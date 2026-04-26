@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universe Canvas | Centralis</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
+  <link rel="stylesheet" href="styles.css?v=node-kebab-close-1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="universe-canvas">
+  <div class="app-shell">
+  <header class="site-header" aria-label="Centralis main header">
+    <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+
+    <nav class="category-nav" aria-label="Primary categories">
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="World building">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3.6 9h16.8"></path>
+            <path d="M3.6 15h16.8"></path>
+            <path d="M12 3a15 15 0 0 1 0 18"></path>
+            <path d="M12 3a15 15 0 0 0 0 18"></path>
+          </svg>
+          <span>World Building</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+          <button type="button" role="menuitem">Atlas</button>
+          <button type="button" role="menuitem">Lore Maker</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Entertainment">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+            <path d="M8 21h8"></path>
+            <path d="M12 18v3"></path>
+            <path d="m10 10 5 2-5 2z"></path>
+          </svg>
+          <span>Entertainment</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <button type="button" role="menuitem">Movie Tracker</button>
+          <button type="button" role="menuitem">Episode Roulette</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Utilities">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-5.1 5.1a2.1 2.1 0 0 0 3 3l5.1-5.1a4 4 0 0 0 5.4-5.4l-2.6 2.6-3-3z"></path>
+          </svg>
+          <span>Utilities</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <button type="button" role="menuitem">Tool One</button>
+          <button type="button" role="menuitem">Tool Two</button>
+          <button type="button" role="menuitem">Tool Three</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+          </svg>
+          <span>Settings</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <button type="button" role="menuitem">Preferences</button>
+          <button type="button" role="menuitem">Privacy</button>
+          <button type="button" role="menuitem">Shortcuts</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+        <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+        </svg>
+      </button>
+
+      <div class="menu-wrap user-menu">
+        <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="4"></circle>
+            <path d="M4 21a8 8 0 0 1 16 0"></path>
+          </svg>
+        </button>
+        <div class="dropdown-menu align-right" role="menu">
+          <button type="button" role="menuitem">Profile</button>
+          <button type="button" role="menuitem">Account</button>
+          <button type="button" role="menuitem">Notifications</button>
+          <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flow-page" aria-label="Universe canvas">
+    <div class="flow-toolbar">
+      <a class="toolbar-back" href="universe-builder.html">Universes</a>
+      <h1 data-universe-title>Universe Canvas</h1>
+      <div class="canvas-tools" aria-label="Canvas tools">
+        <button class="tool-action" type="button" data-open-modal="add-element-modal">
+          <span aria-hidden="true">+</span>
+          Element
+        </button>
+        <button class="tool-action" type="button">
+          Types
+        </button>
+      </div>
+    </div>
+    <div class="flow-canvas" id="universe-flow"></div>
+  </main>
+
+  <div class="modal-backdrop" id="add-element-modal" hidden>
+    <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="add-element-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="add-element-title">Add Element</h2>
+          <p class="modal-subtitle">Add a new element to this universe canvas.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-close-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form class="element-form" data-element-form>
+        <label class="form-field">
+          <span>Name</span>
+          <input type="text" name="element-name" placeholder="Element name" autocomplete="off">
+        </label>
+
+        <label class="form-field">
+          <span>Description <em>(optional)</em></span>
+          <textarea name="element-description" placeholder="Brief description..."></textarea>
+        </label>
+
+        <label class="form-field">
+          <span>Type <em>(optional)</em></span>
+          <select name="element-type" data-element-type-select>
+            <option value="">No type</option>
+          </select>
+        </label>
+
+        <p class="form-status" data-element-status role="status"></p>
+
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-close-modal>Cancel</button>
+          <button class="primary-action" type="submit">Add Element</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="delete-element-modal" hidden>
+    <section class="modal-dialog confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-element-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="delete-element-title">Delete Element</h2>
+          <p class="modal-subtitle">This will remove the element and any links connected to it.</p>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-cancel-delete-element>No</button>
+        <button class="danger-action" type="button" data-confirm-delete-element>Yes</button>
+      </div>
+    </section>
+  </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=preserve-universe-id-1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
+  <script src="flow-canvas.js?v=canvas-pan-default-1"></script>
+</body>
+</html>
