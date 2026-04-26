@@ -1,5 +1,7 @@
 import {
   createImageKey,
+  createSignedImageUrl,
+  describeError,
   getAuthUser,
   handleCors,
   insertImageRow,
@@ -44,9 +46,15 @@ Deno.serve(async (req) => {
       userId: user.id,
     });
 
-    return jsonResponse({ image });
+    return jsonResponse({
+      image: {
+        ...image,
+        stored_image_url: image.image_url,
+        image_url: await createSignedImageUrl(image.image_url),
+      },
+    });
   } catch (error) {
     console.error(error);
-    return jsonResponse({ error: error instanceof Error ? error.message : "Could not upload image." }, 500);
+    return jsonResponse(describeError(error, "Could not upload image."), 500);
   }
 });

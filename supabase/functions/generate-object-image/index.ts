@@ -1,11 +1,13 @@
 import OpenAI from "npm:openai@^6.1.0";
 import {
   createImageKey,
+  createSignedImageUrl,
   getAuthUser,
   getEnv,
   handleCors,
   insertImageRow,
   jsonResponse,
+  describeError,
   uploadImageBytes,
 } from "../_shared/image-storage.ts";
 
@@ -89,9 +91,15 @@ Deno.serve(async (req) => {
       userId: user.id,
     });
 
-    return jsonResponse({ image });
+    return jsonResponse({
+      image: {
+        ...image,
+        stored_image_url: image.image_url,
+        image_url: await createSignedImageUrl(image.image_url),
+      },
+    });
   } catch (error) {
     console.error(error);
-    return jsonResponse({ error: error instanceof Error ? error.message : "Could not generate image." }, 500);
+    return jsonResponse(describeError(error, "Could not generate image."), 500);
   }
 });

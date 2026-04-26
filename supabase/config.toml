@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.generate-object-image]
 verify_jwt = true
+
+[functions.list-object-images]
+verify_jwt = true

@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3";
+import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +33,42 @@ export function getEnv(name: string) {
   }
 
   return value;
+}
+
+export function describeError(error: unknown, fallback = "Request failed.") {
+  if (error instanceof Error) {
+    const details = {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+    const status = "status" in error ? (error as { status?: unknown }).status : undefined;
+    const code = "code" in error ? (error as { code?: unknown }).code : undefined;
+
+    return {
+      error: error.message || fallback,
+      details,
+      status,
+      code,
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const message = record.message || record.error || record.details || record.hint || fallback;
+    return {
+      error: String(message),
+      details: record,
+      status: record.status,
+      code: record.code,
+    };
+  }
+
+  if (typeof error === "string") {
+    return { error };
+  }
+
+  return { error: fallback, details: String(error) };
 }
 
 export function getEndpoint() {
@@ -67,7 +104,7 @@ export async function getAuthUser(req: Request) {
 
 export function createImageKey(userId: string, objectId: string, extension = "png") {
   const cleanExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
-  return `users/${userId}/objects/${objectId}/${crypto.randomUUID()}.${cleanExtension}`;
+  return `images/${objectId}/${crypto.randomUUID()}.${cleanExtension}`;
 }
 
 export function buildPublicUrl(key: string) {
@@ -85,14 +122,9 @@ export function buildPublicUrl(key: string) {
   return `${endpoint}/${bucket}/${key}`;
 }
 
-export async function uploadImageBytes(options: {
-  bytes: Uint8Array;
-  key: string;
-  contentType: string;
-}) {
+export function createS3Client() {
   const endpoint = getEndpoint();
-  const bucket = getEnv("IDRIVE_E2_BUCKET");
-  const client = new S3Client({
+  return new S3Client({
     region: Deno.env.get("IDRIVE_E2_REGION") || "us-east-1",
     endpoint,
     forcePathStyle: true,
@@ -101,6 +133,15 @@ export async function uploadImageBytes(options: {
       secretAccessKey: getEnv("IDRIVE_E2_SECRET_ACCESS_KEY"),
     },
   });
+}
+
+export async function uploadImageBytes(options: {
+  bytes: Uint8Array;
+  key: string;
+  contentType: string;
+}) {
+  const bucket = getEnv("IDRIVE_E2_BUCKET");
+  const client = createS3Client();
 
   await client.send(new PutObjectCommand({
     Bucket: bucket,
@@ -110,6 +151,23 @@ export async function uploadImageBytes(options: {
   }));
 
   return buildPublicUrl(options.key);
+}
+
+export function getKeyFromImageUrl(imageUrl: string) {
+  const bucket = getEnv("IDRIVE_E2_BUCKET");
+  const url = new URL(imageUrl);
+  const path = url.pathname.replace(/^\/+/, "");
+  const bucketPrefix = `${bucket}/`;
+  return path.startsWith(bucketPrefix) ? path.slice(bucketPrefix.length) : path;
+}
+
+export async function createSignedImageUrl(imageUrl: string, expiresIn = 3600) {
+  const bucket = getEnv("IDRIVE_E2_BUCKET");
+  const key = getKeyFromImageUrl(imageUrl);
+  return getSignedUrl(createS3Client(), new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  }), { expiresIn });
 }
 
 export async function insertImageRow(options: {

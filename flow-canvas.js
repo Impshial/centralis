@@ -80,6 +80,43 @@
     return error?.message || error?.error || error?.details || error?.hint || "Unknown error";
   }
 
+  async function callEdgeFunction(name, options = {}) {
+    if (!window.centralisSupabase || !window.CENTRALIS_SUPABASE_CONFIG) {
+      throw new Error("Supabase is not available yet.");
+    }
+
+    const { data: sessionData, error: sessionError } = await window.centralisSupabase.auth.getSession();
+    if (sessionError || !sessionData.session?.access_token) {
+      throw new Error(sessionError?.message || "You must be signed in to use this feature.");
+    }
+
+    const response = await fetch(`${window.CENTRALIS_SUPABASE_CONFIG.url}/functions/v1/${name}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        apikey: window.CENTRALIS_SUPABASE_CONFIG.publishableKey,
+        ...(options.headers || {})
+      },
+      body: options.body
+    });
+    const responseText = await response.text();
+    let data = null;
+
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch (_error) {
+        data = { error: responseText };
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(getReadableError(data) || `Edge Function returned ${response.status}.`);
+    }
+
+    return data;
+  }
+
   let universe = {
     id: universeId || "universe-root",
     name: "Universe Canvas",
@@ -140,15 +177,15 @@
 
     const imageObjectIds = [universe.id, ...elements.map((element) => element.id)].filter(Boolean);
     if (imageObjectIds.length) {
-      const imageResponse = await withTimeout(window.centralisSupabase
-        .from("image_table")
-        .select("id,object_id,image_url,provider,prompt,generation_settings,is_primary,sort_order,created_at")
-        .in("object_id", imageObjectIds)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }), "Loading images");
+      try {
+        const imageResponse = await withTimeout(callEdgeFunction("list-object-images", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ objectIds: imageObjectIds })
+        }), "Loading images");
 
-      if (!imageResponse.error) {
-        imageRows = imageResponse.data || [];
+        imageRows = imageResponse.images || [];
+      } catch (error) {
+        console.error("Could not load image gallery:", error);
       }
     }
   }
@@ -1227,13 +1264,12 @@
         body.append("objectId", node.data.recordId);
         body.append("file", file);
 
-        const { data, error } = await window.centralisSupabase.functions.invoke("upload-object-image", {
-          body
-        });
-
-        if (error || data?.error) {
+        let data;
+        try {
+          data = await callEdgeFunction("upload-object-image", { body });
+        } catch (error) {
           if (status) {
-            status.textContent = `Could not upload image: ${getReadableError(error || data)}`;
+            status.textContent = `Could not upload image: ${getReadableError(error)}`;
             status.classList.add("is-error");
           }
           return;
@@ -1262,6 +1298,7 @@
 
       function closeGenerateModal() {
         modal.hidden = true;
+        form.dataset.generating = "false";
         setPendingImageGeneration(null);
         form.reset();
         if (status) {
@@ -1305,12 +1342,17 @@
 
       async function handleGenerateSubmit(event) {
         event.preventDefault();
+        if (form.dataset.generating === "true") {
+          return;
+        }
+
         const node = nodes.find((currentNode) => currentNode.id === pendingImageGeneration?.nodeId);
         const submitButton = form.querySelector('[type="submit"]');
         if (!node || !window.centralisSupabase) {
           return;
         }
 
+        form.dataset.generating = "true";
         if (submitButton) {
           submitButton.disabled = true;
         }
@@ -1320,28 +1362,36 @@
         }
 
         const meta = getNodeTypeMeta(node);
-        const { data, error } = await window.centralisSupabase.functions.invoke("generate-object-image", {
-          body: {
+        let data;
+        try {
+          data = await callEdgeFunction("generate-object-image", {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
             objectId: node.data.recordId,
             objectKind: node.data.kind,
             elementType: meta.label,
             name: node.data.name,
             description: node.data.description,
             extraPrompt: promptInput.value
+            })
+          });
+        } catch (error) {
+          if (submitButton) {
+            submitButton.disabled = false;
           }
-        });
+          form.dataset.generating = "false";
 
-        if (submitButton) {
-          submitButton.disabled = false;
-        }
-
-        if (error || data?.error) {
           if (status) {
-            status.textContent = `Could not generate image: ${getReadableError(error || data)}`;
+            status.textContent = `Could not generate image: ${getReadableError(error)}`;
             status.classList.add("is-error");
           }
           return;
         }
+
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+        form.dataset.generating = "false";
 
         appendImageToNode(node.id, data.image);
         closeGenerateModal();
