@@ -77,7 +77,7 @@
   }
 
   function getReadableError(error) {
-    return error?.message || error?.details || error?.hint || "Unknown error";
+    return error?.message || error?.error || error?.details || error?.hint || "Unknown error";
   }
 
   let universe = {
@@ -90,6 +90,7 @@
   let elementTypes = [];
   let elements = [];
   let elementLinks = [];
+  let imageRows = [];
 
   if (window.centralisSupabase && universeId) {
     const universeResponse = await withTimeout(window.centralisSupabase
@@ -135,6 +136,20 @@
 
     if (!linkResponse.error) {
       elementLinks = linkResponse.data || [];
+    }
+
+    const imageObjectIds = [universe.id, ...elements.map((element) => element.id)].filter(Boolean);
+    if (imageObjectIds.length) {
+      const imageResponse = await withTimeout(window.centralisSupabase
+        .from("image_table")
+        .select("id,object_id,image_url,provider,prompt,generation_settings,is_primary,sort_order,created_at")
+        .in("object_id", imageObjectIds)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }), "Loading images");
+
+      if (!imageResponse.error) {
+        imageRows = imageResponse.data || [];
+      }
     }
   }
 
@@ -210,13 +225,25 @@
     return { menuOpen, setMenuOpen, menuRef, toggleMenu };
   }
 
+  function openNodeDetails(nodeId) {
+    window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
+      detail: { nodeId }
+    }));
+  }
+
   function UniverseNode(props) {
     const data = props.data;
     const { menuOpen, setMenuOpen, menuRef, toggleMenu } = useNodeMenu(props.id);
 
     return React.createElement(
       "article",
-      { className: `universe-flow-node${props.selected ? " is-selected" : ""}` },
+      {
+        className: `universe-flow-node${props.selected ? " is-selected" : ""}`,
+        onDoubleClick: (event) => {
+          event.stopPropagation();
+          openNodeDetails(props.id);
+        }
+      },
       React.createElement(Handle, { className: "node-grab node-grab-right", id: "right", type: "source", position: Position.Right }),
       React.createElement(Handle, { className: "node-grab node-grab-left", id: "left", type: "target", position: Position.Left }),
       React.createElement(
@@ -243,9 +270,7 @@
               onClick: (event) => {
                 event.stopPropagation();
                 setMenuOpen(false);
-                window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
-                  detail: { nodeId: props.id }
-                }));
+                openNodeDetails(props.id);
               }
             },
             "View Details"
@@ -270,7 +295,11 @@
       "article",
       {
         className: `element-flow-node${props.selected ? " is-selected" : ""}`,
-        style: { "--element-color": color }
+        style: { "--element-color": color },
+        onDoubleClick: (event) => {
+          event.stopPropagation();
+          openNodeDetails(props.id);
+        }
       },
       React.createElement(Handle, { className: "node-grab node-grab-right", id: "right", type: "source", position: Position.Right }),
       React.createElement(Handle, { className: "node-grab node-grab-left", id: "left", type: "target", position: Position.Left }),
@@ -298,9 +327,7 @@
               onClick: (event) => {
                 event.stopPropagation();
                 setMenuOpen(false);
-                window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
-                  detail: { nodeId: props.id }
-                }));
+                openNodeDetails(props.id);
               }
             },
             "View Details"
@@ -349,7 +376,8 @@
         kind: "universe",
         recordId: row.id,
         name: row.name || "Untitled Universe",
-        description: row.description || ""
+        description: row.description || "",
+        images: getImagesForObject(row.id)
       },
       draggable: true
     };
@@ -370,7 +398,8 @@
         recordId: row.id,
         name: row.name || "Untitled Element",
         description: row.description || "",
-        elementType
+        elementType,
+        images: getImagesForObject(row.id)
       },
       draggable: true
     };
@@ -415,6 +444,10 @@
 
   const initialEdges = elementLinks.map(toLinkEdge);
 
+  function getImagesForObject(objectId) {
+    return imageRows.filter((image) => image.object_id === objectId);
+  }
+
   function getNodeTypeMeta(node) {
     if (node?.data?.kind === "universe") {
       return {
@@ -444,6 +477,9 @@
       title: pane.querySelector("[data-details-title]"),
       content: pane.querySelector("[data-details-content]"),
       closeButton: pane.querySelector("[data-details-close]"),
+      editButton: pane.querySelector("[data-details-edit]"),
+      saveButton: pane.querySelector("[data-details-save]"),
+      cancelButton: pane.querySelector("[data-details-cancel]"),
       resizer: pane.querySelector("[data-details-resizer]")
     };
   }
@@ -499,7 +535,140 @@
     }).join("");
   }
 
-  function renderDetailsPane(nodeId, currentNodes, currentEdges, openNodeDetails) {
+  function renderImageGallery(images) {
+    if (!images?.length) {
+      return '<p class="details-empty">No images yet.</p>';
+    }
+
+    const primaryImage = images.find((image) => image.is_primary) || images[0];
+    const primaryIndex = Math.max(0, images.findIndex((image) => image.id === primaryImage.id));
+
+    return `
+      <div class="image-gallery">
+        <a class="image-primary" href="${escapeHtml(primaryImage.image_url)}" target="_blank" rel="noopener noreferrer">
+          <img src="${escapeHtml(primaryImage.image_url)}" alt="">
+          <span>${primaryIndex + 1} / ${images.length}</span>
+        </a>
+        <div class="image-thumbs" aria-label="Image gallery">
+          ${images.map((image, index) => `
+            <a class="image-thumb${image.id === primaryImage.id ? " is-active" : ""}" href="${escapeHtml(image.image_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open image ${index + 1}">
+              <img src="${escapeHtml(image.image_url)}" alt="">
+            </a>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function createImagePrompt(node) {
+    const meta = getNodeTypeMeta(node);
+    const name = node.data?.name || "Untitled Node";
+    const description = node.data?.description || "";
+    return [
+      `${name} is a ${meta.label.toLowerCase()} in a universe-building canvas.`,
+      description,
+      "Create a visually rich, cinematic concept image based on these details."
+    ].filter(Boolean).join(" ");
+  }
+
+  function createTypeOptionMarkup(type, selectedTypeId) {
+    const value = type.id || "";
+    const color = sanitizeColor(type.color);
+    const iconName = sanitizeIconName(type.icon);
+    return `
+      <button class="type-picker-option" type="button" data-type-option="true" data-value="${escapeHtml(value)}" role="option" aria-selected="${value === selectedTypeId ? "true" : "false"}">
+        <span class="type-picker-swatch" style="--type-color: ${escapeHtml(color)}"></span>
+        <span class="type-picker-icon" aria-hidden="true" style="--type-color: ${escapeHtml(color)}">
+          <ph-${escapeHtml(iconName)} weight="duotone"></ph-${escapeHtml(iconName)}>
+        </span>
+        <span>${escapeHtml(type.name)}</span>
+      </button>
+    `;
+  }
+
+  function createDetailsTypePickerMarkup(selectedTypeId) {
+    const options = [
+      { id: "", name: "No type", icon: "circle", color: "#64748b" },
+      ...elementTypes
+    ];
+    const selectedType = getElementTypeById(selectedTypeId) || options[0];
+    const selectedColor = sanitizeColor(selectedType.color);
+    const selectedIcon = sanitizeIconName(selectedType.icon);
+
+    return `
+      <div class="type-picker" data-details-type-picker>
+        <input type="hidden" name="details-element-type" data-details-type-input value="${escapeHtml(selectedType.id || "")}">
+        <button class="type-picker-trigger" type="button" data-details-type-trigger aria-expanded="false" aria-haspopup="listbox">
+          <span class="type-picker-current">
+            <span class="type-picker-swatch" data-details-type-swatch style="--type-color: ${escapeHtml(selectedColor)}"></span>
+            <span class="type-picker-icon" data-details-type-icon aria-hidden="true" style="--type-color: ${escapeHtml(selectedColor)}">
+              <ph-${escapeHtml(selectedIcon)} weight="duotone"></ph-${escapeHtml(selectedIcon)}>
+            </span>
+            <span data-details-type-label>${escapeHtml(selectedType.name)}</span>
+          </span>
+          <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+        </button>
+        <div class="type-picker-list" data-details-type-list role="listbox" hidden>
+          ${options.map((type) => createTypeOptionMarkup(type, selectedType.id || "")).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function setupDetailsTypePicker(content) {
+    const picker = content.querySelector("[data-details-type-picker]");
+    if (!picker) {
+      return;
+    }
+
+    const input = picker.querySelector("[data-details-type-input]");
+    const trigger = picker.querySelector("[data-details-type-trigger]");
+    const list = picker.querySelector("[data-details-type-list]");
+    const label = picker.querySelector("[data-details-type-label]");
+    const swatch = picker.querySelector("[data-details-type-swatch]");
+    const icon = picker.querySelector("[data-details-type-icon]");
+
+    function setValue(typeId) {
+      const type = getElementTypeById(typeId) || { id: "", name: "No type", icon: "circle", color: "#64748b" };
+      const color = sanitizeColor(type.color);
+      input.value = type.id || "";
+      label.textContent = type.name;
+      swatch.style.setProperty("--type-color", color);
+      icon.style.setProperty("--type-color", color);
+      renderTypeIcon(icon, type.icon);
+      list.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      list.querySelectorAll("[data-type-option]").forEach((option) => {
+        option.setAttribute("aria-selected", option.dataset.value === input.value ? "true" : "false");
+      });
+    }
+
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const willOpen = list.hidden;
+      list.hidden = !willOpen;
+      trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+
+    list.querySelectorAll("[data-type-option]").forEach((option) => {
+      option.addEventListener("click", () => setValue(option.dataset.value || ""));
+    });
+  }
+
+  function setDetailsPaneMode(controls, mode) {
+    const isEditMode = mode === "edit";
+    if (controls.editButton) {
+      controls.editButton.hidden = isEditMode;
+    }
+    if (controls.saveButton) {
+      controls.saveButton.hidden = !isEditMode;
+    }
+    if (controls.cancelButton) {
+      controls.cancelButton.hidden = !isEditMode;
+    }
+  }
+
+  function renderDetailsPane(nodeId, currentNodes, currentEdges, openNodeDetails, mode) {
     const controls = getDetailsControls();
     if (!controls?.pane || !controls.content) {
       return;
@@ -515,13 +684,79 @@
     const linkedNodes = getLinkedNodes(nodeId, currentNodes, currentEdges);
     const name = node.data?.name || "Untitled Node";
     const description = node.data?.description || "No description yet.";
+    const rawDescription = node.data?.description || "";
+    const images = node.data?.images || [];
 
     controls.pane.hidden = false;
+    setDetailsPaneMode(controls, mode);
     if (controls.kind) {
-      controls.kind.textContent = meta.label;
+      controls.kind.textContent = mode === "edit" ? `Editing ${meta.label}` : meta.label;
     }
     if (controls.title) {
       controls.title.textContent = name;
+    }
+
+    if (mode === "edit") {
+      const isElement = node.data?.kind === "element";
+      controls.content.innerHTML = `
+        <form class="details-edit-form" data-details-form>
+          <label class="form-field">
+            <span>Name</span>
+            <input type="text" name="details-name" value="${escapeHtml(name)}" autocomplete="off">
+          </label>
+          <label class="form-field">
+            <span>Description</span>
+            <textarea name="details-description" placeholder="Brief description...">${escapeHtml(rawDescription)}</textarea>
+          </label>
+          <label class="form-field">
+            <span>Element Type</span>
+            ${isElement ? createDetailsTypePickerMarkup(node.data?.elementType?.id || "") : `
+              <button class="type-picker-trigger" type="button" disabled>
+                <span class="type-picker-current">
+                  <span class="type-picker-swatch" style="--type-color: ${escapeHtml(meta.color)}"></span>
+                  <span class="type-picker-icon" aria-hidden="true" style="--type-color: ${escapeHtml(meta.color)}">
+                    <ph-${escapeHtml(meta.icon)} weight="duotone"></ph-${escapeHtml(meta.icon)}>
+                  </span>
+                  <span>${escapeHtml(meta.label)}</span>
+                </span>
+              </button>
+            `}
+          </label>
+          <section class="details-section image-edit-section">
+            <h3>Image</h3>
+            ${renderImageGallery(images)}
+            <div class="image-actions">
+              <button class="secondary-action image-action-button" type="button" data-generate-image>
+                <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+                Generate
+              </button>
+              <label class="secondary-action image-action-button" for="details-image-upload">
+                <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                Upload
+              </label>
+              <input id="details-image-upload" type="file" accept="image/*" data-image-upload hidden>
+            </div>
+          </section>
+          <p class="form-status" data-details-status role="status"></p>
+        </form>
+      `;
+
+      setupDetailsTypePicker(controls.content);
+      controls.content.querySelector("[data-generate-image]")?.addEventListener("click", () => {
+        window.dispatchEvent(new CustomEvent("centralis:generate-image", {
+          detail: { nodeId, prompt: createImagePrompt(node) }
+        }));
+      });
+      controls.content.querySelector("[data-image-upload]")?.addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+          window.dispatchEvent(new CustomEvent("centralis:upload-image", {
+            detail: { nodeId, file }
+          }));
+        }
+      });
+      controls.content.querySelector('[name="details-name"]')?.focus();
+      return;
     }
 
     controls.content.innerHTML = `
@@ -553,6 +788,10 @@
         <div class="linked-node-list">
           ${renderLinkedNodeCards(linkedNodes)}
         </div>
+      </section>
+      <section class="details-section">
+        <h3>Images</h3>
+        ${renderImageGallery(images)}
       </section>
     `;
 
@@ -774,6 +1013,8 @@
     const [pendingLink, setPendingLink] = React.useState(null);
     const [pendingDeleteElement, setPendingDeleteElement] = React.useState(null);
     const [detailsNodeId, setDetailsNodeId] = React.useState(null);
+    const [detailsMode, setDetailsMode] = React.useState("view");
+    const [pendingImageGeneration, setPendingImageGeneration] = React.useState(null);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
     const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode }), []);
@@ -850,9 +1091,85 @@
       }
     }), [deleteEdge]);
 
+    const openLinkedNodeDetails = React.useCallback((nodeId) => {
+      setDetailsNodeId(nodeId);
+      setDetailsMode("view");
+      setNodes((currentNodes) => currentNodes.map((node) => ({
+        ...node,
+        selected: node.id === nodeId
+      })));
+    }, []);
+
+    const appendImageToNode = React.useCallback((nodeId, image) => {
+      if (!image) {
+        return;
+      }
+
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        if (node.id !== nodeId) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            images: [...(node.data.images || []), image]
+          }
+        };
+      }));
+    }, []);
+
     React.useEffect(() => {
       const cleanup = populateElementTypeSelect();
       return cleanup || undefined;
+    }, []);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("add-element-modal");
+      const form = document.querySelector("[data-element-form]");
+      const status = document.querySelector("[data-element-status]");
+      if (!modal) {
+        return undefined;
+      }
+
+      function closeAddElementModal() {
+        modal.hidden = true;
+        setPendingLink(null);
+        form?.reset();
+        setElementTypePickerValue("");
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-error", "is-success");
+        }
+      }
+
+      function handleCloseClick(event) {
+        if (event.target.closest("[data-close-modal]")) {
+          closeAddElementModal();
+        }
+      }
+
+      function handleBackdropClick(event) {
+        if (event.target === modal) {
+          closeAddElementModal();
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeAddElementModal();
+        }
+      }
+
+      modal.addEventListener("click", handleCloseClick);
+      modal.addEventListener("click", handleBackdropClick);
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        modal.removeEventListener("click", handleCloseClick);
+        modal.removeEventListener("click", handleBackdropClick);
+        document.removeEventListener("keydown", handleEscape);
+      };
     }, []);
 
     React.useEffect(() => {
@@ -862,6 +1179,7 @@
 
       function handleCloseDetails() {
         setDetailsNodeId(null);
+        setDetailsMode("view");
       }
 
       if (closeButton) {
@@ -883,6 +1201,7 @@
       function handleViewDetails(event) {
         if (event.detail?.nodeId) {
           setDetailsNodeId(event.detail.nodeId);
+          setDetailsMode("view");
         }
       }
 
@@ -891,13 +1210,282 @@
     }, []);
 
     React.useEffect(() => {
+      async function handleUploadImage(event) {
+        const { nodeId, file } = event.detail || {};
+        const node = nodes.find((currentNode) => currentNode.id === nodeId);
+        const status = document.querySelector("[data-details-status]");
+        if (!node || !file || !window.centralisSupabase) {
+          return;
+        }
+
+        if (status) {
+          status.textContent = "Uploading image...";
+          status.classList.remove("is-error", "is-success");
+        }
+
+        const body = new FormData();
+        body.append("objectId", node.data.recordId);
+        body.append("file", file);
+
+        const { data, error } = await window.centralisSupabase.functions.invoke("upload-object-image", {
+          body
+        });
+
+        if (error || data?.error) {
+          if (status) {
+            status.textContent = `Could not upload image: ${getReadableError(error || data)}`;
+            status.classList.add("is-error");
+          }
+          return;
+        }
+
+        appendImageToNode(nodeId, data.image);
+        if (status) {
+          status.textContent = "Image uploaded.";
+          status.classList.add("is-success");
+        }
+      }
+
+      window.addEventListener("centralis:upload-image", handleUploadImage);
+      return () => window.removeEventListener("centralis:upload-image", handleUploadImage);
+    }, [appendImageToNode, nodes]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("generate-image-modal");
+      const form = document.querySelector("[data-generate-image-form]");
+      const promptInput = document.querySelector("[data-generate-image-prompt]");
+      const subtitle = document.querySelector("[data-generate-image-subtitle]");
+      const status = document.querySelector("[data-generate-image-status]");
+      if (!modal || !form || !promptInput) {
+        return undefined;
+      }
+
+      function closeGenerateModal() {
+        modal.hidden = true;
+        setPendingImageGeneration(null);
+        form.reset();
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-error", "is-success");
+        }
+      }
+
+      function handleGenerateRequest(event) {
+        const node = nodes.find((currentNode) => currentNode.id === event.detail?.nodeId);
+        if (!node) {
+          return;
+        }
+
+        setPendingImageGeneration({ nodeId: node.id });
+        promptInput.value = event.detail?.prompt || createImagePrompt(node);
+        if (subtitle) {
+          subtitle.textContent = `Describe the image you want to generate for ${node.data.name || "this node"}.`;
+        }
+        modal.hidden = false;
+        promptInput.focus();
+      }
+
+      function handleCloseClick(event) {
+        if (event.target.closest("[data-close-generate-image]")) {
+          closeGenerateModal();
+        }
+      }
+
+      function handleBackdropClick(event) {
+        if (event.target === modal) {
+          closeGenerateModal();
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeGenerateModal();
+        }
+      }
+
+      async function handleGenerateSubmit(event) {
+        event.preventDefault();
+        const node = nodes.find((currentNode) => currentNode.id === pendingImageGeneration?.nodeId);
+        const submitButton = form.querySelector('[type="submit"]');
+        if (!node || !window.centralisSupabase) {
+          return;
+        }
+
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+        if (status) {
+          status.textContent = "Generating image...";
+          status.classList.remove("is-error", "is-success");
+        }
+
+        const meta = getNodeTypeMeta(node);
+        const { data, error } = await window.centralisSupabase.functions.invoke("generate-object-image", {
+          body: {
+            objectId: node.data.recordId,
+            objectKind: node.data.kind,
+            elementType: meta.label,
+            name: node.data.name,
+            description: node.data.description,
+            extraPrompt: promptInput.value
+          }
+        });
+
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+
+        if (error || data?.error) {
+          if (status) {
+            status.textContent = `Could not generate image: ${getReadableError(error || data)}`;
+            status.classList.add("is-error");
+          }
+          return;
+        }
+
+        appendImageToNode(node.id, data.image);
+        closeGenerateModal();
+        setDetailsMode("view");
+      }
+
+      window.addEventListener("centralis:generate-image", handleGenerateRequest);
+      modal.addEventListener("click", handleCloseClick);
+      modal.addEventListener("click", handleBackdropClick);
+      document.addEventListener("keydown", handleEscape);
+      form.addEventListener("submit", handleGenerateSubmit);
+      return () => {
+        window.removeEventListener("centralis:generate-image", handleGenerateRequest);
+        modal.removeEventListener("click", handleCloseClick);
+        modal.removeEventListener("click", handleBackdropClick);
+        document.removeEventListener("keydown", handleEscape);
+        form.removeEventListener("submit", handleGenerateSubmit);
+      };
+    }, [appendImageToNode, nodes, pendingImageGeneration]);
+
+    React.useEffect(() => {
+      const controls = getDetailsControls();
+      if (!controls) {
+        return undefined;
+      }
+
+      function handleEdit() {
+        if (detailsNodeId) {
+          setDetailsMode("edit");
+        }
+      }
+
+      function handleCancel() {
+        setDetailsMode("view");
+      }
+
+      async function handleSave() {
+        const node = nodes.find((currentNode) => currentNode.id === detailsNodeId);
+        const form = controls.content?.querySelector("[data-details-form]");
+        const status = controls.content?.querySelector("[data-details-status]");
+        if (!node || !form || !window.centralisSupabase) {
+          return;
+        }
+
+        const saveButton = controls.saveButton;
+        const formData = new FormData(form);
+        const name = String(formData.get("details-name") || "").trim();
+        const description = String(formData.get("details-description") || "").trim();
+        const elementTypeId = String(formData.get("details-element-type") || "");
+
+        if (!name) {
+          if (status) {
+            status.textContent = "Name is required.";
+            status.classList.add("is-error");
+          }
+          form.querySelector('[name="details-name"]')?.focus();
+          return;
+        }
+
+        if (saveButton) {
+          saveButton.disabled = true;
+        }
+        if (status) {
+          status.textContent = "Saving...";
+          status.classList.remove("is-error", "is-success");
+        }
+
+        const isUniverse = node.data?.kind === "universe";
+        const tableName = isUniverse ? "universes" : "elements";
+        const payload = {
+          name,
+          description: description || null,
+          updated_at: new Date().toISOString()
+        };
+
+        if (!isUniverse) {
+          payload.element_type_id = elementTypeId || null;
+        }
+
+        const { error } = await window.centralisSupabase
+          .from(tableName)
+          .update(payload)
+          .eq("id", node.data.recordId);
+
+        if (error) {
+          if (status) {
+            status.textContent = `Could not save: ${getReadableError(error)}`;
+            status.classList.add("is-error");
+          }
+          if (saveButton) {
+            saveButton.disabled = false;
+          }
+          return;
+        }
+
+        const nextElementType = isUniverse ? null : getElementTypeById(elementTypeId);
+        setNodes((currentNodes) => currentNodes.map((currentNode) => {
+          if (currentNode.id !== node.id) {
+            return currentNode;
+          }
+
+          return {
+            ...currentNode,
+            data: {
+              ...currentNode.data,
+              name,
+              description,
+              ...(isUniverse ? {} : { elementType: nextElementType })
+            }
+          };
+        }));
+
+        if (isUniverse) {
+          universe.name = name;
+          universe.description = description;
+          if (titleElement) {
+            titleElement.textContent = name;
+          }
+        }
+
+        if (saveButton) {
+          saveButton.disabled = false;
+        }
+        setDetailsMode("view");
+      }
+
+      controls.editButton?.addEventListener("click", handleEdit);
+      controls.cancelButton?.addEventListener("click", handleCancel);
+      controls.saveButton?.addEventListener("click", handleSave);
+      return () => {
+        controls.editButton?.removeEventListener("click", handleEdit);
+        controls.cancelButton?.removeEventListener("click", handleCancel);
+        controls.saveButton?.removeEventListener("click", handleSave);
+      };
+    }, [detailsNodeId, nodes]);
+
+    React.useEffect(() => {
       if (!detailsNodeId) {
         hideDetailsPane();
         return;
       }
 
-      renderDetailsPane(detailsNodeId, nodes, edges, setDetailsNodeId);
-    }, [detailsNodeId, nodes, edges]);
+      renderDetailsPane(detailsNodeId, nodes, edges, openLinkedNodeDetails, detailsMode);
+    }, [detailsNodeId, detailsMode, nodes, edges, openLinkedNodeDetails]);
 
     React.useEffect(() => {
       const form = document.querySelector("[data-element-form]");

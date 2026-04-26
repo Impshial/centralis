@@ -680,6 +680,102 @@ body.is-resizing-details {
   font-weight: 620;
 }
 
+.image-edit-section {
+  padding-top: 4px;
+}
+
+.image-gallery {
+  display: grid;
+  gap: 9px;
+  width: min(100%, 256px);
+}
+
+.image-primary {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 1;
+  color: #ffffff;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.image-primary img,
+.image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-primary span {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  min-width: 42px;
+  padding: 4px 8px;
+  background: rgb(0 0 0 / 58%);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1;
+  text-align: center;
+}
+
+.image-primary:hover,
+.image-primary:focus-visible,
+.image-thumb:hover,
+.image-thumb:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.image-thumbs {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.image-thumb {
+  flex: 0 0 auto;
+  display: block;
+  overflow: hidden;
+  width: 58px;
+  height: 58px;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.image-thumb.is-active {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 1px var(--accent-strong);
+}
+
+.image-actions {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 256px);
+}
+
+.image-action-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.image-action-button > * {
+  width: 16px;
+  height: 16px;
+}
+
 .react-flow {
   color: var(--ink);
 }

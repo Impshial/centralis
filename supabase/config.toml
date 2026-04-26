@@ -1,0 +1,7 @@
+project_id = "lztmpbxmntcktijcdcda"
+
+[functions.upload-object-image]
+verify_jwt = true
+
+[functions.generate-object-image]
+verify_jwt = true
