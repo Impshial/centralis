@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Universe Canvas | Centralis</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
-  <link rel="stylesheet" href="styles.css?v=node-kebab-close-1">
+  <link rel="stylesheet" href="styles.css?v=details-pane-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="universe-canvas">
@@ -128,6 +128,25 @@
       </div>
     </div>
     <div class="flow-canvas" id="universe-flow"></div>
+    <aside class="details-pane" data-details-pane hidden aria-label="Node details">
+      <div class="details-pane-resizer" data-details-resizer aria-hidden="true"></div>
+      <header class="details-pane-header">
+        <div>
+          <p class="details-pane-kicker" data-details-kind>Details</p>
+          <h2 data-details-title>Node Details</h2>
+        </div>
+        <div class="details-pane-actions">
+          <button class="secondary-action compact-action" type="button" data-details-edit>Edit</button>
+          <button class="modal-close" type="button" aria-label="Close details" data-details-close>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+      <div class="details-pane-body" data-details-content></div>
+    </aside>
   </main>
 
   <div class="modal-backdrop" id="add-element-modal" hidden>
@@ -158,9 +177,20 @@
 
         <label class="form-field">
           <span>Type <em>(optional)</em></span>
-          <select name="element-type" data-element-type-select>
-            <option value="">No type</option>
-          </select>
+          <div class="type-picker" data-element-type-picker>
+            <input type="hidden" name="element-type" data-element-type-input value="">
+            <button class="type-picker-trigger" type="button" data-element-type-trigger aria-expanded="false" aria-haspopup="listbox">
+              <span class="type-picker-current">
+                <span class="type-picker-swatch" data-element-type-swatch style="--type-color: #64748b"></span>
+                <span class="type-picker-icon" data-element-type-icon aria-hidden="true">
+                  <ph-circle weight="duotone"></ph-circle>
+                </span>
+                <span data-element-type-label>No type</span>
+              </span>
+              <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+            </button>
+            <div class="type-picker-list" data-element-type-list role="listbox" hidden></div>
+          </div>
         </label>
 
         <p class="form-status" data-element-status role="status"></p>
@@ -192,10 +222,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=preserve-universe-id-1"></script>
+  <script src="script.js?v=details-pane-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
-  <script src="flow-canvas.js?v=canvas-pan-default-1"></script>
+  <script src="flow-canvas.js?v=details-pane-1"></script>
 </body>
 </html>

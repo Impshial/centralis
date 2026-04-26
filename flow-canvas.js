@@ -49,9 +49,31 @@
     return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
   function sanitizeIconName(icon) {
-    const clean = String(icon || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const clean = String(icon || "")
+      .trim()
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .replace(/[\s_]+/g, "-")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
     return clean || "circle";
+  }
+
+  function sanitizeColor(color, fallback = "#64748b") {
+    const clean = String(color || "").trim();
+    return /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(clean) ? clean : fallback;
   }
 
   function getReadableError(error) {
@@ -190,7 +212,7 @@
 
   function UniverseNode(props) {
     const data = props.data;
-    const { menuOpen, menuRef, toggleMenu } = useNodeMenu(props.id);
+    const { menuOpen, setMenuOpen, menuRef, toggleMenu } = useNodeMenu(props.id);
 
     return React.createElement(
       "article",
@@ -214,7 +236,20 @@
         menuOpen && React.createElement(
           "div",
           { className: "node-menu" },
-          React.createElement("button", { type: "button", disabled: true }, "No Items")
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: (event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+                window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
+                  detail: { nodeId: props.id }
+                }));
+              }
+            },
+            "View Details"
+          )
         )
       ),
       React.createElement("span", { className: "node-kicker" }, "Universe"),
@@ -227,7 +262,7 @@
     const data = props.data;
     const { menuOpen, setMenuOpen, menuRef, toggleMenu } = useNodeMenu(props.id);
     const elementType = data.elementType;
-    const color = elementType?.color || "#64748b";
+    const color = sanitizeColor(elementType?.color);
     const typeName = elementType?.name || "No Type";
     const iconName = sanitizeIconName(elementType?.icon);
 
@@ -259,6 +294,21 @@
           React.createElement(
             "button",
             {
+              type: "button",
+              onClick: (event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+                window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
+                  detail: { nodeId: props.id }
+                }));
+              }
+            },
+            "View Details"
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "danger-menu-item",
               type: "button",
               onClick: (event) => {
                 event.stopPropagation();
@@ -365,6 +415,184 @@
 
   const initialEdges = elementLinks.map(toLinkEdge);
 
+  function getNodeTypeMeta(node) {
+    if (node?.data?.kind === "universe") {
+      return {
+        label: "Universe",
+        icon: "globe-hemisphere-west",
+        color: sanitizeColor("#78d5c8")
+      };
+    }
+
+    const elementType = node?.data?.elementType;
+    return {
+      label: elementType?.name || "No Type",
+      icon: sanitizeIconName(elementType?.icon || "circle"),
+      color: sanitizeColor(elementType?.color)
+    };
+  }
+
+  function getDetailsControls() {
+    const pane = document.querySelector("[data-details-pane]");
+    if (!pane) {
+      return null;
+    }
+
+    return {
+      pane,
+      kind: pane.querySelector("[data-details-kind]"),
+      title: pane.querySelector("[data-details-title]"),
+      content: pane.querySelector("[data-details-content]"),
+      closeButton: pane.querySelector("[data-details-close]"),
+      resizer: pane.querySelector("[data-details-resizer]")
+    };
+  }
+
+  function hideDetailsPane() {
+    const controls = getDetailsControls();
+    if (controls?.pane) {
+      controls.pane.hidden = true;
+    }
+  }
+
+  function getLinkedNodes(nodeId, currentNodes, currentEdges) {
+    const linkedIds = [];
+    const seen = new Set();
+
+    currentEdges.forEach((edge) => {
+      let linkedId = null;
+      if (edge.source === nodeId) {
+        linkedId = edge.target;
+      } else if (edge.target === nodeId) {
+        linkedId = edge.source;
+      }
+
+      if (linkedId && !seen.has(linkedId)) {
+        seen.add(linkedId);
+        linkedIds.push(linkedId);
+      }
+    });
+
+    return linkedIds
+      .map((linkedId) => currentNodes.find((node) => node.id === linkedId))
+      .filter(Boolean);
+  }
+
+  function renderLinkedNodeCards(linkedNodes) {
+    if (!linkedNodes.length) {
+      return '<p class="details-empty">No linked nodes yet.</p>';
+    }
+
+    return linkedNodes.map((linkedNode) => {
+      const meta = getNodeTypeMeta(linkedNode);
+      return `
+        <button class="linked-node-card" type="button" data-linked-node-id="${escapeHtml(linkedNode.id)}" style="--linked-color: ${escapeHtml(meta.color)}">
+          <span class="linked-node-icon" aria-hidden="true">
+            <ph-${escapeHtml(meta.icon)} weight="duotone"></ph-${escapeHtml(meta.icon)}>
+          </span>
+          <span class="linked-node-text">
+            <strong>${escapeHtml(linkedNode.data?.name || "Untitled Node")}</strong>
+            <span>${escapeHtml(meta.label)}</span>
+          </span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  function renderDetailsPane(nodeId, currentNodes, currentEdges, openNodeDetails) {
+    const controls = getDetailsControls();
+    if (!controls?.pane || !controls.content) {
+      return;
+    }
+
+    const node = currentNodes.find((currentNode) => currentNode.id === nodeId);
+    if (!node) {
+      hideDetailsPane();
+      return;
+    }
+
+    const meta = getNodeTypeMeta(node);
+    const linkedNodes = getLinkedNodes(nodeId, currentNodes, currentEdges);
+    const name = node.data?.name || "Untitled Node";
+    const description = node.data?.description || "No description yet.";
+
+    controls.pane.hidden = false;
+    if (controls.kind) {
+      controls.kind.textContent = meta.label;
+    }
+    if (controls.title) {
+      controls.title.textContent = name;
+    }
+
+    controls.content.innerHTML = `
+      <section class="details-section">
+        <dl class="details-fields">
+          <div>
+            <dt>Name</dt>
+            <dd>${escapeHtml(name)}</dd>
+          </div>
+          <div>
+            <dt>Description</dt>
+            <dd>${escapeHtml(description)}</dd>
+          </div>
+          <div>
+            <dt>Element Type</dt>
+            <dd>
+              <span class="details-type-badge" style="--detail-color: ${escapeHtml(meta.color)}">
+                <span class="details-type-icon" aria-hidden="true">
+                  <ph-${escapeHtml(meta.icon)} weight="duotone"></ph-${escapeHtml(meta.icon)}>
+                </span>
+                ${escapeHtml(meta.label)}
+              </span>
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section class="details-section">
+        <h3>Linked Nodes</h3>
+        <div class="linked-node-list">
+          ${renderLinkedNodeCards(linkedNodes)}
+        </div>
+      </section>
+    `;
+
+    controls.content.querySelectorAll("[data-linked-node-id]").forEach((button) => {
+      button.addEventListener("click", () => openNodeDetails(button.dataset.linkedNodeId));
+    });
+  }
+
+  function setupDetailsPaneResize() {
+    const controls = getDetailsControls();
+    if (!controls?.pane || !controls.resizer) {
+      return undefined;
+    }
+
+    function handlePointerMove(event) {
+      const maxWidth = Math.min(760, window.innerWidth - 72);
+      const nextWidth = Math.min(maxWidth, Math.max(320, window.innerWidth - event.clientX));
+      controls.pane.style.width = `${nextWidth}px`;
+    }
+
+    function handlePointerUp() {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+      document.body.classList.remove("is-resizing-details");
+    }
+
+    function handlePointerDown(event) {
+      event.preventDefault();
+      document.body.classList.add("is-resizing-details");
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
+    }
+
+    controls.resizer.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      controls.resizer.removeEventListener("pointerdown", handlePointerDown);
+      handlePointerUp();
+    };
+  }
+
   async function saveNodePosition(_event, node) {
     if (!window.centralisSupabase || !node?.position || !node?.data?.recordId) {
       return;
@@ -394,19 +622,150 @@
     }
   }
 
-  function populateElementTypeSelect() {
-    const select = document.querySelector("[data-element-type-select]");
-    if (!select) {
+  function getElementTypeById(typeId) {
+    return elementTypes.find((type) => type.id === typeId) || null;
+  }
+
+  function getElementTypePicker() {
+    const picker = document.querySelector("[data-element-type-picker]");
+    if (!picker) {
+      return null;
+    }
+
+    return {
+      picker,
+      input: picker.querySelector("[data-element-type-input]"),
+      trigger: picker.querySelector("[data-element-type-trigger]"),
+      list: picker.querySelector("[data-element-type-list]"),
+      label: picker.querySelector("[data-element-type-label]"),
+      swatch: picker.querySelector("[data-element-type-swatch]"),
+      icon: picker.querySelector("[data-element-type-icon]")
+    };
+  }
+
+  function renderTypeIcon(iconTarget, iconName) {
+    if (!iconTarget) {
       return;
     }
 
-    select.innerHTML = '<option value="">No type</option>';
-    elementTypes.forEach((type) => {
-      const option = document.createElement("option");
-      option.value = type.id;
-      option.textContent = type.name;
-      select.appendChild(option);
+    iconTarget.innerHTML = "";
+    iconTarget.appendChild(document.createElement(`ph-${sanitizeIconName(iconName)}`));
+    iconTarget.firstElementChild?.setAttribute("weight", "duotone");
+    iconTarget.firstElementChild?.setAttribute("aria-hidden", "true");
+  }
+
+  function setElementTypePickerValue(typeId) {
+    const controls = getElementTypePicker();
+    if (!controls?.input || !controls.trigger) {
+      return;
+    }
+
+    const type = getElementTypeById(typeId);
+    const color = sanitizeColor(type?.color);
+
+    controls.input.value = type?.id || "";
+    controls.trigger.setAttribute("aria-expanded", "false");
+    if (controls.list) {
+      controls.list.hidden = true;
+      controls.list.querySelectorAll("[data-type-option]").forEach((option) => {
+        option.setAttribute("aria-selected", option.dataset.value === controls.input.value ? "true" : "false");
+      });
+    }
+
+    if (controls.label) {
+      controls.label.textContent = type?.name || "No type";
+    }
+
+    if (controls.swatch) {
+      controls.swatch.style.setProperty("--type-color", color);
+    }
+
+    if (controls.icon) {
+      controls.icon.style.setProperty("--type-color", color);
+    }
+
+    renderTypeIcon(controls.icon, type?.icon || "circle");
+  }
+
+  function closeElementTypePicker() {
+    const controls = getElementTypePicker();
+    if (!controls?.list || !controls.trigger) {
+      return;
+    }
+
+    controls.list.hidden = true;
+    controls.trigger.setAttribute("aria-expanded", "false");
+  }
+
+  function populateElementTypeSelect() {
+    const controls = getElementTypePicker();
+    if (!controls?.list || !controls.trigger) {
+      return null;
+    }
+
+    controls.list.innerHTML = "";
+
+    const options = [
+      { id: "", name: "No type", icon: "circle", color: "#64748b" },
+      ...elementTypes
+    ];
+
+    options.forEach((type) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "type-picker-option";
+      option.dataset.typeOption = "true";
+      option.dataset.value = type.id || "";
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", type.id ? "false" : "true");
+
+      const swatch = document.createElement("span");
+      swatch.className = "type-picker-swatch";
+      swatch.style.setProperty("--type-color", sanitizeColor(type.color));
+
+      const icon = document.createElement("span");
+      icon.className = "type-picker-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.style.setProperty("--type-color", sanitizeColor(type.color));
+      renderTypeIcon(icon, type.icon);
+
+      const label = document.createElement("span");
+      label.textContent = type.name;
+
+      option.append(swatch, icon, label);
+      option.addEventListener("click", () => setElementTypePickerValue(type.id || ""));
+      controls.list.appendChild(option);
     });
+
+    const handleTriggerClick = (event) => {
+      event.stopPropagation();
+      const willOpen = controls.list.hidden;
+      controls.list.hidden = !willOpen;
+      controls.trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    };
+
+    const handleOutsidePointerDown = (event) => {
+      if (!controls.picker.contains(event.target)) {
+        closeElementTypePicker();
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        closeElementTypePicker();
+      }
+    };
+
+    controls.trigger.addEventListener("click", handleTriggerClick);
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    setElementTypePickerValue("");
+
+    return () => {
+      controls.trigger.removeEventListener("click", handleTriggerClick);
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }
 
   function UniverseFlow() {
@@ -414,6 +773,7 @@
     const [edges, setEdges] = React.useState(initialEdges);
     const [pendingLink, setPendingLink] = React.useState(null);
     const [pendingDeleteElement, setPendingDeleteElement] = React.useState(null);
+    const [detailsNodeId, setDetailsNodeId] = React.useState(null);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
     const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode }), []);
@@ -491,8 +851,55 @@
     }), [deleteEdge]);
 
     React.useEffect(() => {
-      populateElementTypeSelect();
+      const cleanup = populateElementTypeSelect();
+      return cleanup || undefined;
+    }, []);
 
+    React.useEffect(() => {
+      const controls = getDetailsControls();
+      const closeButton = controls?.closeButton;
+      const resizeCleanup = setupDetailsPaneResize();
+
+      function handleCloseDetails() {
+        setDetailsNodeId(null);
+      }
+
+      if (closeButton) {
+        closeButton.addEventListener("click", handleCloseDetails);
+      }
+
+      return () => {
+        if (closeButton) {
+          closeButton.removeEventListener("click", handleCloseDetails);
+        }
+
+        if (resizeCleanup) {
+          resizeCleanup();
+        }
+      };
+    }, []);
+
+    React.useEffect(() => {
+      function handleViewDetails(event) {
+        if (event.detail?.nodeId) {
+          setDetailsNodeId(event.detail.nodeId);
+        }
+      }
+
+      window.addEventListener("centralis:view-node-details", handleViewDetails);
+      return () => window.removeEventListener("centralis:view-node-details", handleViewDetails);
+    }, []);
+
+    React.useEffect(() => {
+      if (!detailsNodeId) {
+        hideDetailsPane();
+        return;
+      }
+
+      renderDetailsPane(detailsNodeId, nodes, edges, setDetailsNodeId);
+    }, [detailsNodeId, nodes, edges]);
+
+    React.useEffect(() => {
       const form = document.querySelector("[data-element-form]");
       const status = document.querySelector("[data-element-status]");
       if (!form) {
@@ -598,6 +1005,7 @@
 
         setPendingLink(null);
         form.reset();
+        setElementTypePickerValue("");
         if (status) {
           status.textContent = "";
           status.classList.remove("is-error");

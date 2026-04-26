@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Universe Builder | Centralis</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=details-pane-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true">
@@ -154,10 +154,28 @@
       </form>
     </section>
   </div>
+
+  <div class="modal-backdrop" id="delete-universe-modal" hidden>
+    <section class="modal-dialog confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-universe-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="delete-universe-title">Delete Universe</h2>
+          <p class="modal-subtitle">This will remove the universe and all elements, element types, and links connected to it.</p>
+        </div>
+      </div>
+
+      <p class="form-status" data-delete-universe-status role="status"></p>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-cancel-delete-universe data-close-modal>No</button>
+        <button class="danger-action" type="button" data-confirm-delete-universe>Yes</button>
+      </div>
+    </section>
+  </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js"></script>
+  <script src="script.js?v=details-pane-1"></script>
 </body>
 </html>

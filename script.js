@@ -7,11 +7,16 @@ const authLanding = document.querySelector(".auth-landing");
 const authForm = document.querySelector(".auth-form");
 const authStatus = document.querySelector("[data-auth-status]");
 const universeStatus = document.querySelector("[data-universe-status]");
+const deleteUniverseStatus = document.querySelector("[data-delete-universe-status]");
 const universeList = document.querySelector("[data-universe-list]");
 const googleAuthButton = document.querySelector("[data-auth-google]");
 const signOutButtons = document.querySelectorAll("[data-sign-out]");
 const createUniverseButtons = document.querySelectorAll("[data-create-universe]");
 const UNIVERSE_TABLE = "universes";
+const DEFAULT_ELEMENT_TYPES_TABLE = "default_element_types";
+const ELEMENT_TYPES_TABLE = "element_types";
+const ELEMENTS_TABLE = "elements";
+const ELEMENT_LINKS_TABLE = "element_links";
 const SUPABASE_TIMEOUT_MS = 15000;
 const DEFAULT_UNIVERSE_POSITION = { x: 120, y: 120 };
 let activeModal = null;
@@ -19,6 +24,7 @@ let supabaseClient = null;
 let currentAppUser = null;
 let currentUserSettings = null;
 let profileLoadPromise = null;
+let pendingUniverseDelete = null;
 
 if (window.supabase && window.CENTRALIS_SUPABASE_CONFIG) {
   const { url, publishableKey } = window.CENTRALIS_SUPABASE_CONFIG;
@@ -48,6 +54,16 @@ function setUniverseStatus(message, type) {
   universeStatus.classList.toggle("is-success", type === "success");
 }
 
+function setDeleteUniverseStatus(message, type) {
+  if (!deleteUniverseStatus) {
+    return;
+  }
+
+  deleteUniverseStatus.textContent = message || "";
+  deleteUniverseStatus.classList.toggle("is-error", type === "error");
+  deleteUniverseStatus.classList.toggle("is-success", type === "success");
+}
+
 function createId() {
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -63,6 +79,19 @@ function createBlurb(description) {
 
   const trimmed = description.trim();
   return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+}
+
+function createUniverseDeleteMenu(universe) {
+  return `
+    <div class="card-menu-wrap">
+      <button class="node-kebab card-kebab" type="button" aria-label="Universe actions" aria-expanded="false" aria-haspopup="menu" data-universe-menu-button>
+        <ph-dots-three-vertical weight="bold" aria-hidden="true"></ph-dots-three-vertical>
+      </button>
+      <div class="node-menu card-menu" role="menu" hidden>
+        <button class="danger-menu-item" type="button" role="menuitem" data-delete-universe data-universe-id="${escapeHtml(universe.id)}" data-universe-name="${escapeHtml(universe.name || "Untitled Universe")}">Delete Universe</button>
+      </div>
+    </div>
+  `;
 }
 
 function getReadableError(error) {
@@ -321,14 +350,18 @@ async function loadUniverseCards() {
   }
 
   universeList.innerHTML = data.map((universe) => `
-    <a class="universe-card" href="universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}">
-      <span class="card-icon" aria-hidden="true">
-        <ph-planet weight="duotone"></ph-planet>
-      </span>
-      <strong>${escapeHtml(universe.name || "Untitled Universe")}</strong>
-      <span>${escapeHtml(createBlurb(universe.description))}</span>
-    </a>
+    <article class="universe-card-wrap">
+      <a class="universe-card" href="universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}">
+        <span class="card-icon" aria-hidden="true">
+          <ph-planet weight="duotone"></ph-planet>
+        </span>
+        <strong>${escapeHtml(universe.name || "Untitled Universe")}</strong>
+        <span>${escapeHtml(createBlurb(universe.description))}</span>
+      </a>
+      ${createUniverseDeleteMenu(universe)}
+    </article>
   `).join("");
+  bindUniverseCardMenus();
   } catch (error) {
     universeList.innerHTML = `<p class="empty-state is-error">Could not load universes: ${getReadableError(error)}</p>`;
   }
@@ -362,6 +395,55 @@ async function getCurrentAppUser() {
   }
 
   return prepareSignedInUser(data.session.user);
+}
+
+async function copyDefaultElementTypesForUniverse(universeId) {
+  const { data: defaultTypes, error: defaultTypesError } = await withTimeout(supabaseClient
+    .from(DEFAULT_ELEMENT_TYPES_TABLE)
+    .select("name,description,icon,color")
+    .order("name", { ascending: true }), "Loading default element types");
+
+  if (defaultTypesError) {
+    throw defaultTypesError;
+  }
+
+  if (!defaultTypes?.length) {
+    return;
+  }
+
+  const { error: createTypesError } = await withTimeout(supabaseClient
+    .from(ELEMENT_TYPES_TABLE)
+    .insert(defaultTypes.map((type) => ({
+      universe_id: universeId,
+      name: type.name,
+      description: type.description || null,
+      icon: type.icon || null,
+      color: type.color || "#6366f1"
+    }))), "Creating universe element types");
+
+  if (createTypesError) {
+    throw createTypesError;
+  }
+}
+
+async function deleteUniverseAndChildren(universeId) {
+  const deleteSteps = [
+    { table: ELEMENT_LINKS_TABLE, column: "universe_id", label: "Deleting universe links" },
+    { table: ELEMENTS_TABLE, column: "universe_id", label: "Deleting universe elements" },
+    { table: ELEMENT_TYPES_TABLE, column: "universe_id", label: "Deleting universe element types" },
+    { table: UNIVERSE_TABLE, column: "id", label: "Deleting universe" }
+  ];
+
+  for (const step of deleteSteps) {
+    const { error } = await withTimeout(supabaseClient
+      .from(step.table)
+      .delete()
+      .eq(step.column, universeId), step.label);
+
+    if (error) {
+      throw error;
+    }
+  }
 }
 
 async function refreshAuthView() {
@@ -446,6 +528,68 @@ function closeMenus(except) {
   });
 }
 
+function closeUniverseCardMenus(except) {
+  if (!universeList) {
+    return;
+  }
+
+  universeList.querySelectorAll("[data-universe-menu-button]").forEach((button) => {
+    const menu = button.nextElementSibling;
+    if (button !== except) {
+      button.setAttribute("aria-expanded", "false");
+      if (menu) {
+        menu.hidden = true;
+      }
+    }
+  });
+}
+
+function openDeleteUniverseDialog(universe) {
+  const modal = document.getElementById("delete-universe-modal");
+  if (!modal) {
+    return;
+  }
+
+  pendingUniverseDelete = universe;
+  setDeleteUniverseStatus(universe?.name ? `Delete "${universe.name}"?` : "Delete this universe?");
+  openModal(modal);
+}
+
+function bindUniverseCardMenus() {
+  if (!universeList) {
+    return;
+  }
+
+  closeUniverseCardMenus();
+
+  universeList.querySelectorAll("[data-universe-menu-button]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const menu = button.nextElementSibling;
+      const isOpen = button.getAttribute("aria-expanded") === "true";
+      closeUniverseCardMenus(button);
+      button.setAttribute("aria-expanded", String(!isOpen));
+      if (menu) {
+        menu.hidden = isOpen;
+      }
+    });
+  });
+
+  universeList.querySelectorAll("[data-delete-universe]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeUniverseCardMenus();
+      openDeleteUniverseDialog({
+        id: button.dataset.universeId,
+        name: button.dataset.universeName
+      });
+    });
+  });
+}
+
 menuTriggers.forEach((trigger) => {
   trigger.addEventListener("click", () => {
     const isOpen = trigger.getAttribute("aria-expanded") === "true";
@@ -458,11 +602,16 @@ document.addEventListener("click", (event) => {
   if (!event.target.closest(".menu-wrap")) {
     closeMenus();
   }
+
+  if (!event.target.closest(".card-menu-wrap")) {
+    closeUniverseCardMenus();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeMenus();
+    closeUniverseCardMenus();
     closeModal();
   }
 });
@@ -485,6 +634,11 @@ function openModal(modal) {
 function closeModal() {
   if (!activeModal) {
     return;
+  }
+
+  if (activeModal.id === "delete-universe-modal") {
+    pendingUniverseDelete = null;
+    setDeleteUniverseStatus("");
   }
 
   activeModal.hidden = true;
@@ -567,6 +721,14 @@ async function createUniverseFromForm(form, submitButton) {
       return;
     }
 
+    setUniverseStatus("Creating universe element types...");
+    try {
+      await copyDefaultElementTypesForUniverse(universeId);
+    } catch (elementTypeError) {
+      setUniverseStatus(`Universe created, but element types could not be copied: ${getReadableError(elementTypeError)}`, "error");
+      return;
+    }
+
     setUniverseStatus("Universe created.", "success");
     window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
   } finally {
@@ -581,6 +743,34 @@ document.querySelectorAll(".universe-form").forEach((form) => {
     event.preventDefault();
     await createUniverseFromForm(form, event.submitter);
   });
+});
+
+document.querySelector("[data-confirm-delete-universe]")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const universe = pendingUniverseDelete;
+
+  if (!universe?.id) {
+    closeModal();
+    return;
+  }
+
+  if (!supabaseClient) {
+    setDeleteUniverseStatus("Supabase is not available yet. Refresh the page and try again.", "error");
+    return;
+  }
+
+  button.disabled = true;
+  setDeleteUniverseStatus("Deleting universe...");
+
+  try {
+    await deleteUniverseAndChildren(universe.id);
+    closeModal();
+    await loadUniverseCards();
+  } catch (error) {
+    setDeleteUniverseStatus(`Could not delete universe: ${getReadableError(error)}`, "error");
+  } finally {
+    button.disabled = false;
+  }
 });
 
 createUniverseButtons.forEach((button) => {
