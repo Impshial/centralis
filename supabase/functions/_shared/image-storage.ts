@@ -188,6 +188,16 @@ export async function insertImageRow(options: {
   userId: string;
 }) {
   const supabase = createAdminClient();
+  const { count, error: countError } = await supabase
+    .from("image_table")
+    .select("id", { count: "exact", head: true })
+    .eq("object_id", options.objectId);
+
+  if (countError) {
+    throw countError;
+  }
+
+  const imageCount = Number(count || 0);
   const { data, error } = await supabase
     .from("image_table")
     .insert({
@@ -197,8 +207,10 @@ export async function insertImageRow(options: {
       prompt: options.prompt || null,
       generation_settings: options.generationSettings || null,
       user_id: options.userId,
+      is_primary: imageCount === 0,
+      sort_order: imageCount,
     })
-    .select()
+    .select("id,object_id,image_url,provider,prompt,generation_settings,is_primary,sort_order,created_at")
     .single();
 
   if (error) {

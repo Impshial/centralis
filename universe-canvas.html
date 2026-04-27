@@ -125,6 +125,9 @@
         <button class="tool-action" type="button" data-open-types-modal>
           Types
         </button>
+        <button class="tool-action icon-tool-action" type="button" data-auto-layout aria-label="Auto-layout canvas" title="Auto-layout canvas">
+          <ph-tree-structure weight="bold" aria-hidden="true"></ph-tree-structure>
+        </button>
         <button class="tool-action icon-tool-action" type="button" data-open-format-modal aria-label="Universe format">
           <ph-gear-six weight="bold" aria-hidden="true"></ph-gear-six>
         </button>
@@ -139,6 +142,7 @@
           <h2 data-details-title>Node Details</h2>
         </div>
         <div class="details-pane-actions">
+          <button class="secondary-action compact-action" type="button" data-details-rich hidden>Add Rich Details</button>
           <button class="secondary-action compact-action" type="button" data-details-edit>Edit</button>
           <button class="secondary-action compact-action" type="button" data-details-cancel hidden>Cancel</button>
           <button class="primary-action compact-action" type="button" data-details-save hidden>Save</button>
@@ -399,6 +403,31 @@
     </section>
   </div>
 
+  <div class="modal-backdrop rich-details-backdrop" id="rich-details-modal" hidden>
+    <section class="modal-dialog rich-details-dialog" role="dialog" aria-modal="true" aria-labelledby="rich-details-title">
+      <header class="rich-details-header">
+        <div>
+          <p class="details-pane-kicker" data-rich-details-kind>Rich Details</p>
+          <h2 id="rich-details-title" data-rich-details-title>Rich Details</h2>
+        </div>
+        <div class="rich-details-actions">
+          <button class="secondary-action compact-action" type="button" data-rich-details-close>Close</button>
+          <button class="secondary-action compact-action" type="button" data-rich-details-edit>Edit</button>
+          <button class="secondary-action compact-action" type="button" data-rich-details-cancel hidden>Cancel</button>
+          <button class="primary-action compact-action" type="button" data-rich-details-save hidden>Save</button>
+          <button class="modal-close" type="button" aria-label="Close rich details" data-rich-details-close>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+      <div class="rich-details-body" data-rich-details-body></div>
+      <p class="form-status rich-details-status" data-rich-details-status role="status"></p>
+    </section>
+  </div>
+
   <div class="modal-backdrop image-viewer-backdrop" id="image-viewer-modal" hidden>
     <section class="modal-dialog image-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="image-viewer-title">
       <div class="image-viewer-header">
@@ -423,8 +452,16 @@
       </div>
       <div class="image-viewer-thumbs" data-image-viewer-thumbs aria-label="Image thumbnails"></div>
       <p class="form-status image-viewer-status" data-image-viewer-status role="status"></p>
+      <label class="image-primary-toggle">
+        <input type="checkbox" data-image-viewer-primary>
+        <span>Set as primary image</span>
+      </label>
       <div class="image-viewer-footer">
         <div class="image-viewer-left-actions">
+          <button class="secondary-action image-viewer-action" type="button" data-image-viewer-open>
+            <ph-arrow-square-out weight="bold" aria-hidden="true"></ph-arrow-square-out>
+            Open
+          </button>
           <button class="secondary-action image-viewer-action" type="button" data-image-viewer-download>
             <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
             Download
@@ -446,6 +483,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
-  <script src="flow-canvas.js?v=details-edit-labels-1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+  <script src="flow-canvas.js?v=rich-details-view-edit-1"></script>
 </body>
 </html>

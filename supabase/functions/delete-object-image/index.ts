@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     const supabase = createAdminClient();
     const { data: image, error: findError } = await supabase
       .from("image_table")
-      .select("id,image_url,user_id")
+      .select("id,object_id,image_url,user_id")
       .eq("id", imageId)
       .maybeSingle();
 
@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
     if (image.user_id && image.user_id !== user.id) {
       return jsonResponse({ error: "You do not have permission to delete this image." }, 403);
     }
+    const objectId = image.object_id;
 
     await deleteImageObject(image.image_url);
 
@@ -47,6 +48,28 @@ Deno.serve(async (req) => {
 
     if (deleteError) {
       throw deleteError;
+    }
+
+    const { data: remainingImages, error: remainingError } = await supabase
+      .from("image_table")
+      .select("id,is_primary")
+      .eq("object_id", objectId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (remainingError) {
+      throw remainingError;
+    }
+
+    if (remainingImages?.length === 1 && !remainingImages[0].is_primary) {
+      const { error: primaryError } = await supabase
+        .from("image_table")
+        .update({ is_primary: true })
+        .eq("id", remainingImages[0].id);
+
+      if (primaryError) {
+        throw primaryError;
+      }
     }
 
     return jsonResponse({ deleted: true, imageId });

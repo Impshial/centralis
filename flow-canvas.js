@@ -49,6 +49,26 @@
     return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
   }
 
+  function normalizeImages(images = []) {
+    if (!Array.isArray(images) || !images.length) {
+      return [];
+    }
+
+    const primaryIndex = images.findIndex((image) => image.is_primary);
+    if (primaryIndex >= 0) {
+      const primaryImage = images[primaryIndex];
+      return [
+        primaryImage,
+        ...images.filter((_, index) => index !== primaryIndex)
+      ];
+    }
+
+    return images.map((image, index) => ({
+      ...image,
+      is_primary: index === 0
+    }));
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -672,7 +692,7 @@
   const initialEdges = elementLinks.map(toLinkEdge);
 
   function getImagesForObject(objectId) {
-    return imageRows.filter((image) => image.object_id === objectId);
+    return normalizeImages(imageRows.filter((image) => image.object_id === objectId));
   }
 
   function getNodeTypeMeta(node) {
@@ -704,6 +724,7 @@
       title: pane.querySelector("[data-details-title]"),
       content: pane.querySelector("[data-details-content]"),
       closeButton: pane.querySelector("[data-details-close]"),
+      richButton: pane.querySelector("[data-details-rich]"),
       editButton: pane.querySelector("[data-details-edit]"),
       saveButton: pane.querySelector("[data-details-save]"),
       cancelButton: pane.querySelector("[data-details-cancel]"),
@@ -762,13 +783,44 @@
     }).join("");
   }
 
+  function renderCollapsibleDetailsSection(id, title, content) {
+    const bodyId = `details-section-${sanitizeIconName(id)}`;
+    return `
+      <section class="details-section collapsible-details-section">
+        <button class="details-section-toggle" type="button" aria-expanded="true" aria-controls="${escapeHtml(bodyId)}" data-details-section-toggle>
+          <span>${escapeHtml(title)}</span>
+          <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+        </button>
+        <div class="details-section-body" id="${escapeHtml(bodyId)}" data-details-section-body>
+          ${content}
+        </div>
+      </section>
+    `;
+  }
+
+  function setupCollapsibleDetailsSections(container) {
+    container.querySelectorAll("[data-details-section-toggle]").forEach((button) => {
+      const body = button.closest(".collapsible-details-section")?.querySelector("[data-details-section-body]");
+      if (!body) {
+        return;
+      }
+
+      button.addEventListener("click", () => {
+        const isExpanded = button.getAttribute("aria-expanded") === "true";
+        button.setAttribute("aria-expanded", isExpanded ? "false" : "true");
+        body.hidden = isExpanded;
+      });
+    });
+  }
+
   function renderImageGallery(images, nodeId) {
     if (!images?.length) {
       return '<p class="details-empty">No images yet.</p>';
     }
 
-    const primaryImage = images.find((image) => image.is_primary) || images[0];
-    const primaryIndex = Math.max(0, images.findIndex((image) => image.id === primaryImage.id));
+    const normalizedImages = normalizeImages(images);
+    const primaryImage = normalizedImages[0];
+    const primaryIndex = 0;
 
     return `
       <div class="image-gallery">
@@ -777,7 +829,7 @@
           <span data-image-counter>${primaryIndex + 1} / ${images.length}</span>
         </button>
         <div class="image-thumbs" aria-label="Image gallery">
-          ${images.map((image, index) => `
+          ${normalizedImages.map((image, index) => `
             <button class="image-thumb${image.id === primaryImage.id ? " is-active" : ""}" type="button" data-image-thumb data-image-id="${escapeHtml(image.id)}" data-image-url="${escapeHtml(image.image_url)}" data-image-index="${index + 1}" aria-label="Show image ${index + 1}">
               <img src="${escapeHtml(image.image_url)}" alt="">
             </button>
@@ -917,10 +969,218 @@
     });
   }
 
+  function getTemplateFieldLabel(field) {
+    return field.label || field.name || field.field_key || "Untitled Field";
+  }
+
+  function getTemplateFieldKey(field) {
+    return field.field_key || sanitizeIconName(getTemplateFieldLabel(field));
+  }
+
+  function getTemplateFieldType(field) {
+    return String(field.field_type || "textarea").toLowerCase();
+  }
+
+  function isRichTextareaType(type) {
+    return ["textarea", "rich_text"].includes(String(type || "").toLowerCase());
+  }
+
+  function parseFieldOptions(options) {
+    if (!options) {
+      return {};
+    }
+    if (typeof options === "object") {
+      return options;
+    }
+    try {
+      return JSON.parse(options);
+    } catch {
+      return {};
+    }
+  }
+
+  function getFieldChoices(field) {
+    const options = parseFieldOptions(field.options);
+    return Array.isArray(options.choices) ? options.choices.map(String) : [];
+  }
+
+  function getFieldStoredValue(valuesByFieldId, field) {
+    const savedValue = valuesByFieldId.get(field.id)?.value;
+    if (savedValue !== undefined && savedValue !== null) {
+      return String(savedValue);
+    }
+    return field.default_value === undefined || field.default_value === null ? "" : String(field.default_value);
+  }
+
+  function renderRichFieldValue(field, value) {
+    const label = getTemplateFieldLabel(field);
+    const type = getTemplateFieldType(field);
+    let displayValue = hasMeaningfulValue(value) ? value : "--";
+    if (type === "checkbox" && hasMeaningfulValue(value)) {
+      displayValue = value === "true" ? "Yes" : "No";
+    } else if (type === "multi_select") {
+      displayValue = String(value).split("\n").filter(Boolean).join(", ");
+    }
+
+    return `
+      <div class="rich-view-field${isRichTextareaType(type) ? " is-textarea-field" : ""}" data-template-field-id="${escapeHtml(field.id)}">
+        <dt>${escapeHtml(label)}</dt>
+        <dd class="${hasMeaningfulValue(value) ? "" : "is-empty"}">${escapeHtml(displayValue)}</dd>
+      </div>
+    `;
+  }
+
+  function renderRichFieldControl(field, value) {
+    const fieldId = `rich-field-${escapeHtml(field.id)}`;
+    const fieldName = `rich-field:${field.id}`;
+    const label = getTemplateFieldLabel(field);
+    const type = getTemplateFieldType(field);
+    const description = field.description || field.hint_text || "";
+    const placeholder = field.placeholder || "";
+    const choices = getFieldChoices(field);
+    const required = Boolean(field.is_required) ? " required" : "";
+    const commonAttrs = `id="${fieldId}" name="${escapeHtml(fieldName)}" placeholder="${escapeHtml(placeholder)}"${required}`;
+    let control = "";
+
+    if (type === "text" || type === "url") {
+      control = `<input type="${type === "url" ? "url" : "text"}" ${commonAttrs} value="${escapeHtml(value)}">`;
+    } else if (type === "number") {
+      control = `<input type="number" ${commonAttrs} value="${escapeHtml(value)}">`;
+    } else if (type === "date") {
+      control = `<input type="date" ${commonAttrs} value="${escapeHtml(value)}">`;
+    } else if (type === "checkbox") {
+      control = `
+        <label class="rich-checkbox-field">
+          <input type="checkbox" name="${escapeHtml(fieldName)}" value="true"${value === "true" ? " checked" : ""}>
+          <span>${escapeHtml(field.placeholder || "Enabled")}</span>
+        </label>
+      `;
+    } else if (type === "select") {
+      control = `
+        <select ${commonAttrs}>
+          <option value="">Select...</option>
+          ${choices.map((choice) => `<option value="${escapeHtml(choice)}"${choice === value ? " selected" : ""}>${escapeHtml(choice)}</option>`).join("")}
+        </select>
+      `;
+    } else if (type === "multi_select") {
+      const selected = new Set(value ? value.split("\n").map((item) => item.trim()).filter(Boolean) : []);
+      control = `
+        <select ${commonAttrs} multiple>
+          ${choices.map((choice) => `<option value="${escapeHtml(choice)}"${selected.has(choice) ? " selected" : ""}>${escapeHtml(choice)}</option>`).join("")}
+        </select>
+      `;
+    } else {
+      const fallback = ["textarea", "rich_text"].includes(type) ? "" : `<em>Unsupported field type "${escapeHtml(type)}"; saving as text.</em>`;
+      control = `${fallback}<textarea ${commonAttrs} rows="5">${escapeHtml(value)}</textarea>`;
+    }
+
+    return `
+      <label class="form-field rich-template-field${isRichTextareaType(type) ? " is-textarea-field" : ""}" data-template-field-id="${escapeHtml(field.id)}" data-template-field-type="${escapeHtml(type)}">
+        <span>${escapeHtml(label)}${field.is_required ? " *" : ""}</span>
+        ${description ? `<small>${escapeHtml(description)}</small>` : ""}
+        ${control}
+      </label>
+    `;
+  }
+
+  function sortTemplateFields(fields) {
+    return [...fields].sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || getTemplateFieldLabel(left).localeCompare(getTemplateFieldLabel(right)));
+  }
+
+  function buildRichTemplateSectionModels(sections = [], fields = []) {
+    const sectionModels = [...sections]
+      .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || String(left.name || "").localeCompare(String(right.name || "")))
+      .map((section) => ({
+        id: section.id,
+        name: section.name || "Untitled Section",
+        description: section.description || "",
+        fields: []
+      }));
+    const modelsById = new Map(sectionModels.map((section) => [section.id, section]));
+    const unsectionedFields = [];
+
+    fields.forEach((field) => {
+      const section = field.section_id ? modelsById.get(field.section_id) : null;
+      if (section) {
+        section.fields.push(field);
+      } else {
+        unsectionedFields.push(field);
+      }
+    });
+
+    sectionModels.forEach((section) => {
+      section.fields = sortTemplateFields(section.fields);
+    });
+    if (unsectionedFields.length) {
+      sectionModels.push({
+        id: "unsectioned",
+        name: "Unsectioned",
+        description: "",
+        fields: sortTemplateFields(unsectionedFields)
+      });
+    }
+
+    return sectionModels;
+  }
+
+  function renderRichTemplateSections(sections, fields, valuesByFieldId, mode = "view") {
+    if (!sections.length && !fields.length) {
+      return '<p class="details-empty">No template fields are available for this element type yet.</p>';
+    }
+
+    return buildRichTemplateSectionModels(sections, fields).map((section) => `
+      <section class="rich-template-section">
+        <div class="rich-template-section-header">
+          <h3>${escapeHtml(section.name)}</h3>
+          ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+        </div>
+        ${section.fields.length ? `
+          <${mode === "view" ? "dl" : "div"} class="rich-template-fields">
+            ${section.fields
+              .map((field) => mode === "view"
+                ? renderRichFieldValue(field, getFieldStoredValue(valuesByFieldId, field))
+                : renderRichFieldControl(field, getFieldStoredValue(valuesByFieldId, field)))
+              .join("")}
+          </${mode === "view" ? "dl" : "div"}>
+        ` : '<p class="details-empty">No fields in this section yet.</p>'}
+      </section>
+    `).join("");
+  }
+
+  function renderCustomFields(customFields = [], mode = "edit") {
+    if (mode === "view") {
+      if (!customFields.length) {
+        return '<p class="details-empty">No custom fields yet.</p>';
+      }
+      return `
+        <dl class="rich-template-fields">
+          ${customFields.map((field) => `
+            <div class="rich-view-field is-textarea-field">
+              <dt>${escapeHtml(field.name || "Untitled Field")}</dt>
+              <dd class="${hasMeaningfulValue(field.value) ? "" : "is-empty"}">${escapeHtml(hasMeaningfulValue(field.value) ? field.value : "--")}</dd>
+            </div>
+          `).join("")}
+        </dl>
+      `;
+    }
+
+    const rows = customFields.length ? customFields : [{ id: "", name: "", value: "" }];
+    return rows.map((field) => `
+      <div class="custom-field-row" data-custom-field-row data-custom-field-id="${escapeHtml(field.id || "")}">
+        <input type="text" name="custom-name" value="${escapeHtml(field.name || "")}" placeholder="Field name">
+        <textarea name="custom-value" rows="3" placeholder="Value">${escapeHtml(field.value || "")}</textarea>
+        <button class="secondary-action compact-action" type="button" data-remove-custom-field>Remove</button>
+      </div>
+    `).join("");
+  }
+
   function setDetailsPaneMode(controls, mode) {
     const isEditMode = mode === "edit";
     if (controls.editButton) {
       controls.editButton.hidden = isEditMode;
+    }
+    if (controls.richButton) {
+      controls.richButton.hidden = isEditMode;
     }
     if (controls.saveButton) {
       controls.saveButton.hidden = !isEditMode;
@@ -956,6 +1216,9 @@
     }
     if (controls.title) {
       controls.title.textContent = name;
+    }
+    if (controls.richButton) {
+      controls.richButton.hidden = mode === "edit" || node.data?.kind !== "element";
     }
 
     if (mode === "edit") {
@@ -1034,16 +1297,10 @@
           </div>
         </dl>
       </section>
-      <section class="details-section">
-        <h3>Images</h3>
-        ${renderImageGallery(images, nodeId)}
-      </section>
+      ${renderCollapsibleDetailsSection("images", "Images", renderImageGallery(images, nodeId))}
+      ${renderCollapsibleDetailsSection("description", "Description", `<p class="details-description-text">${escapeHtml(description)}</p>`)}
       <section class="details-section">
         <dl class="details-fields">
-          <div>
-            <dt>Description</dt>
-            <dd class="details-description-text">${escapeHtml(description)}</dd>
-          </div>
           <div>
             <dt>Element Type</dt>
             <dd>
@@ -1057,17 +1314,17 @@
           </div>
         </dl>
       </section>
-      <section class="details-section">
-        <h3>Linked Nodes</h3>
+      ${renderCollapsibleDetailsSection("linked-nodes", "Linked Nodes", `
         <div class="linked-node-list">
           ${renderLinkedNodeCards(linkedNodes)}
         </div>
-      </section>
+      `)}
     `;
 
     controls.content.querySelectorAll("[data-linked-node-id]").forEach((button) => {
       button.addEventListener("click", () => openNodeDetails(button.dataset.linkedNodeId));
     });
+    setupCollapsibleDetailsSections(controls.content);
     setupImageGallery(controls.content);
   }
 
@@ -1132,6 +1389,184 @@
     }
   }
 
+  function estimateNodeSize(node, format = DEFAULT_UNIVERSE_FORMAT) {
+    const hasTopImage = format.nodeImagePlacement === "top" && Boolean(node.data?.images?.length);
+    const measuredWidth = node.measured?.width || node.width;
+    const measuredHeight = node.measured?.height || node.height;
+    const width = Number(measuredWidth || (node.data?.kind === "universe" ? 280 : 236));
+    if (measuredHeight) {
+      return { width, height: Number(measuredHeight) };
+    }
+
+    const descriptionLength = String(node.data?.description || "").length;
+    const blurbRows = descriptionLength > 92 ? 3 : descriptionLength > 44 ? 2 : 1;
+    const baseHeight = node.data?.kind === "universe" ? 106 : 96;
+    const imageHeight = hasTopImage ? 92 : 0;
+    return {
+      width,
+      height: baseHeight + imageHeight + blurbRows * 18 + Number(format.nodeLayoutGap || 12)
+    };
+  }
+
+  function createColumnAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
+    const nodesById = new Map(currentNodes.map((node) => [node.id, node]));
+    const childrenById = new Map(currentNodes.map((node) => [node.id, []]));
+    const indegreeById = new Map(currentNodes.map((node) => [node.id, 0]));
+
+    currentEdges.forEach((edge) => {
+      if (!nodesById.has(edge.source) || !nodesById.has(edge.target)) {
+        return;
+      }
+      childrenById.get(edge.source).push(edge.target);
+      indegreeById.set(edge.target, (indegreeById.get(edge.target) || 0) + 1);
+    });
+
+    childrenById.forEach((children) => {
+      children.sort((leftId, rightId) => {
+        const left = nodesById.get(leftId)?.position?.y || 0;
+        const right = nodesById.get(rightId)?.position?.y || 0;
+        return left - right;
+      });
+    });
+
+    const universeRoot = currentNodes.find((node) => node.data?.kind === "universe");
+    const roots = [
+      universeRoot,
+      ...currentNodes.filter((node) => node.id !== universeRoot?.id && !indegreeById.get(node.id))
+    ].filter(Boolean);
+    const levelsById = new Map();
+
+    function visit(nodeId, level, trail = new Set()) {
+      if (trail.has(nodeId)) {
+        return;
+      }
+      const existingLevel = levelsById.get(nodeId);
+      if (existingLevel === undefined || level > existingLevel) {
+        levelsById.set(nodeId, level);
+      }
+      const nextTrail = new Set(trail);
+      nextTrail.add(nodeId);
+      (childrenById.get(nodeId) || []).forEach((childId) => visit(childId, level + 1, nextTrail));
+    }
+
+    roots.forEach((root) => visit(root.id, 0));
+    currentNodes.forEach((node) => {
+      if (!levelsById.has(node.id)) {
+        levelsById.set(node.id, 0);
+      }
+    });
+
+    const minX = Math.min(...currentNodes.map((node) => Number(node.position?.x || 0)));
+    const minY = Math.min(...currentNodes.map((node) => Number(node.position?.y || 0)));
+    const spacingUnit = Number(format.nodeLayoutGap || 12);
+    const columnGap = Math.max(330, 286 + spacingUnit * 7);
+    const rowGap = Math.max(58, 42 + spacingUnit * 3);
+    const groups = new Map();
+
+    currentNodes.forEach((node) => {
+      const level = levelsById.get(node.id) || 0;
+      if (!groups.has(level)) {
+        groups.set(level, []);
+      }
+      groups.get(level).push(node);
+    });
+
+    const positionsById = new Map();
+    [...groups.entries()]
+      .sort(([leftLevel], [rightLevel]) => leftLevel - rightLevel)
+      .forEach(([level, levelNodes]) => {
+        const sortedNodes = [...levelNodes].sort((left, right) => {
+          if (left.data?.kind === "universe") return -1;
+          if (right.data?.kind === "universe") return 1;
+          return Number(left.position?.y || 0) - Number(right.position?.y || 0);
+        });
+        let yCursor = minY;
+        sortedNodes.forEach((node) => {
+          const size = estimateNodeSize(node, format);
+          positionsById.set(node.id, {
+            x: Math.round((minX + level * columnGap) / 12) * 12,
+            y: Math.round(yCursor / 12) * 12
+          });
+          yCursor += size.height + rowGap;
+        });
+      });
+
+    return currentNodes.map((node) => ({
+      ...node,
+      position: positionsById.get(node.id) || node.position
+    }));
+  }
+
+  async function createAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
+    const Elk = window.ELK || window.ElkConstructor || window.elkjs?.ELK;
+    if (!Elk) {
+      return createColumnAutoLayout(currentNodes, currentEdges, format);
+    }
+
+    const minX = Math.min(...currentNodes.map((node) => Number(node.position?.x || 0)));
+    const minY = Math.min(...currentNodes.map((node) => Number(node.position?.y || 0)));
+    const spacingUnit = Number(format.nodeLayoutGap || 12);
+    const nodeSizes = new Map(currentNodes.map((node) => [node.id, estimateNodeSize(node, format)]));
+    const graph = {
+      id: "centralis-universe-layout",
+      layoutOptions: {
+        "elk.algorithm": "layered",
+        "elk.direction": "RIGHT",
+        "elk.spacing.nodeNode": String(Math.max(48, spacingUnit * 5)),
+        "elk.layered.spacing.nodeNodeBetweenLayers": String(Math.max(125, spacingUnit * 10)),
+        "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+        "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+        "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+        "elk.hierarchyHandling": "INCLUDE_CHILDREN"
+      },
+      children: currentNodes.map((node) => {
+        const size = nodeSizes.get(node.id);
+        return {
+          id: node.id,
+          width: size.width,
+          height: size.height
+        };
+      }),
+      edges: currentEdges
+        .filter((edge) => nodeSizes.has(edge.source) && nodeSizes.has(edge.target))
+        .map((edge) => ({
+          id: edge.id,
+          sources: [edge.source],
+          targets: [edge.target]
+        }))
+    };
+
+    try {
+      const layout = await new Elk().layout(graph);
+      const positionsById = new Map((layout.children || []).map((child) => [
+        child.id,
+        {
+          x: Math.round((minX + Number(child.x || 0)) / 12) * 12,
+          y: Math.round((minY + Number(child.y || 0)) / 12) * 12
+        }
+      ]));
+
+      return currentNodes.map((node) => ({
+        ...node,
+        position: positionsById.get(node.id) || node.position
+      }));
+    } catch (error) {
+      console.error("ELK auto-layout failed, using fallback layout:", error);
+      return createColumnAutoLayout(currentNodes, currentEdges, format);
+    }
+  }
+
+  async function saveNodePositions(nodesToSave) {
+    await Promise.all(nodesToSave.map((node) => saveNodePosition(null, node)));
+  }
+
+  function throwFirstSupabaseError(responses) {
+    const failedResponse = responses.find((response) => response?.error);
+    if (failedResponse?.error) {
+      throw failedResponse.error;
+    }
+  }
+
   function getElementTypeById(typeId) {
     return elementTypes.find((type) => type.id === typeId) || null;
   }
@@ -1153,6 +1588,114 @@
 
     elementTypes = data || [];
     return elementTypes;
+  }
+
+  function hasMeaningfulValue(value) {
+    return String(value ?? "").trim().length > 0;
+  }
+
+  async function elementHasRichDetails(elementId) {
+    if (!window.centralisSupabase || !elementId) {
+      return false;
+    }
+
+    const [valueResponse, customResponse] = await Promise.all([
+      window.centralisSupabase
+        .from("element_template_field_values")
+        .select("id,value")
+        .eq("element_id", elementId),
+      window.centralisSupabase
+        .from("element_custom_fields")
+        .select("id,name,value")
+        .eq("element_id", elementId)
+    ]);
+
+    if (valueResponse.error) {
+      console.error("Could not check rich detail values:", valueResponse.error);
+    }
+    if (customResponse.error) {
+      console.error("Could not check custom fields:", customResponse.error);
+    }
+
+    return Boolean((valueResponse.data || []).some((row) => hasMeaningfulValue(row.value))
+      || (customResponse.data || []).some((row) => hasMeaningfulValue(row.name) || hasMeaningfulValue(row.value)));
+  }
+
+  async function fetchRichDetailsData(node) {
+    if (!window.centralisSupabase || !node?.data?.recordId) {
+      return { template: null, sections: [], fields: [], values: [], customFields: [] };
+    }
+
+    const [valueResponse, customResponse] = await Promise.all([
+      window.centralisSupabase
+        .from("element_template_field_values")
+        .select("*")
+        .eq("element_id", node.data.recordId),
+      window.centralisSupabase
+        .from("element_custom_fields")
+        .select("*")
+        .eq("element_id", node.data.recordId)
+        .order("sort_order", { ascending: true })
+    ]);
+
+    if (valueResponse.error) {
+      throw valueResponse.error;
+    }
+    if (customResponse.error) {
+      throw customResponse.error;
+    }
+
+    let template = null;
+    let sections = [];
+    let fields = [];
+    const elementTypeId = node.data?.elementType?.id;
+    if (elementTypeId) {
+      const templateResponse = await window.centralisSupabase
+        .from("element_type_templates")
+        .select("*")
+        .eq("element_type_id", elementTypeId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (templateResponse.error) {
+        throw templateResponse.error;
+      }
+      template = templateResponse.data || null;
+
+      if (template?.id) {
+        const [sectionResponse, fieldResponse] = await Promise.all([
+          window.centralisSupabase
+            .from("element_template_sections")
+            .select("*")
+            .eq("template_id", template.id)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }),
+          window.centralisSupabase
+            .from("element_type_template_fields")
+            .select("*")
+            .eq("template_id", template.id)
+            .order("sort_order", { ascending: true })
+        ]);
+
+        if (sectionResponse.error) {
+          throw sectionResponse.error;
+        }
+        if (fieldResponse.error) {
+          throw fieldResponse.error;
+        }
+        sections = sectionResponse.data || [];
+        fields = fieldResponse.data || [];
+      }
+    }
+
+    return {
+      template,
+      sections,
+      fields,
+      values: valueResponse.data || [],
+      customFields: customResponse.data || []
+    };
   }
 
   let phosphorIconNamesPromise = null;
@@ -1366,14 +1909,27 @@
     const [detailsNodeId, setDetailsNodeId] = React.useState(null);
     const [detailsMode, setDetailsMode] = React.useState("view");
     const [pendingImageGeneration, setPendingImageGeneration] = React.useState(null);
+    const [richDetailsNodeId, setRichDetailsNodeId] = React.useState(null);
+    const [richDetailsData, setRichDetailsData] = React.useState(null);
+    const [richDetailsMode, setRichDetailsMode] = React.useState("view");
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
     const nodesRef = React.useRef(nodes);
+    const edgesRef = React.useRef(edges);
+    const universeFormatRef = React.useRef(universeFormat);
     const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode }), []);
 
     React.useEffect(() => {
       nodesRef.current = nodes;
     }, [nodes]);
+
+    React.useEffect(() => {
+      edgesRef.current = edges;
+    }, [edges]);
+
+    React.useEffect(() => {
+      universeFormatRef.current = universeFormat;
+    }, [universeFormat]);
 
     const syncElementTypes = React.useCallback((nextTypes) => {
       elementTypes = [...nextTypes].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
@@ -1392,6 +1948,22 @@
         };
       }));
       populateElementTypeSelect();
+    }, []);
+
+    const handleNodesChange = React.useCallback((changes) => {
+      setNodes((currentNodes) => {
+        const nextNodes = applyNodeChanges(changes, currentNodes);
+        const finishedPositionIds = new Set(changes
+          .filter((change) => change.type === "position" && change.dragging === false)
+          .map((change) => change.id));
+
+        if (finishedPositionIds.size) {
+          const movedNodes = nextNodes.filter((node) => finishedPositionIds.has(node.id));
+          saveNodePositions(movedNodes);
+        }
+
+        return nextNodes;
+      });
     }, []);
 
     const applyUniverseFormat = React.useCallback((format) => {
@@ -1504,33 +2076,82 @@
     }), [deleteEdge, getFormattedEdgePath]);
 
     const openLinkedNodeDetails = React.useCallback((nodeId) => {
-      setDetailsNodeId(nodeId);
-      setDetailsMode("view");
       setNodes((currentNodes) => currentNodes.map((node) => ({
         ...node,
         selected: node.id === nodeId
       })));
+      window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
+        detail: { nodeId }
+      }));
     }, []);
 
-    const setNodeImages = React.useCallback((nodeId, images) => {
+    const openRichDetails = React.useCallback(async (nodeId) => {
+      const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
+      if (!node || node.data?.kind !== "element") {
+        return;
+      }
+
+      hideDetailsPane();
+      setDetailsNodeId(null);
+      setDetailsMode("view");
+      setRichDetailsMode("view");
+      setRichDetailsNodeId(nodeId);
+      setRichDetailsData({ loading: true, error: "", template: null, sections: [], fields: [], values: [], customFields: [] });
+      try {
+        const data = await fetchRichDetailsData(node);
+        setRichDetailsData({ loading: false, error: "", ...data });
+      } catch (error) {
+        setRichDetailsData({ loading: false, error: getReadableError(error), template: null, fields: [], values: [], customFields: [] });
+      }
+    }, []);
+
+    const runAutoLayout = React.useCallback(async (options = {}) => {
+      const { fit = true, sourceNodes = nodesRef.current, persist = true } = options;
+      const nextNodes = await createAutoLayout(sourceNodes, edgesRef.current, universeFormatRef.current);
+      setNodes(nextNodes);
+      nodesRef.current = nextNodes;
+
+      if (fit) {
+        window.setTimeout(() => {
+          reactFlowInstance.current?.fitView({ padding: 0.18, duration: 360 });
+        }, 50);
+      }
+
+      if (persist) {
+        await saveNodePositions(nextNodes);
+      }
+    }, []);
+
+    const setNodeImages = React.useCallback((nodeId, images, options = {}) => {
       if (!Array.isArray(images)) {
         return;
       }
 
-      setNodes((currentNodes) => currentNodes.map((node) => {
-        if (node.id !== nodeId) {
-          return node;
-        }
-
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            images
+      const normalizedImages = normalizeImages(images);
+      let nextNodes = null;
+      setNodes((currentNodes) => {
+        nextNodes = currentNodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
           }
-        };
-      }));
-    }, []);
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              images: normalizedImages
+            }
+          };
+        });
+        return nextNodes;
+      });
+
+      if (options.autoLayoutAfter && nextNodes) {
+        window.setTimeout(() => {
+          runAutoLayout({ fit: false, sourceNodes: nextNodes });
+        }, 60);
+      }
+    }, [runAutoLayout]);
 
     const refreshNodeImages = React.useCallback(async (node) => {
       if (!node?.data?.recordId) {
@@ -1542,7 +2163,9 @@
         body: JSON.stringify({ objectIds: [node.data.recordId] })
       });
 
-      setNodeImages(node.id, data.images || []);
+      setNodeImages(node.id, data.images || [], {
+        autoLayoutAfter: universeFormatRef.current.nodeImagePlacement === "top"
+      });
     }, [setNodeImages]);
 
     React.useEffect(() => {
@@ -1554,8 +2177,10 @@
       const status = document.querySelector("[data-image-viewer-status]");
       const prevButton = document.querySelector("[data-image-viewer-prev]");
       const nextButton = document.querySelector("[data-image-viewer-next]");
+      const openButton = document.querySelector("[data-image-viewer-open]");
       const downloadButton = document.querySelector("[data-image-viewer-download]");
       const deleteButton = document.querySelector("[data-image-viewer-delete]");
+      const primaryInput = document.querySelector("[data-image-viewer-primary]");
       const closeButtons = document.querySelectorAll("[data-image-viewer-close]");
       if (!modal || !frame || !image || !thumbs) {
         return undefined;
@@ -1616,6 +2241,10 @@
         if (nextButton) {
           nextButton.disabled = viewerImages.length < 2;
         }
+        if (primaryInput) {
+          primaryInput.checked = Boolean(activeImage.is_primary);
+          primaryInput.disabled = Boolean(activeImage.is_primary);
+        }
         if (status) {
           status.textContent = "";
           status.classList.remove("is-error", "is-success");
@@ -1651,14 +2280,15 @@
       function handleOpenViewer(event) {
         const { nodeId, imageId } = event.detail || {};
         const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
-        const images = node?.data?.images || [];
+        const images = normalizeImages(node?.data?.images || []);
         if (!node || !images.length) {
           return;
         }
 
         viewerNodeId = nodeId;
         viewerImages = images;
-        viewerIndex = Math.max(0, images.findIndex((viewerImage) => viewerImage.id === imageId));
+        const requestedIndex = images.findIndex((viewerImage) => viewerImage.id === imageId);
+        viewerIndex = requestedIndex >= 0 ? requestedIndex : 0;
         modal.hidden = false;
         renderViewer();
       }
@@ -1727,6 +2357,58 @@
         link.click();
       }
 
+      function handleOpenImage() {
+        const activeImage = currentImage();
+        if (!activeImage?.image_url) {
+          return;
+        }
+
+        window.open(activeImage.image_url, "_blank", "noopener,noreferrer");
+      }
+
+      async function handleSetPrimaryImage() {
+        const activeImage = currentImage();
+        const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
+        if (!activeImage || !node || activeImage.is_primary) {
+          return;
+        }
+
+        if (primaryInput) {
+          primaryInput.disabled = true;
+        }
+        if (status) {
+          status.textContent = "Setting primary image...";
+          status.classList.remove("is-error", "is-success");
+        }
+
+        try {
+          await callEdgeFunction("set-primary-image", {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageId: activeImage.id })
+          });
+          viewerImages = normalizeImages(viewerImages.map((viewerImage) => ({
+            ...viewerImage,
+            is_primary: viewerImage.id === activeImage.id
+          })));
+          viewerIndex = Math.max(0, viewerImages.findIndex((viewerImage) => viewerImage.id === activeImage.id));
+          setNodeImages(node.id, viewerImages);
+          if (status) {
+            status.textContent = "Primary image updated.";
+            status.classList.add("is-success");
+          }
+          renderViewer();
+        } catch (error) {
+          if (status) {
+            status.textContent = `Could not set primary image: ${getReadableError(error)}`;
+            status.classList.add("is-error");
+          }
+          if (primaryInput) {
+            primaryInput.checked = false;
+            primaryInput.disabled = false;
+          }
+        }
+      }
+
       async function handleDelete() {
         const activeImage = currentImage();
         const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
@@ -1747,7 +2429,12 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ imageId: activeImage.id })
           });
-          const nextImages = viewerImages.filter((viewerImage) => viewerImage.id !== activeImage.id);
+          const nextImages = normalizeImages(viewerImages
+            .filter((viewerImage) => viewerImage.id !== activeImage.id)
+            .map((viewerImage, index, remainingImages) => ({
+              ...viewerImage,
+              is_primary: remainingImages.length === 1 ? true : viewerImage.is_primary
+            })));
           viewerImages = nextImages;
           viewerIndex = Math.min(viewerIndex, Math.max(0, nextImages.length - 1));
           setNodeImages(node.id, nextImages);
@@ -1772,8 +2459,10 @@
       closeButtons.forEach((button) => button.addEventListener("click", closeViewer));
       prevButton?.addEventListener("click", handlePrevious);
       nextButton?.addEventListener("click", handleNext);
+      openButton?.addEventListener("click", handleOpenImage);
       downloadButton?.addEventListener("click", handleDownload);
       deleteButton?.addEventListener("click", handleDelete);
+      primaryInput?.addEventListener("change", handleSetPrimaryImage);
       frame.addEventListener("wheel", handleWheel, { passive: false });
       image.addEventListener("pointerdown", handlePointerDown);
       image.addEventListener("pointermove", handlePointerMove);
@@ -1785,8 +2474,10 @@
         closeButtons.forEach((button) => button.removeEventListener("click", closeViewer));
         prevButton?.removeEventListener("click", handlePrevious);
         nextButton?.removeEventListener("click", handleNext);
+        openButton?.removeEventListener("click", handleOpenImage);
         downloadButton?.removeEventListener("click", handleDownload);
         deleteButton?.removeEventListener("click", handleDelete);
+        primaryInput?.removeEventListener("change", handleSetPrimaryImage);
         frame.removeEventListener("wheel", handleWheel);
         image.removeEventListener("pointerdown", handlePointerDown);
         image.removeEventListener("pointermove", handlePointerMove);
@@ -1889,6 +2580,16 @@
             status.textContent = "Saved.";
             status.classList.add("is-success");
           }
+          if (nextFormat.nodeImagePlacement === "top") {
+            const formattedNodes = nodesRef.current.map((node) => ({
+              ...node,
+              data: {
+                ...node.data,
+                format: nextFormat
+              }
+            }));
+            await runAutoLayout({ fit: false, sourceNodes: formattedNodes });
+          }
         } catch (error) {
           if (status) {
             status.textContent = `Could not save: ${getReadableError(error)}`;
@@ -1928,7 +2629,30 @@
         resetButton?.removeEventListener("click", handleReset);
         form.removeEventListener("click", handleSegmentClick);
       };
-    }, [applyUniverseFormat, universeFormat]);
+    }, [applyUniverseFormat, runAutoLayout, universeFormat]);
+
+    React.useEffect(() => {
+      const button = document.querySelector("[data-auto-layout]");
+      if (!button) {
+        return undefined;
+      }
+
+      async function handleAutoLayout() {
+        button.classList.add("is-busy");
+        button.disabled = true;
+        try {
+          await runAutoLayout();
+        } catch (error) {
+          console.error("Could not auto-layout canvas:", error);
+        } finally {
+          button.classList.remove("is-busy");
+          button.disabled = false;
+        }
+      }
+
+      button.addEventListener("click", handleAutoLayout);
+      return () => button.removeEventListener("click", handleAutoLayout);
+    }, [runAutoLayout]);
 
     React.useEffect(() => {
       const modal = document.getElementById("element-types-modal");
@@ -2318,15 +3042,394 @@
 
     React.useEffect(() => {
       function handleViewDetails(event) {
-        if (event.detail?.nodeId) {
-          setDetailsNodeId(event.detail.nodeId);
+        const nodeId = event.detail?.nodeId;
+        const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
+        if (!node) {
+          return;
+        }
+
+        async function routeDetailsOpen() {
+          if (node.data?.kind === "element" && await elementHasRichDetails(node.data.recordId)) {
+            openRichDetails(nodeId);
+            return;
+          }
+
+          setRichDetailsNodeId(null);
+          setRichDetailsData(null);
+          setDetailsNodeId(nodeId);
           setDetailsMode("view");
+        }
+
+        routeDetailsOpen();
+      }
+
+      function handleOpenRichDetails(event) {
+        if (event.detail?.nodeId) {
+          openRichDetails(event.detail.nodeId);
         }
       }
 
       window.addEventListener("centralis:view-node-details", handleViewDetails);
-      return () => window.removeEventListener("centralis:view-node-details", handleViewDetails);
-    }, []);
+      window.addEventListener("centralis:open-rich-details", handleOpenRichDetails);
+      return () => {
+        window.removeEventListener("centralis:view-node-details", handleViewDetails);
+        window.removeEventListener("centralis:open-rich-details", handleOpenRichDetails);
+      };
+    }, [openRichDetails]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("rich-details-modal");
+      const body = document.querySelector("[data-rich-details-body]");
+      const title = document.querySelector("[data-rich-details-title]");
+      const kind = document.querySelector("[data-rich-details-kind]");
+      const status = document.querySelector("[data-rich-details-status]");
+      const saveButton = document.querySelector("[data-rich-details-save]");
+      const editButton = document.querySelector("[data-rich-details-edit]");
+      const cancelButton = document.querySelector("[data-rich-details-cancel]");
+      const closeButtons = document.querySelectorAll("[data-rich-details-close]");
+      if (!modal || !body) {
+        return undefined;
+      }
+
+      const node = nodes.find((currentNode) => currentNode.id === richDetailsNodeId);
+      function closeRichDetails() {
+        modal.hidden = true;
+        setRichDetailsNodeId(null);
+        setRichDetailsData(null);
+        setRichDetailsMode("view");
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-error", "is-success");
+        }
+      }
+
+      function setRichStatus(message, tone = "") {
+        if (!status) {
+          return;
+        }
+        status.textContent = message;
+        status.classList.toggle("is-error", tone === "error");
+        status.classList.toggle("is-success", tone === "success");
+      }
+
+      function addCustomFieldRow() {
+        const list = body.querySelector("[data-custom-fields-list]");
+        if (!list) return;
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = renderCustomFields([{ id: "", name: "", value: "" }]);
+        list.appendChild(wrapper.firstElementChild);
+      }
+
+      function renderRichDetails() {
+        if (!richDetailsNodeId || !node) {
+          modal.hidden = true;
+          return;
+        }
+
+        const meta = getNodeTypeMeta(node);
+        modal.hidden = false;
+        if (title) title.textContent = node.data?.name || "Rich Details";
+        if (kind) kind.textContent = `Rich ${meta.label}`;
+        if (editButton) editButton.hidden = richDetailsMode === "edit";
+        if (cancelButton) cancelButton.hidden = richDetailsMode !== "edit";
+        if (saveButton) saveButton.hidden = richDetailsMode !== "edit";
+        if (richDetailsData?.loading) {
+          body.innerHTML = '<p class="details-empty">Loading rich details...</p>';
+          return;
+        }
+        if (richDetailsData?.error) {
+          body.innerHTML = `<p class="form-status is-error">Could not load rich details: ${escapeHtml(richDetailsData.error)}</p>`;
+          return;
+        }
+
+        const linkedNodes = getLinkedNodes(node.id, nodes, edges);
+        const valuesByFieldId = new Map((richDetailsData?.values || []).map((value) => [value.template_field_id, value]));
+        const isEditMode = richDetailsMode === "edit";
+        body.innerHTML = isEditMode ? `
+          <form class="rich-details-form" data-rich-details-form>
+            <section class="rich-details-section rich-details-basics">
+              <label class="form-field">
+                <span>Name</span>
+                <input type="text" name="rich-name" value="${escapeHtml(node.data?.name || "")}" autocomplete="off">
+              </label>
+              <label class="form-field is-textarea-field">
+                <span>Description</span>
+                <textarea name="rich-description" rows="6" placeholder="Brief description...">${escapeHtml(node.data?.description || "")}</textarea>
+              </label>
+            </section>
+            <section class="rich-details-section">
+              <h3>Images</h3>
+              ${renderImageGallery(node.data?.images || [], node.id)}
+              <div class="image-actions">
+                <button class="secondary-action image-action-button" type="button" data-rich-generate-image>
+                  <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+                  Generate
+                </button>
+                <div class="image-upload-row">
+                  <label class="secondary-action image-action-button" for="rich-details-image-upload">
+                    <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                    Upload
+                  </label>
+                  <input id="rich-details-image-upload" type="file" accept="image/*" data-rich-image-upload hidden>
+                  <p class="form-status image-upload-status" data-image-upload-status role="status"></p>
+                </div>
+              </div>
+            </section>
+            <section class="rich-details-section">
+              <h3>Element Type</h3>
+              ${createDetailsTypePickerMarkup(node.data?.elementType?.id || "")}
+            </section>
+            <section class="rich-details-section">
+              <h3>Linked Nodes</h3>
+              <div class="linked-node-list">
+                ${renderLinkedNodeCards(linkedNodes)}
+              </div>
+            </section>
+            ${renderRichTemplateSections(richDetailsData?.sections || [], richDetailsData?.fields || [], valuesByFieldId, "edit")}
+            <section class="rich-details-section">
+              <div class="rich-section-title-row">
+                <h3>Custom Fields</h3>
+                <button class="secondary-action compact-action" type="button" data-add-custom-field>Add Field</button>
+              </div>
+              <div class="custom-fields-list" data-custom-fields-list>
+                ${renderCustomFields(richDetailsData?.customFields || [], "edit")}
+              </div>
+            </section>
+          </form>
+        ` : `
+          <div class="rich-details-form rich-details-view">
+            <section class="rich-details-section rich-details-basics">
+              <dl class="rich-template-fields">
+                <div class="rich-view-field">
+                  <dt>Name</dt>
+                  <dd>${escapeHtml(node.data?.name || "Untitled Node")}</dd>
+                </div>
+                <div class="rich-view-field is-textarea-field">
+                  <dt>Description</dt>
+                  <dd class="${hasMeaningfulValue(node.data?.description) ? "" : "is-empty"}">${escapeHtml(hasMeaningfulValue(node.data?.description) ? node.data.description : "--")}</dd>
+                </div>
+              </dl>
+            </section>
+            <section class="rich-details-section">
+              <h3>Images</h3>
+              ${renderImageGallery(node.data?.images || [], node.id)}
+            </section>
+            <section class="rich-details-section">
+              <h3>Element Type</h3>
+              <span class="details-type-badge" style="--detail-color: ${escapeHtml(meta.color)}">
+                <span class="details-type-icon" aria-hidden="true">
+                  <ph-${escapeHtml(meta.icon)} weight="duotone"></ph-${escapeHtml(meta.icon)}>
+                </span>
+                ${escapeHtml(meta.label)}
+              </span>
+            </section>
+            <section class="rich-details-section">
+              <h3>Linked Nodes</h3>
+              <div class="linked-node-list">
+                ${renderLinkedNodeCards(linkedNodes)}
+              </div>
+            </section>
+            ${renderRichTemplateSections(richDetailsData?.sections || [], richDetailsData?.fields || [], valuesByFieldId, "view")}
+            <section class="rich-details-section">
+              <h3>Custom Fields</h3>
+              ${renderCustomFields(richDetailsData?.customFields || [], "view")}
+            </section>
+          </div>
+        `;
+
+        if (isEditMode) {
+          setupDetailsTypePicker(body);
+        }
+        setupImageGallery(body);
+        body.querySelectorAll("[data-linked-node-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            closeRichDetails();
+            openNodeDetails(button.dataset.linkedNodeId);
+          });
+        });
+        if (isEditMode) {
+          body.querySelector("[data-add-custom-field]")?.addEventListener("click", addCustomFieldRow);
+          body.querySelectorAll("[data-remove-custom-field]").forEach((button) => {
+            button.addEventListener("click", () => {
+              const row = button.closest("[data-custom-field-row]");
+              const customFieldId = row?.dataset.customFieldId;
+              if (customFieldId) {
+                const marker = document.createElement("input");
+                marker.type = "hidden";
+                marker.name = "deleted-custom-field-id";
+                marker.value = customFieldId;
+                body.querySelector("[data-rich-details-form]")?.appendChild(marker);
+              }
+              row?.remove();
+            });
+          });
+          body.querySelector("[data-rich-generate-image]")?.addEventListener("click", () => {
+            window.dispatchEvent(new CustomEvent("centralis:generate-image", {
+              detail: { nodeId: node.id, prompt: createImagePrompt(node) }
+            }));
+          });
+          body.querySelector("[data-rich-image-upload]")?.addEventListener("change", (event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              window.dispatchEvent(new CustomEvent("centralis:upload-image", {
+                detail: { nodeId: node.id, file }
+              }));
+            }
+          });
+        }
+      }
+
+      function showRichEditMode() {
+        setRichStatus("");
+        setRichDetailsMode("edit");
+      }
+
+      function cancelRichEditMode() {
+        setRichStatus("");
+        setRichDetailsMode("view");
+      }
+
+      async function saveRichDetails() {
+        const form = body.querySelector("[data-rich-details-form]");
+        if (!node || !form || !window.centralisSupabase) return;
+        const formData = new FormData(form);
+        const name = String(formData.get("rich-name") || "").trim();
+        const description = String(formData.get("rich-description") || "").trim();
+        const elementTypeId = String(formData.get("details-element-type") || "");
+        if (!name) {
+          setRichStatus("Name is required.", "error");
+          form.querySelector('[name="rich-name"]')?.focus();
+          return;
+        }
+
+        if (saveButton) {
+          saveButton.disabled = true;
+        }
+        setRichStatus("Saving rich details...");
+        try {
+          const { error: elementError } = await window.centralisSupabase
+            .from("elements")
+            .update({
+              name,
+              description: description || null,
+              element_type_id: elementTypeId || null,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", node.data.recordId);
+          if (elementError) throw elementError;
+
+          const fields = richDetailsData?.fields || [];
+          const valueResponses = await Promise.all(fields.map((field) => {
+            const fieldType = getTemplateFieldType(field);
+            let value = "";
+            const control = form.querySelector(`[name="rich-field:${CSS.escape(field.id)}"]`);
+            if (fieldType === "checkbox") {
+              value = control?.checked ? "true" : "";
+            } else if (fieldType === "multi_select") {
+              value = control ? [...control.selectedOptions].map((option) => option.value).join("\n") : "";
+            } else {
+              value = String(control?.value || "").trim();
+            }
+
+            if (!hasMeaningfulValue(value)) {
+              return window.centralisSupabase
+                .from("element_template_field_values")
+                .delete()
+                .eq("element_id", node.data.recordId)
+                .eq("template_field_id", field.id);
+            }
+
+            return window.centralisSupabase
+              .from("element_template_field_values")
+              .upsert({
+                element_id: node.data.recordId,
+                template_field_id: field.id,
+                value,
+                updated_at: new Date().toISOString()
+              }, { onConflict: "element_id,template_field_id" });
+          }));
+          throwFirstSupabaseError(valueResponses);
+
+          const customRows = [...form.querySelectorAll("[data-custom-field-row]")];
+          const customResponses = await Promise.all(customRows.map((row, index) => {
+            const id = row.dataset.customFieldId;
+            const customName = String(row.querySelector('[name="custom-name"]')?.value || "").trim();
+            const customValue = String(row.querySelector('[name="custom-value"]')?.value || "").trim();
+            if (!hasMeaningfulValue(customName) && !hasMeaningfulValue(customValue)) {
+              return id
+                ? window.centralisSupabase.from("element_custom_fields").delete().eq("id", id)
+                : Promise.resolve();
+            }
+
+            if (id) {
+              return window.centralisSupabase
+                .from("element_custom_fields")
+                .update({ name: customName || "Untitled Field", value: customValue || null, sort_order: index })
+                .eq("id", id);
+            }
+
+            return window.centralisSupabase
+              .from("element_custom_fields")
+              .insert({ element_id: node.data.recordId, name: customName || "Untitled Field", value: customValue || null, sort_order: index });
+          }));
+          throwFirstSupabaseError(customResponses);
+
+          const deletedCustomFieldIds = [...form.querySelectorAll('[name="deleted-custom-field-id"]')]
+            .map((input) => input.value)
+            .filter(Boolean);
+          if (deletedCustomFieldIds.length) {
+            const { error: deleteCustomError } = await window.centralisSupabase
+              .from("element_custom_fields")
+              .delete()
+              .in("id", deletedCustomFieldIds);
+            if (deleteCustomError) throw deleteCustomError;
+          }
+
+          const nextElementType = getElementTypeById(elementTypeId);
+          setNodes((currentNodes) => currentNodes.map((currentNode) => currentNode.id === node.id
+            ? {
+                ...currentNode,
+                data: {
+                  ...currentNode.data,
+                  name,
+                  description,
+                  elementType: nextElementType
+              }
+            }
+            : currentNode));
+          setRichStatus("Rich details saved.", "success");
+          setRichDetailsMode("view");
+          setRichDetailsData({ loading: false, error: "", ...await fetchRichDetailsData({
+            ...node,
+            data: {
+              ...node.data,
+              name,
+              description,
+              elementType: nextElementType
+            }
+          }) });
+        } catch (error) {
+          setRichStatus(`Could not save rich details: ${getReadableError(error)}`, "error");
+        } finally {
+          if (saveButton) {
+            saveButton.disabled = false;
+          }
+        }
+      }
+
+      renderRichDetails();
+      editButton?.addEventListener("click", showRichEditMode);
+      cancelButton?.addEventListener("click", cancelRichEditMode);
+      saveButton?.addEventListener("click", saveRichDetails);
+      closeButtons.forEach((button) => button.addEventListener("click", closeRichDetails));
+      return () => {
+        editButton?.removeEventListener("click", showRichEditMode);
+        cancelButton?.removeEventListener("click", cancelRichEditMode);
+        saveButton?.removeEventListener("click", saveRichDetails);
+        closeButtons.forEach((button) => button.removeEventListener("click", closeRichDetails));
+      };
+    }, [richDetailsNodeId, richDetailsData, richDetailsMode, nodes, edges, openRichDetails]);
+
 
     React.useEffect(() => {
       async function handleUploadImage(event) {
@@ -2508,6 +3611,14 @@
         setDetailsMode("view");
       }
 
+      function handleRichDetails() {
+        if (detailsNodeId) {
+          window.dispatchEvent(new CustomEvent("centralis:open-rich-details", {
+            detail: { nodeId: detailsNodeId }
+          }));
+        }
+      }
+
       async function handleSave() {
         const node = nodes.find((currentNode) => currentNode.id === detailsNodeId);
         const form = controls.content?.querySelector("[data-details-form]");
@@ -2598,10 +3709,12 @@
         setDetailsMode("view");
       }
 
+      controls.richButton?.addEventListener("click", handleRichDetails);
       controls.editButton?.addEventListener("click", handleEdit);
       controls.cancelButton?.addEventListener("click", handleCancel);
       controls.saveButton?.addEventListener("click", handleSave);
       return () => {
+        controls.richButton?.removeEventListener("click", handleRichDetails);
         controls.editButton?.removeEventListener("click", handleEdit);
         controls.cancelButton?.removeEventListener("click", handleCancel);
         controls.saveButton?.removeEventListener("click", handleSave);
@@ -2930,10 +4043,12 @@
         nodeTypes,
         edgeTypes,
         fitView: true,
+        minZoom: 0.08,
+        maxZoom: 2.5,
         onInit: (instance) => {
           reactFlowInstance.current = instance;
         },
-        onNodesChange: (changes) => setNodes((currentNodes) => applyNodeChanges(changes, currentNodes)),
+        onNodesChange: handleNodesChange,
         onEdgesChange: handleEdgesChange,
         onConnectStart: (_event, params) => {
           window.__centralisConnectionStart = {
@@ -2949,7 +4064,6 @@
         selectionKeyCode: "Shift",
         selectionOnDrag: false,
         panOnDrag: true,
-        onNodeDragStop: saveNodePosition,
         proOptions: { hideAttribution: true }
       },
       React.createElement(Background, { gap: 18, size: 1 }),

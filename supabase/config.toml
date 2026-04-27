@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.delete-object-image]
 verify_jwt = true
+
+[functions.set-primary-image]
+verify_jwt = true

@@ -36,6 +36,27 @@ Deno.serve(async (req) => {
       throw error;
     }
 
+    const imagesByObjectId = new Map<string, NonNullable<typeof data>>();
+    for (const image of data || []) {
+      const group = imagesByObjectId.get(image.object_id) || [];
+      group.push(image);
+      imagesByObjectId.set(image.object_id, group);
+    }
+
+    for (const group of imagesByObjectId.values()) {
+      if (group.length === 1 && !group[0].is_primary) {
+        const { error: primaryError } = await supabase
+          .from("image_table")
+          .update({ is_primary: true })
+          .eq("id", group[0].id);
+
+        if (primaryError) {
+          throw primaryError;
+        }
+        group[0].is_primary = true;
+      }
+    }
+
     const images = await Promise.all((data || []).map(async (image) => ({
       ...image,
       stored_image_url: image.image_url,
