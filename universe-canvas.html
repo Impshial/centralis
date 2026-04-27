@@ -122,8 +122,11 @@
           <span aria-hidden="true">+</span>
           Element
         </button>
-        <button class="tool-action" type="button">
+        <button class="tool-action" type="button" data-open-types-modal>
           Types
+        </button>
+        <button class="tool-action icon-tool-action" type="button" data-open-format-modal aria-label="Universe format">
+          <ph-gear-six weight="bold" aria-hidden="true"></ph-gear-six>
         </button>
       </div>
     </div>
@@ -252,6 +255,189 @@
       </form>
     </section>
   </div>
+
+  <div class="modal-backdrop" id="universe-format-modal" hidden>
+    <section class="modal-dialog format-dialog" role="dialog" aria-modal="true" aria-labelledby="universe-format-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="universe-format-title">Universe Format</h2>
+          <p class="modal-subtitle">Default styling for new connections and element nodes on this Universe. Individually formatted items are not affected.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-close-format-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form class="format-form" data-format-form>
+        <section class="format-section">
+          <h3>Connections</h3>
+          <label class="format-field">
+            <span>Color</span>
+            <div class="format-color-row" data-format-colors>
+              <button type="button" data-format-value="#3b82f6" style="--swatch-color: #3b82f6" aria-label="Blue"></button>
+              <button type="button" data-format-value="#94a3b8" style="--swatch-color: #94a3b8" aria-label="Slate"></button>
+              <button type="button" data-format-value="#fb7185" style="--swatch-color: #fb7185" aria-label="Rose"></button>
+              <button type="button" data-format-value="#fb923c" style="--swatch-color: #fb923c" aria-label="Orange"></button>
+              <button type="button" data-format-value="#fbbf24" style="--swatch-color: #fbbf24" aria-label="Amber"></button>
+              <button type="button" data-format-value="#4ade80" style="--swatch-color: #4ade80" aria-label="Green"></button>
+              <button type="button" data-format-value="#60a5fa" style="--swatch-color: #60a5fa" aria-label="Sky"></button>
+              <button type="button" data-format-value="#a78bfa" style="--swatch-color: #a78bfa" aria-label="Violet"></button>
+              <button type="button" data-format-value="#f472b6" style="--swatch-color: #f472b6" aria-label="Pink"></button>
+            </div>
+            <input type="hidden" name="strokeColor">
+          </label>
+          <label class="format-field">
+            <span>Width</span>
+            <div class="format-segmented" data-format-segment="strokeWidth">
+              <button type="button" data-format-value="1">1</button>
+              <button type="button" data-format-value="2">2</button>
+              <button type="button" data-format-value="3">3</button>
+              <button type="button" data-format-value="4">4</button>
+            </div>
+            <input type="hidden" name="strokeWidth">
+          </label>
+          <label class="format-field">
+            <span>Line</span>
+            <div class="format-segmented" data-format-segment="strokeStyle">
+              <button type="button" data-format-value="solid"><span class="line-sample line-solid"></span></button>
+              <button type="button" data-format-value="dashed"><span class="line-sample line-dashed"></span></button>
+              <button type="button" data-format-value="dotted"><span class="line-sample line-dotted"></span></button>
+            </div>
+            <input type="hidden" name="strokeStyle">
+          </label>
+          <label class="format-field">
+            <span>Curve</span>
+            <div class="format-segmented" data-format-segment="pathType">
+              <button type="button" data-format-value="step">Step</button>
+              <button type="button" data-format-value="curve">Curve</button>
+              <button type="button" data-format-value="line">Line</button>
+            </div>
+            <input type="hidden" name="pathType">
+          </label>
+        </section>
+
+        <section class="format-section">
+          <h3>Nodes</h3>
+          <label class="format-field">
+            <span>Background</span>
+            <div class="format-segmented" data-format-segment="nodeBgOpacity">
+              <button type="button" data-format-value="1">Solid</button>
+              <button type="button" data-format-value="0.78">Medium</button>
+              <button type="button" data-format-value="0.55">Light</button>
+              <button type="button" data-format-value="0.22">Clear</button>
+            </div>
+            <input type="hidden" name="nodeBgOpacity">
+          </label>
+          <label class="format-field">
+            <span>Border</span>
+            <div class="format-segmented" data-format-segment="nodeBorderWidth">
+              <button type="button" data-format-value="1">1</button>
+              <button type="button" data-format-value="2">2</button>
+              <button type="button" data-format-value="3">3</button>
+              <button type="button" data-format-value="4">4</button>
+            </div>
+            <input type="hidden" name="nodeBorderWidth">
+          </label>
+          <label class="format-field">
+            <span>Image</span>
+            <div class="format-segmented" data-format-segment="nodeImagePlacement">
+              <button type="button" data-format-value="side">Side</button>
+              <button type="button" data-format-value="top">Top</button>
+              <button type="button" data-format-value="hidden">Hidden</button>
+            </div>
+            <input type="hidden" name="nodeImagePlacement">
+          </label>
+          <label class="format-field">
+            <span>Auto-layout Spacing</span>
+            <div class="format-segmented" data-format-segment="nodeLayoutGap">
+              <button type="button" data-format-value="8">Compact</button>
+              <button type="button" data-format-value="12">Normal</button>
+              <button type="button" data-format-value="18">Spacious</button>
+            </div>
+            <input type="hidden" name="nodeLayoutGap">
+          </label>
+        </section>
+
+        <p class="form-status" data-format-status role="status"></p>
+        <div class="modal-actions format-actions">
+          <button class="secondary-action" type="button" data-format-reset>Reset to defaults</button>
+          <button class="secondary-action" type="button" data-close-format-modal>Close</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="element-types-modal" hidden>
+    <section class="modal-dialog element-types-dialog" role="dialog" aria-modal="true" aria-labelledby="element-types-title">
+      <div class="modal-header element-types-header">
+        <div>
+          <h2 id="element-types-title">Element Types</h2>
+          <p class="modal-subtitle">Manage the types and templates used to categorize your elements.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-close-types-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="element-types-toolbar">
+        <p data-element-types-count>0 types</p>
+        <button class="secondary-action compact-action" type="button" data-add-type>
+          <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+          Add Type
+        </button>
+      </div>
+
+      <div class="element-type-editor-host" data-type-editor-host></div>
+      <div class="element-types-list" data-element-types-list></div>
+      <p class="form-status" data-element-types-status role="status"></p>
+    </section>
+  </div>
+
+  <div class="modal-backdrop image-viewer-backdrop" id="image-viewer-modal" hidden>
+    <section class="modal-dialog image-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="image-viewer-title">
+      <div class="image-viewer-header">
+        <h2 id="image-viewer-title">Image</h2>
+        <button class="modal-close" type="button" aria-label="Close image viewer" data-image-viewer-close>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="image-viewer-stage">
+        <button class="image-viewer-nav image-viewer-prev" type="button" aria-label="Previous image" data-image-viewer-prev>
+          <ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>
+        </button>
+        <div class="image-viewer-frame" data-image-viewer-frame>
+          <img src="" alt="" draggable="false" data-image-viewer-img>
+        </div>
+        <button class="image-viewer-nav image-viewer-next" type="button" aria-label="Next image" data-image-viewer-next>
+          <ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>
+        </button>
+      </div>
+      <div class="image-viewer-thumbs" data-image-viewer-thumbs aria-label="Image thumbnails"></div>
+      <p class="form-status image-viewer-status" data-image-viewer-status role="status"></p>
+      <div class="image-viewer-footer">
+        <div class="image-viewer-left-actions">
+          <button class="secondary-action image-viewer-action" type="button" data-image-viewer-download>
+            <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+            Download
+          </button>
+          <button class="danger-action image-viewer-action" type="button" data-image-viewer-delete>
+            <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+            Delete
+          </button>
+        </div>
+        <button class="secondary-action image-viewer-action" type="button" data-image-viewer-close>Close</button>
+      </div>
+    </section>
+  </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -260,6 +446,6 @@
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
-  <script src="flow-canvas.js?v=signed-image-urls-1"></script>
+  <script src="flow-canvas.js?v=details-edit-labels-1"></script>
 </body>
 </html>

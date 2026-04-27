@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.list-object-images]
 verify_jwt = true
+
+[functions.delete-object-image]
+verify_jwt = true

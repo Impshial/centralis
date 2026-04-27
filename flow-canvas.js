@@ -76,6 +76,153 @@
     return /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(clean) ? clean : fallback;
   }
 
+  const DEFAULT_UNIVERSE_FORMAT = {
+    strokeColor: "#3b82f6",
+    strokeWidth: 2,
+    strokeStyle: "solid",
+    pathType: "step",
+    nodeBgOpacity: 1,
+    nodeBorderWidth: 2,
+    nodeImagePlacement: "side",
+    nodeLayoutGap: 12
+  };
+  const DEFAULT_ELEMENT_TYPE_ICON = "circle";
+  const DEFAULT_ELEMENT_TYPE_COLOR = "#6366f1";
+  const FALLBACK_PHOSPHOR_ICONS = [
+    "airplane", "airplane-in-flight", "anchor", "archive", "armchair", "arrow-bend-down-right",
+    "asterisk", "atom", "bank", "bell", "book", "bookmark", "books", "briefcase", "broadcast",
+    "bug", "buildings", "calendar", "camera", "campfire", "castle-turret", "cat", "chats",
+    "circle", "city", "cloud", "code", "compass", "crown", "cube", "detective", "diamonds-four",
+    "door", "dragon", "drop", "factory", "feather", "film-strip", "fire", "flag", "flask",
+    "flower", "folder", "gear", "ghost", "globe", "globe-hemisphere-west", "hammer", "heart",
+    "hourglass", "house", "image", "island", "key", "leaf", "lightbulb", "lightning",
+    "magic-wand", "map-pin", "map-trifold", "mask-happy", "moon", "mountains", "music-note",
+    "palette", "park", "paw-print", "planet", "plant", "puzzle-piece", "question", "rocket",
+    "scroll", "shield", "shooting-star", "skull", "sparkle", "squares-four", "star", "sword",
+    "tent", "tree", "tree-evergreen", "users", "warehouse", "waveform", "wrench"
+  ];
+  const phosphorIconSearchTerms = new Map();
+
+  function addIconSearchTerms(iconName, terms = []) {
+    const cleanName = sanitizeIconName(iconName);
+    if (!cleanName) {
+      return;
+    }
+    const existing = phosphorIconSearchTerms.get(cleanName) || cleanName.replaceAll("-", " ");
+    phosphorIconSearchTerms.set(cleanName, `${existing} ${terms.filter(Boolean).join(" ")}`.toLowerCase());
+  }
+
+  function normalizePhosphorCatalogItem(item) {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+
+    if (Array.isArray(item)) {
+      const name = item.find((value) => typeof value === "string" && /^[a-z0-9-]+$/.test(value));
+      const terms = item.flat(Infinity).filter((value) => typeof value === "string");
+      return name ? { name, terms } : null;
+    }
+
+    const rawName = item.name || item.kebab || item.kebabName || item.slug || item.id;
+    const name = typeof rawName === "string" ? rawName : null;
+    const terms = [
+      item.name,
+      item.pascal_name,
+      item.pascalName,
+      item.category,
+      item.categories,
+      item.tags,
+      item.alias?.name,
+      item.alias?.pascal_name,
+      item.aliases,
+      item.keywords
+    ].flat(Infinity).filter((value) => typeof value === "string");
+
+    return name ? { name, terms } : null;
+  }
+
+  function collectPhosphorCatalogItems(value, output = [], depth = 0) {
+    if (!value || depth > 4) {
+      return output;
+    }
+
+    if (Array.isArray(value)) {
+      const normalized = normalizePhosphorCatalogItem(value);
+      if (normalized) {
+        output.push(normalized);
+        return output;
+      }
+      value.forEach((item) => collectPhosphorCatalogItems(item, output, depth + 1));
+      return output;
+    }
+
+    if (typeof value === "object") {
+      const normalized = normalizePhosphorCatalogItem(value);
+      if (normalized) {
+        output.push(normalized);
+        return output;
+      }
+      Object.values(value).forEach((item) => collectPhosphorCatalogItems(item, output, depth + 1));
+    }
+
+    return output;
+  }
+  const TYPE_COLOR_CHOICES = [
+    "#6366f1", "#8b5cf6", "#a855f7", "#ec4899", "#ef4444", "#f97316", "#eab308", "#22c55e",
+    "#10b981", "#14b8a6", "#06b6d4", "#3b82f6", "#64748b", "#78716c", "#d4a017"
+  ];
+
+  function getUniverseFormat(row = {}) {
+    const backgroundByName = {
+      solid: 1,
+      medium: 0.78,
+      light: 0.55,
+      clear: 0.22
+    };
+    const gapByName = {
+      compact: 8,
+      normal: 12,
+      spacious: 18
+    };
+    const bgValue = row.fmt_node_bg_opacity;
+    const gapValue = row.fmt_node_layout_gap;
+
+    return {
+      strokeColor: sanitizeColor(row.fmt_stroke_color, DEFAULT_UNIVERSE_FORMAT.strokeColor),
+      strokeWidth: Number(row.fmt_stroke_width || DEFAULT_UNIVERSE_FORMAT.strokeWidth),
+      strokeStyle: ["solid", "dashed", "dotted"].includes(row.fmt_stroke_style) ? row.fmt_stroke_style : DEFAULT_UNIVERSE_FORMAT.strokeStyle,
+      pathType: ["step", "curve", "line"].includes(row.fmt_path_type) ? row.fmt_path_type : DEFAULT_UNIVERSE_FORMAT.pathType,
+      nodeBgOpacity: typeof bgValue === "string" && backgroundByName[bgValue] ? backgroundByName[bgValue] : Number(bgValue ?? DEFAULT_UNIVERSE_FORMAT.nodeBgOpacity),
+      nodeBorderWidth: Number(row.fmt_node_border_width || DEFAULT_UNIVERSE_FORMAT.nodeBorderWidth),
+      nodeImagePlacement: ["side", "top", "hidden"].includes(row.fmt_node_image_placement) ? row.fmt_node_image_placement : DEFAULT_UNIVERSE_FORMAT.nodeImagePlacement,
+      nodeLayoutGap: typeof gapValue === "string" && gapByName[gapValue] ? gapByName[gapValue] : Number(gapValue ?? DEFAULT_UNIVERSE_FORMAT.nodeLayoutGap)
+    };
+  }
+
+  function toFormatPayload(format) {
+    return {
+      fmt_stroke_color: format.strokeColor,
+      fmt_stroke_width: format.strokeWidth,
+      fmt_stroke_style: format.strokeStyle,
+      fmt_path_type: format.pathType,
+      fmt_node_bg_opacity: format.nodeBgOpacity,
+      fmt_node_border_width: format.nodeBorderWidth,
+      fmt_node_image_placement: format.nodeImagePlacement,
+      fmt_node_layout_gap: format.nodeLayoutGap,
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  function getStrokeDasharray(style) {
+    if (style === "dashed") {
+      return "8 6";
+    }
+    if (style === "dotted") {
+      return "2 6";
+    }
+    return undefined;
+  }
+
   function getReadableError(error) {
     return error?.message || error?.error || error?.details || error?.hint || "Unknown error";
   }
@@ -122,7 +269,8 @@
     name: "Universe Canvas",
     description: "",
     canvas_position_x: 120,
-    canvas_position_y: 120
+    canvas_position_y: 120,
+    ...toFormatPayload(DEFAULT_UNIVERSE_FORMAT)
   };
   let elementTypes = [];
   let elements = [];
@@ -132,7 +280,7 @@
   if (window.centralisSupabase && universeId) {
     const universeResponse = await withTimeout(window.centralisSupabase
       .from("universes")
-      .select("id,name,description,canvas_position_x,canvas_position_y,fmt_node_bg_opacity,fmt_node_border_width")
+      .select("id,name,description,canvas_position_x,canvas_position_y,fmt_stroke_color,fmt_stroke_width,fmt_stroke_style,fmt_path_type,fmt_node_bg_opacity,fmt_node_border_width,fmt_node_image_placement,fmt_node_layout_gap")
       .eq("id", universeId)
       .maybeSingle(), "Loading universe");
 
@@ -194,6 +342,8 @@
     titleElement.textContent = universe.name || "Universe Canvas";
   }
 
+  const initialUniverseFormat = getUniverseFormat(universe);
+
   const React = window.React;
   const ReactDOM = window.ReactDOM;
   const Flow = window.ReactFlow;
@@ -205,6 +355,8 @@
   const EdgeLabelRenderer = Flow.EdgeLabelRenderer;
   const BaseEdge = Flow.BaseEdge;
   const getBezierPath = Flow.getBezierPath;
+  const getSmoothStepPath = Flow.getSmoothStepPath;
+  const getStraightPath = Flow.getStraightPath;
   const applyNodeChanges = Flow.applyNodeChanges;
   const applyEdgeChanges = Flow.applyEdgeChanges;
 
@@ -271,11 +423,19 @@
   function UniverseNode(props) {
     const data = props.data;
     const { menuOpen, setMenuOpen, menuRef, toggleMenu } = useNodeMenu(props.id);
+    const format = data.format || DEFAULT_UNIVERSE_FORMAT;
+    const imageUrl = data.images?.[0]?.image_url;
+    const imagePlacement = imageUrl ? format.nodeImagePlacement : "hidden";
 
     return React.createElement(
       "article",
       {
-        className: `universe-flow-node${props.selected ? " is-selected" : ""}`,
+        className: `universe-flow-node node-image-${imagePlacement}${props.selected ? " is-selected" : ""}`,
+        style: {
+          "--node-bg-opacity": format.nodeBgOpacity,
+          "--node-border-width": `${format.nodeBorderWidth}px`,
+          "--node-layout-gap": `${format.nodeLayoutGap}px`
+        },
         onDoubleClick: (event) => {
           event.stopPropagation();
           openNodeDetails(props.id);
@@ -314,8 +474,18 @@
           )
         )
       ),
-      React.createElement("span", { className: "node-kicker" }, "Universe"),
-      React.createElement("strong", null, data.name),
+      imagePlacement === "top" && React.createElement("img", { className: "node-top-image", src: imageUrl, alt: "" }),
+      React.createElement(
+        "div",
+        { className: "node-title-row" },
+        imagePlacement === "side" && React.createElement("img", { className: "node-side-image", src: imageUrl, alt: "" }),
+        React.createElement(
+          "div",
+          { className: "node-title-copy" },
+          React.createElement("span", { className: "node-kicker" }, "Universe"),
+          React.createElement("strong", null, data.name)
+        )
+      ),
       React.createElement("p", null, createBlurb(data.description))
     );
   }
@@ -327,12 +497,20 @@
     const color = sanitizeColor(elementType?.color);
     const typeName = elementType?.name || "No Type";
     const iconName = sanitizeIconName(elementType?.icon);
+    const format = data.format || DEFAULT_UNIVERSE_FORMAT;
+    const imageUrl = data.images?.[0]?.image_url;
+    const imagePlacement = imageUrl ? format.nodeImagePlacement : "hidden";
 
     return React.createElement(
       "article",
       {
-        className: `element-flow-node${props.selected ? " is-selected" : ""}`,
-        style: { "--element-color": color },
+        className: `element-flow-node node-image-${imagePlacement}${props.selected ? " is-selected" : ""}`,
+        style: {
+          "--element-color": color,
+          "--node-bg-opacity": format.nodeBgOpacity,
+          "--node-border-width": `${format.nodeBorderWidth}px`,
+          "--node-layout-gap": `${format.nodeLayoutGap}px`
+        },
         onDoubleClick: (event) => {
           event.stopPropagation();
           openNodeDetails(props.id);
@@ -390,13 +568,20 @@
           )
         )
       ),
+      imagePlacement === "top" && React.createElement("img", { className: "node-top-image", src: imageUrl, alt: "" }),
       React.createElement(
-        "span",
-        { className: "node-kicker" },
-        React.createElement("span", { className: "element-icon", "aria-hidden": "true" }, React.createElement(`ph-${iconName}`, { weight: "duotone" })),
-        typeName
+        "div",
+        { className: "node-title-row" },
+        imagePlacement === "side"
+          ? React.createElement("img", { className: "node-side-image", src: imageUrl, alt: "" })
+          : React.createElement("span", { className: "element-icon", "aria-hidden": "true" }, React.createElement(`ph-${iconName}`, { weight: "duotone" })),
+        React.createElement(
+          "div",
+          { className: "node-title-copy" },
+          React.createElement("span", { className: "node-kicker" }, typeName),
+          React.createElement("strong", null, data.name)
+        )
       ),
-      React.createElement("strong", null, data.name),
       React.createElement("p", null, createBlurb(data.description))
     );
   }
@@ -414,6 +599,7 @@
         recordId: row.id,
         name: row.name || "Untitled Universe",
         description: row.description || "",
+        format: initialUniverseFormat,
         images: getImagesForObject(row.id)
       },
       draggable: true
@@ -436,6 +622,7 @@
         name: row.name || "Untitled Element",
         description: row.description || "",
         elementType,
+        format: initialUniverseFormat,
         images: getImagesForObject(row.id)
       },
       draggable: true
@@ -461,6 +648,7 @@
   }
 
   function toLinkEdge(link) {
+    const format = initialUniverseFormat;
     return {
       id: link.id,
       source: toNodeId(link.source_element_id),
@@ -470,11 +658,13 @@
       label: link.label || undefined,
       type: "deletable",
       data: {
-        recordId: link.id
+        recordId: link.id,
+        format
       },
       style: {
-        stroke: link.stroke_color || "#475569",
-        strokeWidth: Number(link.stroke_width || 2)
+        stroke: link.stroke_color || format.strokeColor,
+        strokeWidth: Number(link.stroke_width || format.strokeWidth),
+        strokeDasharray: getStrokeDasharray(link.stroke_style || format.strokeStyle)
       }
     };
   }
@@ -572,7 +762,7 @@
     }).join("");
   }
 
-  function renderImageGallery(images) {
+  function renderImageGallery(images, nodeId) {
     if (!images?.length) {
       return '<p class="details-empty">No images yet.</p>';
     }
@@ -582,19 +772,54 @@
 
     return `
       <div class="image-gallery">
-        <a class="image-primary" href="${escapeHtml(primaryImage.image_url)}" target="_blank" rel="noopener noreferrer">
-          <img src="${escapeHtml(primaryImage.image_url)}" alt="">
-          <span>${primaryIndex + 1} / ${images.length}</span>
-        </a>
+        <button class="image-primary" type="button" data-image-primary data-node-id="${escapeHtml(nodeId)}" data-image-id="${escapeHtml(primaryImage.id)}">
+          <img src="${escapeHtml(primaryImage.image_url)}" alt="" data-image-primary-img>
+          <span data-image-counter>${primaryIndex + 1} / ${images.length}</span>
+        </button>
         <div class="image-thumbs" aria-label="Image gallery">
           ${images.map((image, index) => `
-            <a class="image-thumb${image.id === primaryImage.id ? " is-active" : ""}" href="${escapeHtml(image.image_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open image ${index + 1}">
+            <button class="image-thumb${image.id === primaryImage.id ? " is-active" : ""}" type="button" data-image-thumb data-image-id="${escapeHtml(image.id)}" data-image-url="${escapeHtml(image.image_url)}" data-image-index="${index + 1}" aria-label="Show image ${index + 1}">
               <img src="${escapeHtml(image.image_url)}" alt="">
-            </a>
+            </button>
           `).join("")}
         </div>
       </div>
     `;
+  }
+
+  function setupImageGallery(container) {
+    const primaryButton = container.querySelector("[data-image-primary]");
+    const primaryImage = container.querySelector("[data-image-primary-img]");
+    const counter = container.querySelector("[data-image-counter]");
+    const thumbs = container.querySelectorAll("[data-image-thumb]");
+    if (!primaryButton || !primaryImage || !thumbs.length) {
+      return;
+    }
+
+    primaryButton.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("centralis:open-image-viewer", {
+        detail: {
+          nodeId: primaryButton.dataset.nodeId,
+          imageId: primaryButton.dataset.imageId
+        }
+      }));
+    });
+
+    thumbs.forEach((thumb) => {
+      thumb.addEventListener("click", () => {
+        const url = thumb.dataset.imageUrl;
+        if (!url) {
+          return;
+        }
+
+        primaryImage.src = url;
+        primaryButton.dataset.imageId = thumb.dataset.imageId || "";
+        if (counter) {
+          counter.textContent = `${thumb.dataset.imageIndex} / ${thumbs.length}`;
+        }
+        thumbs.forEach((currentThumb) => currentThumb.classList.toggle("is-active", currentThumb === thumb));
+      });
+    });
   }
 
   function createImagePrompt(node) {
@@ -727,7 +952,7 @@
     controls.pane.hidden = false;
     setDetailsPaneMode(controls, mode);
     if (controls.kind) {
-      controls.kind.textContent = mode === "edit" ? `Editing ${meta.label}` : meta.label;
+      controls.kind.textContent = meta.label;
     }
     if (controls.title) {
       controls.title.textContent = name;
@@ -741,9 +966,27 @@
             <span>Name</span>
             <input type="text" name="details-name" value="${escapeHtml(name)}" autocomplete="off">
           </label>
+          <section class="details-section image-edit-section">
+            <h3>Image</h3>
+            ${renderImageGallery(images, nodeId)}
+            <div class="image-actions">
+              <button class="secondary-action image-action-button" type="button" data-generate-image>
+                <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+                Generate
+              </button>
+              <div class="image-upload-row">
+                <label class="secondary-action image-action-button" for="details-image-upload">
+                  <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                  Upload
+                </label>
+                <input id="details-image-upload" type="file" accept="image/*" data-image-upload hidden>
+                <p class="form-status image-upload-status" data-image-upload-status role="status"></p>
+              </div>
+            </div>
+          </section>
           <label class="form-field">
             <span>Description</span>
-            <textarea name="details-description" placeholder="Brief description...">${escapeHtml(rawDescription)}</textarea>
+            <textarea name="details-description" rows="16" placeholder="Brief description...">${escapeHtml(rawDescription)}</textarea>
           </label>
           <label class="form-field">
             <span>Element Type</span>
@@ -759,21 +1002,6 @@
               </button>
             `}
           </label>
-          <section class="details-section image-edit-section">
-            <h3>Image</h3>
-            ${renderImageGallery(images)}
-            <div class="image-actions">
-              <button class="secondary-action image-action-button" type="button" data-generate-image>
-                <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
-                Generate
-              </button>
-              <label class="secondary-action image-action-button" for="details-image-upload">
-                <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
-                Upload
-              </label>
-              <input id="details-image-upload" type="file" accept="image/*" data-image-upload hidden>
-            </div>
-          </section>
           <p class="form-status" data-details-status role="status"></p>
         </form>
       `;
@@ -793,6 +1021,7 @@
         }
       });
       controls.content.querySelector('[name="details-name"]')?.focus();
+      setupImageGallery(controls.content);
       return;
     }
 
@@ -803,9 +1032,17 @@
             <dt>Name</dt>
             <dd>${escapeHtml(name)}</dd>
           </div>
+        </dl>
+      </section>
+      <section class="details-section">
+        <h3>Images</h3>
+        ${renderImageGallery(images, nodeId)}
+      </section>
+      <section class="details-section">
+        <dl class="details-fields">
           <div>
             <dt>Description</dt>
-            <dd>${escapeHtml(description)}</dd>
+            <dd class="details-description-text">${escapeHtml(description)}</dd>
           </div>
           <div>
             <dt>Element Type</dt>
@@ -826,15 +1063,12 @@
           ${renderLinkedNodeCards(linkedNodes)}
         </div>
       </section>
-      <section class="details-section">
-        <h3>Images</h3>
-        ${renderImageGallery(images)}
-      </section>
     `;
 
     controls.content.querySelectorAll("[data-linked-node-id]").forEach((button) => {
       button.addEventListener("click", () => openNodeDetails(button.dataset.linkedNodeId));
     });
+    setupImageGallery(controls.content);
   }
 
   function setupDetailsPaneResize() {
@@ -900,6 +1134,84 @@
 
   function getElementTypeById(typeId) {
     return elementTypes.find((type) => type.id === typeId) || null;
+  }
+
+  async function fetchElementTypes() {
+    if (!window.centralisSupabase || !universe?.id) {
+      return elementTypes;
+    }
+
+    const { data, error } = await window.centralisSupabase
+      .from("element_types")
+      .select("id,name,icon,color")
+      .eq("universe_id", universe.id)
+      .order("name", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    elementTypes = data || [];
+    return elementTypes;
+  }
+
+  let phosphorIconNamesPromise = null;
+  async function getPhosphorIconNames() {
+    if (!phosphorIconNamesPromise) {
+      phosphorIconNamesPromise = (async () => {
+        const names = new Set(FALLBACK_PHOSPHOR_ICONS);
+
+        try {
+          const catalogModule = await import("https://esm.sh/@phosphor-icons/core@2.1.1");
+          const catalogItems = collectPhosphorCatalogItems(catalogModule.icons || catalogModule.default || catalogModule);
+          if (catalogItems.length) {
+            catalogItems.forEach((item) => {
+              const cleanName = sanitizeIconName(item.name);
+              names.add(cleanName);
+              addIconSearchTerms(cleanName, item.terms);
+            });
+            return [...names];
+          }
+        } catch (error) {
+          console.warn("Could not load Phosphor icon metadata catalog.", error);
+        }
+
+        try {
+          const response = await fetch("https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css");
+          if (!response.ok) {
+            throw new Error("Could not load Phosphor icon stylesheet.");
+          }
+          const css = await response.text();
+          for (const match of css.matchAll(/\.ph-([a-z0-9-]+):before/g)) {
+            if (match[1] && !match[1].includes("regular")) {
+              names.add(match[1]);
+            }
+          }
+        } catch (error) {
+          console.warn("Could not load Phosphor icon stylesheet.", error);
+        }
+
+        return [...names];
+      })()
+        .then((names) => names
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b)))
+        .catch(() => FALLBACK_PHOSPHOR_ICONS);
+    }
+
+    return phosphorIconNamesPromise;
+  }
+
+  function iconMatchesSearch(icon, query) {
+    const cleanQuery = query.trim().toLowerCase();
+    if (!cleanQuery) {
+      return true;
+    }
+
+    const iconName = String(icon || "").toLowerCase();
+    const searchableAliases = phosphorIconSearchTerms.get(iconName) || iconName.replaceAll("-", " ");
+
+    return searchableAliases.includes(cleanQuery);
   }
 
   function getElementTypePicker() {
@@ -1047,6 +1359,8 @@
   function UniverseFlow() {
     const [nodes, setNodes] = React.useState(initialNodes);
     const [edges, setEdges] = React.useState(initialEdges);
+    const [universeFormat, setUniverseFormat] = React.useState(initialUniverseFormat);
+    const [elementTypeVersion, setElementTypeVersion] = React.useState(0);
     const [pendingLink, setPendingLink] = React.useState(null);
     const [pendingDeleteElement, setPendingDeleteElement] = React.useState(null);
     const [detailsNodeId, setDetailsNodeId] = React.useState(null);
@@ -1054,7 +1368,56 @@
     const [pendingImageGeneration, setPendingImageGeneration] = React.useState(null);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
+    const nodesRef = React.useRef(nodes);
     const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode }), []);
+
+    React.useEffect(() => {
+      nodesRef.current = nodes;
+    }, [nodes]);
+
+    const syncElementTypes = React.useCallback((nextTypes) => {
+      elementTypes = [...nextTypes].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      setElementTypeVersion((version) => version + 1);
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        if (node.data?.kind !== "element") {
+          return node;
+        }
+        const currentTypeId = node.data.elementType?.id;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            elementType: currentTypeId ? getElementTypeById(currentTypeId) : null
+          }
+        };
+      }));
+      populateElementTypeSelect();
+    }, []);
+
+    const applyUniverseFormat = React.useCallback((format) => {
+      setUniverseFormat(format);
+      setNodes((currentNodes) => currentNodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          format
+        }
+      })));
+      setEdges((currentEdges) => currentEdges.map((edge) => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          format
+        },
+        style: {
+          ...edge.style,
+          stroke: format.strokeColor,
+          strokeWidth: format.strokeWidth,
+          strokeDasharray: getStrokeDasharray(format.strokeStyle)
+        }
+      })));
+    }, []);
+
     const deleteEdge = React.useCallback(async (edgeId) => {
       setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
 
@@ -1067,17 +1430,29 @@
         console.error("Could not delete element link:", error);
       }
     }, []);
+    const getFormattedEdgePath = React.useCallback((props) => {
+      const pathType = props.data?.format?.pathType || DEFAULT_UNIVERSE_FORMAT.pathType;
+      const pathInput = {
+        sourceX: props.sourceX,
+        sourceY: props.sourceY,
+        sourcePosition: props.sourcePosition,
+        targetX: props.targetX,
+        targetY: props.targetY,
+        targetPosition: props.targetPosition
+      };
+
+      if (pathType === "line" && getStraightPath) {
+        return getStraightPath(pathInput);
+      }
+      if (pathType === "step" && getSmoothStepPath) {
+        return getSmoothStepPath(pathInput);
+      }
+      return getBezierPath(pathInput);
+    }, []);
     const edgeTypes = React.useMemo(() => ({
       deletable: function DeletableEdge(props) {
         const [isHovered, setIsHovered] = React.useState(false);
-        const pathResult = getBezierPath({
-          sourceX: props.sourceX,
-          sourceY: props.sourceY,
-          sourcePosition: props.sourcePosition,
-          targetX: props.targetX,
-          targetY: props.targetY,
-          targetPosition: props.targetPosition
-        });
+        const pathResult = getFormattedEdgePath(props);
         const edgePath = pathResult[0];
         const labelX = pathResult[1];
         const labelY = pathResult[2];
@@ -1126,7 +1501,7 @@
           )
         );
       }
-    }), [deleteEdge]);
+    }), [deleteEdge, getFormattedEdgePath]);
 
     const openLinkedNodeDetails = React.useCallback((nodeId) => {
       setDetailsNodeId(nodeId);
@@ -1137,8 +1512,8 @@
       })));
     }, []);
 
-    const appendImageToNode = React.useCallback((nodeId, image) => {
-      if (!image) {
+    const setNodeImages = React.useCallback((nodeId, images) => {
+      if (!Array.isArray(images)) {
         return;
       }
 
@@ -1151,16 +1526,723 @@
           ...node,
           data: {
             ...node.data,
-            images: [...(node.data.images || []), image]
+            images
           }
         };
       }));
     }, []);
 
+    const refreshNodeImages = React.useCallback(async (node) => {
+      if (!node?.data?.recordId) {
+        return;
+      }
+
+      const data = await callEdgeFunction("list-object-images", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectIds: [node.data.recordId] })
+      });
+
+      setNodeImages(node.id, data.images || []);
+    }, [setNodeImages]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("image-viewer-modal");
+      const title = document.querySelector("[data-image-viewer-title], #image-viewer-title");
+      const frame = document.querySelector("[data-image-viewer-frame]");
+      const image = document.querySelector("[data-image-viewer-img]");
+      const thumbs = document.querySelector("[data-image-viewer-thumbs]");
+      const status = document.querySelector("[data-image-viewer-status]");
+      const prevButton = document.querySelector("[data-image-viewer-prev]");
+      const nextButton = document.querySelector("[data-image-viewer-next]");
+      const downloadButton = document.querySelector("[data-image-viewer-download]");
+      const deleteButton = document.querySelector("[data-image-viewer-delete]");
+      const closeButtons = document.querySelectorAll("[data-image-viewer-close]");
+      if (!modal || !frame || !image || !thumbs) {
+        return undefined;
+      }
+
+      let viewerNodeId = null;
+      let viewerImages = [];
+      let viewerIndex = 0;
+      let scale = 1;
+      let translateX = 0;
+      let translateY = 0;
+      let dragStart = null;
+
+      function currentImage() {
+        return viewerImages[viewerIndex] || null;
+      }
+
+      function applyTransform() {
+        image.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        image.classList.add("is-pannable");
+      }
+
+      function resetTransform() {
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        applyTransform();
+      }
+
+      function renderViewer() {
+        const activeImage = currentImage();
+        if (!activeImage) {
+          modal.hidden = true;
+          return;
+        }
+
+        const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
+        if (title) {
+          title.textContent = `${node?.data?.name || "Image"} Image (${viewerIndex + 1} of ${viewerImages.length})`;
+        }
+        image.src = activeImage.image_url;
+        image.alt = "";
+        thumbs.innerHTML = viewerImages.map((viewerImage, index) => `
+          <button class="image-thumb${index === viewerIndex ? " is-active" : ""}" type="button" data-viewer-thumb="${index}" aria-label="Show image ${index + 1}">
+            <img src="${escapeHtml(viewerImage.image_url)}" alt="">
+          </button>
+        `).join("");
+        thumbs.querySelectorAll("[data-viewer-thumb]").forEach((thumb) => {
+          thumb.addEventListener("click", () => {
+            viewerIndex = Number(thumb.dataset.viewerThumb || 0);
+            resetTransform();
+            renderViewer();
+          });
+        });
+        if (prevButton) {
+          prevButton.disabled = viewerImages.length < 2;
+        }
+        if (nextButton) {
+          nextButton.disabled = viewerImages.length < 2;
+        }
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-error", "is-success");
+        }
+        resetTransform();
+      }
+
+      function closeViewer() {
+        modal.hidden = true;
+        viewerNodeId = null;
+        viewerImages = [];
+        viewerIndex = 0;
+        resetTransform();
+      }
+
+      function moveViewer(direction) {
+        if (!viewerImages.length) {
+          return;
+        }
+
+        viewerIndex = (viewerIndex + direction + viewerImages.length) % viewerImages.length;
+        renderViewer();
+      }
+
+      function handlePrevious() {
+        moveViewer(-1);
+      }
+
+      function handleNext() {
+        moveViewer(1);
+      }
+
+      function handleOpenViewer(event) {
+        const { nodeId, imageId } = event.detail || {};
+        const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
+        const images = node?.data?.images || [];
+        if (!node || !images.length) {
+          return;
+        }
+
+        viewerNodeId = nodeId;
+        viewerImages = images;
+        viewerIndex = Math.max(0, images.findIndex((viewerImage) => viewerImage.id === imageId));
+        modal.hidden = false;
+        renderViewer();
+      }
+
+      function handleWheel(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextScale = Math.min(4, Math.max(1, scale + (event.deltaY < 0 ? 0.16 : -0.16)));
+        if (nextScale === 1) {
+          translateX = 0;
+          translateY = 0;
+        }
+        scale = nextScale;
+        applyTransform();
+      }
+
+      function handlePointerDown(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        image.setPointerCapture(event.pointerId);
+        dragStart = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          translateX,
+          translateY
+        };
+      }
+
+      function handlePointerMove(event) {
+        if (!dragStart || dragStart.pointerId !== event.pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        translateX = dragStart.translateX + event.clientX - dragStart.x;
+        translateY = dragStart.translateY + event.clientY - dragStart.y;
+        applyTransform();
+      }
+
+      function handlePointerUp(event) {
+        if (dragStart?.pointerId === event.pointerId) {
+          event.preventDefault();
+          event.stopPropagation();
+          dragStart = null;
+        }
+      }
+
+      function preventImageDrag(event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      function handleDownload() {
+        const activeImage = currentImage();
+        if (!activeImage) {
+          return;
+        }
+
+        const link = document.createElement("a");
+        link.href = activeImage.image_url;
+        link.download = `centralis-image-${activeImage.id || Date.now()}.png`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.click();
+      }
+
+      async function handleDelete() {
+        const activeImage = currentImage();
+        const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
+        if (!activeImage || !node || !window.confirm("Delete this image?")) {
+          return;
+        }
+
+        if (deleteButton) {
+          deleteButton.disabled = true;
+        }
+        if (status) {
+          status.textContent = "Deleting image...";
+          status.classList.remove("is-error", "is-success");
+        }
+
+        try {
+          await callEdgeFunction("delete-object-image", {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageId: activeImage.id })
+          });
+          const nextImages = viewerImages.filter((viewerImage) => viewerImage.id !== activeImage.id);
+          viewerImages = nextImages;
+          viewerIndex = Math.min(viewerIndex, Math.max(0, nextImages.length - 1));
+          setNodeImages(node.id, nextImages);
+          if (!nextImages.length) {
+            closeViewer();
+          } else {
+            renderViewer();
+          }
+        } catch (error) {
+          if (status) {
+            status.textContent = `Could not delete image: ${getReadableError(error)}`;
+            status.classList.add("is-error");
+          }
+        }
+
+        if (deleteButton) {
+          deleteButton.disabled = false;
+        }
+      }
+
+      window.addEventListener("centralis:open-image-viewer", handleOpenViewer);
+      closeButtons.forEach((button) => button.addEventListener("click", closeViewer));
+      prevButton?.addEventListener("click", handlePrevious);
+      nextButton?.addEventListener("click", handleNext);
+      downloadButton?.addEventListener("click", handleDownload);
+      deleteButton?.addEventListener("click", handleDelete);
+      frame.addEventListener("wheel", handleWheel, { passive: false });
+      image.addEventListener("pointerdown", handlePointerDown);
+      image.addEventListener("pointermove", handlePointerMove);
+      image.addEventListener("pointerup", handlePointerUp);
+      image.addEventListener("pointercancel", handlePointerUp);
+      image.addEventListener("dragstart", preventImageDrag);
+      return () => {
+        window.removeEventListener("centralis:open-image-viewer", handleOpenViewer);
+        closeButtons.forEach((button) => button.removeEventListener("click", closeViewer));
+        prevButton?.removeEventListener("click", handlePrevious);
+        nextButton?.removeEventListener("click", handleNext);
+        downloadButton?.removeEventListener("click", handleDownload);
+        deleteButton?.removeEventListener("click", handleDelete);
+        frame.removeEventListener("wheel", handleWheel);
+        image.removeEventListener("pointerdown", handlePointerDown);
+        image.removeEventListener("pointermove", handlePointerMove);
+        image.removeEventListener("pointerup", handlePointerUp);
+        image.removeEventListener("pointercancel", handlePointerUp);
+        image.removeEventListener("dragstart", preventImageDrag);
+      };
+    }, [setNodeImages]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("universe-format-modal");
+      const form = document.querySelector("[data-format-form]");
+      const status = document.querySelector("[data-format-status]");
+      const opener = document.querySelector("[data-open-format-modal]");
+      const closers = document.querySelectorAll("[data-close-format-modal]");
+      const resetButton = document.querySelector("[data-format-reset]");
+      if (!modal || !form || !opener) {
+        return undefined;
+      }
+
+      function setSegmentValue(name, value) {
+        const input = form.querySelector(`[name="${name}"]`);
+        const group = form.querySelector(`[data-format-segment="${name}"]`);
+        if (input) {
+          input.value = String(value);
+        }
+        group?.querySelectorAll("[data-format-value]").forEach((button) => {
+          button.classList.toggle("is-selected", button.dataset.formatValue === String(value));
+        });
+      }
+
+      function setColorValue(value) {
+        const color = sanitizeColor(value, DEFAULT_UNIVERSE_FORMAT.strokeColor);
+        const input = form.querySelector('[name="strokeColor"]');
+        if (input) {
+          input.value = color;
+        }
+        form.querySelectorAll("[data-format-colors] [data-format-value]").forEach((button) => {
+          button.classList.toggle("is-selected", button.dataset.formatValue === color);
+        });
+      }
+
+      function populateForm(format) {
+        setColorValue(format.strokeColor);
+        setSegmentValue("strokeWidth", format.strokeWidth);
+        setSegmentValue("strokeStyle", format.strokeStyle);
+        setSegmentValue("pathType", format.pathType);
+        setSegmentValue("nodeBgOpacity", format.nodeBgOpacity);
+        setSegmentValue("nodeBorderWidth", format.nodeBorderWidth);
+        setSegmentValue("nodeImagePlacement", format.nodeImagePlacement);
+        setSegmentValue("nodeLayoutGap", format.nodeLayoutGap);
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-error", "is-success");
+        }
+      }
+
+      function readFormFormat() {
+        const formData = new FormData(form);
+        return getUniverseFormat({
+          fmt_stroke_color: formData.get("strokeColor"),
+          fmt_stroke_width: formData.get("strokeWidth"),
+          fmt_stroke_style: formData.get("strokeStyle"),
+          fmt_path_type: formData.get("pathType"),
+          fmt_node_bg_opacity: formData.get("nodeBgOpacity"),
+          fmt_node_border_width: formData.get("nodeBorderWidth"),
+          fmt_node_image_placement: formData.get("nodeImagePlacement"),
+          fmt_node_layout_gap: formData.get("nodeLayoutGap")
+        });
+      }
+
+      function openFormatModal() {
+        populateForm(universeFormat);
+        modal.hidden = false;
+      }
+
+      function closeFormatModal() {
+        modal.hidden = true;
+      }
+
+      async function saveFormat(nextFormat) {
+        applyUniverseFormat(nextFormat);
+        Object.assign(universe, toFormatPayload(nextFormat));
+        if (status) {
+          status.textContent = "Saving...";
+          status.classList.remove("is-error", "is-success");
+        }
+
+        try {
+          const { error } = await window.centralisSupabase
+            .from("universes")
+            .update(toFormatPayload(nextFormat))
+            .eq("id", universe.id);
+
+          if (error) {
+            throw error;
+          }
+
+          if (status) {
+            status.textContent = "Saved.";
+            status.classList.add("is-success");
+          }
+        } catch (error) {
+          if (status) {
+            status.textContent = `Could not save: ${getReadableError(error)}`;
+            status.classList.add("is-error");
+          }
+        }
+      }
+
+      function handleReset() {
+        populateForm(DEFAULT_UNIVERSE_FORMAT);
+        saveFormat(DEFAULT_UNIVERSE_FORMAT);
+      }
+
+      function handleSegmentClick(event) {
+        const button = event.target.closest("[data-format-value]");
+        if (!button) {
+          return;
+        }
+
+        const colorGroup = button.closest("[data-format-colors]");
+        const segmentGroup = button.closest("[data-format-segment]");
+        if (colorGroup) {
+          setColorValue(button.dataset.formatValue);
+        } else if (segmentGroup) {
+          setSegmentValue(segmentGroup.dataset.formatSegment, button.dataset.formatValue);
+        }
+        saveFormat(readFormFormat());
+      }
+
+      opener.addEventListener("click", openFormatModal);
+      closers.forEach((button) => button.addEventListener("click", closeFormatModal));
+      resetButton?.addEventListener("click", handleReset);
+      form.addEventListener("click", handleSegmentClick);
+      return () => {
+        opener.removeEventListener("click", openFormatModal);
+        closers.forEach((button) => button.removeEventListener("click", closeFormatModal));
+        resetButton?.removeEventListener("click", handleReset);
+        form.removeEventListener("click", handleSegmentClick);
+      };
+    }, [applyUniverseFormat, universeFormat]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("element-types-modal");
+      const opener = document.querySelector("[data-open-types-modal]");
+      const closeButton = document.querySelector("[data-close-types-modal]");
+      const addButton = document.querySelector("[data-add-type]");
+      const list = document.querySelector("[data-element-types-list]");
+      const count = document.querySelector("[data-element-types-count]");
+      const editorHost = document.querySelector("[data-type-editor-host]");
+      const status = document.querySelector("[data-element-types-status]");
+      if (!modal || !opener || !list || !editorHost) {
+        return undefined;
+      }
+
+      let activeEditor = null;
+      let iconPanelOpen = false;
+      let colorPanelOpen = false;
+      let selectedIcon = DEFAULT_ELEMENT_TYPE_ICON;
+      let selectedColor = DEFAULT_ELEMENT_TYPE_COLOR;
+      let iconNames = FALLBACK_PHOSPHOR_ICONS;
+
+      function setTypeStatus(message, type) {
+        if (!status) {
+          return;
+        }
+        status.textContent = message || "";
+        status.classList.toggle("is-error", type === "error");
+        status.classList.toggle("is-success", type === "success");
+      }
+
+      function createTypeIconMarkup(iconName, color) {
+        const icon = sanitizeIconName(iconName || DEFAULT_ELEMENT_TYPE_ICON);
+        const safeColor = sanitizeColor(color || DEFAULT_ELEMENT_TYPE_COLOR);
+        return `<span class="element-type-icon" style="--type-color: ${escapeHtml(safeColor)}" aria-hidden="true"><ph-${escapeHtml(icon)} weight="duotone"></ph-${escapeHtml(icon)}></span>`;
+      }
+
+      function renderTypeList() {
+        const sortedTypes = [...elementTypes].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+        if (count) {
+          count.textContent = `${sortedTypes.length} ${sortedTypes.length === 1 ? "type" : "types"}`;
+        }
+        list.innerHTML = sortedTypes.map((type) => `
+          <div class="element-type-row" data-type-id="${escapeHtml(type.id)}">
+            <button class="element-type-expand" type="button" aria-label="Expand ${escapeHtml(type.name)}"><ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right></button>
+            ${createTypeIconMarkup(type.icon, type.color)}
+            <span class="element-type-name">${escapeHtml(type.name)}</span>
+            <div class="element-type-actions">
+              <button type="button" data-edit-type="${escapeHtml(type.id)}" aria-label="Edit ${escapeHtml(type.name)}"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
+              <button type="button" data-delete-type="${escapeHtml(type.id)}" aria-label="Delete ${escapeHtml(type.name)}"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      function renderIconPanel() {
+        if (!iconPanelOpen) {
+          return "";
+        }
+        const filterValue = activeEditor?.iconSearch || "";
+        const filteredIcons = iconNames
+          .filter((icon) => iconMatchesSearch(icon, filterValue))
+          .slice(0, filterValue ? 600 : 200);
+        const helper = filterValue
+          ? `Showing ${filteredIcons.length} matching icons`
+          : `Showing first ${filteredIcons.length} - type to search all ${iconNames.length} icons`;
+        return `
+          <div class="icon-selector">
+            <input type="search" data-icon-search placeholder="Search all icons..." value="${escapeHtml(filterValue)}" autocomplete="off">
+            <p>${escapeHtml(helper)}</p>
+            <div class="icon-grid">
+              ${filteredIcons.map((icon) => `<button class="${icon === selectedIcon ? "is-selected" : ""}" type="button" data-pick-icon="${escapeHtml(icon)}" aria-label="${escapeHtml(icon)}"><ph-${escapeHtml(sanitizeIconName(icon))} weight="duotone" aria-hidden="true"></ph-${escapeHtml(sanitizeIconName(icon))}></button>`).join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      function renderColorPanel() {
+        if (!colorPanelOpen) {
+          return "";
+        }
+        const distinctColors = [...new Set([
+          selectedColor,
+          ...elementTypes.map((type) => sanitizeColor(type.color, DEFAULT_ELEMENT_TYPE_COLOR)),
+          ...TYPE_COLOR_CHOICES
+        ])].slice(0, 18);
+        return `
+          <div class="color-selector">
+            <div class="color-grid">
+              ${distinctColors.map((color) => `<button class="${color === selectedColor ? "is-selected" : ""}" type="button" data-pick-color="${escapeHtml(color)}" style="--swatch-color: ${escapeHtml(color)}" aria-label="${escapeHtml(color)}"></button>`).join("")}
+            </div>
+            <label class="color-hex-field">
+              <span style="--swatch-color: ${escapeHtml(selectedColor)}"></span>
+              <input type="text" data-color-hex value="${escapeHtml(selectedColor)}" maxlength="9" spellcheck="false">
+            </label>
+          </div>
+        `;
+      }
+
+      function renderEditor() {
+        if (!activeEditor) {
+          editorHost.innerHTML = "";
+          return;
+        }
+        const isEdit = activeEditor.mode === "edit";
+        editorHost.innerHTML = `
+          <form class="element-type-editor" data-type-editor>
+            <input type="text" name="type-name" placeholder="Type name" value="${escapeHtml(activeEditor.name || "")}" autocomplete="off">
+            <div class="type-editor-controls">
+              <button class="secondary-action type-editor-choice" type="button" data-toggle-icon-picker>${createTypeIconMarkup(selectedIcon, selectedColor)} Icon</button>
+              <button class="secondary-action type-editor-choice" type="button" data-toggle-color-picker><span class="type-color-dot" style="--type-color: ${escapeHtml(selectedColor)}"></span> Color</button>
+            </div>
+            ${renderIconPanel()}
+            ${renderColorPanel()}
+            <div class="type-editor-actions">
+              <button class="secondary-action compact-action" type="button" data-cancel-type-editor>Cancel</button>
+              <button class="primary-action compact-action" type="submit">${isEdit ? "Save" : "Add"}</button>
+            </div>
+          </form>
+        `;
+        const focusSelector = activeEditor.focusTarget === "iconSearch"
+          ? "[data-icon-search]"
+          : activeEditor.focusTarget === "colorHex"
+            ? "[data-color-hex]"
+            : '[name="type-name"]';
+        const focusTarget = editorHost.querySelector(focusSelector);
+        focusTarget?.focus();
+        if (focusTarget?.setSelectionRange) {
+          const end = focusTarget.value.length;
+          focusTarget.setSelectionRange(end, end);
+        }
+      }
+
+      function openEditor(mode, type = null) {
+        activeEditor = { mode, typeId: type?.id || null, name: type?.name || "", iconSearch: "", focusTarget: "name" };
+        selectedIcon = sanitizeIconName(type?.icon || DEFAULT_ELEMENT_TYPE_ICON);
+        selectedColor = sanitizeColor(type?.color || DEFAULT_ELEMENT_TYPE_COLOR, DEFAULT_ELEMENT_TYPE_COLOR);
+        iconPanelOpen = false;
+        colorPanelOpen = false;
+        renderEditor();
+      }
+
+      function closeEditor() {
+        activeEditor = null;
+        iconPanelOpen = false;
+        colorPanelOpen = false;
+        renderEditor();
+      }
+
+      async function openTypesModal() {
+        modal.hidden = false;
+        setTypeStatus("");
+        iconNames = await getPhosphorIconNames();
+        renderTypeList();
+      }
+
+      function closeTypesModal() {
+        modal.hidden = true;
+        closeEditor();
+      }
+
+      function handleAddClick() {
+        openEditor("add");
+      }
+
+      async function saveType(event) {
+        event.preventDefault();
+        if (!activeEditor) {
+          return;
+        }
+        const form = event.target;
+        const submitButton = form.querySelector('[type="submit"]');
+        const name = String(new FormData(form).get("type-name") || "").trim();
+        if (!name) {
+          setTypeStatus("Type name is required.", "error");
+          form.querySelector('[name="type-name"]')?.focus();
+          return;
+        }
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+        setTypeStatus(activeEditor.mode === "edit" ? "Saving type..." : "Adding type...");
+        try {
+          if (activeEditor.mode === "edit") {
+            const { error } = await window.centralisSupabase
+              .from("element_types")
+              .update({ name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) })
+              .eq("id", activeEditor.typeId)
+              .eq("universe_id", universe.id);
+            if (error) throw error;
+          } else {
+            const { error } = await window.centralisSupabase
+              .from("element_types")
+              .insert({ universe_id: universe.id, name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) });
+            if (error) throw error;
+          }
+          const completedMode = activeEditor.mode;
+          syncElementTypes(await fetchElementTypes());
+          renderTypeList();
+          closeEditor();
+          setTypeStatus(completedMode === "edit" ? "Type saved." : "Type added.", "success");
+        } catch (error) {
+          setTypeStatus(`Could not save type: ${getReadableError(error)}`, "error");
+        }
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+      }
+
+      async function deleteType(typeId) {
+        const type = getElementTypeById(typeId);
+        if (!type || !window.confirm(`Delete "${type.name}"? Elements using this type will be set to No Type.`)) {
+          return;
+        }
+        setTypeStatus("Deleting type...");
+        try {
+          const { error: updateError } = await window.centralisSupabase
+            .from("elements")
+            .update({ element_type_id: null, updated_at: new Date().toISOString() })
+            .eq("universe_id", universe.id)
+            .eq("element_type_id", typeId);
+          if (updateError) throw updateError;
+          const { error: deleteError } = await window.centralisSupabase
+            .from("element_types")
+            .delete()
+            .eq("id", typeId)
+            .eq("universe_id", universe.id);
+          if (deleteError) throw deleteError;
+          syncElementTypes(await fetchElementTypes());
+          renderTypeList();
+          closeEditor();
+          setTypeStatus("Type deleted.", "success");
+        } catch (error) {
+          setTypeStatus(`Could not delete type: ${getReadableError(error)}`, "error");
+        }
+      }
+
+      function handleEditorClick(event) {
+        const iconButton = event.target.closest("[data-toggle-icon-picker]");
+        const colorButton = event.target.closest("[data-toggle-color-picker]");
+        const cancelButton = event.target.closest("[data-cancel-type-editor]");
+        const pickedIcon = event.target.closest("[data-pick-icon]");
+        const pickedColor = event.target.closest("[data-pick-color]");
+        if (iconButton) {
+          iconPanelOpen = !iconPanelOpen;
+          colorPanelOpen = false;
+          activeEditor.focusTarget = iconPanelOpen ? "iconSearch" : "name";
+          renderEditor();
+        } else if (colorButton) {
+          colorPanelOpen = !colorPanelOpen;
+          iconPanelOpen = false;
+          activeEditor.focusTarget = colorPanelOpen ? "colorHex" : "name";
+          renderEditor();
+        } else if (cancelButton) {
+          closeEditor();
+        } else if (pickedIcon) {
+          selectedIcon = sanitizeIconName(pickedIcon.dataset.pickIcon);
+          iconPanelOpen = false;
+          renderEditor();
+        } else if (pickedColor) {
+          selectedColor = sanitizeColor(pickedColor.dataset.pickColor, DEFAULT_ELEMENT_TYPE_COLOR);
+          renderEditor();
+        }
+      }
+
+      function handleEditorInput(event) {
+        if (!activeEditor) return;
+        if (event.target.matches('[name="type-name"]')) {
+          activeEditor.name = event.target.value;
+          activeEditor.focusTarget = "name";
+        } else if (event.target.matches("[data-icon-search]")) {
+          activeEditor.iconSearch = event.target.value;
+          activeEditor.focusTarget = "iconSearch";
+          renderEditor();
+        } else if (event.target.matches("[data-color-hex]")) {
+          activeEditor.focusTarget = "colorHex";
+          const value = event.target.value.trim();
+          if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) {
+            selectedColor = value;
+          }
+        }
+      }
+
+      function handleListClick(event) {
+        const editButton = event.target.closest("[data-edit-type]");
+        const deleteButton = event.target.closest("[data-delete-type]");
+        if (editButton) {
+          openEditor("edit", getElementTypeById(editButton.dataset.editType));
+        } else if (deleteButton) {
+          deleteType(deleteButton.dataset.deleteType);
+        }
+      }
+
+      opener.addEventListener("click", openTypesModal);
+      closeButton?.addEventListener("click", closeTypesModal);
+      addButton?.addEventListener("click", handleAddClick);
+      list.addEventListener("click", handleListClick);
+      editorHost.addEventListener("click", handleEditorClick);
+      editorHost.addEventListener("input", handleEditorInput);
+      editorHost.addEventListener("submit", saveType);
+      return () => {
+        opener.removeEventListener("click", openTypesModal);
+        closeButton?.removeEventListener("click", closeTypesModal);
+        addButton?.removeEventListener("click", handleAddClick);
+        list.removeEventListener("click", handleListClick);
+        editorHost.removeEventListener("click", handleEditorClick);
+        editorHost.removeEventListener("input", handleEditorInput);
+        editorHost.removeEventListener("submit", saveType);
+      };
+    }, [syncElementTypes, elementTypeVersion]);
+
     React.useEffect(() => {
       const cleanup = populateElementTypeSelect();
       return cleanup || undefined;
-    }, []);
+    }, [elementTypeVersion]);
 
     React.useEffect(() => {
       const modal = document.getElementById("add-element-modal");
@@ -1250,7 +2332,7 @@
       async function handleUploadImage(event) {
         const { nodeId, file } = event.detail || {};
         const node = nodes.find((currentNode) => currentNode.id === nodeId);
-        const status = document.querySelector("[data-details-status]");
+        const status = document.querySelector("[data-image-upload-status]");
         if (!node || !file || !window.centralisSupabase) {
           return;
         }
@@ -1264,9 +2346,9 @@
         body.append("objectId", node.data.recordId);
         body.append("file", file);
 
-        let data;
         try {
-          data = await callEdgeFunction("upload-object-image", { body });
+          await callEdgeFunction("upload-object-image", { body });
+          await refreshNodeImages(node);
         } catch (error) {
           if (status) {
             status.textContent = `Could not upload image: ${getReadableError(error)}`;
@@ -1275,7 +2357,6 @@
           return;
         }
 
-        appendImageToNode(nodeId, data.image);
         if (status) {
           status.textContent = "Image uploaded.";
           status.classList.add("is-success");
@@ -1284,7 +2365,7 @@
 
       window.addEventListener("centralis:upload-image", handleUploadImage);
       return () => window.removeEventListener("centralis:upload-image", handleUploadImage);
-    }, [appendImageToNode, nodes]);
+    }, [nodes, refreshNodeImages]);
 
     React.useEffect(() => {
       const modal = document.getElementById("generate-image-modal");
@@ -1362,19 +2443,19 @@
         }
 
         const meta = getNodeTypeMeta(node);
-        let data;
         try {
-          data = await callEdgeFunction("generate-object-image", {
+          await callEdgeFunction("generate-object-image", {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-            objectId: node.data.recordId,
-            objectKind: node.data.kind,
-            elementType: meta.label,
-            name: node.data.name,
-            description: node.data.description,
-            extraPrompt: promptInput.value
+              objectId: node.data.recordId,
+              objectKind: node.data.kind,
+              elementType: meta.label,
+              name: node.data.name,
+              description: node.data.description,
+              extraPrompt: promptInput.value
             })
           });
+          await refreshNodeImages(node);
         } catch (error) {
           if (submitButton) {
             submitButton.disabled = false;
@@ -1393,7 +2474,6 @@
         }
         form.dataset.generating = "false";
 
-        appendImageToNode(node.id, data.image);
         closeGenerateModal();
         setDetailsMode("view");
       }
@@ -1410,7 +2490,7 @@
         document.removeEventListener("keydown", handleEscape);
         form.removeEventListener("submit", handleGenerateSubmit);
       };
-    }, [appendImageToNode, nodes, pendingImageGeneration]);
+    }, [nodes, pendingImageGeneration, refreshNodeImages]);
 
     React.useEffect(() => {
       const controls = getDetailsControls();
@@ -1603,7 +2683,9 @@
           return;
         }
 
-        setNodes((currentNodes) => [...currentNodes, toElementNode(savedElement)]);
+        const nextNode = toElementNode(savedElement);
+        nextNode.data.format = universeFormat;
+        setNodes((currentNodes) => [...currentNodes, nextNode]);
 
         if (pendingLink?.sourceNodeId) {
           const linkId = createId();
@@ -1616,10 +2698,11 @@
             sourceHandle: pendingLink.sourceHandle || "right",
             targetHandle: "left",
             type: "deletable",
-            data: { recordId: linkId },
+            data: { recordId: linkId, format: universeFormat },
             style: {
-              stroke: "#475569",
-              strokeWidth: 2
+              stroke: universeFormat.strokeColor,
+              strokeWidth: universeFormat.strokeWidth,
+              strokeDasharray: getStrokeDasharray(universeFormat.strokeStyle)
             }
           };
 
@@ -1663,7 +2746,7 @@
 
       form.addEventListener("submit", handleSubmit);
       return () => form.removeEventListener("submit", handleSubmit);
-    }, [nodes.length, pendingLink]);
+    }, [nodes.length, pendingLink, universeFormat]);
 
     React.useEffect(() => {
       function handleRequestDelete(event) {
@@ -1754,10 +2837,11 @@
         sourceHandle: connection.sourceHandle || "right",
         targetHandle: connection.targetHandle || "left",
         type: "deletable",
-        data: { recordId: id },
+        data: { recordId: id, format: universeFormat },
         style: {
-          stroke: "#475569",
-          strokeWidth: 2
+          stroke: universeFormat.strokeColor,
+          strokeWidth: universeFormat.strokeWidth,
+          strokeDasharray: getStrokeDasharray(universeFormat.strokeStyle)
         }
       };
 
@@ -1770,7 +2854,10 @@
           universe_id: universe.id,
           source_element_id: sourceRecordId,
           target_element_id: targetRecordId,
-          path_type: "deletable"
+          stroke_color: universeFormat.strokeColor,
+          stroke_width: universeFormat.strokeWidth,
+          stroke_style: universeFormat.strokeStyle,
+          path_type: universeFormat.pathType
         });
 
       if (error) {

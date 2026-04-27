@@ -19,6 +19,16 @@ const ELEMENTS_TABLE = "elements";
 const ELEMENT_LINKS_TABLE = "element_links";
 const SUPABASE_TIMEOUT_MS = 15000;
 const DEFAULT_UNIVERSE_POSITION = { x: 120, y: 120 };
+const DEFAULT_UNIVERSE_FORMAT = {
+  fmt_stroke_color: "#3b82f6",
+  fmt_stroke_width: 2,
+  fmt_stroke_style: "solid",
+  fmt_path_type: "step",
+  fmt_node_bg_opacity: 1,
+  fmt_node_border_width: 2,
+  fmt_node_image_placement: "side",
+  fmt_node_layout_gap: 12
+};
 let activeModal = null;
 let supabaseClient = null;
 let currentAppUser = null;
@@ -712,7 +722,8 @@ async function createUniverseFromForm(form, submitButton) {
         name,
         description: description || null,
         canvas_position_x: DEFAULT_UNIVERSE_POSITION.x,
-        canvas_position_y: DEFAULT_UNIVERSE_POSITION.y
+        canvas_position_y: DEFAULT_UNIVERSE_POSITION.y,
+        ...DEFAULT_UNIVERSE_FORMAT
       })
       , "Creating universe");
 

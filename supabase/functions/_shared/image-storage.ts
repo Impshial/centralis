@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner";
 
 export const corsHeaders = {
@@ -168,6 +168,15 @@ export async function createSignedImageUrl(imageUrl: string, expiresIn = 3600) {
     Bucket: bucket,
     Key: key,
   }), { expiresIn });
+}
+
+export async function deleteImageObject(imageUrl: string) {
+  const bucket = getEnv("IDRIVE_E2_BUCKET");
+  const key = getKeyFromImageUrl(imageUrl);
+  await createS3Client().send(new DeleteObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  }));
 }
 
 export async function insertImageRow(options: {
