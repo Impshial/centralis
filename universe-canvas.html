@@ -123,7 +123,16 @@
           Element
         </button>
         <button class="tool-action" type="button" data-open-types-modal>
+          <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
           Types
+        </button>
+        <button class="tool-action" type="button" data-import-elements>
+          <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+          Import
+        </button>
+        <button class="tool-action" type="button" data-export-elements>
+          <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+          Export
         </button>
         <button class="tool-action icon-tool-action" type="button" data-auto-layout aria-label="Auto-layout canvas" title="Auto-layout canvas">
           <ph-tree-structure weight="bold" aria-hidden="true"></ph-tree-structure>
@@ -132,6 +141,8 @@
           <ph-gear-six weight="bold" aria-hidden="true"></ph-gear-six>
         </button>
       </div>
+      <input type="file" accept="application/json,.json" data-import-elements-file hidden>
+      <p class="canvas-transfer-status" data-canvas-transfer-status role="status"></p>
     </div>
     <div class="flow-canvas" id="universe-flow"></div>
     <aside class="details-pane" data-details-pane hidden aria-label="Node details">
@@ -157,6 +168,45 @@
       <div class="details-pane-body" data-details-content></div>
     </aside>
   </main>
+
+  <div class="modal-backdrop" id="element-transfer-options-modal" hidden>
+    <section class="modal-dialog transfer-options-dialog" role="dialog" aria-modal="true" aria-labelledby="transfer-options-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="transfer-options-title" data-transfer-options-title>Transfer Elements</h2>
+          <p class="modal-subtitle" data-transfer-options-subtitle>Select what should be included.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-transfer-options-cancel>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form class="transfer-options-form" data-transfer-options-form>
+        <label class="transfer-option-row">
+          <input type="checkbox" name="connections" checked>
+          <span>Connections</span>
+        </label>
+        <label class="transfer-option-row">
+          <input type="checkbox" name="position" checked>
+          <span>Position</span>
+        </label>
+        <label class="transfer-option-row">
+          <input type="checkbox" name="richDetails" checked>
+          <span>Rich Details</span>
+        </label>
+        <label class="transfer-option-row">
+          <input type="checkbox" name="customFields" checked>
+          <span>Custom Fields</span>
+        </label>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-transfer-options-cancel>Cancel</button>
+          <button class="primary-action" type="submit" data-transfer-options-confirm>Continue</button>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <div class="modal-backdrop" id="add-element-modal" hidden>
     <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="add-element-title">
@@ -379,7 +429,7 @@
       <div class="modal-header element-types-header">
         <div>
           <h2 id="element-types-title">Element Types</h2>
-          <p class="modal-subtitle">Manage the types and templates used to categorize your elements.</p>
+          <p class="modal-subtitle">Manage the types used to categorize your elements.</p>
         </div>
         <button class="modal-close" type="button" aria-label="Close dialog" data-close-types-modal>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -403,6 +453,52 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="template-editor-modal" hidden>
+    <section class="modal-dialog wide-template-dialog" role="dialog" aria-modal="true" aria-labelledby="template-editor-title">
+      <div class="modal-header template-editor-header">
+        <div>
+          <p class="details-pane-kicker" data-template-editor-type>Element Type</p>
+          <h2 id="template-editor-title">Templates</h2>
+          <p class="modal-subtitle">Manage templates, sections, and fields for this element type.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close template editor" data-close-template-editor>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="wide-template-layout">
+        <aside class="wide-template-sidebar">
+          <div class="template-panel-actions">
+            <strong>Templates</strong>
+            <button class="secondary-action compact-action" type="button" data-wide-add-template>
+              <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+              Add
+            </button>
+          </div>
+          <div class="wide-template-list" data-wide-template-list></div>
+        </aside>
+        <section class="wide-template-main" data-wide-template-main></section>
+      </div>
+      <p class="form-status" data-template-editor-status role="status"></p>
+      <div class="template-nested-overlay" data-template-nested-dialog hidden>
+        <section class="template-nested-dialog" role="dialog" aria-modal="true" aria-labelledby="template-nested-title">
+          <div class="modal-header template-nested-header">
+            <h3 id="template-nested-title" data-template-nested-title>Template Item</h3>
+            <button class="modal-close" type="button" aria-label="Close editor" data-cancel-nested-editor>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 6 6 18"></path>
+                <path d="m6 6 12 12"></path>
+              </svg>
+            </button>
+          </div>
+          <div data-template-nested-content></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
   <div class="modal-backdrop rich-details-backdrop" id="rich-details-modal" hidden>
     <section class="modal-dialog rich-details-dialog" role="dialog" aria-modal="true" aria-labelledby="rich-details-title">
       <header class="rich-details-header">
@@ -411,7 +507,7 @@
           <h2 id="rich-details-title" data-rich-details-title>Rich Details</h2>
         </div>
         <div class="rich-details-actions">
-          <button class="secondary-action compact-action" type="button" data-rich-details-close>Close</button>
+          <button class="secondary-action compact-action" type="button" data-rich-details-close data-rich-details-close-action>Close</button>
           <button class="secondary-action compact-action" type="button" data-rich-details-edit>Edit</button>
           <button class="secondary-action compact-action" type="button" data-rich-details-cancel hidden>Cancel</button>
           <button class="primary-action compact-action" type="button" data-rich-details-save hidden>Save</button>
@@ -425,6 +521,22 @@
       </header>
       <div class="rich-details-body" data-rich-details-body></div>
       <p class="form-status rich-details-status" data-rich-details-status role="status"></p>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="template-choice-modal" hidden>
+    <section class="modal-dialog template-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="template-choice-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="template-choice-title">Choose Template</h2>
+          <p class="modal-subtitle" data-template-choice-subtitle>Select a Rich Details template for this element.</p>
+        </div>
+      </div>
+      <div class="template-choice-list" data-template-choice-list></div>
+      <p class="form-status" data-template-choice-status role="status"></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-template-choice-cancel>Cancel</button>
+      </div>
     </section>
   </div>
 
@@ -479,11 +591,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=details-pane-1"></script>
+  <script src="script.js?v=seed-diagnostics-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
-  <script src="flow-canvas.js?v=rich-details-view-edit-1"></script>
+  <script src="flow-canvas.js?v=wide-template-editor-1"></script>
 </body>
 </html>

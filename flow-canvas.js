@@ -8,6 +8,13 @@
   }
 
   const SUPABASE_TIMEOUT_MS = 15000;
+  const ELEMENT_EXPORT_FORMAT = "centralis.element-export.v1";
+  const DEFAULT_TRANSFER_OPTIONS = {
+    connections: true,
+    position: true,
+    richDetails: true,
+    customFields: true
+  };
   const params = new URLSearchParams(window.location.search);
   let universeId = params.get("universe_id");
   const titleElement = document.querySelector("[data-universe-title]");
@@ -47,6 +54,19 @@
 
     const trimmed = description.trim();
     return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
+  }
+
+  function normalizeLookupKey(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function safeFileSlug(value) {
+    return String(value || "centralis")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "centralis";
   }
 
   function normalizeImages(images = []) {
@@ -298,9 +318,18 @@
   let imageRows = [];
 
   if (window.centralisSupabase && universeId) {
+    let currentAppUser = window.centralisCurrentAppUser || null;
+    if (!currentAppUser && window.centralisGetCurrentAppUser) {
+      try {
+        currentAppUser = await window.centralisGetCurrentAppUser();
+      } catch (error) {
+        console.warn("Could not load the signed-in Centralis user before canvas data.", error);
+      }
+    }
+
     const universeResponse = await withTimeout(window.centralisSupabase
       .from("universes")
-      .select("id,name,description,canvas_position_x,canvas_position_y,fmt_stroke_color,fmt_stroke_width,fmt_stroke_style,fmt_path_type,fmt_node_bg_opacity,fmt_node_border_width,fmt_node_image_placement,fmt_node_layout_gap")
+      .select("id,user_id,name,description,canvas_position_x,canvas_position_y,fmt_stroke_color,fmt_stroke_width,fmt_stroke_style,fmt_path_type,fmt_node_bg_opacity,fmt_node_border_width,fmt_node_image_placement,fmt_node_layout_gap")
       .eq("id", universeId)
       .maybeSingle(), "Loading universe");
 
@@ -313,19 +342,22 @@
       universe = universeResponse.data;
     }
 
-    const typeResponse = await withTimeout(window.centralisSupabase
-      .from("element_types")
-      .select("id,name,icon,color")
-      .eq("universe_id", universeId)
-      .order("name", { ascending: true }), "Loading element types");
+    const typeOwnerId = universe.user_id || currentAppUser?.id;
+    if (typeOwnerId) {
+      const typeResponse = await withTimeout(window.centralisSupabase
+        .from("element_types")
+        .select("id,name,icon,color")
+        .eq("user_id", typeOwnerId)
+        .order("name", { ascending: true }), "Loading element types");
 
-    if (!typeResponse.error) {
-      elementTypes = typeResponse.data || [];
+      if (!typeResponse.error) {
+        elementTypes = typeResponse.data || [];
+      }
     }
 
     const elementResponse = await withTimeout(window.centralisSupabase
       .from("elements")
-      .select("id,name,description,position_x,position_y,element_type_id")
+      .select("id,name,description,position_x,position_y,element_type_id,rich_template_id")
       .eq("universe_id", universeId)
       .order("created_at", { ascending: true }), "Loading elements");
 
@@ -642,6 +674,7 @@
         name: row.name || "Untitled Element",
         description: row.description || "",
         elementType,
+        richTemplateId: row.rich_template_id || null,
         format: initialUniverseFormat,
         images: getImagesForObject(row.id)
       },
@@ -1004,6 +1037,26 @@
     return Array.isArray(options.choices) ? options.choices.map(String) : [];
   }
 
+  function normalizeFieldKey(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function optionsToLines(options) {
+    return getFieldChoices({ options }).join("\n");
+  }
+
+  function linesToOptions(value) {
+    const choices = String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return choices.length ? { choices } : null;
+  }
+
   function getFieldStoredValue(valuesByFieldId, field) {
     const savedValue = valuesByFieldId.get(field.id)?.value;
     if (savedValue !== undefined && savedValue !== null) {
@@ -1085,6 +1138,41 @@
 
   function sortTemplateFields(fields) {
     return [...fields].sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || getTemplateFieldLabel(left).localeCompare(getTemplateFieldLabel(right)));
+  }
+
+  function dedupeTemplateFields(fields = [], templateId = "") {
+    const fieldsByIdentity = new Map();
+    const duplicateFields = [];
+
+    fields.forEach((field) => {
+      const identity = [
+        field.template_id || templateId || "",
+        field.section_id || "",
+        String(field.field_key || getTemplateFieldLabel(field) || field.id || "").trim().toLowerCase()
+      ].join("::");
+
+      if (fieldsByIdentity.has(identity)) {
+        duplicateFields.push(field);
+        return;
+      }
+
+      fieldsByIdentity.set(identity, field);
+    });
+
+    if (duplicateFields.length) {
+      console.warn("Duplicate rich template fields were hidden from rendering.", {
+        templateId,
+        duplicateCount: duplicateFields.length,
+        duplicates: duplicateFields.map((field) => ({
+          id: field.id,
+          section_id: field.section_id,
+          field_key: field.field_key,
+          label: field.label
+        }))
+      });
+    }
+
+    return [...fieldsByIdentity.values()];
   }
 
   function buildRichTemplateSectionModels(sections = [], fields = []) {
@@ -1572,14 +1660,14 @@
   }
 
   async function fetchElementTypes() {
-    if (!window.centralisSupabase || !universe?.id) {
+    if (!window.centralisSupabase || !universe?.user_id) {
       return elementTypes;
     }
 
     const { data, error } = await window.centralisSupabase
       .from("element_types")
       .select("id,name,icon,color")
-      .eq("universe_id", universe.id)
+      .eq("user_id", universe.user_id)
       .order("name", { ascending: true });
 
     if (error) {
@@ -1588,6 +1676,101 @@
 
     elementTypes = data || [];
     return elementTypes;
+  }
+
+  async function fetchTemplatesForType(elementTypeId) {
+    if (!window.centralisSupabase || !elementTypeId) {
+      return [];
+    }
+
+    const { data, error } = await window.centralisSupabase
+      .from("element_type_templates")
+      .select("*")
+      .eq("element_type_id", elementTypeId)
+      .order("name", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  async function persistElementTemplateChoice(node, templateId) {
+    if (!window.centralisSupabase || !node?.data?.recordId) {
+      return;
+    }
+
+    const { error } = await window.centralisSupabase
+      .from("elements")
+      .update({ rich_template_id: templateId || null, updated_at: new Date().toISOString() })
+      .eq("id", node.data.recordId);
+
+    if (error) {
+      throw error;
+    }
+
+    node.data.richTemplateId = templateId || null;
+  }
+
+  function chooseTemplateForNode(node, templates) {
+    const modal = document.getElementById("template-choice-modal");
+    const list = document.querySelector("[data-template-choice-list]");
+    const subtitle = document.querySelector("[data-template-choice-subtitle]");
+    const status = document.querySelector("[data-template-choice-status]");
+    const cancelButton = document.querySelector("[data-template-choice-cancel]");
+
+    if (!modal || !list) {
+      return Promise.resolve(null);
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      function cleanup(result) {
+        if (settled) return;
+        settled = true;
+        modal.hidden = true;
+        list.removeEventListener("click", handleChoice);
+        cancelButton?.removeEventListener("click", handleCancel);
+        document.removeEventListener("keydown", handleEscape);
+        resolve(result);
+      }
+
+      function handleChoice(event) {
+        const choice = event.target.closest("[data-template-choice-id]");
+        if (!choice) return;
+        const template = templates.find((item) => item.id === choice.dataset.templateChoiceId) || null;
+        cleanup(template);
+      }
+
+      function handleCancel() {
+        cleanup(null);
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape") {
+          cleanup(null);
+        }
+      }
+
+      if (subtitle) {
+        subtitle.textContent = `Choose the Rich Details template to use for ${node.data?.name || "this element"}.`;
+      }
+      if (status) {
+        status.textContent = "";
+        status.classList.remove("is-error", "is-success");
+      }
+      list.innerHTML = templates.map((template) => `
+        <button class="template-choice-card" type="button" data-template-choice-id="${escapeHtml(template.id)}">
+          <strong>${escapeHtml(template.name || "Untitled Template")}</strong>
+          ${template.description ? `<span>${escapeHtml(template.description)}</span>` : ""}
+        </button>
+      `).join("");
+      modal.hidden = false;
+      list.addEventListener("click", handleChoice);
+      cancelButton?.addEventListener("click", handleCancel);
+      document.addEventListener("keydown", handleEscape);
+    });
   }
 
   function hasMeaningfulValue(value) {
@@ -1599,7 +1782,7 @@
       return false;
     }
 
-    const [valueResponse, customResponse] = await Promise.all([
+    const [valueResponse, customResponse, elementResponse] = await Promise.all([
       window.centralisSupabase
         .from("element_template_field_values")
         .select("id,value")
@@ -1607,7 +1790,12 @@
       window.centralisSupabase
         .from("element_custom_fields")
         .select("id,name,value")
-        .eq("element_id", elementId)
+        .eq("element_id", elementId),
+      window.centralisSupabase
+        .from("elements")
+        .select("rich_template_id")
+        .eq("id", elementId)
+        .maybeSingle()
     ]);
 
     if (valueResponse.error) {
@@ -1616,8 +1804,12 @@
     if (customResponse.error) {
       console.error("Could not check custom fields:", customResponse.error);
     }
+    if (elementResponse.error) {
+      console.error("Could not check selected rich template:", elementResponse.error);
+    }
 
-    return Boolean((valueResponse.data || []).some((row) => hasMeaningfulValue(row.value))
+    return Boolean(elementResponse.data?.rich_template_id
+      || (valueResponse.data || []).some((row) => hasMeaningfulValue(row.value))
       || (customResponse.data || []).some((row) => hasMeaningfulValue(row.name) || hasMeaningfulValue(row.value)));
   }
 
@@ -1646,22 +1838,26 @@
     }
 
     let template = null;
+    let templates = [];
     let sections = [];
     let fields = [];
     const elementTypeId = node.data?.elementType?.id;
     if (elementTypeId) {
-      const templateResponse = await window.centralisSupabase
-        .from("element_type_templates")
-        .select("*")
-        .eq("element_type_id", elementTypeId)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+      templates = await fetchTemplatesForType(elementTypeId);
+      const selectedTemplateId = node.data?.richTemplateId;
+      template = selectedTemplateId
+        ? templates.find((item) => item.id === selectedTemplateId) || null
+        : null;
 
-      if (templateResponse.error) {
-        throw templateResponse.error;
+      if (!template && templates.length === 1) {
+        template = templates[0];
+        await persistElementTemplateChoice(node, template.id);
+      } else if (!template && templates.length > 1) {
+        template = await chooseTemplateForNode(node, templates);
+        if (template?.id) {
+          await persistElementTemplateChoice(node, template.id);
+        }
       }
-      template = templateResponse.data || null;
 
       if (template?.id) {
         const [sectionResponse, fieldResponse] = await Promise.all([
@@ -1684,13 +1880,18 @@
         if (fieldResponse.error) {
           throw fieldResponse.error;
         }
-        sections = sectionResponse.data || [];
-        fields = fieldResponse.data || [];
+        const hiddenSectionIds = new Set((sectionResponse.data || [])
+          .filter((section) => section.is_hidden)
+          .map((section) => section.id));
+        sections = (sectionResponse.data || []).filter((section) => !section.is_hidden);
+        fields = dedupeTemplateFields(fieldResponse.data || [], template.id)
+          .filter((field) => !field.is_hidden && !hiddenSectionIds.has(field.section_id));
       }
     }
 
     return {
       template,
+      templates,
       sections,
       fields,
       values: valueResponse.data || [],
@@ -1868,6 +2069,32 @@
       controls.list.appendChild(option);
     });
 
+    let typeaheadBuffer = "";
+    let typeaheadTimer = null;
+
+    const getSortedTypeaheadTypes = () => elementTypes
+      .slice()
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+
+    const selectTypeaheadMatch = (queryText = typeaheadBuffer, { cycle = false } = {}) => {
+      const query = String(queryText || "").trim().toLowerCase();
+      if (!query) return false;
+      const matches = getSortedTypeaheadTypes()
+        .filter((type) => String(type.name || "").toLowerCase().startsWith(query));
+      if (!matches.length) return false;
+      let matchingType = matches[0];
+      if (cycle && matches.length > 1) {
+        const currentIndex = matches.findIndex((type) => String(type.id || "") === String(controls.input?.value || ""));
+        matchingType = matches[(currentIndex + 1) % matches.length];
+      }
+      if (!matchingType) return false;
+      setElementTypePickerValue(matchingType.id || "");
+      const selectedOption = [...(controls.list?.querySelectorAll("[data-type-option]") || [])]
+        .find((option) => option.dataset.value === String(matchingType.id || ""));
+      selectedOption?.scrollIntoView({ block: "nearest" });
+      return true;
+    };
+
     const handleTriggerClick = (event) => {
       event.stopPropagation();
       const willOpen = controls.list.hidden;
@@ -1887,14 +2114,48 @@
       }
     };
 
+    const handleTypeaheadKeyDown = (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.key.length !== 1) {
+        return;
+      }
+      const targetTag = event.target?.tagName;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(targetTag)) {
+        return;
+      }
+      const addModal = document.getElementById("add-element-modal");
+      const pickerIsActive = controls.picker.contains(document.activeElement) || !controls.list.hidden;
+      if (addModal?.hidden || !pickerIsActive) {
+        return;
+      }
+      event.preventDefault();
+      const key = event.key.toLowerCase();
+      typeaheadBuffer += key;
+      const isRepeatedSingleCharacter = typeaheadBuffer.length > 1
+        && [...typeaheadBuffer].every((character) => character === key);
+      if (isRepeatedSingleCharacter) {
+        typeaheadBuffer = key;
+        selectTypeaheadMatch(key, { cycle: true });
+      } else if (!selectTypeaheadMatch(typeaheadBuffer)) {
+        typeaheadBuffer = key;
+        selectTypeaheadMatch(key);
+      }
+      window.clearTimeout(typeaheadTimer);
+      typeaheadTimer = window.setTimeout(() => {
+        typeaheadBuffer = "";
+      }, 900);
+    };
+
     controls.trigger.addEventListener("click", handleTriggerClick);
     document.addEventListener("pointerdown", handleOutsidePointerDown);
+    document.addEventListener("keydown", handleTypeaheadKeyDown);
     document.addEventListener("keydown", handleEscape);
     setElementTypePickerValue("");
 
     return () => {
+      window.clearTimeout(typeaheadTimer);
       controls.trigger.removeEventListener("click", handleTriggerClick);
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
+      document.removeEventListener("keydown", handleTypeaheadKeyDown);
       document.removeEventListener("keydown", handleEscape);
     };
   }
@@ -2099,6 +2360,11 @@
       setRichDetailsData({ loading: true, error: "", template: null, sections: [], fields: [], values: [], customFields: [] });
       try {
         const data = await fetchRichDetailsData(node);
+        if (data.template?.id && node.data?.richTemplateId !== data.template.id) {
+          setNodes((currentNodes) => currentNodes.map((currentNode) => currentNode.id === nodeId
+            ? { ...currentNode, data: { ...currentNode.data, richTemplateId: data.template.id } }
+            : currentNode));
+        }
         setRichDetailsData({ loading: false, error: "", ...data });
       } catch (error) {
         setRichDetailsData({ loading: false, error: getReadableError(error), template: null, fields: [], values: [], customFields: [] });
@@ -2663,11 +2929,27 @@
       const count = document.querySelector("[data-element-types-count]");
       const editorHost = document.querySelector("[data-type-editor-host]");
       const status = document.querySelector("[data-element-types-status]");
+      const templateModal = document.getElementById("template-editor-modal");
+      const templateCloseButton = document.querySelector("[data-close-template-editor]");
+      const templateTypeLabel = document.querySelector("[data-template-editor-type]");
+      const templateList = document.querySelector("[data-wide-template-list]");
+      const templateMain = document.querySelector("[data-wide-template-main]");
+      const templateStatus = document.querySelector("[data-template-editor-status]");
+      const wideAddTemplateButton = document.querySelector("[data-wide-add-template]");
+      const templateNestedDialog = document.querySelector("[data-template-nested-dialog]");
+      const templateNestedTitle = document.querySelector("[data-template-nested-title]");
+      const templateNestedContent = document.querySelector("[data-template-nested-content]");
       if (!modal || !opener || !list || !editorHost) {
         return undefined;
       }
 
       let activeEditor = null;
+      let activeNestedEditor = null;
+      let templateEditorTypeId = null;
+      let selectedTemplateId = null;
+      let templatesByTypeId = new Map();
+      let sectionsByTemplateId = new Map();
+      let fieldsByTemplateId = new Map();
       let iconPanelOpen = false;
       let colorPanelOpen = false;
       let selectedIcon = DEFAULT_ELEMENT_TYPE_ICON;
@@ -2683,10 +2965,270 @@
         status.classList.toggle("is-success", type === "success");
       }
 
+      function setTemplateStatus(message, type) {
+        const target = templateStatus || status;
+        if (!target) return;
+        target.textContent = message || "";
+        target.classList.toggle("is-error", type === "error");
+        target.classList.toggle("is-success", type === "success");
+      }
+
       function createTypeIconMarkup(iconName, color) {
         const icon = sanitizeIconName(iconName || DEFAULT_ELEMENT_TYPE_ICON);
         const safeColor = sanitizeColor(color || DEFAULT_ELEMENT_TYPE_COLOR);
         return `<span class="element-type-icon" style="--type-color: ${escapeHtml(safeColor)}" aria-hidden="true"><ph-${escapeHtml(icon)} weight="duotone"></ph-${escapeHtml(icon)}></span>`;
+      }
+
+      async function refreshTypeTemplateData() {
+        const typeIds = elementTypes.map((type) => type.id).filter(Boolean);
+        templatesByTypeId = new Map();
+        sectionsByTemplateId = new Map();
+        fieldsByTemplateId = new Map();
+        if (!typeIds.length) {
+          return;
+        }
+
+        const templateResponse = await window.centralisSupabase
+          .from("element_type_templates")
+          .select("*")
+          .in("element_type_id", typeIds)
+          .order("name", { ascending: true });
+        if (templateResponse.error) throw templateResponse.error;
+
+        const templates = templateResponse.data || [];
+        templates.forEach((template) => {
+          const listForType = templatesByTypeId.get(template.element_type_id) || [];
+          listForType.push(template);
+          templatesByTypeId.set(template.element_type_id, listForType);
+        });
+
+        const templateIds = templates.map((template) => template.id).filter(Boolean);
+        if (!templateIds.length) {
+          return;
+        }
+
+        const [sectionResponse, fieldResponse] = await Promise.all([
+          window.centralisSupabase
+            .from("element_template_sections")
+            .select("*")
+            .in("template_id", templateIds)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }),
+          window.centralisSupabase
+            .from("element_type_template_fields")
+            .select("*")
+            .in("template_id", templateIds)
+            .order("sort_order", { ascending: true })
+        ]);
+        if (sectionResponse.error) throw sectionResponse.error;
+        if (fieldResponse.error) throw fieldResponse.error;
+
+        (sectionResponse.data || []).forEach((section) => {
+          const listForTemplate = sectionsByTemplateId.get(section.template_id) || [];
+          listForTemplate.push(section);
+          sectionsByTemplateId.set(section.template_id, listForTemplate);
+        });
+        (fieldResponse.data || []).forEach((field) => {
+          const listForTemplate = fieldsByTemplateId.get(field.template_id) || [];
+          listForTemplate.push(field);
+          fieldsByTemplateId.set(field.template_id, listForTemplate);
+        });
+      }
+
+      function refreshNodesForTypeChanges() {
+        setNodes((currentNodes) => currentNodes.map((node) => {
+          if (node.data?.kind !== "element") return node;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              elementType: getElementTypeById(node.data?.elementType?.id)
+            }
+          };
+        }));
+      }
+
+      function createNestedEditorMarkup() {
+        if (!activeNestedEditor) return "";
+        const data = activeNestedEditor.data || {};
+        const isEdit = activeNestedEditor.mode === "edit";
+        if (activeNestedEditor.kind === "template") {
+          return `
+            <form class="element-type-editor nested-template-editor" data-template-editor>
+              <label class="template-form-field">
+                <span>Name</span>
+                <input type="text" name="template-name" placeholder="Template name" value="${escapeHtml(data.name || "")}" autocomplete="off">
+              </label>
+              <label class="template-form-field">
+                <span>Description</span>
+                <textarea name="template-description" rows="2" placeholder="Template description">${escapeHtml(data.description || "")}</textarea>
+              </label>
+              <div class="type-editor-actions">
+                <button class="secondary-action compact-action" type="button" data-cancel-nested-editor>Cancel</button>
+                <button class="primary-action compact-action" type="submit">${isEdit ? "Save" : "Add"}</button>
+              </div>
+            </form>
+          `;
+        }
+
+        if (activeNestedEditor.kind === "section") {
+          return `
+            <form class="element-type-editor nested-template-editor" data-section-editor>
+              <label class="template-form-field">
+                <span>Name</span>
+                <input type="text" name="section-name" placeholder="Section name" value="${escapeHtml(data.name || "")}" autocomplete="off">
+              </label>
+              <label class="template-form-field">
+                <span>Description</span>
+                <textarea name="section-description" rows="3" placeholder="Section description">${escapeHtml(data.description || "")}</textarea>
+              </label>
+              <label class="template-form-field">
+                <span>Sort Order</span>
+                <input type="number" name="section-sort-order" placeholder="Sort order" value="${escapeHtml(data.sort_order ?? 0)}">
+              </label>
+              <div class="type-editor-actions">
+                <button class="secondary-action compact-action" type="button" data-cancel-nested-editor>Cancel</button>
+                <button class="primary-action compact-action" type="submit">${isEdit ? "Save" : "Add"}</button>
+              </div>
+            </form>
+          `;
+        }
+
+        const templateSections = sectionsByTemplateId.get(activeNestedEditor.templateId) || [];
+        const fieldLabel = activeNestedEditor.mode === "edit" ? getTemplateFieldLabel(data) : "";
+        const fieldType = getTemplateFieldType(data);
+        const optionsText = optionsToLines(data.options);
+        return `
+          <form class="element-type-editor nested-template-editor field-template-editor" data-field-editor>
+            <div class="template-editor-grid">
+              <label class="template-form-field">
+                <span>Label</span>
+                <input type="text" name="field-label" placeholder="Field label" value="${escapeHtml(fieldLabel)}" autocomplete="off">
+              </label>
+              <label class="template-form-field">
+                <span>Field Key</span>
+                <input type="text" name="field-key" placeholder="field_key" value="${escapeHtml(data.field_key || "")}" autocomplete="off">
+              </label>
+              <label class="template-form-field">
+                <span>Field Type</span>
+                <select name="field-type">
+                  ${["text", "textarea", "rich_text", "number", "date", "checkbox", "select", "multi_select", "url"].map((type) => `<option value="${type}"${fieldType === type ? " selected" : ""}>${type.replace("_", " ")}</option>`).join("")}
+                </select>
+              </label>
+              <label class="template-form-field">
+                <span>Section</span>
+                <select name="field-section">
+                  <option value="">Unsectioned</option>
+                  ${templateSections.map((section) => `<option value="${escapeHtml(section.id)}"${section.id === data.section_id ? " selected" : ""}>${escapeHtml(section.name || "Untitled Section")}</option>`).join("")}
+                </select>
+              </label>
+              <label class="template-form-field">
+                <span>Sort Order</span>
+                <input type="number" name="field-sort-order" placeholder="Sort order" value="${escapeHtml(data.sort_order ?? 0)}">
+              </label>
+              <label class="template-required-check">
+                <input type="checkbox" name="field-required"${data.is_required ? " checked" : ""}>
+                Required
+              </label>
+            </div>
+            <label class="template-form-field">
+              <span>Description</span>
+              <textarea name="field-description" rows="3" placeholder="Description">${escapeHtml(data.description || "")}</textarea>
+            </label>
+            <label class="template-form-field">
+              <span>Placeholder</span>
+              <textarea name="field-placeholder" rows="3" placeholder="Placeholder">${escapeHtml(data.placeholder || "")}</textarea>
+            </label>
+            <label class="template-form-field">
+              <span>Default Value</span>
+              <textarea name="field-default-value" rows="3" placeholder="Default value">${escapeHtml(data.default_value || "")}</textarea>
+            </label>
+            <label class="template-form-field">
+              <span>Options</span>
+              <textarea name="field-options" rows="5" placeholder="Options, one per line">${escapeHtml(optionsText)}</textarea>
+            </label>
+            <div class="type-editor-actions">
+              <button class="secondary-action compact-action" type="button" data-cancel-nested-editor>Cancel</button>
+              <button class="primary-action compact-action" type="submit">${isEdit ? "Save" : "Add"}</button>
+            </div>
+          </form>
+        `;
+      }
+
+      function renderFieldRows(template, fields = null) {
+        const fieldRows = sortTemplateFields(fields || fieldsByTemplateId.get(template.id) || []);
+        if (!fieldRows.length) {
+          return '<p class="template-empty">No fields yet.</p>';
+        }
+
+        return fieldRows.map((field) => `
+          <div class="template-child-row field-row${field.is_hidden ? " is-hidden" : ""}" data-field-id="${escapeHtml(field.id)}">
+            <span class="template-row-title">${escapeHtml(getTemplateFieldLabel(field))}${field.is_default ? ' <em class="template-default-badge">Default</em>' : ""}${field.is_hidden ? ' <em class="template-hidden-badge">Hidden</em>' : ""}</span>
+            <span class="template-row-meta">${escapeHtml(getTemplateFieldType(field))}${field.is_required ? " *" : ""}</span>
+            <span class="template-row-order">${escapeHtml(field.sort_order ?? 0)}</span>
+            <div class="element-type-actions template-row-actions">
+              <button type="button" data-edit-field="${escapeHtml(field.id)}" aria-label="Edit field"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
+              ${field.is_default
+                ? `<button type="button" data-toggle-field-hidden="${escapeHtml(field.id)}" aria-label="${field.is_hidden ? "Show" : "Hide"} field"><ph-${field.is_hidden ? "eye" : "eye-slash"} weight="bold" aria-hidden="true"></ph-${field.is_hidden ? "eye" : "eye-slash"}></button>`
+                : `<button type="button" data-delete-field="${escapeHtml(field.id)}" aria-label="Delete field"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>`}
+            </div>
+          </div>
+        `).join("");
+      }
+
+      function renderSectionRows(template) {
+        const sections = sectionsByTemplateId.get(template.id) || [];
+        const fields = fieldsByTemplateId.get(template.id) || [];
+        const fieldsBySectionId = new Map();
+        const unsectionedFields = [];
+        fields.forEach((field) => {
+          if (field.section_id) {
+            const sectionFields = fieldsBySectionId.get(field.section_id) || [];
+            sectionFields.push(field);
+            fieldsBySectionId.set(field.section_id, sectionFields);
+          } else {
+            unsectionedFields.push(field);
+          }
+        });
+        return `
+          <div class="template-subgroup">
+            <div class="template-subgroup-header">
+              <strong>Sections</strong>
+              <button class="secondary-action compact-action" type="button" data-add-section="${escapeHtml(template.id)}">Add Section</button>
+            </div>
+            ${activeNestedEditor?.kind === "section" && activeNestedEditor.mode === "add" && activeNestedEditor.templateId === template.id ? createNestedEditorMarkup() : ""}
+            ${sections.length ? sections.map((section) => `
+              <div class="template-child-row${section.is_hidden ? " is-hidden" : ""}" data-section-id="${escapeHtml(section.id)}">
+                <span class="template-row-title">${escapeHtml(section.name || "Untitled Section")}${section.is_default ? ' <em class="template-default-badge">Default</em>' : ""}${section.is_hidden ? ' <em class="template-hidden-badge">Hidden</em>' : ""}</span>
+                <span class="template-row-meta">${escapeHtml(section.description || "")}</span>
+                <span class="template-row-order">${escapeHtml(section.sort_order ?? 0)}</span>
+                <div class="element-type-actions template-row-actions">
+                  <button type="button" data-add-field="${escapeHtml(template.id)}" data-field-section="${escapeHtml(section.id)}" aria-label="Add field to section"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>
+                  <button type="button" data-edit-section="${escapeHtml(section.id)}" aria-label="Edit section"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
+                  ${section.is_default
+                    ? `<button type="button" data-toggle-section-hidden="${escapeHtml(section.id)}" aria-label="${section.is_hidden ? "Show" : "Hide"} section"><ph-${section.is_hidden ? "eye" : "eye-slash"} weight="bold" aria-hidden="true"></ph-${section.is_hidden ? "eye" : "eye-slash"}></button>`
+                    : `<button type="button" data-delete-section="${escapeHtml(section.id)}" aria-label="Delete section"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>`}
+                </div>
+              </div>
+              <div class="section-field-list">
+                ${renderFieldRows(template, fieldsBySectionId.get(section.id) || [])}
+              </div>
+            `).join("") : '<p class="template-empty">No sections yet.</p>'}
+            ${unsectionedFields.length || (activeNestedEditor?.kind === "field" && activeNestedEditor.mode === "add" && activeNestedEditor.templateId === template.id && !activeNestedEditor.data?.section_id) ? `
+              <div class="template-child-row unsectioned-fields-row">
+                <span class="template-row-title">Unsectioned</span>
+                <span class="template-row-meta">Fields without a section</span>
+                <span class="template-row-order"></span>
+                <div class="element-type-actions template-row-actions">
+                  <button type="button" data-add-field="${escapeHtml(template.id)}" aria-label="Add unsectioned field"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>
+                </div>
+              </div>
+              <div class="section-field-list">
+                ${renderFieldRows(template, unsectionedFields)}
+              </div>
+            ` : ""}
+          </div>
+        `;
       }
 
       function renderTypeList() {
@@ -2695,16 +3237,133 @@
           count.textContent = `${sortedTypes.length} ${sortedTypes.length === 1 ? "type" : "types"}`;
         }
         list.innerHTML = sortedTypes.map((type) => `
-          <div class="element-type-row" data-type-id="${escapeHtml(type.id)}">
-            <button class="element-type-expand" type="button" aria-label="Expand ${escapeHtml(type.name)}"><ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right></button>
-            ${createTypeIconMarkup(type.icon, type.color)}
-            <span class="element-type-name">${escapeHtml(type.name)}</span>
-            <div class="element-type-actions">
-              <button type="button" data-edit-type="${escapeHtml(type.id)}" aria-label="Edit ${escapeHtml(type.name)}"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
-              <button type="button" data-delete-type="${escapeHtml(type.id)}" aria-label="Delete ${escapeHtml(type.name)}"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>
+          <div class="element-type-block" data-type-id="${escapeHtml(type.id)}">
+            <div class="element-type-row">
+              <span class="element-type-expand" aria-hidden="true"></span>
+              ${createTypeIconMarkup(type.icon, type.color)}
+              <span class="element-type-name">${escapeHtml(type.name)}</span>
+              <button class="secondary-action compact-action element-type-template-button" type="button" data-open-template-editor="${escapeHtml(type.id)}">Templates</button>
+              <div class="element-type-actions">
+                <button type="button" data-edit-type="${escapeHtml(type.id)}" aria-label="Edit ${escapeHtml(type.name)}"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
+                <button type="button" data-delete-type="${escapeHtml(type.id)}" aria-label="Delete ${escapeHtml(type.name)}"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>
+              </div>
             </div>
           </div>
         `).join("");
+      }
+
+      function getSelectedTemplateEditorType() {
+        return getElementTypeById(templateEditorTypeId);
+      }
+
+      function getSelectedTemplate() {
+        const templates = templatesByTypeId.get(templateEditorTypeId) || [];
+        return templates.find((template) => template.id === selectedTemplateId) || templates[0] || null;
+      }
+
+      function renderWideTemplateEditor() {
+        if (!templateList || !templateMain) return;
+        const type = getSelectedTemplateEditorType();
+        const templates = templatesByTypeId.get(templateEditorTypeId) || [];
+        const selectedTemplate = getSelectedTemplate();
+        selectedTemplateId = selectedTemplate?.id || null;
+        if (templateTypeLabel) {
+          templateTypeLabel.textContent = type ? `${type.name} Templates` : "Templates";
+        }
+        if (wideAddTemplateButton) {
+          wideAddTemplateButton.disabled = !type;
+        }
+
+        templateList.innerHTML = templates.length ? templates.map((template) => `
+          <button class="wide-template-list-item${template.id === selectedTemplateId ? " is-selected" : ""}" type="button" data-select-template="${escapeHtml(template.id)}">
+            <strong>${escapeHtml(template.name || "Untitled Template")}</strong>
+            <span>${template.is_default ? "Default template" : "Custom template"}</span>
+          </button>
+        `).join("") : '<p class="template-empty">No templates yet.</p>';
+
+        if (activeNestedEditor?.kind === "template" && activeNestedEditor.mode === "add") {
+          renderNestedTemplateDialog();
+          templateMain.innerHTML = `
+            <div class="wide-template-section">
+              <h3>Add Template</h3>
+              ${createNestedEditorMarkup()}
+            </div>
+          `;
+          return;
+        }
+
+        if (!selectedTemplate) {
+          renderNestedTemplateDialog();
+          templateMain.innerHTML = '<p class="details-empty">Choose Add to create a template for this type.</p>';
+          return;
+        }
+
+        const isTemplateEditorOpen = activeNestedEditor?.kind === "template" && activeNestedEditor.templateId === selectedTemplate.id;
+        templateMain.innerHTML = `
+          <div class="wide-template-selected-header">
+            <div>
+              <h3>${escapeHtml(selectedTemplate.name || "Untitled Template")} ${selectedTemplate.is_default ? '<em class="template-default-badge">Default</em>' : ""}</h3>
+              ${selectedTemplate.description ? `<p>${escapeHtml(selectedTemplate.description)}</p>` : ""}
+            </div>
+            <div class="wide-template-actions">
+              <button class="secondary-action compact-action" type="button" data-duplicate-template="${escapeHtml(selectedTemplate.id)}">Duplicate</button>
+              <button class="secondary-action compact-action" type="button" data-edit-template="${escapeHtml(selectedTemplate.id)}">Edit</button>
+              ${selectedTemplate.is_default
+                ? '<button class="secondary-action compact-action" type="button" disabled>Default</button>'
+                : `<button class="secondary-action compact-action danger-action" type="button" data-delete-template="${escapeHtml(selectedTemplate.id)}">Delete</button>`}
+            </div>
+          </div>
+          ${isTemplateEditorOpen ? createNestedEditorMarkup() : ""}
+          <div class="wide-template-section">
+            ${renderSectionRows(selectedTemplate)}
+          </div>
+        `;
+        renderNestedTemplateDialog();
+      }
+
+      function renderNestedTemplateDialog() {
+        if (!templateNestedDialog || !templateNestedContent || !templateNestedTitle) return;
+        if (!activeNestedEditor || !["section", "field"].includes(activeNestedEditor.kind)) {
+          templateNestedDialog.hidden = true;
+          templateNestedContent.innerHTML = "";
+          return;
+        }
+        const noun = activeNestedEditor.kind === "section" ? "Section" : "Field";
+        templateNestedTitle.textContent = `${activeNestedEditor.mode === "edit" ? "Edit" : "Add"} ${noun}`;
+        templateNestedContent.innerHTML = createNestedEditorMarkup();
+        templateNestedDialog.hidden = false;
+        requestAnimationFrame(() => {
+          templateNestedContent.querySelector("input, select, textarea, button")?.focus();
+        });
+      }
+
+      async function openTemplateEditor(typeId) {
+        templateEditorTypeId = typeId;
+        activeNestedEditor = null;
+        setTemplateStatus("");
+        try {
+          await refreshTypeTemplateData();
+        } catch (error) {
+          setTemplateStatus(`Could not load templates: ${getReadableError(error)}`, "error");
+        }
+        selectedTemplateId = (templatesByTypeId.get(typeId) || [])[0]?.id || null;
+        if (templateModal) {
+          templateModal.hidden = false;
+        }
+        renderWideTemplateEditor();
+      }
+
+      function closeTemplateEditor() {
+        if (templateModal) {
+          templateModal.hidden = true;
+        }
+        if (templateNestedDialog) {
+          templateNestedDialog.hidden = true;
+        }
+        activeNestedEditor = null;
+        templateEditorTypeId = null;
+        selectedTemplateId = null;
+        setTemplateStatus("");
       }
 
       function renderIconPanel() {
@@ -2786,6 +3445,7 @@
       }
 
       function openEditor(mode, type = null) {
+        activeNestedEditor = null;
         activeEditor = { mode, typeId: type?.id || null, name: type?.name || "", iconSearch: "", focusTarget: "name" };
         selectedIcon = sanitizeIconName(type?.icon || DEFAULT_ELEMENT_TYPE_ICON);
         selectedColor = sanitizeColor(type?.color || DEFAULT_ELEMENT_TYPE_COLOR, DEFAULT_ELEMENT_TYPE_COLOR);
@@ -2805,12 +3465,19 @@
         modal.hidden = false;
         setTypeStatus("");
         iconNames = await getPhosphorIconNames();
+        try {
+          await refreshTypeTemplateData();
+        } catch (error) {
+          setTypeStatus(`Could not load templates: ${getReadableError(error)}`, "error");
+        }
         renderTypeList();
       }
 
       function closeTypesModal() {
         modal.hidden = true;
+        closeTemplateEditor();
         closeEditor();
+        activeNestedEditor = null;
       }
 
       function handleAddClick() {
@@ -2840,18 +3507,20 @@
               .from("element_types")
               .update({ name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) })
               .eq("id", activeEditor.typeId)
-              .eq("universe_id", universe.id);
+              .eq("user_id", universe.user_id);
             if (error) throw error;
           } else {
             const { error } = await window.centralisSupabase
               .from("element_types")
-              .insert({ universe_id: universe.id, name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) });
+              .insert({ user_id: universe.user_id, name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) });
             if (error) throw error;
           }
           const completedMode = activeEditor.mode;
           syncElementTypes(await fetchElementTypes());
+          await refreshTypeTemplateData();
           renderTypeList();
           closeEditor();
+          refreshNodesForTypeChanges();
           setTypeStatus(completedMode === "edit" ? "Type saved." : "Type added.", "success");
         } catch (error) {
           setTypeStatus(`Could not save type: ${getReadableError(error)}`, "error");
@@ -2870,19 +3539,20 @@
         try {
           const { error: updateError } = await window.centralisSupabase
             .from("elements")
-            .update({ element_type_id: null, updated_at: new Date().toISOString() })
-            .eq("universe_id", universe.id)
+            .update({ element_type_id: null, rich_template_id: null, updated_at: new Date().toISOString() })
             .eq("element_type_id", typeId);
           if (updateError) throw updateError;
           const { error: deleteError } = await window.centralisSupabase
             .from("element_types")
             .delete()
             .eq("id", typeId)
-            .eq("universe_id", universe.id);
+            .eq("user_id", universe.user_id);
           if (deleteError) throw deleteError;
           syncElementTypes(await fetchElementTypes());
+          await refreshTypeTemplateData();
           renderTypeList();
           closeEditor();
+          refreshNodesForTypeChanges();
           setTypeStatus("Type deleted.", "success");
         } catch (error) {
           setTypeStatus(`Could not delete type: ${getReadableError(error)}`, "error");
@@ -2936,12 +3606,328 @@
       }
 
       function handleListClick(event) {
+        const templateButton = event.target.closest("[data-open-template-editor]");
         const editButton = event.target.closest("[data-edit-type]");
         const deleteButton = event.target.closest("[data-delete-type]");
-        if (editButton) {
+        if (templateButton) {
+          openTemplateEditor(templateButton.dataset.openTemplateEditor);
+        } else if (editButton) {
           openEditor("edit", getElementTypeById(editButton.dataset.editType));
         } else if (deleteButton) {
           deleteType(deleteButton.dataset.deleteType);
+        }
+      }
+
+      function handleTemplateEditorClick(event) {
+        if (templateNestedDialog && event.target === templateNestedDialog) {
+          activeNestedEditor = null;
+          renderWideTemplateEditor();
+          return;
+        }
+        const selectTemplateButton = event.target.closest("[data-select-template]");
+        const addTemplateButton = event.target.closest("[data-wide-add-template]");
+        const editTemplateButton = event.target.closest("[data-edit-template]");
+        const deleteTemplateButton = event.target.closest("[data-delete-template]");
+        const duplicateTemplateButton = event.target.closest("[data-duplicate-template]");
+        const addSectionButton = event.target.closest("[data-add-section]");
+        const editSectionButton = event.target.closest("[data-edit-section]");
+        const deleteSectionButton = event.target.closest("[data-delete-section]");
+        const toggleSectionButton = event.target.closest("[data-toggle-section-hidden]");
+        const addFieldButton = event.target.closest("[data-add-field]");
+        const editFieldButton = event.target.closest("[data-edit-field]");
+        const deleteFieldButton = event.target.closest("[data-delete-field]");
+        const toggleFieldButton = event.target.closest("[data-toggle-field-hidden]");
+        const cancelNestedButton = event.target.closest("[data-cancel-nested-editor]");
+
+        if (selectTemplateButton) {
+          selectedTemplateId = selectTemplateButton.dataset.selectTemplate;
+          activeNestedEditor = null;
+          renderWideTemplateEditor();
+        } else if (addTemplateButton) {
+          activeNestedEditor = { kind: "template", mode: "add", typeId: templateEditorTypeId, data: {} };
+          renderWideTemplateEditor();
+        } else if (editTemplateButton) {
+          const template = [...templatesByTypeId.values()].flat().find((item) => item.id === editTemplateButton.dataset.editTemplate);
+          activeNestedEditor = { kind: "template", mode: "edit", typeId: template?.element_type_id, templateId: template?.id, data: template || {} };
+          renderWideTemplateEditor();
+        } else if (deleteTemplateButton) {
+          deleteTemplate(deleteTemplateButton.dataset.deleteTemplate);
+        } else if (duplicateTemplateButton) {
+          duplicateTemplate(duplicateTemplateButton.dataset.duplicateTemplate);
+        } else if (addSectionButton) {
+          activeNestedEditor = { kind: "section", mode: "add", templateId: addSectionButton.dataset.addSection, data: { sort_order: 0 } };
+          renderWideTemplateEditor();
+        } else if (editSectionButton) {
+          const section = [...sectionsByTemplateId.values()].flat().find((item) => item.id === editSectionButton.dataset.editSection);
+          activeNestedEditor = { kind: "section", mode: "edit", templateId: section?.template_id, sectionId: section?.id, data: section || {} };
+          renderWideTemplateEditor();
+        } else if (deleteSectionButton) {
+          deleteSection(deleteSectionButton.dataset.deleteSection);
+        } else if (toggleSectionButton) {
+          toggleSectionHidden(toggleSectionButton.dataset.toggleSectionHidden);
+        } else if (addFieldButton) {
+          activeNestedEditor = {
+            kind: "field",
+            mode: "add",
+            templateId: addFieldButton.dataset.addField,
+            data: {
+              field_type: "textarea",
+              section_id: addFieldButton.dataset.fieldSection || "",
+              sort_order: 0
+            }
+          };
+          renderWideTemplateEditor();
+        } else if (editFieldButton) {
+          const field = [...fieldsByTemplateId.values()].flat().find((item) => item.id === editFieldButton.dataset.editField);
+          activeNestedEditor = { kind: "field", mode: "edit", templateId: field?.template_id, fieldId: field?.id, data: field || {} };
+          renderWideTemplateEditor();
+        } else if (deleteFieldButton) {
+          deleteField(deleteFieldButton.dataset.deleteField);
+        } else if (toggleFieldButton) {
+          toggleFieldHidden(toggleFieldButton.dataset.toggleFieldHidden);
+        } else if (cancelNestedButton) {
+          activeNestedEditor = null;
+          renderWideTemplateEditor();
+        }
+      }
+
+      async function saveNestedEditor(event) {
+        event.preventDefault();
+        if (!activeNestedEditor) return;
+        const form = event.target;
+        const submitButton = form.querySelector('[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+        try {
+          if (activeNestedEditor.kind === "template") {
+            const name = String(new FormData(form).get("template-name") || "").trim();
+            const description = String(new FormData(form).get("template-description") || "").trim();
+            if (!name) throw new Error("Template name is required.");
+            const payload = { name, description: description || null };
+            const response = activeNestedEditor.mode === "edit"
+              ? await window.centralisSupabase.from("element_type_templates").update(payload).eq("id", activeNestedEditor.templateId)
+              : await window.centralisSupabase.from("element_type_templates").insert({ ...payload, element_type_id: activeNestedEditor.typeId, is_default: false }).select("id").single();
+            if (response.error) throw response.error;
+            if (response.data?.id) {
+              selectedTemplateId = response.data.id;
+            }
+          } else if (activeNestedEditor.kind === "section") {
+            const formData = new FormData(form);
+            const name = String(formData.get("section-name") || "").trim();
+            if (!name) throw new Error("Section name is required.");
+            const payload = {
+              name,
+              description: String(formData.get("section-description") || "").trim() || null,
+              sort_order: Number(formData.get("section-sort-order") || 0)
+            };
+            const response = activeNestedEditor.mode === "edit"
+              ? await window.centralisSupabase.from("element_template_sections").update(payload).eq("id", activeNestedEditor.sectionId)
+              : await window.centralisSupabase.from("element_template_sections").insert({ ...payload, template_id: activeNestedEditor.templateId, is_default: false });
+            if (response.error) throw response.error;
+          } else if (activeNestedEditor.kind === "field") {
+            const formData = new FormData(form);
+            const label = String(formData.get("field-label") || "").trim();
+            if (!label) throw new Error("Field label is required.");
+            const payload = {
+              label,
+              field_key: normalizeFieldKey(formData.get("field-key") || label),
+              field_type: String(formData.get("field-type") || "textarea"),
+              section_id: String(formData.get("field-section") || "") || null,
+              description: String(formData.get("field-description") || "").trim() || null,
+              placeholder: String(formData.get("field-placeholder") || "").trim() || null,
+              default_value: String(formData.get("field-default-value") || "").trim() || null,
+              options: linesToOptions(formData.get("field-options")),
+              is_required: formData.get("field-required") === "on",
+              sort_order: Number(formData.get("field-sort-order") || 0),
+              updated_at: new Date().toISOString()
+            };
+            const response = activeNestedEditor.mode === "edit"
+              ? await window.centralisSupabase.from("element_type_template_fields").update(payload).eq("id", activeNestedEditor.fieldId)
+              : await window.centralisSupabase.from("element_type_template_fields").insert({ ...payload, template_id: activeNestedEditor.templateId, is_default: false });
+            if (response.error) throw response.error;
+          }
+          await refreshTypeTemplateData();
+          activeNestedEditor = null;
+          renderTypeList();
+          renderWideTemplateEditor();
+          setTemplateStatus("Template changes saved.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not save template changes: ${getReadableError(error)}`, "error");
+        } finally {
+          if (submitButton) submitButton.disabled = false;
+        }
+      }
+
+      async function deleteTemplate(templateId) {
+        const template = [...templatesByTypeId.values()].flat().find((item) => item.id === templateId);
+        if (template?.is_default) {
+          setTemplateStatus("Default templates cannot be deleted. Duplicate it if you want a deletable copy.", "error");
+          return;
+        }
+        if (!template || !window.confirm(`Delete "${template.name}"? Elements using it will lose their selected Rich Details template.`)) return;
+        setTemplateStatus("Deleting template...");
+        try {
+          const clearResponse = await window.centralisSupabase
+            .from("elements")
+            .update({ rich_template_id: null, updated_at: new Date().toISOString() })
+            .eq("rich_template_id", templateId);
+          if (clearResponse.error) throw clearResponse.error;
+          const deleteResponse = await window.centralisSupabase
+            .from("element_type_templates")
+            .delete()
+            .eq("id", templateId);
+          if (deleteResponse.error) throw deleteResponse.error;
+          setNodes((currentNodes) => currentNodes.map((node) => node.data?.richTemplateId === templateId
+            ? { ...node, data: { ...node.data, richTemplateId: null } }
+            : node));
+          await refreshTypeTemplateData();
+          selectedTemplateId = (templatesByTypeId.get(templateEditorTypeId) || [])[0]?.id || null;
+          renderTypeList();
+          renderWideTemplateEditor();
+          setTemplateStatus("Template deleted.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not delete template: ${getReadableError(error)}`, "error");
+        }
+      }
+
+      async function deleteSection(sectionId) {
+        const section = [...sectionsByTemplateId.values()].flat().find((item) => item.id === sectionId);
+        if (section?.is_default) {
+          setTemplateStatus("Default sections can be hidden, but not deleted.", "error");
+          return;
+        }
+        if (!window.confirm("Delete this section? Its fields will become unsectioned.")) return;
+        try {
+          const response = await window.centralisSupabase.from("element_template_sections").delete().eq("id", sectionId);
+          if (response.error) throw response.error;
+          await refreshTypeTemplateData();
+          renderWideTemplateEditor();
+          setTemplateStatus("Section deleted.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not delete section: ${getReadableError(error)}`, "error");
+        }
+      }
+
+      async function deleteField(fieldId) {
+        const field = [...fieldsByTemplateId.values()].flat().find((item) => item.id === fieldId);
+        if (field?.is_default) {
+          setTemplateStatus("Default fields can be hidden, but not deleted.", "error");
+          return;
+        }
+        if (!window.confirm("Delete this field and its saved values?")) return;
+        try {
+          const response = await window.centralisSupabase.from("element_type_template_fields").delete().eq("id", fieldId);
+          if (response.error) throw response.error;
+          await refreshTypeTemplateData();
+          renderWideTemplateEditor();
+          setTemplateStatus("Field deleted.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not delete field: ${getReadableError(error)}`, "error");
+        }
+      }
+
+      async function toggleSectionHidden(sectionId) {
+        const section = [...sectionsByTemplateId.values()].flat().find((item) => item.id === sectionId);
+        if (!section) return;
+        try {
+          const response = await window.centralisSupabase
+            .from("element_template_sections")
+            .update({ is_hidden: !section.is_hidden })
+            .eq("id", sectionId);
+          if (response.error) throw response.error;
+          await refreshTypeTemplateData();
+          renderWideTemplateEditor();
+          setTemplateStatus(section.is_hidden ? "Section shown." : "Section hidden.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not update section visibility: ${getReadableError(error)}`, "error");
+        }
+      }
+
+      async function toggleFieldHidden(fieldId) {
+        const field = [...fieldsByTemplateId.values()].flat().find((item) => item.id === fieldId);
+        if (!field) return;
+        try {
+          const response = await window.centralisSupabase
+            .from("element_type_template_fields")
+            .update({ is_hidden: !field.is_hidden, updated_at: new Date().toISOString() })
+            .eq("id", fieldId);
+          if (response.error) throw response.error;
+          await refreshTypeTemplateData();
+          renderWideTemplateEditor();
+          setTemplateStatus(field.is_hidden ? "Field shown." : "Field hidden.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not update field visibility: ${getReadableError(error)}`, "error");
+        }
+      }
+
+      async function duplicateTemplate(templateId) {
+        const template = [...templatesByTypeId.values()].flat().find((item) => item.id === templateId);
+        if (!template) return;
+        setTemplateStatus("Duplicating template...");
+        try {
+          const { data: newTemplate, error: templateError } = await window.centralisSupabase
+            .from("element_type_templates")
+            .insert({
+              element_type_id: template.element_type_id,
+              name: `${template.name || "Template"} Copy`,
+              description: template.description || null,
+              is_default: false,
+              source_default_template_id: null
+            })
+            .select("*")
+            .single();
+          if (templateError) throw templateError;
+
+          const sourceSections = sectionsByTemplateId.get(templateId) || [];
+          const sourceFields = fieldsByTemplateId.get(templateId) || [];
+          const sectionIdMap = new Map();
+          if (sourceSections.length) {
+            const { data: newSections, error: sectionError } = await window.centralisSupabase
+              .from("element_template_sections")
+              .insert(sourceSections.map((section) => ({
+                template_id: newTemplate.id,
+                name: section.name,
+                description: section.description || null,
+                sort_order: Number(section.sort_order || 0),
+                is_default: false,
+                is_hidden: Boolean(section.is_hidden)
+              })))
+              .select("*");
+            if (sectionError) throw sectionError;
+            sourceSections.forEach((section, index) => {
+              if (newSections?.[index]?.id) {
+                sectionIdMap.set(section.id, newSections[index].id);
+              }
+            });
+          }
+
+          if (sourceFields.length) {
+            const { error: fieldError } = await window.centralisSupabase
+              .from("element_type_template_fields")
+              .insert(sourceFields.map((field) => ({
+                template_id: newTemplate.id,
+                section_id: field.section_id ? sectionIdMap.get(field.section_id) || null : null,
+                field_key: field.field_key,
+                label: getTemplateFieldLabel(field),
+                field_type: getTemplateFieldType(field),
+                description: field.description || null,
+                placeholder: field.placeholder || null,
+                default_value: field.default_value || null,
+                options: field.options || null,
+                is_required: Boolean(field.is_required),
+                sort_order: Number(field.sort_order || 0),
+                is_default: false,
+                is_hidden: Boolean(field.is_hidden)
+              })));
+            if (fieldError) throw fieldError;
+          }
+
+          await refreshTypeTemplateData();
+          selectedTemplateId = newTemplate.id;
+          renderTypeList();
+          renderWideTemplateEditor();
+          setTemplateStatus("Template duplicated.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not duplicate template: ${getReadableError(error)}`, "error");
         }
       }
 
@@ -2949,6 +3935,9 @@
       closeButton?.addEventListener("click", closeTypesModal);
       addButton?.addEventListener("click", handleAddClick);
       list.addEventListener("click", handleListClick);
+      templateCloseButton?.addEventListener("click", closeTemplateEditor);
+      templateModal?.addEventListener("click", handleTemplateEditorClick);
+      templateModal?.addEventListener("submit", saveNestedEditor);
       editorHost.addEventListener("click", handleEditorClick);
       editorHost.addEventListener("input", handleEditorInput);
       editorHost.addEventListener("submit", saveType);
@@ -2957,6 +3946,9 @@
         closeButton?.removeEventListener("click", closeTypesModal);
         addButton?.removeEventListener("click", handleAddClick);
         list.removeEventListener("click", handleListClick);
+        templateCloseButton?.removeEventListener("click", closeTemplateEditor);
+        templateModal?.removeEventListener("click", handleTemplateEditorClick);
+        templateModal?.removeEventListener("submit", saveNestedEditor);
         editorHost.removeEventListener("click", handleEditorClick);
         editorHost.removeEventListener("input", handleEditorInput);
         editorHost.removeEventListener("submit", saveType);
@@ -3086,6 +4078,7 @@
       const saveButton = document.querySelector("[data-rich-details-save]");
       const editButton = document.querySelector("[data-rich-details-edit]");
       const cancelButton = document.querySelector("[data-rich-details-cancel]");
+      const closeActionButton = document.querySelector("[data-rich-details-close-action]");
       const closeButtons = document.querySelectorAll("[data-rich-details-close]");
       if (!modal || !body) {
         return undefined;
@@ -3133,6 +4126,7 @@
         if (editButton) editButton.hidden = richDetailsMode === "edit";
         if (cancelButton) cancelButton.hidden = richDetailsMode !== "edit";
         if (saveButton) saveButton.hidden = richDetailsMode !== "edit";
+        if (closeActionButton) closeActionButton.hidden = richDetailsMode === "edit";
         if (richDetailsData?.loading) {
           body.innerHTML = '<p class="details-empty">Loading rich details...</p>';
           return;
@@ -3145,6 +4139,11 @@
         const linkedNodes = getLinkedNodes(node.id, nodes, edges);
         const valuesByFieldId = new Map((richDetailsData?.values || []).map((value) => [value.template_field_id, value]));
         const isEditMode = richDetailsMode === "edit";
+        const templateMarkup = richDetailsData?.template
+          ? renderRichTemplateSections(richDetailsData?.sections || [], richDetailsData?.fields || [], valuesByFieldId, isEditMode ? "edit" : "view")
+          : node.data?.elementType?.id
+            ? `<section class="rich-template-section"><div class="rich-template-section-header"><h3>No Rich Details Template</h3><p>This element type does not have a template yet. Open Types to add one.</p></div></section>`
+            : `<section class="rich-template-section"><div class="rich-template-section-header"><h3>No Element Type</h3><p>Choose an element type before adding Rich Details template fields.</p></div></section>`;
         body.innerHTML = isEditMode ? `
           <form class="rich-details-form" data-rich-details-form>
             <section class="rich-details-section rich-details-basics">
@@ -3185,7 +4184,7 @@
                 ${renderLinkedNodeCards(linkedNodes)}
               </div>
             </section>
-            ${renderRichTemplateSections(richDetailsData?.sections || [], richDetailsData?.fields || [], valuesByFieldId, "edit")}
+            ${templateMarkup}
             <section class="rich-details-section">
               <div class="rich-section-title-row">
                 <h3>Custom Fields</h3>
@@ -3198,8 +4197,13 @@
           </form>
         ` : `
           <div class="rich-details-form rich-details-view">
+            ${node.data?.images?.length ? `
+              <section class="rich-details-section rich-details-images">
+                ${renderImageGallery(node.data.images, node.id)}
+              </section>
+            ` : ""}
             <section class="rich-details-section rich-details-basics">
-              <dl class="rich-template-fields">
+              <dl class="rich-template-fields rich-basics-fields">
                 <div class="rich-view-field">
                   <dt>Name</dt>
                   <dd>${escapeHtml(node.data?.name || "Untitled Node")}</dd>
@@ -3209,10 +4213,6 @@
                   <dd class="${hasMeaningfulValue(node.data?.description) ? "" : "is-empty"}">${escapeHtml(hasMeaningfulValue(node.data?.description) ? node.data.description : "--")}</dd>
                 </div>
               </dl>
-            </section>
-            <section class="rich-details-section">
-              <h3>Images</h3>
-              ${renderImageGallery(node.data?.images || [], node.id)}
             </section>
             <section class="rich-details-section">
               <h3>Element Type</h3>
@@ -3229,7 +4229,7 @@
                 ${renderLinkedNodeCards(linkedNodes)}
               </div>
             </section>
-            ${renderRichTemplateSections(richDetailsData?.sections || [], richDetailsData?.fields || [], valuesByFieldId, "view")}
+            ${templateMarkup}
             <section class="rich-details-section">
               <h3>Custom Fields</h3>
               ${renderCustomFields(richDetailsData?.customFields || [], "view")}
@@ -3307,12 +4307,14 @@
         }
         setRichStatus("Saving rich details...");
         try {
+          const typeChanged = elementTypeId !== (node.data?.elementType?.id || "");
           const { error: elementError } = await window.centralisSupabase
             .from("elements")
             .update({
               name,
               description: description || null,
               element_type_id: elementTypeId || null,
+              rich_template_id: typeChanged ? null : node.data?.richTemplateId || null,
               updated_at: new Date().toISOString()
             })
             .eq("id", node.data.recordId);
@@ -3386,6 +4388,7 @@
           }
 
           const nextElementType = getElementTypeById(elementTypeId);
+          const nextRichTemplateId = typeChanged ? null : node.data?.richTemplateId || null;
           setNodes((currentNodes) => currentNodes.map((currentNode) => currentNode.id === node.id
             ? {
                 ...currentNode,
@@ -3393,7 +4396,8 @@
                   ...currentNode.data,
                   name,
                   description,
-                  elementType: nextElementType
+                  elementType: nextElementType,
+                  richTemplateId: nextRichTemplateId
               }
             }
             : currentNode));
@@ -3405,7 +4409,8 @@
               ...node.data,
               name,
               description,
-              elementType: nextElementType
+              elementType: nextElementType,
+              richTemplateId: nextRichTemplateId
             }
           }) });
         } catch (error) {
@@ -4029,6 +5034,520 @@
         .eq("id", change.id)));
     }
 
+    function setTransferStatus(message, tone = "") {
+      const status = document.querySelector("[data-canvas-transfer-status]");
+      if (!status) return;
+      status.textContent = message || "";
+      status.classList.toggle("is-error", tone === "error");
+      status.classList.toggle("is-success", tone === "success");
+    }
+
+    function getViewportImportOrigin() {
+      const fallback = {
+        x: Number(universe.canvas_position_x ?? 120) + 420,
+        y: Number(universe.canvas_position_y ?? 120) + 120
+      };
+      if (!reactFlowInstance.current || !reactFlowWrapper.current) {
+        return fallback;
+      }
+
+      const rect = reactFlowWrapper.current.getBoundingClientRect();
+      const point = {
+        x: rect.width / 2,
+        y: rect.height / 2
+      };
+      if (typeof reactFlowInstance.current.project === "function") {
+        return reactFlowInstance.current.project(point);
+      }
+      if (typeof reactFlowInstance.current.screenToFlowPosition === "function") {
+        return reactFlowInstance.current.screenToFlowPosition({
+          x: rect.left + point.x,
+          y: rect.top + point.y
+        });
+      }
+      return fallback;
+    }
+
+    async function fetchTemplateLibraryForImport() {
+      const typesByName = new Map(elementTypes.map((type) => [normalizeLookupKey(type.name), type]));
+      const typeIds = elementTypes.map((type) => type.id).filter(Boolean);
+      const templatesByTypeAndName = new Map();
+      const fieldsByTemplateAndKey = new Map();
+      if (!typeIds.length) {
+        return { typesByName, templatesByTypeAndName, fieldsByTemplateAndKey };
+      }
+
+      const templateResponse = await window.centralisSupabase
+        .from("element_type_templates")
+        .select("*")
+        .in("element_type_id", typeIds);
+      if (templateResponse.error) throw templateResponse.error;
+
+      const templates = templateResponse.data || [];
+      templates.forEach((template) => {
+        templatesByTypeAndName.set(`${template.element_type_id}::${normalizeLookupKey(template.name)}`, template);
+      });
+
+      const templateIds = templates.map((template) => template.id).filter(Boolean);
+      if (!templateIds.length) {
+        return { typesByName, templatesByTypeAndName, fieldsByTemplateAndKey };
+      }
+
+      const fieldResponse = await window.centralisSupabase
+        .from("element_type_template_fields")
+        .select("*")
+        .in("template_id", templateIds);
+      if (fieldResponse.error) throw fieldResponse.error;
+
+      (fieldResponse.data || []).forEach((field) => {
+        fieldsByTemplateAndKey.set(`${field.template_id}::${normalizeLookupKey(getTemplateFieldKey(field))}`, field);
+      });
+
+      return { typesByName, templatesByTypeAndName, fieldsByTemplateAndKey };
+    }
+
+    function normalizeTransferOptions(options = {}) {
+      return {
+        ...DEFAULT_TRANSFER_OPTIONS,
+        ...options
+      };
+    }
+
+    async function exportSelectedElements(options = DEFAULT_TRANSFER_OPTIONS) {
+      const transferOptions = normalizeTransferOptions(options);
+      const selectedElementNodes = nodesRef.current.filter((node) => node.selected && node.data?.kind === "element");
+      if (!selectedElementNodes.length) {
+        setTransferStatus("Select one or more element nodes to export.", "error");
+        return;
+      }
+
+      setTransferStatus("Preparing export...");
+      try {
+        const selectedRecordIds = selectedElementNodes.map((node) => node.data.recordId);
+        const selectedNodeIds = new Set(selectedElementNodes.map((node) => node.id));
+        const selectedRecordIdSet = new Set(selectedRecordIds);
+
+        const [valueResponse, customResponse] = await Promise.all([
+          transferOptions.richDetails
+            ? window.centralisSupabase
+              .from("element_template_field_values")
+              .select("*")
+              .in("element_id", selectedRecordIds)
+            : Promise.resolve({ data: [], error: null }),
+          transferOptions.customFields
+            ? window.centralisSupabase
+              .from("element_custom_fields")
+              .select("*")
+              .in("element_id", selectedRecordIds)
+              .order("sort_order", { ascending: true })
+            : Promise.resolve({ data: [], error: null })
+        ]);
+        if (valueResponse.error) throw valueResponse.error;
+        if (customResponse.error) throw customResponse.error;
+
+        const values = valueResponse.data || [];
+        const fieldIds = [...new Set(values.map((value) => value.template_field_id).filter(Boolean))];
+        let fieldsById = new Map();
+        if (fieldIds.length) {
+          const fieldResponse = await window.centralisSupabase
+            .from("element_type_template_fields")
+            .select("id,field_key,label")
+            .in("id", fieldIds);
+          if (fieldResponse.error) throw fieldResponse.error;
+          fieldsById = new Map((fieldResponse.data || []).map((field) => [field.id, field]));
+        }
+
+        const templateIds = transferOptions.richDetails
+          ? [...new Set(selectedElementNodes.map((node) => node.data?.richTemplateId).filter(Boolean))]
+          : [];
+        let templatesById = new Map();
+        if (templateIds.length) {
+          const templateResponse = await window.centralisSupabase
+            .from("element_type_templates")
+            .select("id,name")
+            .in("id", templateIds);
+          if (templateResponse.error) throw templateResponse.error;
+          templatesById = new Map((templateResponse.data || []).map((template) => [template.id, template]));
+        }
+
+        const valuesByElementId = new Map();
+        values.forEach((value) => {
+          const field = fieldsById.get(value.template_field_id);
+          const fieldKey = field ? getTemplateFieldKey(field) : "";
+          if (!fieldKey) return;
+          const elementValues = valuesByElementId.get(value.element_id) || [];
+          elementValues.push({
+            field_key: fieldKey,
+            label: field?.label || "",
+            value: value.value || ""
+          });
+          valuesByElementId.set(value.element_id, elementValues);
+        });
+
+        const customByElementId = new Map();
+        (customResponse.data || []).forEach((field) => {
+          const elementFields = customByElementId.get(field.element_id) || [];
+          elementFields.push({
+            name: field.name || "",
+            value: field.value || "",
+            sort_order: Number(field.sort_order || 0)
+          });
+          customByElementId.set(field.element_id, elementFields);
+        });
+
+        const exportPayload = {
+          format: ELEMENT_EXPORT_FORMAT,
+          exported_at: new Date().toISOString(),
+          options: transferOptions,
+          source_universe: {
+            id: universe.id,
+            name: universe.name || ""
+          },
+          elements: selectedElementNodes.map((node) => ({
+            export_id: node.data.recordId,
+            name: node.data.name || "Untitled Element",
+            description: node.data.description || "",
+            position: transferOptions.position ? {
+              x: Number(node.position?.x || 0),
+              y: Number(node.position?.y || 0)
+            } : null,
+            element_type_name: node.data.elementType?.name || "",
+            rich_template_name: transferOptions.richDetails ? templatesById.get(node.data?.richTemplateId)?.name || "" : "",
+            rich_values: transferOptions.richDetails ? valuesByElementId.get(node.data.recordId) || [] : [],
+            custom_fields: transferOptions.customFields ? customByElementId.get(node.data.recordId) || [] : []
+          })),
+          links: transferOptions.connections ? edgesRef.current
+            .filter((edge) => selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target))
+            .map((edge) => ({
+              export_id: edge.id,
+              source_export_id: toRecordId(edge.source),
+              target_export_id: toRecordId(edge.target),
+              source_handle: edge.sourceHandle || "right",
+              target_handle: edge.targetHandle || "left",
+              label: edge.label || "",
+              stroke_color: edge.data?.format?.strokeColor || edge.style?.stroke || universeFormatRef.current.strokeColor,
+              stroke_width: Number(edge.data?.format?.strokeWidth || edge.style?.strokeWidth || universeFormatRef.current.strokeWidth),
+              stroke_style: edge.data?.format?.strokeStyle || universeFormatRef.current.strokeStyle,
+              path_type: edge.data?.format?.pathType || universeFormatRef.current.pathType
+            }))
+            .filter((link) => selectedRecordIdSet.has(link.source_export_id) && selectedRecordIdSet.has(link.target_export_id)) : []
+        };
+
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const date = new Date().toISOString().slice(0, 10);
+        anchor.href = url;
+        anchor.download = `centralis-elements-${safeFileSlug(universe.name)}-${date}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        setTransferStatus(`Exported ${exportPayload.elements.length} elements and ${exportPayload.links.length} links.`, "success");
+      } catch (error) {
+        setTransferStatus(`Could not export elements: ${getReadableError(error)}`, "error");
+      }
+    }
+
+    async function importElementPayload(payload, options = DEFAULT_TRANSFER_OPTIONS) {
+      const transferOptions = normalizeTransferOptions(options);
+      if (!payload || payload.format !== ELEMENT_EXPORT_FORMAT || !Array.isArray(payload.elements)) {
+        throw new Error("This is not a supported Centralis element export file.");
+      }
+      if (!window.centralisSupabase) {
+        throw new Error("Supabase is not available.");
+      }
+
+      const library = await fetchTemplateLibraryForImport();
+      const sourceElements = payload.elements.filter((element) => element && String(element.name || "").trim());
+      if (!sourceElements.length) {
+        throw new Error("The import file does not contain any elements.");
+      }
+
+      const minX = Math.min(...sourceElements.map((element) => Number(element.position?.x || 0)));
+      const minY = Math.min(...sourceElements.map((element) => Number(element.position?.y || 0)));
+      const origin = getViewportImportOrigin();
+      const offset = { x: origin.x - minX, y: origin.y - minY };
+      const oldToNewRecordId = new Map();
+      const importedRows = [];
+      const now = new Date().toISOString();
+      let skippedRichFields = 0;
+
+      for (const [index, sourceElement] of sourceElements.entries()) {
+        const type = library.typesByName.get(normalizeLookupKey(sourceElement.element_type_name)) || null;
+        const template = transferOptions.richDetails && type && sourceElement.rich_template_name
+          ? library.templatesByTypeAndName.get(`${type.id}::${normalizeLookupKey(sourceElement.rich_template_name)}`) || null
+          : null;
+        const id = createId();
+        const position = transferOptions.position && sourceElement.position ? {
+          x: Math.round(Number(sourceElement.position?.x || 0) + offset.x),
+          y: Math.round(Number(sourceElement.position?.y || 0) + offset.y)
+        } : {
+          x: Math.round(origin.x + ((index % 4) * 48)),
+          y: Math.round(origin.y + (Math.floor(index / 4) * 48))
+        };
+
+        const { data, error } = await window.centralisSupabase
+          .from("elements")
+          .insert({
+            id,
+            universe_id: universe.id,
+            element_type_id: type?.id || null,
+            rich_template_id: template?.id || null,
+            name: String(sourceElement.name || "Imported Element").trim(),
+            description: String(sourceElement.description || "").trim() || null,
+            position_x: position.x,
+            position_y: position.y
+          })
+          .select("id,name,description,position_x,position_y,element_type_id,rich_template_id")
+          .single();
+        if (error) throw error;
+
+        oldToNewRecordId.set(String(sourceElement.export_id), data.id);
+        importedRows.push(data);
+
+        const richRows = [];
+        if (transferOptions.richDetails && template?.id && Array.isArray(sourceElement.rich_values)) {
+          sourceElement.rich_values.forEach((value) => {
+            const field = library.fieldsByTemplateAndKey.get(`${template.id}::${normalizeLookupKey(value.field_key)}`);
+            if (!field) {
+              skippedRichFields += 1;
+              return;
+            }
+            if (!hasMeaningfulValue(value.value)) return;
+            richRows.push({
+              element_id: data.id,
+              template_field_id: field.id,
+              value: String(value.value),
+              updated_at: now
+            });
+          });
+        } else if (transferOptions.richDetails && Array.isArray(sourceElement.rich_values)) {
+          skippedRichFields += sourceElement.rich_values.filter((value) => hasMeaningfulValue(value?.value)).length;
+        }
+
+        if (richRows.length) {
+          const { error: valueError } = await window.centralisSupabase
+            .from("element_template_field_values")
+            .insert(richRows);
+          if (valueError) throw valueError;
+        }
+
+        const customRows = transferOptions.customFields && Array.isArray(sourceElement.custom_fields)
+          ? sourceElement.custom_fields
+            .filter((field) => hasMeaningfulValue(field?.name) || hasMeaningfulValue(field?.value))
+            .map((field, index) => ({
+              element_id: data.id,
+              name: String(field.name || "Untitled Field").trim() || "Untitled Field",
+              value: String(field.value || "").trim() || null,
+              sort_order: Number(field.sort_order ?? index)
+            }))
+          : [];
+        if (customRows.length) {
+          const { error: customError } = await window.centralisSupabase
+            .from("element_custom_fields")
+            .insert(customRows);
+          if (customError) throw customError;
+        }
+      }
+
+      const importedNodes = importedRows.map((row) => {
+        const node = toElementNode(row);
+        node.data.format = universeFormatRef.current;
+        node.selected = true;
+        return node;
+      });
+
+      const linkRows = transferOptions.connections && Array.isArray(payload.links) ? payload.links : [];
+      const importedEdges = [];
+      for (const link of linkRows) {
+        const sourceRecordId = oldToNewRecordId.get(String(link.source_export_id));
+        const targetRecordId = oldToNewRecordId.get(String(link.target_export_id));
+        if (!sourceRecordId || !targetRecordId) continue;
+
+        const id = createId();
+        const linkFormat = {
+          ...universeFormatRef.current,
+          strokeColor: link.stroke_color || universeFormatRef.current.strokeColor,
+          strokeWidth: Number(link.stroke_width || universeFormatRef.current.strokeWidth),
+          strokeStyle: link.stroke_style || universeFormatRef.current.strokeStyle,
+          pathType: link.path_type || universeFormatRef.current.pathType
+        };
+        const { error } = await window.centralisSupabase
+          .from("element_links")
+          .insert({
+            id,
+            universe_id: universe.id,
+            source_element_id: sourceRecordId,
+            target_element_id: targetRecordId,
+            label: link.label || null,
+            stroke_color: linkFormat.strokeColor,
+            stroke_width: linkFormat.strokeWidth,
+            stroke_style: linkFormat.strokeStyle,
+            path_type: linkFormat.pathType
+          });
+        if (error) throw error;
+
+        importedEdges.push({
+          id,
+          source: `element:${sourceRecordId}`,
+          target: `element:${targetRecordId}`,
+          sourceHandle: link.source_handle || "right",
+          targetHandle: link.target_handle || "left",
+          label: link.label || undefined,
+          type: "deletable",
+          data: { recordId: id, format: linkFormat },
+          style: {
+            stroke: linkFormat.strokeColor,
+            strokeWidth: linkFormat.strokeWidth,
+            strokeDasharray: getStrokeDasharray(linkFormat.strokeStyle)
+          }
+        });
+      }
+
+      setNodes((currentNodes) => [
+        ...currentNodes.map((node) => ({ ...node, selected: false })),
+        ...importedNodes
+      ]);
+      setEdges((currentEdges) => [...currentEdges, ...importedEdges]);
+
+      return {
+        elementCount: importedNodes.length,
+        linkCount: importedEdges.length,
+        skippedRichFields
+      };
+    }
+
+    async function importElementsFromFile(file, options = DEFAULT_TRANSFER_OPTIONS) {
+      if (!file) return;
+      setTransferStatus("Importing elements...");
+      try {
+        const text = await file.text();
+        const payload = JSON.parse(text);
+        const result = await importElementPayload(payload, options);
+        const skipped = result.skippedRichFields ? ` ${result.skippedRichFields} rich fields skipped.` : "";
+        setTransferStatus(`Imported ${result.elementCount} elements and ${result.linkCount} links.${skipped}`, "success");
+      } catch (error) {
+        setTransferStatus(`Could not import elements: ${getReadableError(error)}`, "error");
+      }
+    }
+
+    React.useEffect(() => {
+      const importButton = document.querySelector("[data-import-elements]");
+      const exportButton = document.querySelector("[data-export-elements]");
+      const fileInput = document.querySelector("[data-import-elements-file]");
+      const modal = document.getElementById("element-transfer-options-modal");
+      const form = document.querySelector("[data-transfer-options-form]");
+      const title = document.querySelector("[data-transfer-options-title]");
+      const subtitle = document.querySelector("[data-transfer-options-subtitle]");
+      const confirmButton = document.querySelector("[data-transfer-options-confirm]");
+      const cancelButtons = document.querySelectorAll("[data-transfer-options-cancel]");
+      if (!importButton || !exportButton || !fileInput || !modal || !form) {
+        return undefined;
+      }
+
+      let transferMode = "export";
+      let pendingImportOptions = DEFAULT_TRANSFER_OPTIONS;
+
+      function readOptions() {
+        const data = new FormData(form);
+        return {
+          connections: data.get("connections") === "on",
+          position: data.get("position") === "on",
+          richDetails: data.get("richDetails") === "on",
+          customFields: data.get("customFields") === "on"
+        };
+      }
+
+      function resetOptions() {
+        Object.keys(DEFAULT_TRANSFER_OPTIONS).forEach((key) => {
+          const input = form.elements.namedItem(key);
+          if (input) {
+            input.checked = DEFAULT_TRANSFER_OPTIONS[key];
+          }
+        });
+      }
+
+      function openTransferOptions(mode) {
+        transferMode = mode;
+        resetOptions();
+        if (title) {
+          title.textContent = mode === "import" ? "Import Elements" : "Export Elements";
+        }
+        if (subtitle) {
+          subtitle.textContent = mode === "import"
+            ? "Choose which data to bring into this universe."
+            : "Choose which data to include in the export file.";
+        }
+        if (confirmButton) {
+          confirmButton.textContent = mode === "import" ? "Choose File" : "Export";
+        }
+        modal.hidden = false;
+      }
+
+      function closeTransferOptions() {
+        modal.hidden = true;
+      }
+
+      function handleImportClick() {
+        openTransferOptions("import");
+      }
+
+      function handleExportClick() {
+        const selectedElementNodes = nodesRef.current.filter((node) => node.selected && node.data?.kind === "element");
+        if (!selectedElementNodes.length) {
+          setTransferStatus("Select one or more element nodes to export.", "error");
+          return;
+        }
+        openTransferOptions("export");
+      }
+
+      function handleSubmit(event) {
+        event.preventDefault();
+        const options = readOptions();
+        closeTransferOptions();
+        if (transferMode === "import") {
+          pendingImportOptions = options;
+          fileInput.value = "";
+          fileInput.click();
+          return;
+        }
+        exportSelectedElements(options);
+      }
+
+      function handleBackdropClick(event) {
+        if (event.target === modal) {
+          closeTransferOptions();
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeTransferOptions();
+        }
+      }
+
+      function handleFileChange(event) {
+        importElementsFromFile(event.target.files?.[0], pendingImportOptions);
+      }
+
+      importButton.addEventListener("click", handleImportClick);
+      exportButton.addEventListener("click", handleExportClick);
+      form.addEventListener("submit", handleSubmit);
+      modal.addEventListener("click", handleBackdropClick);
+      cancelButtons.forEach((button) => button.addEventListener("click", closeTransferOptions));
+      document.addEventListener("keydown", handleEscape);
+      fileInput.addEventListener("change", handleFileChange);
+      return () => {
+        importButton.removeEventListener("click", handleImportClick);
+        exportButton.removeEventListener("click", handleExportClick);
+        form.removeEventListener("submit", handleSubmit);
+        modal.removeEventListener("click", handleBackdropClick);
+        cancelButtons.forEach((button) => button.removeEventListener("click", closeTransferOptions));
+        document.removeEventListener("keydown", handleEscape);
+        fileInput.removeEventListener("change", handleFileChange);
+      };
+    }, []);
     return React.createElement(
       "div",
       {

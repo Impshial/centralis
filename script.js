@@ -14,7 +14,13 @@ const signOutButtons = document.querySelectorAll("[data-sign-out]");
 const createUniverseButtons = document.querySelectorAll("[data-create-universe]");
 const UNIVERSE_TABLE = "universes";
 const DEFAULT_ELEMENT_TYPES_TABLE = "default_element_types";
+const DEFAULT_ELEMENT_TYPE_TEMPLATES_TABLE = "default_element_type_templates";
+const DEFAULT_ELEMENT_TEMPLATE_SECTIONS_TABLE = "default_element_template_sections";
+const DEFAULT_ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "default_element_type_template_fields";
 const ELEMENT_TYPES_TABLE = "element_types";
+const ELEMENT_TYPE_TEMPLATES_TABLE = "element_type_templates";
+const ELEMENT_TEMPLATE_SECTIONS_TABLE = "element_template_sections";
+const ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "element_type_template_fields";
 const ELEMENTS_TABLE = "elements";
 const ELEMENT_LINKS_TABLE = "element_links";
 const SUPABASE_TIMEOUT_MS = 15000;
@@ -35,6 +41,9 @@ let currentAppUser = null;
 let currentUserSettings = null;
 let profileLoadPromise = null;
 let pendingUniverseDelete = null;
+
+window.centralisScriptVersion = "seed-diagnostics-3";
+console.warn("Centralis script loaded", window.centralisScriptVersion);
 
 if (window.supabase && window.CENTRALIS_SUPABASE_CONFIG) {
   const { url, publishableKey } = window.CENTRALIS_SUPABASE_CONFIG;
@@ -108,6 +117,11 @@ function getReadableError(error) {
   return error?.message || error?.details || error?.hint || "Unknown error";
 }
 
+function isSchemaColumnError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return error?.code === "PGRST204" || message.includes("schema cache") || message.includes("could not find");
+}
+
 function withTimeout(promise, label) {
   let timeoutId;
   const timeout = new Promise((_, reject) => {
@@ -119,6 +133,203 @@ function withTimeout(promise, label) {
   return Promise.race([promise, timeout]).finally(() => {
     window.clearTimeout(timeoutId);
   });
+}
+
+async function fetchAllRows(table, {
+  select = "*",
+  filters,
+  order,
+  label,
+  pageSize = 1000
+} = {}) {
+  const rows = [];
+  let start = 0;
+
+  while (true) {
+    let query = supabaseClient
+      .from(table)
+      .select(select, { count: "exact" });
+
+    if (typeof filters === "function") {
+      query = filters(query);
+    }
+
+    if (order) {
+      const orders = Array.isArray(order) ? order : [order];
+      orders.forEach((orderRule) => {
+        query = query.order(orderRule.column, {
+          ascending: orderRule.ascending !== false,
+          foreignTable: orderRule.foreignTable
+        });
+      });
+    }
+
+    const end = start + pageSize - 1;
+    const { data, error, count } = await withTimeout(
+      query.range(start, end),
+      `${label || `Loading ${table}`} (${start + 1}-${end + 1})`
+    );
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    rows.push(...(data || []));
+
+    if (typeof count === "number" && rows.length >= count) {
+      return { data: rows, error: null, count };
+    }
+
+    if (!data || data.length < pageSize) {
+      return { data: rows, error: null, count };
+    }
+
+    start += pageSize;
+  }
+}
+
+async function fetchAllRowsById(table, {
+  select = "*",
+  filters,
+  label,
+  pageSize = 1000
+} = {}) {
+  const rows = [];
+  let lastId = null;
+
+  while (true) {
+    let query = supabaseClient
+      .from(table)
+      .select(select)
+      .order("id", { ascending: true })
+      .limit(pageSize);
+
+    if (typeof filters === "function") {
+      query = filters(query);
+    }
+
+    if (lastId) {
+      query = query.gt("id", lastId);
+    }
+
+    const { data, error } = await withTimeout(
+      query,
+      `${label || `Loading ${table}`} (${rows.length + 1}+)`
+    );
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    if (!data?.length) {
+      return { data: rows, error: null };
+    }
+
+    rows.push(...data);
+    lastId = data[data.length - 1].id;
+
+    if (data.length < pageSize) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
+async function insertRowsResiliently(table, rows, {
+  select,
+  label
+} = {}) {
+  let query = supabaseClient
+    .from(table)
+    .insert(rows);
+
+  if (select) {
+    query = query.select(select);
+  }
+
+  const { data, error } = await withTimeout(
+    query,
+    `${label || `Creating ${table}`} (${rows.length} rows)`
+  );
+
+  if (!error) {
+    return {
+      data: data || [],
+      error: null,
+      insertedCount: Array.isArray(data) && data.length ? data.length : rows.length,
+      failedRows: []
+    };
+  }
+
+  if (isSchemaColumnError(error)) {
+    return {
+      data: [],
+      error,
+      insertedCount: 0,
+      failedRows: []
+    };
+  }
+
+  if (rows.length === 1) {
+    console.warn(`${label || `Creating ${table}`} skipped one row.`, {
+      error,
+      row: rows[0]
+    });
+    return {
+      data: [],
+      error: null,
+      insertedCount: 0,
+      failedRows: [{ row: rows[0], error }]
+    };
+  }
+
+  const midpoint = Math.ceil(rows.length / 2);
+  const left = await insertRowsResiliently(table, rows.slice(0, midpoint), { select, label });
+  const right = await insertRowsResiliently(table, rows.slice(midpoint), { select, label });
+
+  return {
+    data: [...left.data, ...right.data],
+    error: null,
+    insertedCount: left.insertedCount + right.insertedCount,
+    failedRows: [...left.failedRows, ...right.failedRows]
+  };
+}
+
+async function insertRowsInBatches(table, rows, {
+  select,
+  label,
+  batchSize = 250,
+  resilient = false
+} = {}) {
+  const insertedRows = [];
+  const failedRows = [];
+  let insertedCount = 0;
+
+  for (let start = 0; start < rows.length; start += batchSize) {
+    const batch = rows.slice(start, start + batchSize);
+
+    const result = resilient
+      ? await insertRowsResiliently(table, batch, { select, label })
+      : await insertRowsResiliently(table, batch, { select, label });
+
+    if (result.error) {
+      return { data: insertedRows, error: result.error, insertedCount, failedRows };
+    }
+
+    insertedRows.push(...(result.data || []));
+    failedRows.push(...(result.failedRows || []));
+    insertedCount += result.insertedCount || 0;
+
+    if (result.failedRows?.length && !resilient) {
+      return {
+        data: insertedRows,
+        error: result.failedRows[0].error,
+        insertedCount,
+        failedRows
+      };
+    }
+  }
+
+  return { data: insertedRows, error: null, insertedCount, failedRows };
 }
 
 function getAuthUrlMessage() {
@@ -321,11 +532,18 @@ async function prepareSignedInUser(authUser) {
   }
 
   profileLoadPromise = (async () => {
-  currentAppUser = await ensureUserProfile(authUser);
-  currentUserSettings = await ensureUserSettings(currentAppUser.id);
-  applyUserSettings(currentUserSettings);
-  await loadUniverseCards();
-  return currentAppUser;
+    currentAppUser = await ensureUserProfile(authUser);
+    window.centralisCurrentAppUser = currentAppUser;
+    currentUserSettings = await ensureUserSettings(currentAppUser.id);
+    try {
+      await ensureUserElementTypeLibrary(currentAppUser.id);
+    } catch (error) {
+      console.error("Could not finish element type library seeding:", error);
+      window.centralisElementTypeSeedError = error;
+    }
+    applyUserSettings(currentUserSettings);
+    await loadUniverseCards();
+    return currentAppUser;
   })();
 
   try {
@@ -407,10 +625,120 @@ async function getCurrentAppUser() {
   return prepareSignedInUser(data.session.user);
 }
 
-async function copyDefaultElementTypesForUniverse(universeId) {
+window.centralisGetCurrentAppUser = getCurrentAppUser;
+
+function getCatalogTypeId(template) {
+  return template.default_element_type_id ?? template.element_type_id ?? template.type_id ?? null;
+}
+
+function getCatalogTemplateId(record) {
+  return record.default_template_id ?? record.template_id ?? null;
+}
+
+function getCatalogSectionId(record) {
+  return record.default_section_id ?? record.section_id ?? null;
+}
+
+function normalizeLibraryKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function makeTemplateKey(elementTypeId, name) {
+  return `${elementTypeId || ""}::${normalizeLibraryKey(name)}`;
+}
+
+function makeSectionKey(templateId, name) {
+  return `${templateId || ""}::${normalizeLibraryKey(name)}`;
+}
+
+function getFieldIdentity(field) {
+  return normalizeLibraryKey(field.field_key || field.label || field.name || field.id);
+}
+
+function makeFieldKey(templateId, field) {
+  return `${templateId || ""}::${getFieldIdentity(field)}`;
+}
+
+const ALLOWED_TEMPLATE_FIELD_TYPES = new Set([
+  "text",
+  "textarea",
+  "number",
+  "date",
+  "select",
+  "multi_select",
+  "checkbox",
+  "url",
+  "image",
+  "rich_text",
+  "relationship"
+]);
+
+function createTemplateFieldKey(field) {
+  const source = field.field_key || field.label || field.name || field.id || "field";
+  const key = String(source)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return key || "field";
+}
+
+function normalizeTemplateFieldType(fieldType) {
+  const normalizedType = String(fieldType || "textarea").trim().toLowerCase();
+  return ALLOWED_TEMPLATE_FIELD_TYPES.has(normalizedType) ? normalizedType : "textarea";
+}
+
+async function ensureUserElementTypeLibrary(userId) {
+  if (!supabaseClient || !userId) {
+    return;
+  }
+
+  console.warn("Element type library seed starting", { userId });
+
+  const { data: beforeDiagnostics, error: beforeDiagnosticsError } = await withTimeout(supabaseClient
+    .rpc("get_element_type_seed_diagnostics", { p_user_id: userId }), "Loading element type seed diagnostics");
+
+  if (beforeDiagnosticsError) {
+    console.warn("Could not load element type seed diagnostics before seeding.", beforeDiagnosticsError);
+  } else {
+    window.centralisSeedDiagnostics = {
+      ...(window.centralisSeedDiagnostics || {}),
+      before: beforeDiagnostics
+    };
+    console.warn("Element type seed diagnostics before", beforeDiagnostics);
+  }
+
+  const { data, error } = await withTimeout(supabaseClient
+    .rpc("ensure_user_element_type_library", { p_user_id: userId }), "Seeding user element type library");
+
+  if (error) {
+    throw error;
+  }
+
+  window.centralisSeedDiagnostics = {
+    ...(window.centralisSeedDiagnostics || {}),
+    seed: data
+  };
+  console.warn("Element type library seed result", data);
+
+  const { data: afterDiagnostics, error: afterDiagnosticsError } = await withTimeout(supabaseClient
+    .rpc("get_element_type_seed_diagnostics", { p_user_id: userId }), "Loading element type seed diagnostics");
+
+  if (afterDiagnosticsError) {
+    console.warn("Could not load element type seed diagnostics after seeding.", afterDiagnosticsError);
+  } else {
+    window.centralisSeedDiagnostics = {
+      ...(window.centralisSeedDiagnostics || {}),
+      after: afterDiagnostics
+    };
+    console.warn("Element type seed diagnostics after", afterDiagnostics);
+  }
+
+  return data;
+
   const { data: defaultTypes, error: defaultTypesError } = await withTimeout(supabaseClient
     .from(DEFAULT_ELEMENT_TYPES_TABLE)
-    .select("name,description,icon,color")
+    .select("id,name,description,icon,color")
     .order("name", { ascending: true }), "Loading default element types");
 
   if (defaultTypesError) {
@@ -421,26 +749,296 @@ async function copyDefaultElementTypesForUniverse(universeId) {
     return;
   }
 
-  const { error: createTypesError } = await withTimeout(supabaseClient
+  const { data: existingTypes, error: existingTypesError } = await withTimeout(supabaseClient
     .from(ELEMENT_TYPES_TABLE)
-    .insert(defaultTypes.map((type) => ({
-      universe_id: universeId,
-      name: type.name,
-      description: type.description || null,
-      icon: type.icon || null,
-      color: type.color || "#6366f1"
-    }))), "Creating universe element types");
+    .select("id,name")
+    .eq("user_id", userId), "Checking user element type library");
 
-  if (createTypesError) {
-    throw createTypesError;
+  if (existingTypesError) {
+    throw existingTypesError;
   }
+
+  const typeByName = new Map((existingTypes || []).map((type) => [normalizeLibraryKey(type.name), type]));
+  const missingTypes = defaultTypes.filter((type) => !typeByName.has(normalizeLibraryKey(type.name)));
+
+  if (missingTypes.length) {
+    const { data: createdTypes, error: createTypesError } = await withTimeout(supabaseClient
+      .from(ELEMENT_TYPES_TABLE)
+      .insert(missingTypes.map((type) => ({
+        user_id: userId,
+        name: type.name,
+        description: type.description || null,
+        icon: type.icon || null,
+        color: type.color || "#6366f1"
+      })))
+      .select("id,name"), "Creating user element types");
+
+    if (createTypesError) {
+      throw createTypesError;
+    }
+
+    (createdTypes || []).forEach((type) => {
+      typeByName.set(normalizeLibraryKey(type.name), type);
+    });
+  }
+
+  const typeIdByDefaultId = new Map();
+  defaultTypes.forEach((defaultType) => {
+    const userType = typeByName.get(normalizeLibraryKey(defaultType.name));
+    if (userType) {
+      typeIdByDefaultId.set(defaultType.id, userType.id);
+    }
+  });
+
+  const { data: defaultTemplates, error: defaultTemplatesError } = await fetchAllRowsById(DEFAULT_ELEMENT_TYPE_TEMPLATES_TABLE, {
+    select: "*",
+    label: "Loading default element type templates"
+  });
+
+  if (defaultTemplatesError) {
+    throw defaultTemplatesError;
+  }
+
+  const userTypeIds = [...new Set([...typeIdByDefaultId.values()])];
+  const { data: existingTemplates, error: existingTemplatesError } = userTypeIds.length
+    ? await fetchAllRowsById(ELEMENT_TYPE_TEMPLATES_TABLE, {
+      select: "id,name,element_type_id",
+      filters: (query) => query.in("element_type_id", userTypeIds),
+      label: "Checking user element type templates"
+    })
+    : { data: [], error: null };
+
+  if (existingTemplatesError) {
+    throw existingTemplatesError;
+  }
+
+  const templateByTypeAndName = new Map((existingTemplates || []).map((template) => [
+    makeTemplateKey(template.element_type_id, template.name),
+    template
+  ]));
+
+  const templatesToCreate = (defaultTemplates || [])
+    .filter((template) => typeIdByDefaultId.has(getCatalogTypeId(template)))
+    .filter((template) => !templateByTypeAndName.has(makeTemplateKey(typeIdByDefaultId.get(getCatalogTypeId(template)), template.name)))
+    .map((template) => ({
+      element_type_id: typeIdByDefaultId.get(getCatalogTypeId(template)),
+      name: template.name,
+      description: template.description || null
+    }));
+
+  if (templatesToCreate.length) {
+    const { data: createdTemplates, error: createTemplatesError } = await withTimeout(supabaseClient
+      .from(ELEMENT_TYPE_TEMPLATES_TABLE)
+      .insert(templatesToCreate)
+      .select("id,name,element_type_id"), "Creating user element type templates");
+
+    if (createTemplatesError) {
+      throw createTemplatesError;
+    }
+
+    (createdTemplates || []).forEach((template) => {
+      templateByTypeAndName.set(makeTemplateKey(template.element_type_id, template.name), template);
+    });
+  }
+
+  const templateIdByDefaultId = new Map();
+  (defaultTemplates || []).forEach((defaultTemplate) => {
+    const elementTypeId = typeIdByDefaultId.get(getCatalogTypeId(defaultTemplate));
+    const userTemplate = templateByTypeAndName.get(makeTemplateKey(elementTypeId, defaultTemplate.name));
+    if (userTemplate) {
+      templateIdByDefaultId.set(defaultTemplate.id, userTemplate.id);
+    }
+  });
+
+  const { data: defaultSections, error: defaultSectionsError } = await fetchAllRowsById(DEFAULT_ELEMENT_TEMPLATE_SECTIONS_TABLE, {
+    select: "*",
+    label: "Loading default template sections"
+  });
+
+  if (defaultSectionsError) {
+    throw defaultSectionsError;
+  }
+
+  const userTemplateIds = [...new Set([...templateIdByDefaultId.values()])];
+  const { data: existingSections, error: existingSectionsError } = userTemplateIds.length
+    ? await fetchAllRowsById(ELEMENT_TEMPLATE_SECTIONS_TABLE, {
+      select: "id,name,template_id",
+      filters: (query) => query.in("template_id", userTemplateIds),
+      label: "Checking user template sections"
+    })
+    : { data: [], error: null };
+
+  if (existingSectionsError) {
+    throw existingSectionsError;
+  }
+
+  const sectionByTemplateAndName = new Map((existingSections || []).map((section) => [
+    makeSectionKey(section.template_id, section.name),
+    section
+  ]));
+
+  const sectionsToCreate = (defaultSections || [])
+    .filter((section) => templateIdByDefaultId.has(getCatalogTemplateId(section)))
+    .filter((section) => !sectionByTemplateAndName.has(makeSectionKey(templateIdByDefaultId.get(getCatalogTemplateId(section)), section.name)))
+    .map((section) => ({
+      template_id: templateIdByDefaultId.get(getCatalogTemplateId(section)),
+      name: section.name,
+      description: section.description || null,
+      sort_order: Number(section.sort_order || 0)
+    }));
+
+  if (sectionsToCreate.length) {
+    const { data: createdSections, error: createSectionsError } = await withTimeout(supabaseClient
+      .from(ELEMENT_TEMPLATE_SECTIONS_TABLE)
+      .insert(sectionsToCreate)
+      .select("id,name,template_id"), "Creating user template sections");
+
+    if (createSectionsError) {
+      throw createSectionsError;
+    }
+
+    (createdSections || []).forEach((section) => {
+      sectionByTemplateAndName.set(makeSectionKey(section.template_id, section.name), section);
+    });
+  }
+
+  const sectionIdByDefaultId = new Map();
+  (defaultSections || []).forEach((defaultSection) => {
+    const templateId = templateIdByDefaultId.get(getCatalogTemplateId(defaultSection));
+    const userSection = sectionByTemplateAndName.get(makeSectionKey(templateId, defaultSection.name));
+    if (userSection) {
+      sectionIdByDefaultId.set(defaultSection.id, userSection.id);
+    }
+  });
+
+  const { data: defaultFields, error: defaultFieldsError } = await fetchAllRowsById(DEFAULT_ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE, {
+    select: "*",
+    label: "Loading default template fields"
+  });
+
+  if (defaultFieldsError) {
+    throw defaultFieldsError;
+  }
+
+  const { data: existingFields, error: existingFieldsError } = userTemplateIds.length
+    ? await fetchAllRowsById(ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE, {
+      select: "*",
+      filters: (query) => query.in("template_id", userTemplateIds),
+      label: "Checking user template fields"
+    })
+    : { data: [], error: null };
+
+  if (existingFieldsError) {
+    throw existingFieldsError;
+  }
+
+  const fieldByTemplateAndIdentity = new Map((existingFields || []).map((field) => [
+    makeFieldKey(field.template_id, field),
+    field
+  ]));
+
+  const mappedDefaultFields = (defaultFields || [])
+    .filter((field) => templateIdByDefaultId.has(getCatalogTemplateId(field)));
+  const unmappedFieldCount = (defaultFields || []).length - mappedDefaultFields.length;
+  const fieldsToCreate = mappedDefaultFields
+    .filter((field) => !fieldByTemplateAndIdentity.has(makeFieldKey(templateIdByDefaultId.get(getCatalogTemplateId(field)), field)))
+    .map((field) => ({
+      template_id: templateIdByDefaultId.get(getCatalogTemplateId(field)),
+      section_id: getCatalogSectionId(field) ? sectionIdByDefaultId.get(getCatalogSectionId(field)) || null : null,
+      field_key: createTemplateFieldKey(field),
+      label: field.label || field.name || "Untitled Field",
+      field_type: normalizeTemplateFieldType(field.field_type),
+      description: field.description || field.hint_text || null,
+      placeholder: field.placeholder || null,
+      default_value: field.default_value || null,
+      options: field.options || null,
+      is_required: Boolean(field.is_required),
+      sort_order: Number(field.sort_order || 0)
+    }));
+
+  if ((defaultFields || []).length && !fieldsToCreate.length && !(existingFields || []).length) {
+    console.warn("Default template fields were found, but none could be mapped into the user library.", {
+      defaultFieldCount: defaultFields.length,
+      defaultTemplateMapCount: templateIdByDefaultId.size,
+      defaultSectionMapCount: sectionIdByDefaultId.size,
+      sampleDefaultField: defaultFields[0]
+    });
+  }
+
+  let insertedFieldCount = 0;
+
+  if (fieldsToCreate.length) {
+    const {
+      data: createdFields,
+      error: createFieldsError,
+      failedRows: failedFieldRows = []
+    } = await insertRowsInBatches(ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE, fieldsToCreate, {
+      select: "id",
+      label: "Creating user template fields",
+      resilient: true
+    });
+
+    if (createFieldsError) {
+      if (!isSchemaColumnError(createFieldsError)) {
+        throw createFieldsError;
+      }
+
+      console.warn("Rich template field insert used the minimal destination column shape.", createFieldsError);
+      const legacyFieldsToCreate = fieldsToCreate.map((field) => ({
+        template_id: field.template_id,
+        field_key: field.field_key,
+        label: field.label,
+        field_type: field.field_type,
+        section_id: field.section_id || null,
+        description: field.description || null,
+        sort_order: field.sort_order || 0
+      }));
+      const {
+        data: legacyCreatedFields,
+        error: legacyCreateFieldsError,
+        failedRows: legacyFailedFieldRows = []
+      } = await insertRowsInBatches(ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE, legacyFieldsToCreate, {
+        select: "id",
+        label: "Creating user template fields",
+        resilient: true
+      });
+
+      if (legacyCreateFieldsError) {
+        throw legacyCreateFieldsError;
+      }
+
+      insertedFieldCount = legacyCreatedFields.length || legacyFieldsToCreate.length;
+      if (legacyFailedFieldRows.length) {
+        console.warn("Some rich template fields could not be seeded with the minimal column shape.", {
+          failedFieldCount: legacyFailedFieldRows.length,
+          firstFailure: legacyFailedFieldRows[0]
+        });
+      }
+    } else {
+      insertedFieldCount = createdFields.length || fieldsToCreate.length;
+      if (failedFieldRows.length) {
+        console.warn("Some rich template fields could not be seeded.", {
+          failedFieldCount: failedFieldRows.length,
+          firstFailure: failedFieldRows[0]
+        });
+      }
+    }
+  }
+
+  console.info("Rich template field seeding summary", {
+    defaultFieldCount: (defaultFields || []).length,
+    existingUserFieldCount: (existingFields || []).length,
+    fieldsToCreateCount: fieldsToCreate.length,
+    insertedFieldCount,
+    unmappedFieldCount,
+    expectedUserFieldCount: (existingFields || []).length + insertedFieldCount
+  });
 }
 
 async function deleteUniverseAndChildren(universeId) {
   const deleteSteps = [
     { table: ELEMENT_LINKS_TABLE, column: "universe_id", label: "Deleting universe links" },
     { table: ELEMENTS_TABLE, column: "universe_id", label: "Deleting universe elements" },
-    { table: ELEMENT_TYPES_TABLE, column: "universe_id", label: "Deleting universe element types" },
     { table: UNIVERSE_TABLE, column: "id", label: "Deleting universe" }
   ];
 
@@ -729,14 +1327,6 @@ async function createUniverseFromForm(form, submitButton) {
 
     if (error) {
       setUniverseStatus(`Could not create universe: ${getReadableError(error)}`, "error");
-      return;
-    }
-
-    setUniverseStatus("Creating universe element types...");
-    try {
-      await copyDefaultElementTypesForUniverse(universeId);
-    } catch (elementTypeError) {
-      setUniverseStatus(`Universe created, but element types could not be copied: ${getReadableError(elementTypeError)}`, "error");
       return;
     }
 
