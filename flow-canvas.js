@@ -4984,6 +4984,56 @@
       }
     }
 
+    async function deleteSelectedElements() {
+      const selectedElementNodes = getSelectedElementNodes();
+      if (!selectedElementNodes.length) {
+        setTransferStatus("Select one or more element nodes to delete.", "error");
+        return;
+      }
+
+      const count = selectedElementNodes.length;
+      const confirmed = window.confirm(`Delete ${count} selected ${count === 1 ? "element" : "elements"} and all connected links?`);
+      if (!confirmed) {
+        return;
+      }
+
+      const recordIds = selectedElementNodes.map((node) => node.data.recordId).filter(Boolean);
+      const selectedNodeIds = new Set(selectedElementNodes.map((node) => node.id));
+      setTransferStatus(`Deleting ${count} ${count === 1 ? "element" : "elements"}...`);
+
+      try {
+        const [sourceLinksResponse, targetLinksResponse] = await Promise.all([
+          window.centralisSupabase
+            .from("element_links")
+            .delete()
+            .in("source_element_id", recordIds),
+          window.centralisSupabase
+            .from("element_links")
+            .delete()
+            .in("target_element_id", recordIds)
+        ]);
+        if (sourceLinksResponse.error) throw sourceLinksResponse.error;
+        if (targetLinksResponse.error) throw targetLinksResponse.error;
+
+        const elementResponse = await window.centralisSupabase
+          .from("elements")
+          .delete()
+          .in("id", recordIds);
+        if (elementResponse.error) throw elementResponse.error;
+
+        setDetailsNodeId((currentId) => selectedNodeIds.has(currentId) ? null : currentId);
+        setRichDetailsNodeId((currentId) => selectedNodeIds.has(currentId) ? null : currentId);
+        setEdges((currentEdges) => currentEdges.filter((edge) => (
+          !selectedNodeIds.has(edge.source) &&
+          !selectedNodeIds.has(edge.target)
+        )));
+        setNodes((currentNodes) => currentNodes.filter((node) => !selectedNodeIds.has(node.id)));
+        setTransferStatus(`Deleted ${count} ${count === 1 ? "element" : "elements"}.`, "success");
+      } catch (error) {
+        setTransferStatus(`Could not delete selected elements: ${getReadableError(error)}`, "error");
+      }
+    }
+
     function handleConnectEnd(event) {
       const targetIsPane = event.target?.classList?.contains("react-flow__pane");
       if (!targetIsPane || !reactFlowInstance.current || !reactFlowWrapper.current) {
@@ -5040,6 +5090,10 @@
       status.textContent = message || "";
       status.classList.toggle("is-error", tone === "error");
       status.classList.toggle("is-success", tone === "success");
+    }
+
+    function getSelectedElementNodes() {
+      return nodesRef.current.filter((node) => node.selected && node.data?.kind === "element");
     }
 
     function getViewportImportOrigin() {
@@ -5126,6 +5180,14 @@
         const selectedRecordIds = selectedElementNodes.map((node) => node.data.recordId);
         const selectedNodeIds = new Set(selectedElementNodes.map((node) => node.id));
         const selectedRecordIdSet = new Set(selectedRecordIds);
+        const sourceUniverseId = universe.id;
+        const isSelectedOrUniverseEndpoint = (nodeId) => {
+          if (String(nodeId || "").startsWith("universe:")) {
+            return toRecordId(nodeId) === sourceUniverseId;
+          }
+          return selectedNodeIds.has(nodeId);
+        };
+        const hasSelectedElementEndpoint = (edge) => selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target);
 
         const [valueResponse, customResponse] = await Promise.all([
           transferOptions.richDetails
@@ -5217,11 +5279,13 @@
             custom_fields: transferOptions.customFields ? customByElementId.get(node.data.recordId) || [] : []
           })),
           links: transferOptions.connections ? edgesRef.current
-            .filter((edge) => selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target))
+            .filter((edge) => hasSelectedElementEndpoint(edge) && isSelectedOrUniverseEndpoint(edge.source) && isSelectedOrUniverseEndpoint(edge.target))
             .map((edge) => ({
               export_id: edge.id,
               source_export_id: toRecordId(edge.source),
               target_export_id: toRecordId(edge.target),
+              source_kind: String(edge.source || "").startsWith("universe:") ? "universe" : "element",
+              target_kind: String(edge.target || "").startsWith("universe:") ? "universe" : "element",
               source_handle: edge.sourceHandle || "right",
               target_handle: edge.targetHandle || "left",
               label: edge.label || "",
@@ -5230,7 +5294,11 @@
               stroke_style: edge.data?.format?.strokeStyle || universeFormatRef.current.strokeStyle,
               path_type: edge.data?.format?.pathType || universeFormatRef.current.pathType
             }))
-            .filter((link) => selectedRecordIdSet.has(link.source_export_id) && selectedRecordIdSet.has(link.target_export_id)) : []
+            .filter((link) => {
+              const sourceIncluded = selectedRecordIdSet.has(link.source_export_id) || (link.source_kind === "universe" && link.source_export_id === sourceUniverseId);
+              const targetIncluded = selectedRecordIdSet.has(link.target_export_id) || (link.target_kind === "universe" && link.target_export_id === sourceUniverseId);
+              return sourceIncluded && targetIncluded;
+            }) : []
         };
 
         const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
@@ -5361,8 +5429,10 @@
       const linkRows = transferOptions.connections && Array.isArray(payload.links) ? payload.links : [];
       const importedEdges = [];
       for (const link of linkRows) {
-        const sourceRecordId = oldToNewRecordId.get(String(link.source_export_id));
-        const targetRecordId = oldToNewRecordId.get(String(link.target_export_id));
+        const sourceIsUniverse = link.source_kind === "universe" || String(link.source_export_id) === String(payload.source_universe?.id);
+        const targetIsUniverse = link.target_kind === "universe" || String(link.target_export_id) === String(payload.source_universe?.id);
+        const sourceRecordId = sourceIsUniverse ? universe.id : oldToNewRecordId.get(String(link.source_export_id));
+        const targetRecordId = targetIsUniverse ? universe.id : oldToNewRecordId.get(String(link.target_export_id));
         if (!sourceRecordId || !targetRecordId) continue;
 
         const id = createId();
@@ -5390,8 +5460,8 @@
 
         importedEdges.push({
           id,
-          source: `element:${sourceRecordId}`,
-          target: `element:${targetRecordId}`,
+          source: sourceIsUniverse ? `universe:${sourceRecordId}` : `element:${sourceRecordId}`,
+          target: targetIsUniverse ? `universe:${targetRecordId}` : `element:${targetRecordId}`,
           sourceHandle: link.source_handle || "right",
           targetHandle: link.target_handle || "left",
           label: link.label || undefined,
@@ -5548,6 +5618,25 @@
         fileInput.removeEventListener("change", handleFileChange);
       };
     }, []);
+
+    React.useEffect(() => {
+      const deleteButton = document.querySelector("[data-delete-selected-elements]");
+      const label = document.querySelector("[data-delete-selected-label]");
+      if (!deleteButton) {
+        return undefined;
+      }
+
+      const selectedCount = nodes.filter((node) => node.selected && node.data?.kind === "element").length;
+      deleteButton.hidden = selectedCount < 1;
+      if (label) {
+        label.textContent = selectedCount > 1 ? `Delete (${selectedCount})` : "Delete";
+      }
+
+      deleteButton.addEventListener("click", deleteSelectedElements);
+      return () => {
+        deleteButton.removeEventListener("click", deleteSelectedElements);
+      };
+    }, [nodes]);
     return React.createElement(
       "div",
       {

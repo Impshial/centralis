@@ -445,7 +445,8 @@ body.dark-mode .moon-icon {
 }
 
 .tool-action > ph-upload-simple,
-.tool-action > ph-download-simple {
+.tool-action > ph-download-simple,
+.tool-action > ph-trash {
   width: 16px;
   height: 16px;
 }
@@ -481,6 +482,17 @@ body.dark-mode .moon-icon {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 13%, transparent);
   outline: none;
+}
+
+.tool-danger-action {
+  color: #ffb4b4;
+  border-color: color-mix(in srgb, #ef4444 38%, var(--line));
+}
+
+.tool-danger-action:hover,
+.tool-danger-action:focus-visible {
+  color: #ffffff;
+  background: #dc2626;
 }
 
 .flow-canvas {
