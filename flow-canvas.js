@@ -316,6 +316,9 @@
   let elements = [];
   let elementLinks = [];
   let imageRows = [];
+  let overlayLayers = [];
+  let overlayLayerEntries = [];
+  let overlayLayerAssignments = [];
 
   if (window.centralisSupabase && universeId) {
     let currentAppUser = window.centralisCurrentAppUser || null;
@@ -373,6 +376,47 @@
 
     if (!linkResponse.error) {
       elementLinks = linkResponse.data || [];
+    }
+
+    try {
+      const layerResponse = await withTimeout(window.centralisSupabase
+        .from("universe_layers")
+        .select("*")
+        .eq("universe_id", universeId)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }), "Loading overlay layers");
+
+      if (!layerResponse.error) {
+        overlayLayers = layerResponse.data || [];
+      } else if (layerResponse.error.code !== "42P01") {
+        console.warn("Could not load overlay layers:", layerResponse.error);
+      }
+
+      const layerIds = overlayLayers.map((layer) => layer.id).filter(Boolean);
+      if (layerIds.length) {
+        const [entryResponse, assignmentResponse] = await Promise.all([
+          withTimeout(window.centralisSupabase
+            .from("universe_layer_entries")
+            .select("*")
+            .in("layer_id", layerIds)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }), "Loading layer entries"),
+          withTimeout(window.centralisSupabase
+            .from("element_layer_assignments")
+            .select("*")
+            .eq("universe_id", universeId)
+            .in("layer_id", layerIds), "Loading layer assignments")
+        ]);
+
+        if (!entryResponse.error) {
+          overlayLayerEntries = entryResponse.data || [];
+        }
+        if (!assignmentResponse.error) {
+          overlayLayerAssignments = assignmentResponse.data || [];
+        }
+      }
+    } catch (error) {
+      console.warn("Overlay layers are not available yet.", error);
     }
 
     const imageObjectIds = [universe.id, ...elements.map((element) => element.id)].filter(Boolean);
@@ -546,22 +590,37 @@
     const data = props.data;
     const { menuOpen, setMenuOpen, menuRef, toggleMenu } = useNodeMenu(props.id);
     const elementType = data.elementType;
-    const color = sanitizeColor(elementType?.color);
-    const typeName = elementType?.name || "No Type";
+    const layerOverlay = data.layerOverlay || null;
+    const color = sanitizeColor(layerOverlay?.color || elementType?.color);
+    const typeName = layerOverlay?.label || elementType?.name || "No Type";
     const iconName = sanitizeIconName(elementType?.icon);
     const format = data.format || DEFAULT_UNIVERSE_FORMAT;
     const imageUrl = data.images?.[0]?.image_url;
     const imagePlacement = imageUrl ? format.nodeImagePlacement : "hidden";
+    const overlayEntries = layerOverlay?.entries || [];
+    const stripeStyle = overlayEntries.length > 1
+      ? overlayEntries.map((entry, index) => {
+        const start = Math.floor((index / overlayEntries.length) * 100);
+        const end = Math.floor(((index + 1) / overlayEntries.length) * 100);
+        return `${entry.color} ${start}% ${end}%`;
+      }).join(", ")
+      : "";
+    const layerClass = layerOverlay?.assigned
+      ? " is-layer-assigned"
+      : layerOverlay?.active
+        ? " is-layer-unassigned"
+        : "";
 
     return React.createElement(
       "article",
       {
-        className: `element-flow-node node-image-${imagePlacement}${props.selected ? " is-selected" : ""}`,
+        className: `element-flow-node node-image-${imagePlacement}${layerClass}${props.selected ? " is-selected" : ""}`,
         style: {
           "--element-color": color,
           "--node-bg-opacity": format.nodeBgOpacity,
           "--node-border-width": `${format.nodeBorderWidth}px`,
-          "--node-layout-gap": `${format.nodeLayoutGap}px`
+          "--node-layout-gap": `${format.nodeLayoutGap}px`,
+          "--layer-stripes": stripeStyle ? `linear-gradient(to bottom, ${stripeStyle})` : "var(--element-color)"
         },
         onDoubleClick: (event) => {
           event.stopPropagation();
@@ -570,6 +629,16 @@
       },
       React.createElement(Handle, { className: "node-grab node-grab-right", id: "right", type: "source", position: Position.Right }),
       React.createElement(Handle, { className: "node-grab node-grab-left", id: "left", type: "target", position: Position.Left }),
+      overlayEntries.length > 1 && React.createElement(
+        "div",
+        { className: "node-layer-chips", "aria-label": `${overlayEntries.length} layer entries` },
+        overlayEntries.slice(0, 4).map((entry) => React.createElement("span", {
+          key: entry.id,
+          style: { "--entry-color": entry.color },
+          title: entry.name
+        })),
+        overlayEntries.length > 4 && React.createElement("small", null, `+${overlayEntries.length - 4}`)
+      ),
       React.createElement(
         "div",
         { className: "node-menu-wrap nodrag nopan", ref: menuRef },
@@ -724,6 +793,81 @@
 
   const initialEdges = elementLinks.map(toLinkEdge);
 
+  function sortLayers(items) {
+    return [...(items || [])].sort((a, b) => {
+      const sortA = Number(a.sort_order ?? 0);
+      const sortB = Number(b.sort_order ?? 0);
+      if (sortA !== sortB) return sortA - sortB;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+  }
+
+  function getEntriesForLayer(layerId, entries = overlayLayerEntries) {
+    return sortLayers((entries || []).filter((entry) => entry.layer_id === layerId));
+  }
+
+  function getAssignmentForElement(elementId, layerId, assignments = overlayLayerAssignments) {
+    return (assignments || []).find((assignment) => (
+      assignment.element_id === elementId &&
+      assignment.layer_id === layerId
+    )) || null;
+  }
+
+  function getAssignmentsForElement(elementId, layerId, assignments = overlayLayerAssignments) {
+    return (assignments || []).filter((assignment) => (
+      assignment.element_id === elementId &&
+      assignment.layer_id === layerId
+    ));
+  }
+
+  function getEntryById(entryId, entries = overlayLayerEntries) {
+    return (entries || []).find((entry) => entry.id === entryId) || null;
+  }
+
+  function applyLayerOverlayToNode(node, activeLayerId, entries, assignments) {
+    if (node.data?.kind !== "element") {
+      return node;
+    }
+
+    if (!activeLayerId) {
+      if (!node.data.layerOverlay) return node;
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          layerOverlay: null
+        }
+      };
+    }
+
+    const nodeAssignments = getAssignmentsForElement(node.data.recordId, activeLayerId, assignments);
+    const assignedEntries = nodeAssignments
+      .map((assignment) => getEntryById(assignment.entry_id, entries))
+      .filter(Boolean);
+    const primaryEntry = assignedEntries[0] || null;
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        layerOverlay: {
+          active: true,
+          assigned: assignedEntries.length > 0,
+          color: primaryEntry?.color || null,
+          label: assignedEntries.length > 1 ? `${primaryEntry?.name || "Assigned"} +${assignedEntries.length - 1}` : primaryEntry?.name || "Unassigned",
+          entries: assignedEntries.map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            color: sanitizeColor(entry.color, "#6366f1")
+          }))
+        }
+      }
+    };
+  }
+
+  function applyLayerOverlayToNodes(nodesToUpdate, activeLayerId, entries, assignments) {
+    return nodesToUpdate.map((node) => applyLayerOverlayToNode(node, activeLayerId, entries, assignments));
+  }
+
   function getImagesForObject(objectId) {
     return normalizeImages(imageRows.filter((image) => image.object_id === objectId));
   }
@@ -770,6 +914,7 @@
     if (controls?.pane) {
       controls.pane.hidden = true;
     }
+    document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", "0px");
   }
 
   function getLinkedNodes(nodeId, currentNodes, currentEdges) {
@@ -1298,6 +1443,7 @@
     const images = node.data?.images || [];
 
     controls.pane.hidden = false;
+    document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", `${controls.pane.getBoundingClientRect().width}px`);
     setDetailsPaneMode(controls, mode);
     if (controls.kind) {
       controls.kind.textContent = meta.label;
@@ -1426,6 +1572,7 @@
       const maxWidth = Math.min(760, window.innerWidth - 72);
       const nextWidth = Math.min(maxWidth, Math.max(320, window.innerWidth - event.clientX));
       controls.pane.style.width = `${nextWidth}px`;
+      document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", `${nextWidth}px`);
     }
 
     function handlePointerUp() {
@@ -2164,6 +2311,15 @@
     const [nodes, setNodes] = React.useState(initialNodes);
     const [edges, setEdges] = React.useState(initialEdges);
     const [universeFormat, setUniverseFormat] = React.useState(initialUniverseFormat);
+    const [layers, setLayers] = React.useState(sortLayers(overlayLayers));
+    const [layerEntries, setLayerEntries] = React.useState(sortLayers(overlayLayerEntries));
+    const [layerAssignments, setLayerAssignments] = React.useState(overlayLayerAssignments);
+    const [activeLayerId, setActiveLayerId] = React.useState(() => {
+      const activeLayer = sortLayers(overlayLayers).find((layer) => layer.is_active);
+      return activeLayer?.id || "";
+    });
+    const [layerModeActive, setLayerModeActive] = React.useState(false);
+    const [layersManagerLayerId, setLayersManagerLayerId] = React.useState("");
     const [elementTypeVersion, setElementTypeVersion] = React.useState(0);
     const [pendingLink, setPendingLink] = React.useState(null);
     const [pendingDeleteElement, setPendingDeleteElement] = React.useState(null);
@@ -2178,7 +2334,14 @@
     const nodesRef = React.useRef(nodes);
     const edgesRef = React.useRef(edges);
     const universeFormatRef = React.useRef(universeFormat);
+    const layersRef = React.useRef(layers);
+    const layerEntriesRef = React.useRef(layerEntries);
+    const layerAssignmentsRef = React.useRef(layerAssignments);
+    const activeLayerIdRef = React.useRef(activeLayerId);
     const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode }), []);
+    const activeLayer = React.useMemo(() => layers.find((layer) => layer.id === activeLayerId) || null, [layers, activeLayerId]);
+    const activeLayerEntries = React.useMemo(() => getEntriesForLayer(activeLayerId, layerEntries), [activeLayerId, layerEntries]);
+    const visibleLayerId = layerModeActive ? activeLayerId : "";
 
     React.useEffect(() => {
       nodesRef.current = nodes;
@@ -2191,6 +2354,26 @@
     React.useEffect(() => {
       universeFormatRef.current = universeFormat;
     }, [universeFormat]);
+
+    React.useEffect(() => {
+      layersRef.current = layers;
+    }, [layers]);
+
+    React.useEffect(() => {
+      layerEntriesRef.current = layerEntries;
+    }, [layerEntries]);
+
+    React.useEffect(() => {
+      layerAssignmentsRef.current = layerAssignments;
+    }, [layerAssignments]);
+
+    React.useEffect(() => {
+      activeLayerIdRef.current = activeLayerId;
+    }, [activeLayerId]);
+
+    React.useEffect(() => {
+      setNodes((currentNodes) => applyLayerOverlayToNodes(currentNodes, visibleLayerId, layerEntries, layerAssignments));
+    }, [visibleLayerId, layerEntries, layerAssignments]);
 
     const syncElementTypes = React.useCallback((nextTypes) => {
       elementTypes = [...nextTypes].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
@@ -4803,7 +4986,10 @@
 
         const nextNode = toElementNode(savedElement);
         nextNode.data.format = universeFormat;
-        setNodes((currentNodes) => [...currentNodes, nextNode]);
+        setNodes((currentNodes) => [
+          ...currentNodes,
+          applyLayerOverlayToNode(nextNode, activeLayerIdRef.current, layerEntriesRef.current, layerAssignmentsRef.current)
+        ]);
 
         if (pendingLink?.sourceNodeId) {
           const linkId = createId();
@@ -5028,6 +5214,7 @@
           !selectedNodeIds.has(edge.target)
         )));
         setNodes((currentNodes) => currentNodes.filter((node) => !selectedNodeIds.has(node.id)));
+        setLayerAssignments((currentAssignments) => currentAssignments.filter((assignment) => !recordIds.includes(assignment.element_id)));
         setTransferStatus(`Deleted ${count} ${count === 1 ? "element" : "elements"}.`, "success");
       } catch (error) {
         setTransferStatus(`Could not delete selected elements: ${getReadableError(error)}`, "error");
@@ -5094,6 +5281,394 @@
 
     function getSelectedElementNodes() {
       return nodesRef.current.filter((node) => node.selected && node.data?.kind === "element");
+    }
+
+    function setLayerStatus(message, tone = "") {
+      const status = document.querySelector("[data-layer-status]");
+      if (!status) return;
+      status.textContent = message || "";
+      status.classList.toggle("is-error", tone === "error");
+      status.classList.toggle("is-success", tone === "success");
+    }
+
+    function setLayersManagerStatus(message, tone = "") {
+      const status = document.querySelector("[data-layers-manager-status]");
+      if (!status) return;
+      status.textContent = message || "";
+      status.classList.toggle("is-error", tone === "error");
+      status.classList.toggle("is-success", tone === "success");
+    }
+
+    function updateLayerCollections(nextLayers, nextEntries = layerEntriesRef.current, nextAssignments = layerAssignmentsRef.current) {
+      const sortedLayers = sortLayers(nextLayers);
+      const sortedEntries = sortLayers(nextEntries);
+      setLayers(sortedLayers);
+      setLayerEntries(sortedEntries);
+      setLayerAssignments(nextAssignments || []);
+      overlayLayers = sortedLayers;
+      overlayLayerEntries = sortedEntries;
+      overlayLayerAssignments = nextAssignments || [];
+    }
+
+    async function reloadLayers() {
+      if (!window.centralisSupabase || !universe.id) {
+        return;
+      }
+
+      const layerResponse = await window.centralisSupabase
+        .from("universe_layers")
+        .select("*")
+        .eq("universe_id", universe.id)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+      if (layerResponse.error) throw layerResponse.error;
+
+      const nextLayers = layerResponse.data || [];
+      const layerIds = nextLayers.map((layer) => layer.id).filter(Boolean);
+      let nextEntries = [];
+      let nextAssignments = [];
+      if (layerIds.length) {
+        const [entryResponse, assignmentResponse] = await Promise.all([
+          window.centralisSupabase
+            .from("universe_layer_entries")
+            .select("*")
+            .in("layer_id", layerIds)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }),
+          window.centralisSupabase
+            .from("element_layer_assignments")
+            .select("*")
+            .eq("universe_id", universe.id)
+            .in("layer_id", layerIds)
+        ]);
+        if (entryResponse.error) throw entryResponse.error;
+        if (assignmentResponse.error) throw assignmentResponse.error;
+        nextEntries = entryResponse.data || [];
+        nextAssignments = assignmentResponse.data || [];
+      }
+
+      updateLayerCollections(nextLayers, nextEntries, nextAssignments);
+      if (activeLayerIdRef.current && !nextLayers.some((layer) => layer.id === activeLayerIdRef.current)) {
+        setActiveLayerId("");
+      }
+      if (layersManagerLayerId && !nextLayers.some((layer) => layer.id === layersManagerLayerId)) {
+        setLayersManagerLayerId(nextLayers[0]?.id || "");
+      }
+    }
+
+    async function createLayer() {
+      const id = createId();
+      const nextOrder = layersRef.current.length
+        ? Math.max(...layersRef.current.map((layer) => Number(layer.sort_order || 0))) + 10
+        : 10;
+      const existingNames = new Set(layersRef.current.map((layer) => normalizeLookupKey(layer.name)));
+      let layerName = "New Layer";
+      let suffix = 2;
+      while (existingNames.has(normalizeLookupKey(layerName))) {
+        layerName = `New Layer ${suffix}`;
+        suffix += 1;
+      }
+      const { data, error } = await window.centralisSupabase
+        .from("universe_layers")
+        .insert({
+          id,
+          universe_id: universe.id,
+          user_id: universe.user_id || window.centralisCurrentAppUser?.id,
+          name: layerName,
+          description: null,
+          sort_order: nextOrder
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      setLayersManagerLayerId(data.id);
+      await reloadLayers();
+    }
+
+    async function saveLayer(layerId, payload) {
+      const { error } = await window.centralisSupabase
+        .from("universe_layers")
+        .update({
+          name: payload.name,
+          description: payload.description || null,
+          sort_order: Number(payload.sort_order || 0),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", layerId);
+      if (error) throw error;
+      await reloadLayers();
+      setLayersManagerStatus("Layer saved.", "success");
+    }
+
+    async function deleteLayer(layerId) {
+      const layer = layersRef.current.find((item) => item.id === layerId);
+      if (!layer) return;
+      if (!window.confirm(`Delete "${layer.name}" and all of its assignments?`)) {
+        return;
+      }
+      const { error } = await window.centralisSupabase
+        .from("universe_layers")
+        .delete()
+        .eq("id", layerId);
+      if (error) throw error;
+      if (activeLayerIdRef.current === layerId) {
+        setActiveLayerId("");
+      }
+      await reloadLayers();
+      setLayersManagerStatus("Layer deleted.", "success");
+    }
+
+    async function createLayerEntry(layerId) {
+      const entries = getEntriesForLayer(layerId, layerEntriesRef.current);
+      const id = createId();
+      const nextOrder = entries.length
+        ? Math.max(...entries.map((entry) => Number(entry.sort_order || 0))) + 10
+        : 10;
+      const existingNames = new Set(entries.map((entry) => normalizeLookupKey(entry.name)));
+      let entryName = "New Entry";
+      let suffix = 2;
+      while (existingNames.has(normalizeLookupKey(entryName))) {
+        entryName = `New Entry ${suffix}`;
+        suffix += 1;
+      }
+      const { error } = await window.centralisSupabase
+        .from("universe_layer_entries")
+        .insert({
+          id,
+          layer_id: layerId,
+          name: entryName,
+          color: "#6366f1",
+          sort_order: nextOrder
+        });
+      if (error) throw error;
+      await reloadLayers();
+    }
+
+    async function saveLayerEntry(entryId, payload) {
+      const { error } = await window.centralisSupabase
+        .from("universe_layer_entries")
+        .update({
+          name: payload.name,
+          color: sanitizeColor(payload.color, "#6366f1"),
+          sort_order: Number(payload.sort_order || 0),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", entryId);
+      if (error) throw error;
+      await reloadLayers();
+      setLayersManagerStatus("Entry saved.", "success");
+    }
+
+    async function deleteLayerEntry(entryId) {
+      const entry = getEntryById(entryId, layerEntriesRef.current);
+      if (!entry) return;
+      if (!window.confirm(`Delete "${entry.name}" and clear it from assigned elements?`)) {
+        return;
+      }
+      const { error } = await window.centralisSupabase
+        .from("universe_layer_entries")
+        .delete()
+        .eq("id", entryId);
+      if (error) throw error;
+      await reloadLayers();
+      setLayersManagerStatus("Entry deleted.", "success");
+    }
+
+    async function saveSelectedLayerAssignments(entryIds) {
+      const selectedNodes = getSelectedElementNodes();
+      const layerId = activeLayerIdRef.current;
+      if (!layerId) {
+        setLayerStatus("Choose an active layer first.", "error");
+        return;
+      }
+      if (!selectedNodes.length) {
+        setLayerStatus("Select one or more elements first.", "error");
+        return;
+      }
+
+      const selectedEntryIds = [...new Set((entryIds || []).filter(Boolean))];
+      const elementIds = selectedNodes.map((node) => node.data.recordId).filter(Boolean);
+      const now = new Date().toISOString();
+      const deleteResponse = await window.centralisSupabase
+        .from("element_layer_assignments")
+        .delete()
+        .eq("layer_id", layerId)
+        .in("element_id", elementIds);
+      if (deleteResponse.error) {
+        setLayerStatus(`Could not update assignments: ${getReadableError(deleteResponse.error)}`, "error");
+        return;
+      }
+
+      if (selectedEntryIds.length) {
+        const rows = elementIds.flatMap((elementId) => selectedEntryIds.map((entryId) => ({
+          id: createId(),
+          universe_id: universe.id,
+          element_id: elementId,
+          layer_id: layerId,
+          entry_id: entryId,
+          updated_at: now
+        })));
+        const insertResponse = await window.centralisSupabase
+          .from("element_layer_assignments")
+          .insert(rows);
+        if (insertResponse.error) {
+          setLayerStatus(`Could not assign layer: ${getReadableError(insertResponse.error)}`, "error");
+          return;
+        }
+      }
+
+      await reloadLayers();
+      setLayerStatus(`Updated ${elementIds.length} ${elementIds.length === 1 ? "element" : "elements"}.`, "success");
+    }
+
+    async function clearSelectedLayerAssignments() {
+      const selectedNodes = getSelectedElementNodes();
+      const layerId = activeLayerIdRef.current;
+      if (!layerId) {
+        setLayerStatus("Choose an active layer first.", "error");
+        return;
+      }
+      if (!selectedNodes.length) {
+        setLayerStatus("Select one or more elements first.", "error");
+        return;
+      }
+      const elementIds = selectedNodes.map((node) => node.data.recordId).filter(Boolean);
+      const { error } = await window.centralisSupabase
+        .from("element_layer_assignments")
+        .delete()
+        .eq("layer_id", layerId)
+        .in("element_id", elementIds);
+      if (error) {
+        setLayerStatus(`Could not clear assignments: ${getReadableError(error)}`, "error");
+        return;
+      }
+      await reloadLayers();
+      setLayerStatus(`Cleared ${elementIds.length} ${elementIds.length === 1 ? "assignment" : "assignments"}.`, "success");
+    }
+
+    function renderLayerAssignmentDialog() {
+      const modal = document.getElementById("layer-assignment-modal");
+      const options = modal?.querySelector("[data-layer-assignment-options]");
+      const subtitle = modal?.querySelector("[data-layer-assignment-subtitle]");
+      if (!modal || !options) return;
+
+      const selectedNodes = getSelectedElementNodes();
+      if (subtitle) {
+        subtitle.textContent = `${activeLayer?.name || "Active layer"}: ${selectedNodes.length} selected ${selectedNodes.length === 1 ? "element" : "elements"}.`;
+      }
+      options.innerHTML = activeLayerEntries.length
+        ? activeLayerEntries.map((entry) => `
+          <label class="layer-assignment-row">
+            <input type="checkbox" name="entry" value="${escapeHtml(entry.id)}">
+            <span class="layer-entry-swatch" style="--entry-color: ${escapeHtml(sanitizeColor(entry.color, "#6366f1"))}"></span>
+            <span>${escapeHtml(entry.name)}</span>
+          </label>
+        `).join("")
+        : `<p class="empty-state">This layer has no entries yet. Use Manage Layers to add entries.</p>`;
+
+      const selectedElementIds = selectedNodes.map((node) => node.data.recordId).filter(Boolean);
+      options.querySelectorAll('input[name="entry"]').forEach((input) => {
+        const assignedCount = selectedElementIds.filter((elementId) => getAssignmentsForElement(elementId, activeLayerIdRef.current, layerAssignmentsRef.current)
+          .some((assignment) => assignment.entry_id === input.value)).length;
+        input.checked = assignedCount > 0 && assignedCount === selectedElementIds.length;
+        input.indeterminate = assignedCount > 0 && assignedCount < selectedElementIds.length;
+      });
+    }
+
+    function openLayerAssignmentDialog() {
+      if (!layerModeActive || !activeLayerIdRef.current) {
+        setLayerStatus("Turn on layer mode and choose a layer first.", "error");
+        return;
+      }
+      if (!getSelectedElementNodes().length) {
+        setLayerStatus("Select one or more elements first.", "error");
+        return;
+      }
+      const modal = document.getElementById("layer-assignment-modal");
+      if (!modal) return;
+      renderLayerAssignmentDialog();
+      modal.hidden = false;
+    }
+
+    function renderLayersManager() {
+      const modal = document.getElementById("layers-manager-modal");
+      const list = modal?.querySelector("[data-layer-list]");
+      const detail = modal?.querySelector("[data-layer-detail]");
+      if (!modal || !list || !detail) return;
+
+      const selectedLayer = layers.find((layer) => layer.id === layersManagerLayerId) || layers[0] || null;
+
+      list.innerHTML = layers.length
+        ? layers.map((layer) => `
+          <button class="layer-list-item${layer.id === selectedLayer?.id ? " is-selected" : ""}" type="button" data-select-layer="${escapeHtml(layer.id)}">
+            <strong>${escapeHtml(layer.name)}</strong>
+            <span>${escapeHtml(layer.description || `${getEntriesForLayer(layer.id, layerEntries).length} entries`)}</span>
+          </button>
+        `).join("")
+        : `<p class="empty-state">No layers yet.</p>`;
+
+      if (!selectedLayer) {
+        detail.innerHTML = `<p class="empty-state">Select a layer or add one to begin.</p>`;
+        return;
+      }
+
+      const entries = getEntriesForLayer(selectedLayer.id, layerEntries);
+      detail.innerHTML = `
+        <div class="layer-detail-header">
+          <div>
+            <h3>${escapeHtml(selectedLayer.name)}</h3>
+            <p class="modal-subtitle">${escapeHtml(selectedLayer.description || "No description yet.")}</p>
+          </div>
+          <button class="danger-action compact-action" type="button" data-delete-layer="${escapeHtml(selectedLayer.id)}">Delete Layer</button>
+        </div>
+        <form class="layer-detail-form" data-layer-form="${escapeHtml(selectedLayer.id)}">
+          <label class="form-field">
+            <span>Name</span>
+            <input type="text" name="name" value="${escapeHtml(selectedLayer.name)}" autocomplete="off">
+          </label>
+          <label class="form-field">
+            <span>Sort Order</span>
+            <input type="number" name="sort_order" value="${escapeHtml(selectedLayer.sort_order ?? 0)}">
+          </label>
+          <label class="form-field">
+            <span>Description</span>
+            <textarea name="description" rows="3">${escapeHtml(selectedLayer.description || "")}</textarea>
+          </label>
+          <div class="layer-detail-actions">
+            <span></span>
+            <button class="primary-action compact-action" type="submit">Save Layer</button>
+          </div>
+        </form>
+        <div class="layer-detail-header">
+          <h3>Entries</h3>
+          <button class="secondary-action compact-action" type="button" data-add-layer-entry="${escapeHtml(selectedLayer.id)}">+ Add Entry</button>
+        </div>
+        <div class="layer-entry-list">
+          ${entries.length ? entries.map((entry) => `
+            <form class="layer-entry-row" data-layer-entry-form="${escapeHtml(entry.id)}">
+              <div class="layer-entry-main">
+                <span class="layer-entry-swatch" style="--entry-color: ${escapeHtml(sanitizeColor(entry.color, "#6366f1"))}"></span>
+                <label class="form-field">
+                  <span>Name</span>
+                  <input type="text" name="name" value="${escapeHtml(entry.name)}" autocomplete="off">
+                </label>
+                <label class="form-field">
+                  <span>Color</span>
+                  <input type="text" name="color" value="${escapeHtml(sanitizeColor(entry.color, "#6366f1"))}" autocomplete="off">
+                </label>
+                <label class="form-field">
+                  <span>Sort</span>
+                  <input type="number" name="sort_order" value="${escapeHtml(entry.sort_order ?? 0)}">
+                </label>
+              </div>
+              <div class="layer-detail-actions">
+                <button class="secondary-action compact-action" type="submit">Save</button>
+                <button class="danger-action compact-action" type="button" data-delete-layer-entry="${escapeHtml(entry.id)}">Delete</button>
+              </div>
+            </form>
+          `).join("") : `<p class="empty-state">No entries yet. Add entries like Nations, Product Lines, Religions, or Regions.</p>`}
+        </div>
+      `;
     }
 
     function getViewportImportOrigin() {
@@ -5423,7 +5998,7 @@
         const node = toElementNode(row);
         node.data.format = universeFormatRef.current;
         node.selected = true;
-        return node;
+        return applyLayerOverlayToNode(node, activeLayerIdRef.current, layerEntriesRef.current, layerAssignmentsRef.current);
       });
 
       const linkRows = transferOptions.connections && Array.isArray(payload.links) ? payload.links : [];
@@ -5637,6 +6212,238 @@
         deleteButton.removeEventListener("click", deleteSelectedElements);
       };
     }, [nodes]);
+
+    React.useEffect(() => {
+      const toggle = document.querySelector("[data-toggle-layers-mode]");
+      const panel = document.querySelector("[data-layers-panel]");
+      const layerSelect = document.querySelector("[data-active-layer-select]");
+      const legend = document.querySelector("[data-layer-inline-legend]");
+      const selectedSummary = document.querySelector("[data-layer-selected-summary]");
+      const count = document.querySelector("[data-layer-panel-count]");
+      const manageButton = document.querySelector("[data-open-layers-manager]");
+      const assignButton = document.querySelector("[data-open-layer-assignment]");
+      if (!toggle || !panel || !layerSelect) {
+        return undefined;
+      }
+
+      const selectedCount = nodes.filter((node) => node.selected && node.data?.kind === "element").length;
+      layerSelect.innerHTML = [
+        `<option value="">No active layer</option>`,
+        ...layers.map((layer) => `<option value="${escapeHtml(layer.id)}">${escapeHtml(layer.name)}</option>`)
+      ].join("");
+      layerSelect.value = activeLayerId;
+
+      panel.hidden = !layerModeActive;
+      toggle.classList.toggle("is-active", layerModeActive);
+      toggle.setAttribute("aria-pressed", String(layerModeActive));
+      if (count) {
+        count.textContent = layers.length ? `${layers.length} ${layers.length === 1 ? "layer" : "layers"}` : "No layers yet";
+      }
+      if (legend) {
+        legend.innerHTML = layerModeActive && activeLayerId && activeLayerEntries.length
+          ? activeLayerEntries.map((entry) => `
+            <div class="layer-inline-legend-row">
+              <span class="layer-legend-swatch" style="--entry-color: ${escapeHtml(sanitizeColor(entry.color, "#6366f1"))}"></span>
+              <span>${escapeHtml(entry.name)}</span>
+            </div>
+          `).join("")
+          : "";
+      }
+      if (selectedSummary) {
+        selectedSummary.textContent = selectedCount
+          ? `${selectedCount} selected ${selectedCount === 1 ? "element" : "elements"}`
+          : "No elements selected";
+      }
+      if (assignButton) {
+        assignButton.disabled = !layerModeActive || !activeLayerId || !selectedCount || !activeLayerEntries.length;
+      }
+
+      function handleToggleClick(event) {
+        event.stopPropagation();
+        setLayerModeActive((isActive) => {
+          const nextActive = !isActive;
+          if (nextActive && !activeLayerIdRef.current && layersRef.current[0]?.id) {
+            setActiveLayerId(layersRef.current[0].id);
+          }
+          return nextActive;
+        });
+      }
+
+      function handleLayerChange(event) {
+        setActiveLayerId(event.target.value || "");
+        setLayerStatus("");
+      }
+
+      function handleManageClick() {
+        const modal = document.getElementById("layers-manager-modal");
+        if (modal) {
+          modal.hidden = false;
+          setLayersManagerLayerId((currentId) => currentId || layers[0]?.id || "");
+          renderLayersManager();
+        }
+      }
+
+      function handleAssignClick() {
+        openLayerAssignmentDialog();
+      }
+
+      toggle.addEventListener("click", handleToggleClick);
+      layerSelect.addEventListener("change", handleLayerChange);
+      manageButton?.addEventListener("click", handleManageClick);
+      assignButton?.addEventListener("click", handleAssignClick);
+      return () => {
+        toggle.removeEventListener("click", handleToggleClick);
+        layerSelect.removeEventListener("change", handleLayerChange);
+        manageButton?.removeEventListener("click", handleManageClick);
+        assignButton?.removeEventListener("click", handleAssignClick);
+      };
+    }, [layers, activeLayerId, activeLayerEntries, layerModeActive, nodes]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("layers-manager-modal");
+      const addButton = modal?.querySelector("[data-add-layer]");
+      const closeButtons = modal?.querySelectorAll("[data-close-layers-manager]");
+      if (!modal || !addButton) {
+        return undefined;
+      }
+
+      renderLayersManager();
+
+      async function runLayerAction(action) {
+        try {
+          setLayersManagerStatus("");
+          await action();
+        } catch (error) {
+          setLayersManagerStatus(getReadableError(error), "error");
+        }
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+      }
+
+      function handleAddLayer() {
+        runLayerAction(createLayer);
+      }
+
+      function handleClick(event) {
+        const selectLayerButton = event.target.closest("[data-select-layer]");
+        if (selectLayerButton) {
+          setLayersManagerLayerId(selectLayerButton.dataset.selectLayer);
+          return;
+        }
+        const deleteLayerButton = event.target.closest("[data-delete-layer]");
+        if (deleteLayerButton) {
+          runLayerAction(() => deleteLayer(deleteLayerButton.dataset.deleteLayer));
+          return;
+        }
+        const addEntryButton = event.target.closest("[data-add-layer-entry]");
+        if (addEntryButton) {
+          runLayerAction(() => createLayerEntry(addEntryButton.dataset.addLayerEntry));
+          return;
+        }
+        const deleteEntryButton = event.target.closest("[data-delete-layer-entry]");
+        if (deleteEntryButton) {
+          runLayerAction(() => deleteLayerEntry(deleteEntryButton.dataset.deleteLayerEntry));
+          return;
+        }
+        if (event.target === modal) {
+          closeModal();
+        }
+      }
+
+      function handleSubmit(event) {
+        const layerForm = event.target.closest("[data-layer-form]");
+        const entryForm = event.target.closest("[data-layer-entry-form]");
+        if (!layerForm && !entryForm) {
+          return;
+        }
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        const payload = Object.fromEntries(formData.entries());
+        if (layerForm) {
+          runLayerAction(() => saveLayer(layerForm.dataset.layerForm, payload));
+        } else if (entryForm) {
+          runLayerAction(() => saveLayerEntry(entryForm.dataset.layerEntryForm, payload));
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeModal();
+        }
+      }
+
+      addButton.addEventListener("click", handleAddLayer);
+      modal.addEventListener("click", handleClick);
+      modal.addEventListener("submit", handleSubmit);
+      closeButtons.forEach((button) => button.addEventListener("click", closeModal));
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        addButton.removeEventListener("click", handleAddLayer);
+        modal.removeEventListener("click", handleClick);
+        modal.removeEventListener("submit", handleSubmit);
+        closeButtons.forEach((button) => button.removeEventListener("click", closeModal));
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [layers, layerEntries, layersManagerLayerId]);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("layer-assignment-modal");
+      const form = modal?.querySelector("[data-layer-assignment-form]");
+      const closeButtons = modal?.querySelectorAll("[data-close-layer-assignment]");
+      const clearButton = modal?.querySelector("[data-clear-layer-assignment]");
+      if (!modal || !form) {
+        return undefined;
+      }
+
+      if (!modal.hidden) {
+        renderLayerAssignmentDialog();
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+      }
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const checkedEntryIds = [...form.querySelectorAll('input[name="entry"]:checked')]
+          .map((input) => input.value)
+          .filter(Boolean);
+        await saveSelectedLayerAssignments(checkedEntryIds);
+        closeModal();
+      }
+
+      async function handleClear() {
+        await clearSelectedLayerAssignments();
+        closeModal();
+      }
+
+      function handleClick(event) {
+        if (event.target === modal) {
+          closeModal();
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeModal();
+        }
+      }
+
+      form.addEventListener("submit", handleSubmit);
+      clearButton?.addEventListener("click", handleClear);
+      modal.addEventListener("click", handleClick);
+      closeButtons.forEach((button) => button.addEventListener("click", closeModal));
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        form.removeEventListener("submit", handleSubmit);
+        clearButton?.removeEventListener("click", handleClear);
+        modal.removeEventListener("click", handleClick);
+        closeButtons.forEach((button) => button.removeEventListener("click", closeModal));
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [activeLayer, activeLayerEntries, layerAssignments, nodes]);
     return React.createElement(
       "div",
       {
