@@ -9,6 +9,7 @@
 
   const SUPABASE_TIMEOUT_MS = 15000;
   const ELEMENT_EXPORT_FORMAT = "centralis.element-export.v1";
+  const RICH_DETAILS_EXPORT_FORMAT = "centralis.rich-details.v1";
   const DEFAULT_TRANSFER_OPTIONS = {
     connections: true,
     position: true,
@@ -67,6 +68,18 @@
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 64) || "centralis";
+  }
+
+  function downloadJsonFile(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   function normalizeImages(images = []) {
@@ -314,6 +327,7 @@
   };
   let elementTypes = [];
   let elements = [];
+  let elementGroups = [];
   let elementLinks = [];
   let imageRows = [];
   let overlayLayers = [];
@@ -358,9 +372,21 @@
       }
     }
 
+    const groupResponse = await withTimeout(window.centralisSupabase
+      .from("element_groups")
+      .select("*")
+      .eq("universe_id", universeId)
+      .order("created_at", { ascending: true }), "Loading element groups");
+
+    if (!groupResponse.error) {
+      elementGroups = groupResponse.data || [];
+    } else if (groupResponse.error.code !== "42P01") {
+      console.warn("Could not load element groups:", groupResponse.error);
+    }
+
     const elementResponse = await withTimeout(window.centralisSupabase
       .from("elements")
-      .select("id,name,description,position_x,position_y,element_type_id,rich_template_id")
+      .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y")
       .eq("universe_id", universeId)
       .order("created_at", { ascending: true }), "Loading elements");
 
@@ -455,6 +481,11 @@
   const getStraightPath = Flow.getStraightPath;
   const applyNodeChanges = Flow.applyNodeChanges;
   const applyEdgeChanges = Flow.applyEdgeChanges;
+
+  function isFormEditingTarget(target) {
+    const element = target instanceof Element ? target : null;
+    return Boolean(element?.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']"));
+  }
 
   function useNodeMenu(nodeId) {
     const [menuOpen, setMenuOpen] = React.useState(false);
@@ -707,6 +738,85 @@
     );
   }
 
+  function GroupNode(props) {
+    const data = props.data;
+    const collapsed = Boolean(data.collapsed);
+    const backgroundColor = sanitizeColor(data.backgroundColor, "#123034");
+
+    return React.createElement(
+      "section",
+      {
+        className: `group-flow-node${props.selected ? " is-selected" : ""}${collapsed ? " is-collapsed" : ""}${data.isDropTarget ? " is-drop-target" : ""}`,
+        style: {
+          "--group-bg-color": backgroundColor
+        },
+        onDoubleClick: (event) => {
+          event.stopPropagation();
+        }
+      },
+      collapsed && React.createElement(Handle, { className: "node-grab node-grab-right", id: "right", type: "source", position: Position.Right, isConnectable: false }),
+      collapsed && React.createElement(Handle, { className: "node-grab node-grab-left", id: "left", type: "target", position: Position.Left, isConnectable: false }),
+      React.createElement(
+        "div",
+        { className: "group-flow-header" },
+        React.createElement(
+          "div",
+          { className: "group-flow-title" },
+          React.createElement("span", null, "Group"),
+          React.createElement("strong", null, data.name || "Untitled Group"),
+          React.createElement("small", null, `${Number(data.childCount || 0)} ${Number(data.childCount || 0) === 1 ? "element" : "elements"}`)
+        ),
+        React.createElement(
+          "div",
+          { className: "group-flow-actions" },
+          React.createElement(
+            "button",
+            {
+              className: "group-toggle nodrag nopan",
+              type: "button",
+              "aria-label": "Group color",
+              title: "Group color",
+              onClick: (event) => {
+                event.stopPropagation();
+                event.currentTarget.nextElementSibling?.click();
+              }
+            },
+            React.createElement("ph-gear-six", { weight: "bold", "aria-hidden": "true" })
+          ),
+          React.createElement("input", {
+            className: "group-color-input nodrag nopan",
+            type: "color",
+            value: backgroundColor,
+            "aria-label": "Group background color",
+            onClick: (event) => event.stopPropagation(),
+            onChange: (event) => {
+              event.stopPropagation();
+              window.dispatchEvent(new CustomEvent("centralis:update-group-color", {
+                detail: { groupId: data.recordId, color: event.target.value }
+              }));
+            }
+          }),
+          React.createElement(
+            "button",
+            {
+              className: "group-toggle nodrag nopan",
+              type: "button",
+              "aria-label": collapsed ? "Expand group" : "Collapse group",
+              title: collapsed ? "Expand group" : "Collapse group",
+              onClick: (event) => {
+                event.stopPropagation();
+                window.dispatchEvent(new CustomEvent("centralis:toggle-group", {
+                  detail: { groupId: data.recordId, collapsed: !collapsed }
+                }));
+              }
+            },
+            React.createElement(collapsed ? "ph-arrows-out-simple" : "ph-arrows-in-simple", { weight: "bold", "aria-hidden": "true" })
+          )
+        )
+      )
+    );
+  }
+
   function toUniverseNode(row) {
     return {
       id: `universe:${row.id}`,
@@ -727,19 +837,57 @@
     };
   }
 
+  function getGroupChildCount(groupId, rows = elements) {
+    return rows.filter((row) => row.group_id === groupId).length;
+  }
+
+  function toGroupNode(row) {
+    return {
+      id: `group:${row.id}`,
+      type: "groupNode",
+      position: {
+        x: Number(row.position_x ?? 320),
+        y: Number(row.position_y ?? 160)
+      },
+      data: {
+        kind: "group",
+        recordId: row.id,
+        name: row.name || "Untitled Group",
+        description: row.description || "",
+        backgroundColor: sanitizeColor(row.background_color, "#123034"),
+        collapsed: Boolean(row.is_collapsed),
+        childCount: getGroupChildCount(row.id),
+        expandedWidth: Number(row.width || 360),
+        expandedHeight: Number(row.height || 260)
+      },
+      style: {
+        width: row.is_collapsed ? 260 : Number(row.width || 360),
+        height: row.is_collapsed ? 96 : Number(row.height || 260)
+      },
+      zIndex: -1,
+      draggable: true
+    };
+  }
+
   function toElementNode(row) {
     const elementType = elementTypes.find((type) => type.id === row.element_type_id) || null;
+    const group = row.group_id ? elementGroups.find((item) => item.id === row.group_id) : null;
+    const isGrouped = Boolean(group);
 
     return {
       id: `element:${row.id}`,
       type: "element",
       position: {
-        x: Number(row.position_x ?? 460),
-        y: Number(row.position_y ?? 180)
+        x: Number(isGrouped ? row.group_position_x ?? 24 : row.position_x ?? 460),
+        y: Number(isGrouped ? row.group_position_y ?? 72 : row.position_y ?? 180)
       },
+      parentId: isGrouped ? `group:${row.group_id}` : undefined,
+      extent: isGrouped ? "parent" : undefined,
+      expandParent: false,
       data: {
         kind: "element",
         recordId: row.id,
+        groupId: row.group_id || null,
         name: row.name || "Untitled Element",
         description: row.description || "",
         elementType,
@@ -753,11 +901,12 @@
 
   const initialNodes = [
     toUniverseNode(universe),
+    ...elementGroups.map(toGroupNode),
     ...elements.map(toElementNode)
   ];
 
   function toRecordId(nodeId) {
-    return String(nodeId || "").replace(/^(universe|element):/, "");
+    return String(nodeId || "").replace(/^(universe|element|group):/, "");
   }
 
   function toNodeId(recordId) {
@@ -767,6 +916,10 @@
     }
 
     return value === universe.id ? `universe:${value}` : `element:${value}`;
+  }
+
+  function isGroupNodeId(nodeId) {
+    return String(nodeId || "").startsWith("group:");
   }
 
   function toLinkEdge(link) {
@@ -779,6 +932,7 @@
       targetHandle: "left",
       label: link.label || undefined,
       type: "deletable",
+      zIndex: 20,
       data: {
         recordId: link.id,
         format
@@ -792,6 +946,66 @@
   }
 
   const initialEdges = elementLinks.map(toLinkEdge);
+
+  function getCollapsedGroupIds(nodesToCheck) {
+    return new Set(nodesToCheck
+      .filter((node) => node.data?.kind === "group" && node.data?.collapsed)
+      .map((node) => node.id));
+  }
+
+  function getVisibleNodesForGroups(nodesToRender) {
+    const collapsedGroupIds = getCollapsedGroupIds(nodesToRender);
+    return nodesToRender.map((node) => ({
+      ...node,
+      hidden: node.parentId && collapsedGroupIds.has(node.parentId) ? true : node.hidden
+    }));
+  }
+
+  function getVisibleEdgesForGroups(edgesToRender, nodesToRender) {
+    const nodesById = new Map(nodesToRender.map((node) => [node.id, node]));
+    const collapsedGroupIds = getCollapsedGroupIds(nodesToRender);
+    const proxyKeys = new Set();
+    const visibleEdges = [];
+
+    edgesToRender.forEach((edge) => {
+      const sourceNode = nodesById.get(edge.source);
+      const targetNode = nodesById.get(edge.target);
+      const sourceGroupId = sourceNode?.parentId && collapsedGroupIds.has(sourceNode.parentId) ? sourceNode.parentId : null;
+      const targetGroupId = targetNode?.parentId && collapsedGroupIds.has(targetNode.parentId) ? targetNode.parentId : null;
+
+      if (!sourceGroupId && !targetGroupId) {
+        visibleEdges.push(edge);
+        return;
+      }
+
+      if (sourceGroupId && targetGroupId && sourceGroupId === targetGroupId) {
+        return;
+      }
+
+      const proxySource = sourceGroupId || edge.source;
+      const proxyTarget = targetGroupId || edge.target;
+      const proxyKey = `${proxySource}->${proxyTarget}:${edge.id}`;
+      if (proxyKeys.has(proxyKey)) {
+        return;
+      }
+      proxyKeys.add(proxyKey);
+      visibleEdges.push({
+        ...edge,
+        id: `proxy:${edge.id}:${proxySource}:${proxyTarget}`,
+        source: proxySource,
+        target: proxyTarget,
+        sourceHandle: sourceGroupId ? "right" : edge.sourceHandle,
+        targetHandle: targetGroupId ? "left" : edge.targetHandle,
+        data: {
+          ...edge.data,
+          isProxy: true
+        },
+        selectable: false
+      });
+    });
+
+    return visibleEdges;
+  }
 
   function sortLayers(items) {
     return [...(items || [])].sort((a, b) => {
@@ -877,6 +1091,13 @@
       return {
         label: "Universe",
         icon: "globe-hemisphere-west",
+        color: sanitizeColor("#78d5c8")
+      };
+    }
+    if (node?.data?.kind === "group") {
+      return {
+        label: "Group",
+        icon: "selection-plus",
         color: sanitizeColor("#78d5c8")
       };
     }
@@ -1180,6 +1401,42 @@
   function getFieldChoices(field) {
     const options = parseFieldOptions(field.options);
     return Array.isArray(options.choices) ? options.choices.map(String) : [];
+  }
+
+  function normalizeRichDetailsFieldValue(field, value) {
+    const type = getTemplateFieldType(field);
+    if (type === "multi_select") {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item).trim()).filter(Boolean).join("\n");
+      }
+      return String(value ?? "")
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (type === "checkbox") {
+      if (value === true) return "true";
+      if (value === false) return "";
+      const clean = String(value ?? "").trim().toLowerCase();
+      return ["true", "yes", "1", "on"].includes(clean) ? "true" : "";
+    }
+    return String(value ?? "").trim();
+  }
+
+  function getRichDetailsExportValue(field, value, includeValues) {
+    const type = getTemplateFieldType(field);
+    if (!includeValues) {
+      return type === "multi_select" ? [] : "";
+    }
+    const cleanValue = String(value ?? "");
+    if (type === "multi_select") {
+      return cleanValue.split("\n").map((item) => item.trim()).filter(Boolean);
+    }
+    if (type === "checkbox") {
+      return cleanValue === "true";
+    }
+    return cleanValue;
   }
 
   function normalizeFieldKey(value) {
@@ -1548,7 +1805,7 @@
           </div>
         </dl>
       </section>
-      ${renderCollapsibleDetailsSection("linked-nodes", "Linked Nodes", `
+      ${renderCollapsibleDetailsSection("linked-nodes", "Linked Elements", `
         <div class="linked-node-list">
           ${renderLinkedNodeCards(linkedNodes)}
         </div>
@@ -1608,10 +1865,23 @@
     if (node.data.kind === "universe") {
       payload.canvas_position_x = Number(node.position.x);
       payload.canvas_position_y = Number(node.position.y);
-    } else {
-      tableName = "elements";
+    } else if (node.data.kind === "group") {
+      tableName = "element_groups";
       payload.position_x = Number(node.position.x);
       payload.position_y = Number(node.position.y);
+      if (node.style?.width && node.style?.height && !node.data?.collapsed) {
+        payload.width = Number(node.style.width);
+        payload.height = Number(node.style.height);
+      }
+    } else {
+      tableName = "elements";
+      if (node.data.groupId) {
+        payload.group_position_x = Number(node.position.x);
+        payload.group_position_y = Number(node.position.y);
+      } else {
+        payload.position_x = Number(node.position.x);
+        payload.position_y = Number(node.position.y);
+      }
     }
 
     const { error } = await window.centralisSupabase
@@ -1626,9 +1896,15 @@
 
   function estimateNodeSize(node, format = DEFAULT_UNIVERSE_FORMAT) {
     const hasTopImage = format.nodeImagePlacement === "top" && Boolean(node.data?.images?.length);
-    const measuredWidth = node.measured?.width || node.width;
-    const measuredHeight = node.measured?.height || node.height;
-    const width = Number(measuredWidth || (node.data?.kind === "universe" ? 280 : 236));
+    if (node.data?.kind === "group" && node.style?.width && node.style?.height) {
+      return {
+        width: Number(node.style.width),
+        height: Number(node.style.height)
+      };
+    }
+    const measuredWidth = node.measured?.width || node.width || node.style?.width;
+    const measuredHeight = node.measured?.height || node.height || node.style?.height;
+    const width = Number(measuredWidth || (node.data?.kind === "universe" ? 280 : node.data?.kind === "group" ? 360 : 236));
     if (measuredHeight) {
       return { width, height: Number(measuredHeight) };
     }
@@ -1643,12 +1919,203 @@
     };
   }
 
-  function createColumnAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
+  function getAbsoluteNodePosition(node, nodesById) {
+    const position = {
+      x: Number(node?.position?.x || 0),
+      y: Number(node?.position?.y || 0)
+    };
+    const parent = node?.parentId ? nodesById.get(node.parentId) : null;
+    if (!parent) {
+      return position;
+    }
+    return {
+      x: Number(parent.position?.x || 0) + position.x,
+      y: Number(parent.position?.y || 0) + position.y
+    };
+  }
+
+  function getLayoutNodes(currentNodes) {
+    return currentNodes.filter((node) => node.data?.kind === "group" || !node.parentId);
+  }
+
+  function getLayoutOwnerId(nodeId, nodesById, layoutNodeIds) {
+    const node = nodesById.get(nodeId);
+    if (!node) {
+      return null;
+    }
+    if (layoutNodeIds.has(node.id)) {
+      return node.id;
+    }
+    if (node.parentId && layoutNodeIds.has(node.parentId)) {
+      return node.parentId;
+    }
+    return null;
+  }
+
+  function getLayoutEdges(currentNodes, currentEdges) {
     const nodesById = new Map(currentNodes.map((node) => [node.id, node]));
-    const childrenById = new Map(currentNodes.map((node) => [node.id, []]));
-    const indegreeById = new Map(currentNodes.map((node) => [node.id, 0]));
+    const layoutNodeIds = new Set(getLayoutNodes(currentNodes).map((node) => node.id));
+    const seenEdges = new Set();
+    const layoutEdges = [];
 
     currentEdges.forEach((edge) => {
+      if (!nodesById.has(edge.source) || !nodesById.has(edge.target)) {
+        return;
+      }
+
+      const source = getLayoutOwnerId(edge.source, nodesById, layoutNodeIds);
+      const target = getLayoutOwnerId(edge.target, nodesById, layoutNodeIds);
+      if (!source || !target || source === target) {
+        return;
+      }
+
+      const key = `${source}->${target}`;
+      if (seenEdges.has(key)) {
+        return;
+      }
+      seenEdges.add(key);
+      layoutEdges.push({
+        id: `layout:${edge.id}:${source}:${target}`,
+        source,
+        target
+      });
+    });
+
+    return layoutEdges;
+  }
+
+  function getLayoutPosition(node, nodesById) {
+    return getAbsoluteNodePosition(node, nodesById);
+  }
+
+  function getGroupLayoutBounds(groupNode, childNodes, positionsById, nodesById, format = DEFAULT_UNIVERSE_FORMAT) {
+    const padding = 44;
+    const headerOffset = 28;
+    if (!childNodes.length) {
+      return {
+        x: Number(groupNode.position?.x || 0),
+        y: Number(groupNode.position?.y || 0),
+        width: Number(groupNode.style?.width || 360),
+        height: Number(groupNode.style?.height || 260)
+      };
+    }
+
+    const childRects = childNodes.map((node) => {
+      const position = positionsById.get(node.id) || getAbsoluteNodePosition(node, nodesById);
+      const size = estimateNodeSize(node, format);
+      return {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height
+      };
+    });
+    const minX = Math.min(...childRects.map((rect) => rect.x));
+    const minY = Math.min(...childRects.map((rect) => rect.y));
+    const maxX = Math.max(...childRects.map((rect) => rect.x + rect.width));
+    const maxY = Math.max(...childRects.map((rect) => rect.y + rect.height));
+
+    return {
+      x: Math.round(minX - padding),
+      y: Math.round(minY - padding - headerOffset),
+      width: Math.max(280, Math.round(maxX - minX + padding * 2)),
+      height: Math.max(190, Math.round(maxY - minY + padding * 2 + headerOffset))
+    };
+  }
+
+  function getTopLevelLayoutRect(node, format = DEFAULT_UNIVERSE_FORMAT) {
+    const size = estimateNodeSize(node, format);
+    return {
+      id: node.id,
+      x: Number(node.position?.x || 0),
+      y: Number(node.position?.y || 0),
+      width: size.width,
+      height: size.height
+    };
+  }
+
+  function rectsOverlap(left, right, margin = 0) {
+    return (
+      left.x < right.x + right.width + margin &&
+      left.x + left.width + margin > right.x &&
+      left.y < right.y + right.height + margin &&
+      left.y + left.height + margin > right.y
+    );
+  }
+
+  function resolveTopLevelLayoutCollisions(nodesToResolve, format = DEFAULT_UNIVERSE_FORMAT) {
+    const spacingUnit = Number(format.nodeLayoutGap || 12);
+    const margin = Math.max(36, spacingUnit * 3);
+    const nextNodes = nodesToResolve.map((node) => ({ ...node }));
+
+    for (let pass = 0; pass < 4; pass += 1) {
+      const topLevelRects = nextNodes
+        .filter((node) => !node.parentId)
+        .map((node) => getTopLevelLayoutRect(node, format))
+        .sort((left, right) => left.y - right.y || left.x - right.x);
+      let movedAny = false;
+
+      for (let index = 0; index < topLevelRects.length; index += 1) {
+        const current = topLevelRects[index];
+        for (let compareIndex = 0; compareIndex < index; compareIndex += 1) {
+          const previous = topLevelRects[compareIndex];
+          if (!rectsOverlap(previous, current, margin)) {
+            continue;
+          }
+
+          const shiftY = Math.ceil(previous.y + previous.height + margin - current.y);
+          if (shiftY <= 0) {
+            continue;
+          }
+
+          const nodeIndex = nextNodes.findIndex((node) => node.id === current.id);
+          if (nodeIndex === -1) {
+            continue;
+          }
+          nextNodes[nodeIndex] = {
+            ...nextNodes[nodeIndex],
+            position: {
+              x: Number(nextNodes[nodeIndex].position?.x || 0),
+              y: Number(nextNodes[nodeIndex].position?.y || 0) + shiftY
+            }
+          };
+          current.y += shiftY;
+          movedAny = true;
+        }
+      }
+
+      if (!movedAny) {
+        break;
+      }
+    }
+
+    return nextNodes;
+  }
+
+  function applyLayoutPositions(currentNodes, positionsById, format = DEFAULT_UNIVERSE_FORMAT) {
+    const nextNodes = currentNodes.map((node) => {
+      if (node.parentId) {
+        return node;
+      }
+
+      return {
+        ...node,
+        position: positionsById.get(node.id) || node.position
+      };
+    });
+
+    return resolveTopLevelLayoutCollisions(nextNodes, format);
+  }
+
+  function createColumnAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
+    const layoutNodes = getLayoutNodes(currentNodes);
+    const layoutEdges = getLayoutEdges(currentNodes, currentEdges);
+    const nodesById = new Map(layoutNodes.map((node) => [node.id, node]));
+    const allNodesById = new Map(currentNodes.map((node) => [node.id, node]));
+    const childrenById = new Map(layoutNodes.map((node) => [node.id, []]));
+    const indegreeById = new Map(layoutNodes.map((node) => [node.id, 0]));
+
+    layoutEdges.forEach((edge) => {
       if (!nodesById.has(edge.source) || !nodesById.has(edge.target)) {
         return;
       }
@@ -1664,10 +2131,10 @@
       });
     });
 
-    const universeRoot = currentNodes.find((node) => node.data?.kind === "universe");
+    const universeRoot = layoutNodes.find((node) => node.data?.kind === "universe");
     const roots = [
       universeRoot,
-      ...currentNodes.filter((node) => node.id !== universeRoot?.id && !indegreeById.get(node.id))
+      ...layoutNodes.filter((node) => node.id !== universeRoot?.id && !indegreeById.get(node.id))
     ].filter(Boolean);
     const levelsById = new Map();
 
@@ -1685,20 +2152,20 @@
     }
 
     roots.forEach((root) => visit(root.id, 0));
-    currentNodes.forEach((node) => {
+    layoutNodes.forEach((node) => {
       if (!levelsById.has(node.id)) {
         levelsById.set(node.id, 0);
       }
     });
 
-    const minX = Math.min(...currentNodes.map((node) => Number(node.position?.x || 0)));
-    const minY = Math.min(...currentNodes.map((node) => Number(node.position?.y || 0)));
+    const minX = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).x || 0)));
+    const minY = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).y || 0)));
     const spacingUnit = Number(format.nodeLayoutGap || 12);
     const columnGap = Math.max(330, 286 + spacingUnit * 7);
     const rowGap = Math.max(58, 42 + spacingUnit * 3);
     const groups = new Map();
 
-    currentNodes.forEach((node) => {
+    layoutNodes.forEach((node) => {
       const level = levelsById.get(node.id) || 0;
       if (!groups.has(level)) {
         groups.set(level, []);
@@ -1713,7 +2180,7 @@
         const sortedNodes = [...levelNodes].sort((left, right) => {
           if (left.data?.kind === "universe") return -1;
           if (right.data?.kind === "universe") return 1;
-          return Number(left.position?.y || 0) - Number(right.position?.y || 0);
+          return Number(getLayoutPosition(left, allNodesById).y || 0) - Number(getLayoutPosition(right, allNodesById).y || 0);
         });
         let yCursor = minY;
         sortedNodes.forEach((node) => {
@@ -1726,10 +2193,7 @@
         });
       });
 
-    return currentNodes.map((node) => ({
-      ...node,
-      position: positionsById.get(node.id) || node.position
-    }));
+    return applyLayoutPositions(currentNodes, positionsById, format);
   }
 
   async function createAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
@@ -1738,10 +2202,13 @@
       return createColumnAutoLayout(currentNodes, currentEdges, format);
     }
 
-    const minX = Math.min(...currentNodes.map((node) => Number(node.position?.x || 0)));
-    const minY = Math.min(...currentNodes.map((node) => Number(node.position?.y || 0)));
+    const layoutNodes = getLayoutNodes(currentNodes);
+    const layoutEdges = getLayoutEdges(currentNodes, currentEdges);
+    const allNodesById = new Map(currentNodes.map((node) => [node.id, node]));
+    const minX = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).x || 0)));
+    const minY = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).y || 0)));
     const spacingUnit = Number(format.nodeLayoutGap || 12);
-    const nodeSizes = new Map(currentNodes.map((node) => [node.id, estimateNodeSize(node, format)]));
+    const nodeSizes = new Map(layoutNodes.map((node) => [node.id, estimateNodeSize(node, format)]));
     const graph = {
       id: "centralis-universe-layout",
       layoutOptions: {
@@ -1754,7 +2221,7 @@
         "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
         "elk.hierarchyHandling": "INCLUDE_CHILDREN"
       },
-      children: currentNodes.map((node) => {
+      children: layoutNodes.map((node) => {
         const size = nodeSizes.get(node.id);
         return {
           id: node.id,
@@ -1762,7 +2229,7 @@
           height: size.height
         };
       }),
-      edges: currentEdges
+      edges: layoutEdges
         .filter((edge) => nodeSizes.has(edge.source) && nodeSizes.has(edge.target))
         .map((edge) => ({
           id: edge.id,
@@ -1781,10 +2248,7 @@
         }
       ]));
 
-      return currentNodes.map((node) => ({
-        ...node,
-        position: positionsById.get(node.id) || node.position
-      }));
+      return applyLayoutPositions(currentNodes, positionsById, format);
     } catch (error) {
       console.error("ELK auto-layout failed, using fallback layout:", error);
       return createColumnAutoLayout(currentNodes, currentEdges, format);
@@ -1793,6 +2257,27 @@
 
   async function saveNodePositions(nodesToSave) {
     await Promise.all(nodesToSave.map((node) => saveNodePosition(null, node)));
+  }
+
+  async function saveGroupSizes(groupsToSave) {
+    if (!window.centralisSupabase) {
+      return;
+    }
+    await Promise.all(groupsToSave.map((node) => {
+      const width = Number(node.measured?.width || node.width || node.style?.width);
+      const height = Number(node.measured?.height || node.height || node.style?.height);
+      if (!node.data?.recordId || !width || !height) {
+        return Promise.resolve();
+      }
+      return window.centralisSupabase
+        .from("element_groups")
+        .update({
+          width,
+          height,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", node.data.recordId);
+    }));
   }
 
   function throwFirstSupabaseError(responses) {
@@ -2323,22 +2808,32 @@
     const [elementTypeVersion, setElementTypeVersion] = React.useState(0);
     const [pendingLink, setPendingLink] = React.useState(null);
     const [pendingDeleteElement, setPendingDeleteElement] = React.useState(null);
+    const [canUndo, setCanUndo] = React.useState(false);
+    const [canRedo, setCanRedo] = React.useState(false);
     const [detailsNodeId, setDetailsNodeId] = React.useState(null);
     const [detailsMode, setDetailsMode] = React.useState("view");
     const [pendingImageGeneration, setPendingImageGeneration] = React.useState(null);
     const [richDetailsNodeId, setRichDetailsNodeId] = React.useState(null);
     const [richDetailsData, setRichDetailsData] = React.useState(null);
     const [richDetailsMode, setRichDetailsMode] = React.useState("view");
+    const [contextMenu, setContextMenu] = React.useState(null);
+    const [dropTargetGroupId, setDropTargetGroupId] = React.useState("");
+    const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
     const nodesRef = React.useRef(nodes);
     const edgesRef = React.useRef(edges);
+    const undoStackRef = React.useRef([]);
+    const redoStackRef = React.useRef([]);
+    const dragHistoryNodeIdRef = React.useRef("");
+    const transferStatusTimerRef = React.useRef(0);
     const universeFormatRef = React.useRef(universeFormat);
     const layersRef = React.useRef(layers);
     const layerEntriesRef = React.useRef(layerEntries);
     const layerAssignmentsRef = React.useRef(layerAssignments);
     const activeLayerIdRef = React.useRef(activeLayerId);
-    const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode }), []);
+    const dropTargetGroupIdRef = React.useRef("");
+    const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode, groupNode: GroupNode }), []);
     const activeLayer = React.useMemo(() => layers.find((layer) => layer.id === activeLayerId) || null, [layers, activeLayerId]);
     const activeLayerEntries = React.useMemo(() => getEntriesForLayer(activeLayerId, layerEntries), [activeLayerId, layerEntries]);
     const visibleLayerId = layerModeActive ? activeLayerId : "";
@@ -2372,6 +2867,174 @@
     }, [activeLayerId]);
 
     React.useEffect(() => {
+      dropTargetGroupIdRef.current = dropTargetGroupId;
+    }, [dropTargetGroupId]);
+
+    function cloneCanvasSnapshot(snapshotNodes = nodesRef.current, snapshotEdges = edgesRef.current) {
+      return {
+        nodes: snapshotNodes.map((node) => ({
+          ...node,
+          position: { ...(node.position || {}) },
+          data: { ...(node.data || {}) },
+          style: node.style ? { ...node.style } : node.style
+        })),
+        edges: snapshotEdges.map((edge) => ({
+          ...edge,
+          data: edge.data ? { ...edge.data } : edge.data,
+          style: edge.style ? { ...edge.style } : edge.style
+        }))
+      };
+    }
+
+    function syncHistoryControls() {
+      const undoButton = document.querySelector("[data-undo-canvas]");
+      const redoButton = document.querySelector("[data-redo-canvas]");
+      const nextCanUndo = undoStackRef.current.length > 0;
+      const nextCanRedo = redoStackRef.current.length > 0;
+      if (undoButton) {
+        undoButton.disabled = !nextCanUndo;
+      }
+      if (redoButton) {
+        redoButton.disabled = !nextCanRedo;
+      }
+      setCanUndo(nextCanUndo);
+      setCanRedo(nextCanRedo);
+      setHistoryVersion((version) => version + 1);
+    }
+
+    function pushCanvasHistory() {
+      undoStackRef.current = [
+        ...undoStackRef.current.slice(-49),
+        cloneCanvasSnapshot()
+      ];
+      redoStackRef.current = [];
+      syncHistoryControls();
+    }
+
+    async function persistCanvasSnapshot(snapshot, previousSnapshot = cloneCanvasSnapshot()) {
+      const snapshotNodeIds = new Set(snapshot.nodes.map((node) => node.id));
+      const removedElementIds = previousSnapshot.nodes
+        .filter((node) => node.data?.kind === "element" && !snapshotNodeIds.has(node.id))
+        .map((node) => node.data.recordId)
+        .filter(Boolean);
+      const removedGroupIds = previousSnapshot.nodes
+        .filter((node) => node.data?.kind === "group" && !snapshotNodeIds.has(node.id))
+        .map((node) => node.data.recordId)
+        .filter(Boolean);
+      const groupUpserts = snapshot.nodes
+        .filter((node) => node.data?.kind === "group" && node.data?.recordId)
+        .map((node) => ({
+          id: node.data.recordId,
+          universe_id: universe.id,
+          name: node.data.name || "Untitled Group",
+          description: node.data.description || null,
+          position_x: Number(node.position?.x || 0),
+          position_y: Number(node.position?.y || 0),
+          width: Number(node.data?.collapsed ? node.data?.expandedWidth || node.style?.width || 360 : node.style?.width || 360),
+          height: Number(node.data?.collapsed ? node.data?.expandedHeight || node.style?.height || 260 : node.style?.height || 260),
+          is_collapsed: Boolean(node.data?.collapsed),
+          background_color: sanitizeColor(node.data?.backgroundColor, "#123034"),
+          updated_at: new Date().toISOString()
+        }));
+      const elementUpserts = snapshot.nodes
+        .filter((node) => node.data?.kind === "element" && node.data?.recordId)
+        .map((node) => {
+          const groupId = node.data?.groupId || null;
+          const groupNode = groupId ? snapshot.nodes.find((item) => item.id === `group:${groupId}`) : null;
+          const absoluteX = groupId ? Number(groupNode?.position?.x || 0) + Number(node.position?.x || 0) : Number(node.position?.x || 0);
+          const absoluteY = groupId ? Number(groupNode?.position?.y || 0) + Number(node.position?.y || 0) : Number(node.position?.y || 0);
+          return {
+            id: node.data.recordId,
+            universe_id: universe.id,
+            name: node.data.name || "Untitled Element",
+            description: node.data.description || null,
+            position_x: Math.round(absoluteX),
+            position_y: Math.round(absoluteY),
+            element_type_id: node.data.elementType?.id || null,
+            rich_template_id: node.data.richTemplateId || null,
+            group_id: groupId,
+            group_position_x: groupId ? Math.round(Number(node.position?.x || 0)) : null,
+            group_position_y: groupId ? Math.round(Number(node.position?.y || 0)) : null,
+            updated_at: new Date().toISOString()
+          };
+        });
+      const nextEdgeIds = new Set(snapshot.edges
+        .filter((edge) => edge.data?.recordId && !String(edge.id).startsWith("proxy:"))
+        .map((edge) => edge.data.recordId));
+      const removedEdgeIds = previousSnapshot.edges
+        .filter((edge) => edge.data?.recordId && !String(edge.id).startsWith("proxy:") && !nextEdgeIds.has(edge.data.recordId))
+        .map((edge) => edge.data.recordId);
+      if (removedEdgeIds.length) {
+        await window.centralisSupabase.from("element_links").delete().in("id", removedEdgeIds);
+      }
+      if (removedElementIds.length) {
+        await window.centralisSupabase.from("elements").delete().in("id", removedElementIds);
+      }
+      if (removedGroupIds.length) {
+        await window.centralisSupabase.from("element_groups").delete().in("id", removedGroupIds);
+      }
+      if (groupUpserts.length) {
+        await window.centralisSupabase.from("element_groups").upsert(groupUpserts);
+      }
+      if (elementUpserts.length) {
+        await window.centralisSupabase.from("elements").upsert(elementUpserts);
+      }
+      await saveNodePositions(snapshot.nodes.filter((node) => node.data?.kind === "universe" && node.data?.recordId));
+      await Promise.all(snapshot.edges.map((edge) => {
+        if (!edge.data?.recordId || String(edge.id).startsWith("proxy:")) {
+          return Promise.resolve();
+        }
+        return window.centralisSupabase
+          .from("element_links")
+          .upsert({
+            id: edge.data.recordId,
+            universe_id: universe.id,
+            source_element_id: toRecordId(edge.source),
+            target_element_id: toRecordId(edge.target),
+            label: edge.label || null,
+            updated_at: new Date().toISOString()
+          });
+      }));
+    }
+
+    async function restoreCanvasSnapshot(snapshot, targetStackRef, sourceStackRef) {
+      if (!snapshot) {
+        return;
+      }
+      const previousSnapshot = cloneCanvasSnapshot();
+      targetStackRef.current = [
+        ...targetStackRef.current.slice(-49),
+        previousSnapshot
+      ];
+      const restored = cloneCanvasSnapshot(snapshot);
+      setNodes(restored.nodes);
+      setEdges(restored.edges);
+      nodesRef.current = restored.nodes;
+      edgesRef.current = restored.edges;
+      sourceStackRef.current = sourceStackRef.current.slice(0, -1);
+      syncHistoryControls();
+      await persistCanvasSnapshot(restored, previousSnapshot);
+    }
+
+    async function undoCanvas() {
+      if (!undoStackRef.current.length) {
+        syncHistoryControls();
+        return;
+      }
+      const snapshot = undoStackRef.current[undoStackRef.current.length - 1];
+      await restoreCanvasSnapshot(snapshot, redoStackRef, undoStackRef);
+    }
+
+    async function redoCanvas() {
+      if (!redoStackRef.current.length) {
+        syncHistoryControls();
+        return;
+      }
+      const snapshot = redoStackRef.current[redoStackRef.current.length - 1];
+      await restoreCanvasSnapshot(snapshot, undoStackRef, redoStackRef);
+    }
+
+    React.useEffect(() => {
       setNodes((currentNodes) => applyLayerOverlayToNodes(currentNodes, visibleLayerId, layerEntries, layerAssignments));
     }, [visibleLayerId, layerEntries, layerAssignments]);
 
@@ -2394,9 +3057,71 @@
       populateElementTypeSelect();
     }, []);
 
+    function getElementContainerKey(node) {
+      if (node?.data?.kind !== "element") {
+        return "";
+      }
+      return node.data.groupId || node.parentId || "ungrouped";
+    }
+
+    function normalizeElementSelection(nextNodes, changes = []) {
+      const selectedElements = nextNodes.filter((node) => node.selected && node.data?.kind === "element");
+      const selectedNodes = nextNodes.filter((node) => node.selected);
+      if (!selectedElements.length || selectedNodes.length <= 1) {
+        return nextNodes;
+      }
+
+      const latestSelectedChange = [...changes]
+        .reverse()
+        .find((change) => change.type === "select" && change.selected);
+      const anchorNode = latestSelectedChange
+        ? nextNodes.find((node) => node.id === latestSelectedChange.id)
+        : selectedElements[selectedElements.length - 1];
+      const anchorContainer = anchorNode?.data?.kind === "element"
+        ? getElementContainerKey(anchorNode)
+        : getElementContainerKey(selectedElements[selectedElements.length - 1]);
+
+      return nextNodes.map((node) => {
+        if (!node.selected) {
+          return node;
+        }
+        if (node.data?.kind === "universe") {
+          return {
+            ...node,
+            selected: anchorContainer === "ungrouped"
+          };
+        }
+        if (node.data?.kind !== "element") {
+          return { ...node, selected: false };
+        }
+        return {
+          ...node,
+          selected: getElementContainerKey(node) === anchorContainer
+        };
+      });
+    }
+
     const handleNodesChange = React.useCallback((changes) => {
       setNodes((currentNodes) => {
-        const nextNodes = applyNodeChanges(changes, currentNodes);
+        const removedElementNodes = changes
+          .filter((change) => change.type === "remove")
+          .map((change) => currentNodes.find((node) => node.id === change.id))
+          .filter((node) => node?.data?.kind === "element" && node.data?.recordId);
+        if (removedElementNodes.length) {
+          pushCanvasHistory();
+          const removedRecordIds = removedElementNodes.map((node) => node.data.recordId);
+          deleteElementRecords(removedRecordIds)
+            .then(() => {
+              setLayerAssignments((currentAssignments) => currentAssignments.filter((assignment) => !removedRecordIds.includes(assignment.element_id)));
+              setTransferStatus(`Deleted ${removedElementNodes.length} ${removedElementNodes.length === 1 ? "element" : "elements"}.`, "success");
+            })
+            .catch((error) => {
+              console.error("Could not delete removed nodes:", error);
+              setTransferStatus(`Could not delete removed nodes: ${getReadableError(error)}`, "error");
+            });
+        }
+
+        const nextNodes = normalizeElementSelection(applyNodeChanges(changes, currentNodes), changes);
         const finishedPositionIds = new Set(changes
           .filter((change) => change.type === "position" && change.dragging === false)
           .map((change) => change.id));
@@ -2408,6 +3133,14 @@
 
         return nextNodes;
       });
+    }, []);
+
+    const handleNodeDragStart = React.useCallback((_event, node) => {
+      if (dragHistoryNodeIdRef.current === node.id) {
+        return;
+      }
+      dragHistoryNodeIdRef.current = node.id;
+      pushCanvasHistory();
     }, []);
 
     const applyUniverseFormat = React.useCallback((format) => {
@@ -2435,6 +3168,7 @@
     }, []);
 
     const deleteEdge = React.useCallback(async (edgeId) => {
+      pushCanvasHistory();
       setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
 
       const { error } = await window.centralisSupabase
@@ -2446,6 +3180,56 @@
         console.error("Could not delete element link:", error);
       }
     }, []);
+
+    async function deleteElementRecords(recordIds) {
+      const ids = [...new Set((recordIds || []).filter(Boolean))];
+      if (!ids.length) {
+        return { deletedIds: [] };
+      }
+
+      const requiredResponses = await Promise.all([
+        window.centralisSupabase.from("element_links").delete().in("source_element_id", ids),
+        window.centralisSupabase.from("element_links").delete().in("target_element_id", ids)
+      ]);
+      throwFirstSupabaseError(requiredResponses);
+
+      const optionalResponses = await Promise.allSettled([
+        window.centralisSupabase.from("element_layer_assignments").delete().in("element_id", ids),
+        window.centralisSupabase.from("element_template_field_values").delete().in("element_id", ids),
+        window.centralisSupabase.from("element_custom_fields").delete().in("element_id", ids),
+        window.centralisSupabase.from("image_table").delete().in("object_id", ids)
+      ]);
+      optionalResponses.forEach((result) => {
+        const error = result.value?.error || result.reason;
+        if (error) {
+          console.warn("Optional element cleanup failed:", error);
+        }
+      });
+
+      const { error } = await window.centralisSupabase
+        .from("elements")
+        .delete()
+        .in("id", ids);
+
+      if (error) {
+        throw error;
+      }
+
+      const verifyResponse = await window.centralisSupabase
+        .from("elements")
+        .select("id")
+        .in("id", ids);
+      if (verifyResponse.error) {
+        throw verifyResponse.error;
+      }
+
+      const remainingIds = (verifyResponse.data || []).map((row) => row.id);
+      if (remainingIds.length) {
+        throw new Error(`Element delete was blocked for ${remainingIds.length} row${remainingIds.length === 1 ? "" : "s"}: ${remainingIds.join(", ")}`);
+      }
+
+      return { deletedIds: ids };
+    }
     const getFormattedEdgePath = React.useCallback((props) => {
       const pathType = props.data?.format?.pathType || DEFAULT_UNIVERSE_FORMAT.pathType;
       const pathInput = {
@@ -2556,6 +3340,7 @@
 
     const runAutoLayout = React.useCallback(async (options = {}) => {
       const { fit = true, sourceNodes = nodesRef.current, persist = true } = options;
+      pushCanvasHistory();
       const nextNodes = await createAutoLayout(sourceNodes, edgesRef.current, universeFormatRef.current);
       setNodes(nextNodes);
       nodesRef.current = nextNodes;
@@ -3693,10 +4478,40 @@
               .eq("user_id", universe.user_id);
             if (error) throw error;
           } else {
-            const { error } = await window.centralisSupabase
+            const { data: createdType, error } = await window.centralisSupabase
               .from("element_types")
-              .insert({ user_id: universe.user_id, name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) });
+              .insert({ user_id: universe.user_id, name, icon: selectedIcon || DEFAULT_ELEMENT_TYPE_ICON, color: sanitizeColor(selectedColor, DEFAULT_ELEMENT_TYPE_COLOR) })
+              .select("id")
+              .single();
             if (error) throw error;
+            const { data: createdTemplate, error: templateError } = await window.centralisSupabase
+              .from("element_type_templates")
+              .insert({
+                element_type_id: createdType.id,
+                name: `${name} Template`,
+                description: null,
+                is_default: false,
+                source_default_template_id: null
+              })
+              .select("id")
+              .single();
+            if (templateError) {
+              throw new Error(`Type was created, but its starter template could not be created. ${getReadableError(templateError)}`);
+            }
+            const { error: sectionError } = await window.centralisSupabase
+              .from("element_template_sections")
+              .insert({
+                template_id: createdTemplate.id,
+                name: "Overview",
+                description: null,
+                sort_order: 10,
+                is_default: false,
+                is_hidden: false,
+                source_default_section_id: null
+              });
+            if (sectionError) {
+              throw new Error(`Type was created, but its starter template could not be created. ${getReadableError(sectionError)}`);
+            }
           }
           const completedMode = activeEditor.mode;
           syncElementTypes(await fetchElementTypes());
@@ -4261,21 +5076,35 @@
       const saveButton = document.querySelector("[data-rich-details-save]");
       const editButton = document.querySelector("[data-rich-details-edit]");
       const cancelButton = document.querySelector("[data-rich-details-cancel]");
-      const closeActionButton = document.querySelector("[data-rich-details-close-action]");
       const closeButtons = document.querySelectorAll("[data-rich-details-close]");
+      const transferWrap = document.querySelector(".rich-details-transfer-menu");
+      const transferTrigger = document.querySelector("[data-rich-details-transfer-trigger]");
+      const transferMenu = document.querySelector("[data-rich-details-transfer-menu]");
       if (!modal || !body) {
         return undefined;
       }
 
+      let importInput = document.querySelector("[data-rich-details-import-file]");
+      if (!importInput) {
+        importInput = document.createElement("input");
+        importInput.type = "file";
+        importInput.accept = "application/json,.json";
+        importInput.hidden = true;
+        importInput.dataset.richDetailsImportFile = "";
+        document.body.appendChild(importInput);
+      }
+
       const node = nodes.find((currentNode) => currentNode.id === richDetailsNodeId);
+      let richStatusTimeoutId = 0;
       function closeRichDetails() {
         modal.hidden = true;
         setRichDetailsNodeId(null);
         setRichDetailsData(null);
         setRichDetailsMode("view");
+        window.clearTimeout(richStatusTimeoutId);
         if (status) {
           status.textContent = "";
-          status.classList.remove("is-error", "is-success");
+          status.classList.remove("is-error", "is-success", "is-visible");
         }
       }
 
@@ -4283,9 +5112,17 @@
         if (!status) {
           return;
         }
-        status.textContent = message;
+        window.clearTimeout(richStatusTimeoutId);
+        status.textContent = message || "";
         status.classList.toggle("is-error", tone === "error");
         status.classList.toggle("is-success", tone === "success");
+        status.classList.toggle("is-visible", Boolean(message));
+        if (message && tone) {
+          richStatusTimeoutId = window.setTimeout(() => {
+            status.textContent = "";
+            status.classList.remove("is-error", "is-success", "is-visible");
+          }, tone === "error" ? 5200 : 3200);
+        }
       }
 
       function addCustomFieldRow() {
@@ -4304,12 +5141,12 @@
 
         const meta = getNodeTypeMeta(node);
         modal.hidden = false;
-        if (title) title.textContent = node.data?.name || "Rich Details";
-        if (kind) kind.textContent = `Rich ${meta.label}`;
+        if (title) title.textContent = `Rich Details for ${node.data?.name || "Untitled Node"}`;
+        if (kind) kind.textContent = meta.label;
         if (editButton) editButton.hidden = richDetailsMode === "edit";
         if (cancelButton) cancelButton.hidden = richDetailsMode !== "edit";
         if (saveButton) saveButton.hidden = richDetailsMode !== "edit";
-        if (closeActionButton) closeActionButton.hidden = richDetailsMode === "edit";
+        if (transferWrap) transferWrap.hidden = richDetailsMode === "edit";
         if (richDetailsData?.loading) {
           body.innerHTML = '<p class="details-empty">Loading rich details...</p>';
           return;
@@ -4360,9 +5197,13 @@
             <section class="rich-details-section">
               <h3>Element Type</h3>
               ${createDetailsTypePickerMarkup(node.data?.elementType?.id || "")}
+              <div class="rich-template-name-row">
+                <span>Element Template</span>
+                <strong>${escapeHtml(richDetailsData?.template?.name || "No template selected")}</strong>
+              </div>
             </section>
             <section class="rich-details-section">
-              <h3>Linked Nodes</h3>
+              <h3>Linked Elements</h3>
               <div class="linked-node-list">
                 ${renderLinkedNodeCards(linkedNodes)}
               </div>
@@ -4399,15 +5240,21 @@
             </section>
             <section class="rich-details-section">
               <h3>Element Type</h3>
-              <span class="details-type-badge" style="--detail-color: ${escapeHtml(meta.color)}">
-                <span class="details-type-icon" aria-hidden="true">
-                  <ph-${escapeHtml(meta.icon)} weight="duotone"></ph-${escapeHtml(meta.icon)}>
+              <div class="rich-type-template-stack">
+                <span class="details-type-badge" style="--detail-color: ${escapeHtml(meta.color)}">
+                  <span class="details-type-icon" aria-hidden="true">
+                    <ph-${escapeHtml(meta.icon)} weight="duotone"></ph-${escapeHtml(meta.icon)}>
+                  </span>
+                  ${escapeHtml(meta.label)}
                 </span>
-                ${escapeHtml(meta.label)}
-              </span>
+                <div class="rich-template-name-row">
+                  <span>Element Template</span>
+                  <strong>${escapeHtml(richDetailsData?.template?.name || "No template selected")}</strong>
+                </div>
+              </div>
             </section>
             <section class="rich-details-section">
-              <h3>Linked Nodes</h3>
+              <h3>Linked Elements</h3>
               <div class="linked-node-list">
                 ${renderLinkedNodeCards(linkedNodes)}
               </div>
@@ -4462,8 +5309,215 @@
         }
       }
 
+      function closeRichTransferMenu() {
+        if (!transferMenu || !transferTrigger) return;
+        transferMenu.hidden = true;
+        transferTrigger.setAttribute("aria-expanded", "false");
+      }
+
+      function toggleRichTransferMenu(event) {
+        event.stopPropagation();
+        if (!transferMenu || !transferTrigger) return;
+        const willOpen = transferMenu.hidden;
+        transferMenu.hidden = !willOpen;
+        transferTrigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      }
+
+      function getOrderedRichTemplateFields() {
+        return buildRichTemplateSectionModels(richDetailsData.sections || [], richDetailsData.fields || [])
+          .flatMap((section) => section.fields.map((field) => ({ section, field })));
+      }
+
+      function buildRichDetailsSimpleExportPayload() {
+        if (!node || !richDetailsData?.template) {
+          throw new Error("This element does not have a Rich Details template.");
+        }
+
+        const valuesByFieldId = new Map((richDetailsData.values || []).map((value) => [value.template_field_id, value]));
+        return {
+          format: RICH_DETAILS_EXPORT_FORMAT,
+          exported_at: new Date().toISOString(),
+          element_id: node.data?.recordId || toRecordId(node.id),
+          template_id: richDetailsData.template.id,
+          fields: getOrderedRichTemplateFields().map(({ field }) => ({
+            field_key: getTemplateFieldKey(field),
+            value: getRichDetailsExportValue(field, getFieldStoredValue(valuesByFieldId, field), true)
+          }))
+        };
+      }
+
+      function buildRichDetailsTemplatePayload() {
+        if (!node || !richDetailsData?.template) {
+          throw new Error("This element does not have a Rich Details template.");
+        }
+
+        return {
+          format: RICH_DETAILS_EXPORT_FORMAT,
+          exported_at: new Date().toISOString(),
+          element: {
+            id: node.data?.recordId || toRecordId(node.id),
+            name: node.data?.name || "Untitled Node"
+          },
+          template: {
+            id: richDetailsData.template.id,
+            name: richDetailsData.template.name || "Rich Details Template"
+          },
+          fields: getOrderedRichTemplateFields().map(({ section, field }) => {
+            const choices = getFieldChoices(field);
+            return {
+              field_key: getTemplateFieldKey(field),
+              label: getTemplateFieldLabel(field),
+              field_type: getTemplateFieldType(field),
+              section: section.id === "unsectioned" ? "" : section.name,
+              description: field.description || "",
+              placeholder: field.placeholder || "",
+              is_required: Boolean(field.is_required),
+              ...(choices.length ? { allowed_values: choices } : {}),
+              value: getRichDetailsExportValue(field, "", false)
+            };
+          })
+        };
+      }
+
+      function exportRichDetails(includeValues) {
+        try {
+          const payload = includeValues
+            ? buildRichDetailsSimpleExportPayload()
+            : buildRichDetailsTemplatePayload();
+          const date = new Date().toISOString().slice(0, 10);
+          const label = includeValues ? "details" : "template";
+          downloadJsonFile(`centralis-rich-${label}-${safeFileSlug(node?.data?.name)}-${date}.json`, payload);
+          setRichStatus(includeValues ? "Rich details exported." : "Rich details template downloaded.", "success");
+        } catch (error) {
+          setRichStatus(getReadableError(error), "error");
+        }
+      }
+
+      function normalizeRichDetailsImportFields(payload) {
+        const isSimplePayload = Object.prototype.hasOwnProperty.call(payload, "element_id")
+          || Object.prototype.hasOwnProperty.call(payload, "template_id");
+        return (payload.fields || []).map((field) => ({
+          field_key: field?.field_key || "",
+          label: isSimplePayload ? "" : field?.label || "",
+          value: field?.value
+        }));
+      }
+
+      async function importRichDetailsPayload(payload) {
+        if (!node || !window.centralisSupabase) {
+          throw new Error("Rich Details import is not available.");
+        }
+        if (!payload || payload.format !== RICH_DETAILS_EXPORT_FORMAT || !Array.isArray(payload.fields)) {
+          throw new Error("This is not a supported Centralis Rich Details JSON file.");
+        }
+        if (!richDetailsData?.template) {
+          throw new Error("This element does not have a Rich Details template.");
+        }
+
+        const currentFieldsByKey = new Map();
+        const currentFieldsByLabel = new Map();
+        (richDetailsData.fields || []).forEach((field) => {
+          currentFieldsByKey.set(normalizeFieldKey(getTemplateFieldKey(field)), field);
+          currentFieldsByLabel.set(normalizeFieldKey(getTemplateFieldLabel(field)), field);
+        });
+
+        const matchedByFieldId = new Map();
+        let skipped = 0;
+        normalizeRichDetailsImportFields(payload).forEach((importedField) => {
+          const key = normalizeFieldKey(importedField?.field_key);
+          const labelKey = normalizeFieldKey(importedField?.label);
+          const field = (key && currentFieldsByKey.get(key)) || (labelKey && currentFieldsByLabel.get(labelKey));
+          if (!field) {
+            skipped += 1;
+            return;
+          }
+          matchedByFieldId.set(field.id, { field, value: normalizeRichDetailsFieldValue(field, importedField?.value) });
+        });
+
+        const now = new Date().toISOString();
+        const clearResponses = [];
+        const upsertRows = [];
+        matchedByFieldId.forEach(({ field, value }) => {
+          if (!hasMeaningfulValue(value)) {
+            clearResponses.push(window.centralisSupabase
+              .from("element_template_field_values")
+              .delete()
+              .eq("element_id", node.data.recordId)
+              .eq("template_field_id", field.id));
+            return;
+          }
+          upsertRows.push({
+            element_id: node.data.recordId,
+            template_field_id: field.id,
+            value,
+            updated_at: now
+          });
+        });
+
+        if (clearResponses.length) {
+          throwFirstSupabaseError(await Promise.all(clearResponses));
+        }
+        if (upsertRows.length) {
+          const { error } = await window.centralisSupabase
+            .from("element_template_field_values")
+            .upsert(upsertRows, { onConflict: "element_id,template_field_id" });
+          if (error) throw error;
+        }
+
+        const refreshed = await fetchRichDetailsData(node);
+        setRichDetailsData({ loading: false, error: "", ...refreshed });
+        setRichDetailsMode("view");
+        setRichStatus(`Imported ${upsertRows.length} values, cleared ${clearResponses.length}, skipped ${skipped}.`, "success");
+      }
+
+      async function importRichDetailsFile(file) {
+        if (!file) return;
+        setRichStatus("Importing rich details...");
+        try {
+          await importRichDetailsPayload(JSON.parse(await file.text()));
+        } catch (error) {
+          setRichStatus(`Could not import rich details: ${getReadableError(error)}`, "error");
+        } finally {
+          if (importInput) {
+            importInput.value = "";
+          }
+        }
+      }
+
+      function handleRichTransferMenuClick(event) {
+        const importButton = event.target.closest("[data-rich-details-import]");
+        const exportButton = event.target.closest("[data-rich-details-export]");
+        const templateButton = event.target.closest("[data-rich-details-template]");
+        if (!importButton && !exportButton && !templateButton) return;
+        closeRichTransferMenu();
+        if (importButton) {
+          importInput?.click();
+        } else if (exportButton) {
+          exportRichDetails(true);
+        } else if (templateButton) {
+          exportRichDetails(false);
+        }
+      }
+
+      function handleRichTransferOutsideClick(event) {
+        if (!transferWrap?.contains(event.target)) {
+          closeRichTransferMenu();
+        }
+      }
+
+      function handleRichTransferKeydown(event) {
+        if (event.key === "Escape") {
+          closeRichTransferMenu();
+        }
+      }
+
+      function handleRichImportInputChange(event) {
+        importRichDetailsFile(event.target.files?.[0]);
+      }
+
       function showRichEditMode() {
         setRichStatus("");
+        closeRichTransferMenu();
         setRichDetailsMode("edit");
       }
 
@@ -4609,11 +5663,22 @@
       editButton?.addEventListener("click", showRichEditMode);
       cancelButton?.addEventListener("click", cancelRichEditMode);
       saveButton?.addEventListener("click", saveRichDetails);
+      transferTrigger?.addEventListener("click", toggleRichTransferMenu);
+      transferMenu?.addEventListener("click", handleRichTransferMenuClick);
+      importInput?.addEventListener("change", handleRichImportInputChange);
+      document.addEventListener("click", handleRichTransferOutsideClick);
+      document.addEventListener("keydown", handleRichTransferKeydown);
       closeButtons.forEach((button) => button.addEventListener("click", closeRichDetails));
       return () => {
+        window.clearTimeout(richStatusTimeoutId);
         editButton?.removeEventListener("click", showRichEditMode);
         cancelButton?.removeEventListener("click", cancelRichEditMode);
         saveButton?.removeEventListener("click", saveRichDetails);
+        transferTrigger?.removeEventListener("click", toggleRichTransferMenu);
+        transferMenu?.removeEventListener("click", handleRichTransferMenuClick);
+        importInput?.removeEventListener("change", handleRichImportInputChange);
+        document.removeEventListener("click", handleRichTransferOutsideClick);
+        document.removeEventListener("keydown", handleRichTransferKeydown);
         closeButtons.forEach((button) => button.removeEventListener("click", closeRichDetails));
       };
     }, [richDetailsNodeId, richDetailsData, richDetailsMode, nodes, edges, openRichDetails]);
@@ -4952,6 +6017,7 @@
           status.classList.remove("is-error");
         }
 
+        pushCanvasHistory();
         const id = createId();
         const position = pendingLink?.position || {
           x: Number(universe.canvas_position_x ?? 120) + 360 + (nodes.length - 1) * 32,
@@ -5002,6 +6068,7 @@
             sourceHandle: pendingLink.sourceHandle || "right",
             targetHandle: "left",
             type: "deletable",
+            zIndex: 20,
             data: { recordId: linkId, format: universeFormat },
             style: {
               stroke: universeFormat.strokeColor,
@@ -5085,26 +6152,14 @@
           return;
         }
 
+        pushCanvasHistory();
         confirmButton.disabled = true;
 
-        const { error: linksError } = await window.centralisSupabase
-          .from("element_links")
-          .delete()
-          .or(`source_element_id.eq.${pendingDeleteElement.elementId},target_element_id.eq.${pendingDeleteElement.elementId}`);
-
-        if (linksError) {
-          console.error("Could not delete element links:", linksError);
-          confirmButton.disabled = false;
-          return;
-        }
-
-        const { error: elementError } = await window.centralisSupabase
-          .from("elements")
-          .delete()
-          .eq("id", pendingDeleteElement.elementId);
-
-        if (elementError) {
-          console.error("Could not delete element:", elementError);
+        try {
+          await deleteElementRecords([pendingDeleteElement.elementId]);
+        } catch (error) {
+          console.error("Could not delete element:", error);
+          setTransferStatus(`Could not delete element: ${getReadableError(error)}`, "error");
           confirmButton.disabled = false;
           return;
         }
@@ -5130,6 +6185,10 @@
       if (!connection.source || !connection.target || connection.source === connection.target) {
         return;
       }
+      if (isGroupNodeId(connection.source) || isGroupNodeId(connection.target)) {
+        return;
+      }
+      pushCanvasHistory();
 
       const id = createId();
       const sourceRecordId = toRecordId(connection.source);
@@ -5141,6 +6200,7 @@
         sourceHandle: connection.sourceHandle || "right",
         targetHandle: connection.targetHandle || "left",
         type: "deletable",
+        zIndex: 20,
         data: { recordId: id, format: universeFormat },
         style: {
           stroke: universeFormat.strokeColor,
@@ -5176,36 +6236,19 @@
         setTransferStatus("Select one or more element nodes to delete.", "error");
         return;
       }
-
       const count = selectedElementNodes.length;
       const confirmed = window.confirm(`Delete ${count} selected ${count === 1 ? "element" : "elements"} and all connected links?`);
       if (!confirmed) {
         return;
       }
+      pushCanvasHistory();
 
       const recordIds = selectedElementNodes.map((node) => node.data.recordId).filter(Boolean);
       const selectedNodeIds = new Set(selectedElementNodes.map((node) => node.id));
       setTransferStatus(`Deleting ${count} ${count === 1 ? "element" : "elements"}...`);
 
       try {
-        const [sourceLinksResponse, targetLinksResponse] = await Promise.all([
-          window.centralisSupabase
-            .from("element_links")
-            .delete()
-            .in("source_element_id", recordIds),
-          window.centralisSupabase
-            .from("element_links")
-            .delete()
-            .in("target_element_id", recordIds)
-        ]);
-        if (sourceLinksResponse.error) throw sourceLinksResponse.error;
-        if (targetLinksResponse.error) throw targetLinksResponse.error;
-
-        const elementResponse = await window.centralisSupabase
-          .from("elements")
-          .delete()
-          .in("id", recordIds);
-        if (elementResponse.error) throw elementResponse.error;
+        await deleteElementRecords(recordIds);
 
         setDetailsNodeId((currentId) => selectedNodeIds.has(currentId) ? null : currentId);
         setRichDetailsNodeId((currentId) => selectedNodeIds.has(currentId) ? null : currentId);
@@ -5222,13 +6265,20 @@
     }
 
     function handleConnectEnd(event) {
-      const targetIsPane = event.target?.classList?.contains("react-flow__pane");
-      if (!targetIsPane || !reactFlowInstance.current || !reactFlowWrapper.current) {
+      const targetElement = event.target instanceof Element ? event.target : null;
+      const targetIsPane = Boolean(targetElement?.classList?.contains("react-flow__pane"));
+      const targetIsGroupCanvas = Boolean(targetElement?.closest(".group-flow-node"));
+      const targetIsConcreteNode = Boolean(targetElement?.closest(".element-flow-node, .universe-flow-node, .react-flow__handle"));
+      if ((!targetIsPane && !targetIsGroupCanvas) || targetIsConcreteNode || !reactFlowInstance.current || !reactFlowWrapper.current) {
         return;
       }
 
       const state = window.__centralisConnectionStart;
       if (!state?.sourceNodeId) {
+        return;
+      }
+      if (isGroupNodeId(state.sourceNodeId)) {
+        window.__centralisConnectionStart = null;
         return;
       }
 
@@ -5258,6 +6308,9 @@
     }
 
     async function handleEdgesChange(changes) {
+      if (changes.some((change) => change.type === "remove")) {
+        pushCanvasHistory();
+      }
       setEdges((currentEdges) => applyEdgeChanges(changes, currentEdges));
 
       const removedEdges = changes.filter((change) => change.type === "remove");
@@ -5274,13 +6327,694 @@
     function setTransferStatus(message, tone = "") {
       const status = document.querySelector("[data-canvas-transfer-status]");
       if (!status) return;
+      window.clearTimeout(transferStatusTimerRef.current);
       status.textContent = message || "";
       status.classList.toggle("is-error", tone === "error");
       status.classList.toggle("is-success", tone === "success");
+      status.classList.toggle("is-fading", false);
+      if (message && tone) {
+        transferStatusTimerRef.current = window.setTimeout(() => {
+          status.classList.add("is-fading");
+          transferStatusTimerRef.current = window.setTimeout(() => {
+            status.textContent = "";
+            status.classList.remove("is-error", "is-success", "is-fading");
+          }, 260);
+        }, tone === "error" ? 7000 : 4200);
+      }
     }
 
     function getSelectedElementNodes() {
       return nodesRef.current.filter((node) => node.selected && node.data?.kind === "element");
+    }
+
+    function getSelectedUngroupedElementNodes() {
+      return getSelectedElementNodes().filter((node) => !node.parentId && !node.data?.groupId);
+    }
+
+    function estimateCanvasNodeSize(node) {
+      return estimateNodeSize(node, universeFormatRef.current);
+    }
+
+    function getGroupBounds(selectedNodes) {
+      const padding = 44;
+      const minX = Math.min(...selectedNodes.map((node) => node.position.x));
+      const minY = Math.min(...selectedNodes.map((node) => node.position.y));
+      const maxX = Math.max(...selectedNodes.map((node) => {
+        const size = estimateCanvasNodeSize(node);
+        return node.position.x + size.width;
+      }));
+      const maxY = Math.max(...selectedNodes.map((node) => {
+        const size = estimateCanvasNodeSize(node);
+        return node.position.y + size.height;
+      }));
+
+      return {
+        x: Math.round(minX - padding),
+        y: Math.round(minY - padding - 28),
+        width: Math.max(280, Math.round(maxX - minX + padding * 2)),
+        height: Math.max(190, Math.round(maxY - minY + padding * 2 + 28)),
+        padding
+      };
+    }
+
+    function getGroupFitPatch(groupNode, childNodes) {
+      const padding = 44;
+      const headerOffset = 28;
+      if (!groupNode) {
+        return null;
+      }
+      if (!childNodes.length) {
+        return {
+          group: {
+            x: Math.round(Number(groupNode.position?.x || 0)),
+            y: Math.round(Number(groupNode.position?.y || 0)),
+            width: 280,
+            height: 190
+          },
+          children: new Map()
+        };
+      }
+
+      const absoluteRects = childNodes.map((node) => {
+        const size = estimateCanvasNodeSize(node);
+        const x = Number(groupNode.position?.x || 0) + Number(node.position?.x || 0);
+        const y = Number(groupNode.position?.y || 0) + Number(node.position?.y || 0);
+        return { node, x, y, width: size.width, height: size.height };
+      });
+      const minX = Math.min(...absoluteRects.map((rect) => rect.x));
+      const minY = Math.min(...absoluteRects.map((rect) => rect.y));
+      const maxX = Math.max(...absoluteRects.map((rect) => rect.x + rect.width));
+      const maxY = Math.max(...absoluteRects.map((rect) => rect.y + rect.height));
+      const group = {
+        x: Math.round(minX - padding),
+        y: Math.round(minY - padding - headerOffset),
+        width: Math.max(280, Math.round(maxX - minX + padding * 2)),
+        height: Math.max(190, Math.round(maxY - minY + padding * 2 + headerOffset))
+      };
+      const children = new Map(absoluteRects.map((rect) => [
+        rect.node.id,
+        {
+          x: Math.round(rect.x - group.x),
+          y: Math.round(rect.y - group.y)
+        }
+      ]));
+      return { group, children };
+    }
+
+    function setGroupDropTarget(groupNodeId) {
+      const nextId = groupNodeId || "";
+      if (dropTargetGroupIdRef.current === nextId) {
+        return;
+      }
+      dropTargetGroupIdRef.current = nextId;
+      setDropTargetGroupId(nextId);
+    }
+
+    function getNodeAbsoluteRect(node, allNodes = nodesRef.current) {
+      const nodesById = new Map(allNodes.map((item) => [item.id, item]));
+      const position = getAbsoluteNodePosition(node, nodesById);
+      const size = estimateCanvasNodeSize(node);
+      return {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+        centerX: position.x + size.width / 2,
+        centerY: position.y + size.height / 2
+      };
+    }
+
+    function isElementGroupDropCandidate(node) {
+      return node?.data?.kind === "element" && !node.parentId && !node.data?.groupId;
+    }
+
+    function findElementDropTargetGroup(draggedNode, allNodes = nodesRef.current) {
+      if (!isElementGroupDropCandidate(draggedNode)) {
+        return null;
+      }
+
+      const draggedRect = getNodeAbsoluteRect(draggedNode, allNodes);
+      const candidateGroups = allNodes
+        .filter((node) => node.data?.kind === "group")
+        .map((groupNode) => {
+          const groupRect = getNodeAbsoluteRect(groupNode, allNodes);
+          const isInside = draggedRect.centerX >= groupRect.x
+            && draggedRect.centerX <= groupRect.x + groupRect.width
+            && draggedRect.centerY >= groupRect.y
+            && draggedRect.centerY <= groupRect.y + groupRect.height;
+          return {
+            groupNode,
+            area: groupRect.width * groupRect.height,
+            isInside
+          };
+        })
+        .filter((candidate) => candidate.isInside)
+        .sort((a, b) => a.area - b.area);
+
+      return candidateGroups[0]?.groupNode || null;
+    }
+
+    function fitGroupsInNodes(currentNodes, groupIds) {
+      let nextNodes = currentNodes;
+      const groupUpdates = [];
+      const childUpdates = [];
+      [...new Set(groupIds.filter(Boolean))].forEach((groupId) => {
+        const groupNodeId = String(groupId).startsWith("group:") ? groupId : `group:${groupId}`;
+        const groupNode = nextNodes.find((node) => node.id === groupNodeId);
+        if (!groupNode) {
+          return;
+        }
+        const childNodes = nextNodes.filter((node) => node.parentId === groupNodeId);
+        const patch = getGroupFitPatch(groupNode, childNodes);
+        if (!patch) {
+          return;
+        }
+        groupUpdates.push({
+          id: groupNode.data.recordId,
+          ...patch.group,
+          collapsed: Boolean(groupNode.data?.collapsed)
+        });
+        patch.children.forEach((position, nodeId) => {
+          const childNode = childNodes.find((node) => node.id === nodeId);
+          if (childNode?.data?.recordId) {
+            childUpdates.push({
+              id: childNode.data.recordId,
+              ...position
+            });
+          }
+        });
+        nextNodes = nextNodes.map((node) => {
+          if (node.id === groupNodeId) {
+            return {
+              ...node,
+              position: { x: patch.group.x, y: patch.group.y },
+              style: {
+                ...node.style,
+                width: node.data?.collapsed ? 260 : patch.group.width,
+                height: node.data?.collapsed ? 96 : patch.group.height
+              },
+              data: {
+                ...node.data,
+                childCount: childNodes.length,
+                expandedWidth: patch.group.width,
+                expandedHeight: patch.group.height
+              }
+            };
+          }
+          const childPosition = patch.children.get(node.id);
+          if (childPosition) {
+            return {
+              ...node,
+              position: childPosition
+            };
+          }
+          return node;
+        });
+      });
+      return { nodes: nextNodes, groupUpdates, childUpdates };
+    }
+
+    async function persistGroupFit(groupUpdates, childUpdates) {
+      const now = new Date().toISOString();
+      await Promise.all([
+        ...groupUpdates.map((group) => window.centralisSupabase
+          .from("element_groups")
+          .update({
+            position_x: group.x,
+            position_y: group.y,
+            width: group.width,
+            height: group.height,
+            updated_at: now
+          })
+          .eq("id", group.id)),
+        ...childUpdates.map((child) => window.centralisSupabase
+          .from("elements")
+          .update({
+            group_position_x: child.x,
+            group_position_y: child.y,
+            updated_at: now
+          })
+          .eq("id", child.id))
+      ]);
+    }
+
+    async function layoutSingleGroupInNodes(currentNodes, groupId) {
+      const groupNodeId = String(groupId).startsWith("group:") ? groupId : `group:${groupId}`;
+      const groupNode = currentNodes.find((node) => node.id === groupNodeId);
+      if (!groupNode || groupNode.data?.collapsed) {
+        return fitGroupsInNodes(currentNodes, [groupId]);
+      }
+
+      const childNodes = currentNodes.filter((node) => node.parentId === groupNodeId);
+      if (childNodes.length < 2) {
+        return fitGroupsInNodes(currentNodes, [groupId]);
+      }
+
+      const childIds = new Set(childNodes.map((node) => node.id));
+      const localEdges = edgesRef.current.filter((edge) => childIds.has(edge.source) && childIds.has(edge.target));
+      const localLayoutInput = childNodes.map((node) => ({
+        ...node,
+        parentId: undefined,
+        extent: undefined,
+        expandParent: undefined
+      }));
+      const layoutedChildren = await createAutoLayout(localLayoutInput, localEdges, universeFormatRef.current);
+      const minX = Math.min(...layoutedChildren.map((node) => Number(node.position?.x || 0)));
+      const minY = Math.min(...layoutedChildren.map((node) => Number(node.position?.y || 0)));
+      const normalizedChildren = new Map(layoutedChildren.map((node) => [
+        node.id,
+        {
+          x: Math.round(Number(node.position?.x || 0) - minX + 44),
+          y: Math.round(Number(node.position?.y || 0) - minY + 72)
+        }
+      ]));
+
+      const locallyLayoutedNodes = currentNodes.map((node) => {
+        const position = normalizedChildren.get(node.id);
+        if (!position) {
+          return node;
+        }
+        return {
+          ...node,
+          position,
+          parentId: groupNodeId,
+          extent: "parent",
+          expandParent: false
+        };
+      });
+
+      return fitGroupsInNodes(locallyLayoutedNodes, [groupId]);
+    }
+
+    async function autoLayoutGroup(groupId) {
+      if (!groupId) {
+        setTransferStatus("No group selected for auto layout.", "error");
+        return false;
+      }
+
+      pushCanvasHistory();
+      const fitted = await layoutSingleGroupInNodes(nodesRef.current, groupId);
+      const finalNodes = fitted.nodes.map((node) => ({ ...node }));
+      setNodes(finalNodes);
+      nodesRef.current = finalNodes;
+      await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
+      setTransferStatus("Auto-layout complete for group.", "success");
+      return true;
+    }
+
+    function openCreateGroupDialog() {
+      const modal = document.getElementById("create-group-modal");
+      const input = modal?.querySelector('[name="group-name"]');
+      const status = modal?.querySelector("[data-group-status]");
+      if (!modal) return;
+      modal.hidden = false;
+      if (status) {
+        status.textContent = "";
+        status.classList.remove("is-error");
+      }
+      if (input) {
+        input.value = `Group ${nodesRef.current.filter((node) => node.data?.kind === "group").length + 1}`;
+        input.select();
+        input.focus();
+      }
+    }
+
+    async function createGroupFromSelection(name) {
+      const selectedNodes = getSelectedUngroupedElementNodes();
+      if (!selectedNodes.length) {
+        setTransferStatus("Select one or more ungrouped elements to group.", "error");
+        return false;
+      }
+
+      const groupName = String(name || "").trim();
+      if (!groupName) {
+        return false;
+      }
+
+      pushCanvasHistory();
+      const bounds = getGroupBounds(selectedNodes);
+      const id = createId();
+      const now = new Date().toISOString();
+      const groupRow = {
+        id,
+        universe_id: universe.id,
+        name: groupName,
+        description: null,
+        position_x: bounds.x,
+        position_y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        background_color: "#123034",
+        is_collapsed: false,
+        updated_at: now
+      };
+
+      const { error: groupError } = await window.centralisSupabase
+        .from("element_groups")
+        .insert(groupRow);
+      if (groupError) {
+        setTransferStatus(`Could not create group: ${getReadableError(groupError)}`, "error");
+        return false;
+      }
+
+      const updates = await Promise.all(selectedNodes.map((node) => window.centralisSupabase
+        .from("elements")
+        .update({
+          group_id: id,
+          group_position_x: Math.round(node.position.x - bounds.x),
+          group_position_y: Math.round(node.position.y - bounds.y),
+          updated_at: now
+        })
+        .eq("id", node.data.recordId)));
+
+      const failed = updates.find((response) => response.error);
+      if (failed?.error) {
+        await window.centralisSupabase
+          .from("element_groups")
+          .delete()
+          .eq("id", id);
+        setTransferStatus(`Could not add elements to group: ${getReadableError(failed.error)}`, "error");
+        return false;
+      }
+
+      const groupNode = toGroupNode(groupRow);
+      groupNode.data.childCount = selectedNodes.length;
+      const selectedIds = new Set(selectedNodes.map((node) => node.id));
+      groupNode.selected = true;
+      setNodes((currentNodes) => {
+        const nextNodes = currentNodes.map((node) => {
+          if (!selectedIds.has(node.id)) {
+            return { ...node, selected: false };
+          }
+          return {
+            ...node,
+            selected: false,
+            parentId: groupNode.id,
+            extent: "parent",
+            expandParent: false,
+            position: {
+              x: Math.round(node.position.x - bounds.x),
+              y: Math.round(node.position.y - bounds.y)
+            },
+            data: {
+              ...node.data,
+              groupId: id
+            }
+          };
+        });
+        const firstSelectedIndex = nextNodes.findIndex((node) => selectedIds.has(node.id));
+        const insertIndex = firstSelectedIndex >= 0 ? firstSelectedIndex : nextNodes.length;
+        return [
+          ...nextNodes.slice(0, insertIndex),
+          groupNode,
+          ...nextNodes.slice(insertIndex)
+        ];
+      });
+      setTransferStatus(`Created group "${groupName}".`, "success");
+      return true;
+    }
+
+    async function addElementNodeToGroup(draggedNode, targetGroupNode) {
+      const currentNodes = nodesRef.current;
+      const storedElementNode = currentNodes.find((node) => node.id === draggedNode?.id);
+      const elementNode = storedElementNode ? { ...storedElementNode, position: draggedNode.position } : draggedNode;
+      const groupNode = currentNodes.find((node) => node.id === targetGroupNode?.id) || targetGroupNode;
+      if (!isElementGroupDropCandidate(elementNode) || !groupNode?.data?.recordId) {
+        return false;
+      }
+
+      const elementName = elementNode.data?.name || "this element";
+      const groupName = groupNode.data?.name || "this group";
+      const confirmed = window.confirm(`Do you want to add "${elementName}" to this group ("${groupName}")?`);
+      if (!confirmed) {
+        return false;
+      }
+
+      pushCanvasHistory();
+      const absolutePosition = getNodeAbsoluteRect(elementNode, currentNodes);
+      const groupPosition = getNodeAbsoluteRect(groupNode, currentNodes);
+      const relativePosition = {
+        x: Math.round(absolutePosition.x - groupPosition.x),
+        y: Math.round(absolutePosition.y - groupPosition.y)
+      };
+      const now = new Date().toISOString();
+
+      const { error } = await window.centralisSupabase
+        .from("elements")
+        .update({
+          group_id: groupNode.data.recordId,
+          group_position_x: relativePosition.x,
+          group_position_y: relativePosition.y,
+          position_x: Math.round(absolutePosition.x),
+          position_y: Math.round(absolutePosition.y),
+          updated_at: now
+        })
+        .eq("id", elementNode.data.recordId);
+
+      if (error) {
+        setTransferStatus(`Could not add "${elementName}" to group: ${getReadableError(error)}`, "error");
+        return false;
+      }
+
+      let fitted = null;
+      const nextNodes = nodesRef.current.map((node) => {
+        if (node.id === elementNode.id) {
+          return {
+            ...node,
+            selected: true,
+            parentId: groupNode.id,
+            extent: "parent",
+            expandParent: false,
+            position: relativePosition,
+            data: {
+              ...node.data,
+              groupId: groupNode.data.recordId
+            }
+          };
+        }
+        return { ...node, selected: false };
+      });
+      fitted = await layoutSingleGroupInNodes(nextNodes, groupNode.data.recordId);
+      const finalNodes = fitted.nodes.map((node) => ({
+        ...node,
+        selected: node.id === elementNode.id
+      }));
+      setNodes(finalNodes);
+      nodesRef.current = finalNodes;
+
+      if (fitted) {
+        await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
+      }
+
+      setTransferStatus(`Added "${elementName}" to "${groupName}".`, "success");
+      return true;
+    }
+
+    async function ungroupNode(groupNode) {
+      if (!groupNode?.data?.recordId) {
+        return false;
+      }
+
+      pushCanvasHistory();
+      const childNodes = nodesRef.current.filter((node) => node.parentId === groupNode.id);
+      const now = new Date().toISOString();
+      const updates = await Promise.all(childNodes.map((node) => window.centralisSupabase
+        .from("elements")
+        .update({
+          group_id: null,
+          group_position_x: null,
+          group_position_y: null,
+          position_x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
+          position_y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0)),
+          updated_at: now
+        })
+        .eq("id", node.data.recordId)));
+
+      const failed = updates.find((response) => response.error);
+      if (failed?.error) {
+        setTransferStatus(`Could not ungroup elements: ${getReadableError(failed.error)}`, "error");
+        return false;
+      }
+
+      const { error: deleteError } = await window.centralisSupabase
+        .from("element_groups")
+        .delete()
+        .eq("id", groupNode.data.recordId);
+
+      if (deleteError) {
+        setTransferStatus(`Could not delete group: ${getReadableError(deleteError)}`, "error");
+        return false;
+      }
+
+      const childIds = new Set(childNodes.map((node) => node.id));
+      setNodes((currentNodes) => currentNodes
+        .filter((node) => node.id !== groupNode.id)
+        .map((node) => {
+          if (!childIds.has(node.id)) {
+            return { ...node, selected: false };
+          }
+          return {
+            ...node,
+            parentId: undefined,
+            extent: undefined,
+            expandParent: undefined,
+            selected: true,
+            position: {
+              x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
+              y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0))
+            },
+            data: {
+              ...node.data,
+              groupId: null
+            }
+          };
+        }));
+      setTransferStatus(`Ungrouped "${groupNode.data.name || "group"}".`, "success");
+      return true;
+    }
+
+    async function removeSelectedElementsFromGroup() {
+      const selectedNodes = getSelectedElementNodes();
+      if (!selectedNodes.length) {
+        setTransferStatus("Select one or more grouped elements first.", "error");
+        return false;
+      }
+      const groupId = selectedNodes[0]?.data?.groupId;
+      const groupNode = nodesRef.current.find((node) => node.id === `group:${groupId}`);
+      if (!groupId || !groupNode) {
+        setTransferStatus("Selected elements are not inside a group.", "error");
+        return false;
+      }
+
+      pushCanvasHistory();
+      const selectedIds = new Set(selectedNodes.map((node) => node.id));
+      const now = new Date().toISOString();
+      const updates = await Promise.all(selectedNodes.map((node) => window.centralisSupabase
+        .from("elements")
+        .update({
+          group_id: null,
+          group_position_x: null,
+          group_position_y: null,
+          position_x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
+          position_y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0)),
+          updated_at: now
+        })
+        .eq("id", node.data.recordId)));
+
+      const failed = updates.find((response) => response.error);
+      if (failed?.error) {
+        setTransferStatus(`Could not remove from group: ${getReadableError(failed.error)}`, "error");
+        return false;
+      }
+
+      let fitted = null;
+      const detachedNodes = nodesRef.current.map((node) => {
+        if (!selectedIds.has(node.id)) {
+          return { ...node, selected: false };
+        }
+        return {
+          ...node,
+          parentId: undefined,
+          extent: undefined,
+          expandParent: undefined,
+          selected: true,
+          position: {
+            x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
+            y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0))
+          },
+          data: {
+            ...node.data,
+            groupId: null
+          }
+        };
+      });
+      fitted = await layoutSingleGroupInNodes(detachedNodes, groupId);
+      const finalNodes = fitted.nodes.map((node) => ({
+        ...node,
+        selected: selectedIds.has(node.id)
+      }));
+      setNodes(finalNodes);
+      nodesRef.current = finalNodes;
+
+      if (fitted) {
+        await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
+      }
+      setTransferStatus(`Removed ${selectedNodes.length} ${selectedNodes.length === 1 ? "element" : "elements"} from group.`, "success");
+      return true;
+    }
+
+    async function duplicateSelectedElements() {
+      const selectedNodes = getSelectedElementNodes();
+      if (!selectedNodes.length) {
+        setTransferStatus("Select one or more elements to duplicate.", "error");
+        return false;
+      }
+
+      pushCanvasHistory();
+      const offset = 28;
+      const now = new Date().toISOString();
+      const payloads = selectedNodes.map((node) => {
+        const isGrouped = Boolean(node.data?.groupId);
+        const groupNode = isGrouped ? nodesRef.current.find((currentNode) => currentNode.id === `group:${node.data.groupId}`) : null;
+        const nextX = Math.round(Number(node.position?.x || 0) + offset);
+        const nextY = Math.round(Number(node.position?.y || 0) + offset);
+        return {
+          id: createId(),
+          universe_id: universe.id,
+          element_type_id: node.data?.elementType?.id || null,
+          rich_template_id: node.data?.richTemplateId || null,
+          name: `${node.data?.name || "Untitled Element"} Copy`,
+          description: node.data?.description || null,
+          group_id: isGrouped ? node.data.groupId : null,
+          group_position_x: isGrouped ? nextX : null,
+          group_position_y: isGrouped ? nextY : null,
+          position_x: isGrouped ? Math.round(Number(groupNode?.position?.x || 0) + nextX) : nextX,
+          position_y: isGrouped ? Math.round(Number(groupNode?.position?.y || 0) + nextY) : nextY,
+          updated_at: now
+        };
+      });
+
+      const { data, error } = await window.centralisSupabase
+        .from("elements")
+        .insert(payloads)
+        .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y");
+
+      if (error) {
+        setTransferStatus(`Could not duplicate elements: ${getReadableError(error)}`, "error");
+        return false;
+      }
+
+      const duplicatedNodes = (data || []).map((row) => {
+        const node = toElementNode(row);
+        node.data.format = universeFormatRef.current;
+        node.selected = true;
+        return applyLayerOverlayToNode(node, activeLayerIdRef.current, layerEntriesRef.current, layerAssignmentsRef.current);
+      });
+      const duplicatedIds = new Set(duplicatedNodes.map((node) => node.id));
+      const groupedIds = [...new Set(duplicatedNodes.map((node) => node.data?.groupId).filter(Boolean))];
+      let fitted = null;
+      const nextNodes = [
+        ...nodesRef.current.map((node) => ({ ...node, selected: false })),
+        ...duplicatedNodes
+      ];
+      if (groupedIds.length === 1) {
+        fitted = await layoutSingleGroupInNodes(nextNodes, groupedIds[0]);
+      } else if (groupedIds.length > 1) {
+        fitted = fitGroupsInNodes(nextNodes, groupedIds);
+      }
+
+      const finalNodes = (fitted?.nodes || nextNodes).map((node) => ({
+        ...node,
+        selected: duplicatedIds.has(node.id)
+      }));
+      setNodes(finalNodes);
+      nodesRef.current = finalNodes;
+
+      if (fitted) {
+        await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
+      }
+      setTransferStatus(`Duplicated ${duplicatedNodes.length} ${duplicatedNodes.length === 1 ? "element" : "elements"}.`, "success");
+      return true;
     }
 
     function setLayerStatus(message, tone = "") {
@@ -5669,6 +7403,67 @@
           `).join("") : `<p class="empty-state">No entries yet. Add entries like Nations, Product Lines, Religions, or Regions.</p>`}
         </div>
       `;
+    }
+
+    async function toggleGroupCollapsed(groupId, collapsed) {
+      if (!groupId) return;
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        if (node.data?.kind !== "group" || node.data.recordId !== groupId) {
+          return node;
+        }
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            width: collapsed ? 260 : Number(node.data.expandedWidth || node.style?.width || 360),
+            height: collapsed ? 96 : Number(node.data.expandedHeight || node.style?.height || 260)
+          },
+          data: {
+            ...node.data,
+            collapsed
+          }
+        };
+      }));
+
+      const { error } = await window.centralisSupabase
+        .from("element_groups")
+        .update({
+          is_collapsed: collapsed,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", groupId);
+      if (error) {
+        console.error("Could not update group collapse state:", error);
+      }
+    }
+
+    async function updateGroupColor(groupId, color) {
+      if (!groupId) return;
+      const safeColor = sanitizeColor(color, "#123034");
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        if (node.data?.kind !== "group" || node.data.recordId !== groupId) {
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            backgroundColor: safeColor
+          }
+        };
+      }));
+
+      const { error } = await window.centralisSupabase
+        .from("element_groups")
+        .update({
+          background_color: safeColor,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", groupId);
+      if (error) {
+        console.error("Could not update group color:", error);
+        setTransferStatus(`Could not update group color: ${getReadableError(error)}`, "error");
+      }
     }
 
     function getViewportImportOrigin() {
@@ -6214,6 +8009,171 @@
     }, [nodes]);
 
     React.useEffect(() => {
+      const groupButton = document.querySelector("[data-create-group]");
+      if (!groupButton) {
+        return undefined;
+      }
+
+      const selectedCount = nodes.filter((node) => node.selected && node.data?.kind === "element" && !node.parentId && !node.data?.groupId).length;
+      groupButton.hidden = selectedCount < 1;
+
+      function handleGroupClick() {
+        openCreateGroupDialog();
+      }
+
+      groupButton.addEventListener("click", handleGroupClick);
+      return () => {
+        groupButton.removeEventListener("click", handleGroupClick);
+      };
+    }, [nodes]);
+
+    React.useEffect(() => {
+      const undoButton = document.querySelector("[data-undo-canvas]");
+      const redoButton = document.querySelector("[data-redo-canvas]");
+      if (!undoButton || !redoButton) {
+        return undefined;
+      }
+
+      syncHistoryControls();
+
+      async function handleUndo() {
+        await undoCanvas();
+      }
+
+      async function handleRedo() {
+        await redoCanvas();
+      }
+
+      undoButton.addEventListener("click", handleUndo);
+      redoButton.addEventListener("click", handleRedo);
+      return () => {
+        undoButton.removeEventListener("click", handleUndo);
+        redoButton.removeEventListener("click", handleRedo);
+      };
+    }, []);
+
+    React.useEffect(() => {
+      async function handleHistoryShortcut(event) {
+        if (isFormEditingTarget(event.target)) {
+          return;
+        }
+        const modifierPressed = event.ctrlKey || event.metaKey;
+        if (!modifierPressed) {
+          return;
+        }
+        const key = String(event.key || "").toLowerCase();
+        if (key === "z" && !event.shiftKey) {
+          event.preventDefault();
+          await undoCanvas();
+        } else if (key === "y" || (key === "z" && event.shiftKey)) {
+          event.preventDefault();
+          await redoCanvas();
+        }
+      }
+
+      document.addEventListener("keydown", handleHistoryShortcut, true);
+      return () => {
+        document.removeEventListener("keydown", handleHistoryShortcut, true);
+      };
+    }, []);
+
+    React.useEffect(() => {
+      async function handleDeleteShortcut(event) {
+        if (event.key !== "Backspace" && event.key !== "Delete") {
+          return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || isFormEditingTarget(event.target)) {
+          return;
+        }
+        if (!getSelectedElementNodes().length) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        await deleteSelectedElements();
+      }
+
+      document.addEventListener("keydown", handleDeleteShortcut, true);
+      return () => {
+        document.removeEventListener("keydown", handleDeleteShortcut, true);
+      };
+    }, []);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("create-group-modal");
+      const form = modal?.querySelector("[data-group-form]");
+      const closeButtons = modal?.querySelectorAll("[data-close-group-modal]");
+      const status = modal?.querySelector("[data-group-status]");
+      if (!modal || !form) {
+        return undefined;
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+      }
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const submitButton = form.querySelector('[type="submit"]');
+        const formData = new FormData(form);
+        const groupName = String(formData.get("group-name") || "").trim();
+        if (!groupName) {
+          if (status) {
+            status.textContent = "Name is required.";
+            status.classList.add("is-error");
+          }
+          return;
+        }
+        if (submitButton) submitButton.disabled = true;
+        const created = await createGroupFromSelection(groupName);
+        if (submitButton) submitButton.disabled = false;
+        if (created) {
+          form.reset();
+          closeModal();
+        }
+      }
+
+      function handleClick(event) {
+        if (event.target === modal) {
+          closeModal();
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeModal();
+        }
+      }
+
+      form.addEventListener("submit", handleSubmit);
+      modal.addEventListener("click", handleClick);
+      closeButtons.forEach((button) => button.addEventListener("click", closeModal));
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        form.removeEventListener("submit", handleSubmit);
+        modal.removeEventListener("click", handleClick);
+        closeButtons.forEach((button) => button.removeEventListener("click", closeModal));
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [nodes]);
+
+    React.useEffect(() => {
+      function handleToggleGroup(event) {
+        toggleGroupCollapsed(event.detail?.groupId, Boolean(event.detail?.collapsed));
+      }
+      function handleUpdateGroupColor(event) {
+        updateGroupColor(event.detail?.groupId, event.detail?.color);
+      }
+
+      window.addEventListener("centralis:toggle-group", handleToggleGroup);
+      window.addEventListener("centralis:update-group-color", handleUpdateGroupColor);
+      return () => {
+        window.removeEventListener("centralis:toggle-group", handleToggleGroup);
+        window.removeEventListener("centralis:update-group-color", handleUpdateGroupColor);
+      };
+    }, []);
+
+    React.useEffect(() => {
       const toggle = document.querySelector("[data-toggle-layers-mode]");
       const panel = document.querySelector("[data-layers-panel]");
       const layerSelect = document.querySelector("[data-active-layer-select]");
@@ -6444,17 +8404,101 @@
         document.removeEventListener("keydown", handleEscape);
       };
     }, [activeLayer, activeLayerEntries, layerAssignments, nodes]);
+
+    React.useEffect(() => {
+      function handleEscape(event) {
+        if (event.key === "Escape") {
+          setContextMenu(null);
+        }
+      }
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, []);
+
+    const handleNodeDrag = React.useCallback((_event, node) => {
+      closeContextMenu();
+      const storedNode = nodesRef.current.find((item) => item.id === node.id);
+      const currentNode = storedNode ? { ...storedNode, position: node.position } : node;
+      const targetGroup = findElementDropTargetGroup(currentNode, nodesRef.current);
+      setGroupDropTarget(targetGroup?.id || "");
+    }, []);
+
+    const handleNodeDragStop = React.useCallback(async (_event, node) => {
+      dragHistoryNodeIdRef.current = "";
+      const currentNodes = nodesRef.current;
+      const storedNode = currentNodes.find((item) => item.id === node.id);
+      const currentNode = storedNode ? { ...storedNode, position: node.position } : node;
+      const targetGroup = findElementDropTargetGroup(currentNode, currentNodes);
+      setGroupDropTarget("");
+      if (!targetGroup) {
+        return;
+      }
+      await addElementNodeToGroup(currentNode, targetGroup);
+    }, []);
+
+    const nodesWithDropTarget = React.useMemo(() => nodes.map((node) => {
+      if (node.data?.kind !== "group") {
+        return node;
+      }
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          isDropTarget: node.id === dropTargetGroupId
+        }
+      };
+    }), [nodes, dropTargetGroupId]);
+
+    const renderedNodes = React.useMemo(() => getVisibleNodesForGroups(nodesWithDropTarget), [nodesWithDropTarget]);
+    const renderedEdges = React.useMemo(() => getVisibleEdgesForGroups(edges, nodes), [edges, nodes]);
+
+    const handleNodeContextMenu = React.useCallback((event, node) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const preserveSelection = Boolean(node.selected);
+      setNodes((currentNodes) => currentNodes.map((currentNode) => ({
+        ...currentNode,
+        selected: preserveSelection ? currentNode.selected : currentNode.id === node.id
+      })));
+      const wrapperRect = reactFlowWrapper.current?.getBoundingClientRect();
+      setContextMenu({
+        nodeId: node.id,
+        x: Math.max(8, (event.clientX || 0) - (wrapperRect?.left || 0)),
+        y: Math.max(8, (event.clientY || 0) - (wrapperRect?.top || 0))
+      });
+    }, []);
+
+    function closeContextMenu() {
+      setContextMenu(null);
+    }
+
+    const contextMenuNode = contextMenu
+      ? nodes.find((node) => node.id === contextMenu.nodeId)
+      : null;
+    const contextSelectedElements = contextMenuNode?.data?.kind === "element"
+      ? nodes.filter((node) => node.selected && node.data?.kind === "element")
+      : [];
+    const contextIsSingleElement = contextSelectedElements.length === 1;
+    const contextIsGroupedSelection = Boolean(contextSelectedElements[0]?.data?.groupId);
+    const contextIsUngroupedSelection = Boolean(contextSelectedElements.length && !contextSelectedElements[0]?.data?.groupId);
+    const contextGroupId = contextMenuNode?.data?.kind === "group"
+      ? contextMenuNode.data.recordId
+      : contextSelectedElements[0]?.data?.groupId || "";
+
     return React.createElement(
       "div",
       {
         ref: reactFlowWrapper,
-        className: "flow-canvas-inner"
+        className: "flow-canvas-inner",
+        onContextMenu: (event) => event.preventDefault()
       },
       React.createElement(
       ReactFlowComponent,
       {
-        nodes,
-        edges,
+        nodes: renderedNodes,
+        edges: renderedEdges,
         nodeTypes,
         edgeTypes,
         fitView: true,
@@ -6465,7 +8509,18 @@
         },
         onNodesChange: handleNodesChange,
         onEdgesChange: handleEdgesChange,
+        onNodeDragStart: handleNodeDragStart,
+        onNodeDrag: handleNodeDrag,
+        onNodeDragStop: handleNodeDragStop,
+        onNodeContextMenu: handleNodeContextMenu,
+        onNodeClick: closeContextMenu,
+        onPaneClick: closeContextMenu,
+        onMoveStart: closeContextMenu,
         onConnectStart: (_event, params) => {
+          if (isGroupNodeId(params.nodeId)) {
+            window.__centralisConnectionStart = null;
+            return;
+          }
           window.__centralisConnectionStart = {
             sourceNodeId: params.nodeId,
             sourceHandle: params.handleId
@@ -6477,12 +8532,142 @@
         nodesDraggable: true,
         multiSelectionKeyCode: ["Control", "Meta"],
         selectionKeyCode: "Shift",
+        deleteKeyCode: null,
         selectionOnDrag: false,
         panOnDrag: true,
         proOptions: { hideAttribution: true }
       },
       React.createElement(Background, { gap: 18, size: 1 }),
       React.createElement(Controls, null)
+      ),
+        contextMenu && React.createElement(
+        "div",
+        {
+          className: "node-context-menu",
+          style: {
+            left: contextMenu.x,
+            top: contextMenu.y
+          },
+          onClick: closeContextMenu,
+          onContextMenu: (event) => event.preventDefault()
+        },
+        contextMenuNode?.data?.kind === "universe" && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              openNodeDetails(contextMenuNode.id);
+            }
+          },
+          "View Details"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextIsSingleElement && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              openNodeDetails(contextMenuNode.id);
+            }
+          },
+          "View Details"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextSelectedElements.length > 0 && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await duplicateSelectedElements();
+            }
+          },
+          "Duplicate"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextIsUngroupedSelection && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              openCreateGroupDialog();
+            }
+          },
+          "Group"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextIsGroupedSelection && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await autoLayoutGroup(contextGroupId);
+            }
+          },
+          "Auto Layout Group"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextIsGroupedSelection && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await removeSelectedElementsFromGroup();
+            }
+          },
+          "Remove From Group"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextSelectedElements.length > 0 && React.createElement("div", {
+          className: "node-context-menu-separator",
+          role: "separator"
+        }),
+        contextMenuNode?.data?.kind === "element" && contextSelectedElements.length > 0 && React.createElement(
+          "button",
+          {
+            className: "danger-menu-item",
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await deleteSelectedElements();
+            }
+          },
+          "Delete"
+        ),
+        contextMenuNode?.data?.kind === "group" && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await autoLayoutGroup(contextGroupId);
+            }
+          },
+          "Auto Layout Group"
+        ),
+        contextMenuNode?.data?.kind === "group" && React.createElement("div", {
+          className: "node-context-menu-separator",
+          role: "separator"
+        }),
+        contextMenuNode?.data?.kind === "group" && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await ungroupNode(contextMenuNode);
+            }
+          },
+          "Ungroup"
+        )
       )
     );
   }

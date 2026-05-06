@@ -1206,6 +1206,12 @@ menuTriggers.forEach((trigger) => {
   });
 });
 
+document.querySelectorAll(".dropdown-menu button, .dropdown-menu a").forEach((item) => {
+  item.addEventListener("click", () => {
+    closeMenus();
+  });
+});
+
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".menu-wrap")) {
     closeMenus();

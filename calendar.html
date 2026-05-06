@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendar | Centralis</title>
+  <link rel="stylesheet" href="styles.css?v=calendar-v5">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="calendar">
+  <div class="app-shell">
+  <header class="site-header" aria-label="Centralis main header">
+    <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+
+    <nav class="category-nav" aria-label="Primary categories">
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="World building">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3.6 9h16.8"></path>
+            <path d="M3.6 15h16.8"></path>
+            <path d="M12 3a15 15 0 0 1 0 18"></path>
+            <path d="M12 3a15 15 0 0 0 0 18"></path>
+          </svg>
+          <span>World Building</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+          <button type="button" role="menuitem">Atlas</button>
+          <button type="button" role="menuitem">Lore Maker</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Entertainment">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+            <path d="M8 21h8"></path>
+            <path d="M12 18v3"></path>
+            <path d="m10 10 5 2-5 2z"></path>
+          </svg>
+          <span>Entertainment</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <button type="button" role="menuitem">Movie Tracker</button>
+          <button type="button" role="menuitem">Episode Roulette</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Utilities">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-5.1 5.1a2.1 2.1 0 0 0 3 3l5.1-5.1a4 4 0 0 0 5.4-5.4l-2.6 2.6-3-3z"></path>
+          </svg>
+          <span>Utilities</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <a href="calendar.html" role="menuitem">Calendar</a>
+          <button type="button" role="menuitem">Tool One</button>
+          <button type="button" role="menuitem">Tool Two</button>
+          <button type="button" role="menuitem">Tool Three</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+          </svg>
+          <span>Settings</span>
+        </button>
+        <div class="dropdown-menu" role="menu">
+          <button type="button" role="menuitem">Preferences</button>
+          <button type="button" role="menuitem">Privacy</button>
+          <button type="button" role="menuitem">Shortcuts</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+        <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+        </svg>
+      </button>
+
+      <div class="menu-wrap user-menu">
+        <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="4"></circle>
+            <path d="M4 21a8 8 0 0 1 16 0"></path>
+          </svg>
+        </button>
+        <div class="dropdown-menu align-right" role="menu">
+          <button type="button" role="menuitem">Profile</button>
+          <button type="button" role="menuitem">Account</button>
+          <button type="button" role="menuitem">Notifications</button>
+          <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="calendar-page" aria-label="Calendar">
+    <aside class="calendar-sidebar" aria-label="Calendar sidebar">
+      <button class="calendar-sidebar-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">
+        <ph-sidebar-simple weight="bold" aria-hidden="true"></ph-sidebar-simple>
+      </button>
+      <section class="mini-calendar" aria-label="Mini calendar">
+        <div class="mini-calendar-header">
+          <h2 data-mini-month>Month</h2>
+          <div class="mini-calendar-nav">
+            <button type="button" data-mini-prev aria-label="Previous month">
+              <ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>
+            </button>
+            <button type="button" data-mini-next aria-label="Next month">
+              <ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>
+            </button>
+          </div>
+        </div>
+        <div class="mini-weekdays" data-mini-weekdays></div>
+        <div class="mini-days" data-mini-days></div>
+      </section>
+
+      <section class="calendar-list-section" aria-label="Calendars">
+        <div class="calendar-list-header">
+          <h2>Calendars</h2>
+          <button type="button" data-open-calendar-modal aria-label="Create calendar" title="Create calendar">
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+          </button>
+        </div>
+        <div class="calendar-list" data-calendar-list></div>
+      </section>
+    </aside>
+
+    <section class="calendar-workspace" aria-label="Calendar month view">
+      <header class="calendar-toolbar">
+        <div class="calendar-toolbar-left">
+          <button class="calendar-button" type="button" data-calendar-today>Today</button>
+          <button class="calendar-icon-action" type="button" data-calendar-prev aria-label="Previous month">
+            <ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>
+          </button>
+          <button class="calendar-icon-action" type="button" data-calendar-next aria-label="Next month">
+            <ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>
+          </button>
+          <h1 data-calendar-title>Calendar</h1>
+        </div>
+        <div class="calendar-toolbar-right">
+          <div class="calendar-view-tabs" aria-label="Calendar views">
+            <button class="is-active" type="button">Month</button>
+            <button type="button" disabled title="Coming soon">Week</button>
+            <button type="button" disabled title="Coming soon">Day</button>
+            <button type="button" disabled title="Coming soon">Agenda</button>
+          </div>
+          <button class="primary-action calendar-new-event" type="button" data-open-event-modal>
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            New Event
+          </button>
+        </div>
+      </header>
+      <p class="calendar-status" data-calendar-status role="status"></p>
+      <div class="calendar-empty-prompt" data-calendar-empty hidden>
+        <h2>No calendars yet</h2>
+        <p>Create a calendar before adding events.</p>
+        <button class="primary-action" type="button" data-open-calendar-modal>Create Calendar</button>
+      </div>
+      <div class="month-weekdays" data-month-weekdays></div>
+      <div class="month-grid" data-month-grid aria-label="Month grid"></div>
+    </section>
+  </main>
+  </div>
+
+  <div class="modal-backdrop" id="calendar-modal" hidden>
+    <section class="modal-dialog calendar-create-dialog" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="calendar-modal-title">New Calendar</h2>
+          <p class="modal-subtitle">Create a calendar for your events.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-close-calendar-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form class="calendar-create-form" data-calendar-form>
+        <label class="form-field">
+          <span>Name</span>
+          <input type="text" name="calendar-name" placeholder="Main" required autocomplete="off">
+        </label>
+        <label class="form-field">
+          <span>Color</span>
+          <input type="color" name="calendar-color" value="#6366f1">
+        </label>
+        <p class="dialog-status" data-calendar-form-status role="status"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-calendar-modal>Cancel</button>
+          <button class="primary-action" type="submit">Create Calendar</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="event-modal" hidden>
+    <section class="modal-dialog event-dialog" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
+      <div class="modal-header">
+        <h2 id="event-modal-title">New Event</h2>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-close-event-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form class="event-form" data-event-form>
+        <input class="event-title-input" type="text" name="event-title" placeholder="Event title" required autocomplete="off">
+        <label class="event-toggle-row">
+          <input type="checkbox" name="event-all-day" data-event-all-day>
+          <span>All Day</span>
+        </label>
+        <div class="event-time-grid">
+          <label class="form-field">
+            <span>Start</span>
+            <input type="date" name="event-start-date" required>
+          </label>
+          <label class="form-field">
+            <span aria-hidden="true">&nbsp;</span>
+            <input type="time" name="event-start-time" required>
+          </label>
+          <label class="form-field">
+            <span>End</span>
+            <input type="date" name="event-end-date" required>
+          </label>
+          <label class="form-field">
+            <span aria-hidden="true">&nbsp;</span>
+            <input type="time" name="event-end-time" required>
+          </label>
+        </div>
+        <div class="event-two-column">
+          <label class="form-field">
+            <span>Calendar</span>
+            <select name="event-calendar" required data-event-calendar></select>
+          </label>
+          <label class="form-field">
+            <span>Category</span>
+            <select name="event-category" data-event-category></select>
+          </label>
+        </div>
+        <label class="form-field">
+          <span>Repeat</span>
+          <select name="event-repeat" data-event-repeat>
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+            <option value="weekdays">Every weekday (Mon-Fri)</option>
+          </select>
+        </label>
+        <p class="event-repeat-help">Preset recurrence only for v1.</p>
+        <input class="event-text-input" type="text" name="event-location" placeholder="Location" autocomplete="off">
+        <textarea class="event-textarea" name="event-description" placeholder="Description or notes"></textarea>
+        <section class="event-reminders" aria-label="Reminders">
+          <h3>
+            <ph-bell weight="bold" aria-hidden="true"></ph-bell>
+            Reminders
+          </h3>
+          <div class="reminder-presets" data-reminder-presets>
+            <button type="button" data-reminder-minutes="10">10 min</button>
+            <button type="button" data-reminder-minutes="30">30 min</button>
+            <button type="button" data-reminder-minutes="60">1 hour</button>
+            <button type="button" data-reminder-minutes="1440">1 day</button>
+          </div>
+          <p data-reminder-status>No reminders set. Click a preset or add custom.</p>
+        </section>
+        <p class="dialog-status" data-event-form-status role="status"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-event-modal>Cancel</button>
+          <button class="primary-action" type="submit">Save Event</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="calendar.js?v=calendar-v5"></script>
+  <script>
+    window.setTimeout(() => {
+      if (!window.centralisCalendarLoaded) {
+        const status = document.querySelector("[data-calendar-status]");
+        if (status) {
+          status.textContent = "Calendar script did not load. Check the browser console for script loading errors.";
+          status.classList.add("is-error");
+        }
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

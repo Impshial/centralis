@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Universe Canvas | Centralis</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
-  <link rel="stylesheet" href="styles.css?v=overlay-layers-1">
+  <link rel="stylesheet" href="styles.css?v=rich-details-toast-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="universe-canvas">
@@ -56,6 +56,7 @@
           <span>Utilities</span>
         </button>
         <div class="dropdown-menu" role="menu">
+          <a href="calendar.html" role="menuitem">Calendar</a>
           <button type="button" role="menuitem">Tool One</button>
           <button type="button" role="menuitem">Tool Two</button>
           <button type="button" role="menuitem">Tool Three</button>
@@ -118,61 +119,76 @@
       <a class="toolbar-back" href="universe-builder.html">Universes</a>
       <h1 data-universe-title>Universe Canvas</h1>
       <div class="canvas-tools" aria-label="Canvas tools">
-        <button class="tool-action" type="button" data-open-modal="add-element-modal">
-          <span aria-hidden="true">+</span>
-          Element
-        </button>
-        <button class="tool-action" type="button" data-open-types-modal>
-          <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
-          Types
-        </button>
-        <button class="tool-action" type="button" data-import-elements>
-          <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
-          Import
-        </button>
-        <button class="tool-action" type="button" data-export-elements>
-          <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
-          Export
-        </button>
-        <div class="layer-tool-wrap">
-          <button class="tool-action" type="button" data-toggle-layers-mode aria-pressed="false">
-            <ph-stack weight="bold" aria-hidden="true"></ph-stack>
-            Layers
+        <div class="canvas-tools-left">
+          <div class="layer-tool-wrap">
+            <button class="tool-action icon-tool-action" type="button" data-toggle-layers-mode aria-pressed="false" aria-label="Layers" title="Layers">
+              <ph-stack weight="bold" aria-hidden="true"></ph-stack>
+            </button>
+          </div>
+          <button class="tool-action" type="button" data-create-group hidden>
+            <ph-selection-plus weight="bold" aria-hidden="true"></ph-selection-plus>
+            Group
+          </button>
+          <button class="tool-action tool-danger-action" type="button" data-delete-selected-elements hidden>
+            <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+            <span data-delete-selected-label>Delete</span>
+          </button>
+          <button class="tool-action icon-tool-action" type="button" data-auto-layout aria-label="Auto-layout canvas" title="Auto-layout canvas">
+            <ph-tree-structure weight="bold" aria-hidden="true"></ph-tree-structure>
+          </button>
+          <button class="tool-action icon-tool-action" type="button" data-open-format-modal aria-label="Universe format" title="Universe format">
+            <ph-gear-six weight="bold" aria-hidden="true"></ph-gear-six>
           </button>
         </div>
-        <button class="tool-action tool-danger-action" type="button" data-delete-selected-elements hidden>
-          <ph-trash weight="bold" aria-hidden="true"></ph-trash>
-          <span data-delete-selected-label>Delete</span>
-        </button>
-        <button class="tool-action icon-tool-action" type="button" data-auto-layout aria-label="Auto-layout canvas" title="Auto-layout canvas">
-          <ph-tree-structure weight="bold" aria-hidden="true"></ph-tree-structure>
-        </button>
-        <button class="tool-action icon-tool-action" type="button" data-open-format-modal aria-label="Universe format">
-          <ph-gear-six weight="bold" aria-hidden="true"></ph-gear-six>
-        </button>
+        <div class="canvas-tools-right">
+          <p class="canvas-transfer-status" data-canvas-transfer-status role="status"></p>
+          <button class="tool-action" type="button" data-open-modal="add-element-modal">
+            <span aria-hidden="true">+</span>
+            Add Element
+          </button>
+          <div class="menu-wrap toolbar-options-menu">
+            <button class="tool-action menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
+              Options
+              <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+            </button>
+            <div class="dropdown-menu align-right" role="menu">
+              <button type="button" role="menuitem" data-import-elements>
+                <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                Import
+              </button>
+              <button type="button" role="menuitem" data-export-elements>
+                <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                Export
+              </button>
+              <button type="button" role="menuitem" data-open-types-modal>
+                <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
+                Edit Types
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
       <input type="file" accept="application/json,.json" data-import-elements-file hidden>
-      <p class="canvas-transfer-status" data-canvas-transfer-status role="status"></p>
     </div>
     <div class="flow-canvas" id="universe-flow"></div>
     <aside class="details-pane" data-details-pane hidden aria-label="Node details">
       <div class="details-pane-resizer" data-details-resizer aria-hidden="true"></div>
       <header class="details-pane-header">
-        <div>
+        <div class="details-pane-title-block">
           <p class="details-pane-kicker" data-details-kind>Details</p>
           <h2 data-details-title>Node Details</h2>
         </div>
+        <button class="modal-close details-pane-close" type="button" aria-label="Close details" data-details-close>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
         <div class="details-pane-actions">
           <button class="secondary-action compact-action" type="button" data-details-rich hidden>Add Rich Details</button>
           <button class="secondary-action compact-action" type="button" data-details-edit>Edit</button>
           <button class="secondary-action compact-action" type="button" data-details-cancel hidden>Cancel</button>
           <button class="primary-action compact-action" type="button" data-details-save hidden>Save</button>
-          <button class="modal-close" type="button" aria-label="Close details" data-details-close>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18 6 6 18"></path>
-              <path d="m6 6 12 12"></path>
-            </svg>
-          </button>
         </div>
       </header>
       <div class="details-pane-body" data-details-content></div>
@@ -197,6 +213,34 @@
       <p class="layer-popover-status" data-layer-status role="status"></p>
     </section>
   </main>
+
+  <div class="modal-backdrop" id="create-group-modal" hidden>
+    <section class="modal-dialog create-group-dialog" role="dialog" aria-modal="true" aria-labelledby="create-group-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="create-group-title">Create Group</h2>
+          <p class="modal-subtitle">Name the group for the selected elements.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-close-group-modal>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form class="group-form" data-group-form>
+        <label class="form-field">
+          <span>Name</span>
+          <input type="text" name="group-name" placeholder="Group name" autocomplete="off">
+        </label>
+        <p class="dialog-status" data-group-status role="status"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-group-modal>Cancel</button>
+          <button class="primary-action" type="submit">Create Group</button>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <div class="modal-backdrop" id="layer-assignment-modal" hidden>
     <section class="modal-dialog layer-assignment-dialog" role="dialog" aria-modal="true" aria-labelledby="layer-assignment-title">
@@ -593,7 +637,17 @@
           <h2 id="rich-details-title" data-rich-details-title>Rich Details</h2>
         </div>
         <div class="rich-details-actions">
-          <button class="secondary-action compact-action" type="button" data-rich-details-close data-rich-details-close-action>Close</button>
+          <div class="menu-wrap rich-details-transfer-menu">
+            <button class="secondary-action compact-action icon-only menu-trigger" type="button" aria-label="Import or export rich details" aria-haspopup="menu" aria-expanded="false" data-rich-details-transfer-trigger>
+              <ph-arrows-down-up weight="bold" aria-hidden="true"></ph-arrows-down-up>
+            </button>
+            <div class="dropdown-menu align-right" role="menu" hidden data-rich-details-transfer-menu>
+              <button type="button" role="menuitem" data-rich-details-import>Import Details</button>
+              <button type="button" role="menuitem" data-rich-details-export>Export Details</button>
+              <hr>
+              <button type="button" role="menuitem" data-rich-details-template>Get Template</button>
+            </div>
+          </div>
           <button class="secondary-action compact-action" type="button" data-rich-details-edit>Edit</button>
           <button class="secondary-action compact-action" type="button" data-rich-details-cancel hidden>Cancel</button>
           <button class="primary-action compact-action" type="button" data-rich-details-save hidden>Save</button>
@@ -605,8 +659,8 @@
           </button>
         </div>
       </header>
-      <div class="rich-details-body" data-rich-details-body></div>
       <p class="form-status rich-details-status" data-rich-details-status role="status"></p>
+      <div class="rich-details-body" data-rich-details-body></div>
     </section>
   </div>
 
@@ -682,6 +736,6 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
-  <script src="flow-canvas.js?v=overlay-layers-1"></script>
+  <script src="flow-canvas.js?v=rich-details-toast-1"></script>
 </body>
 </html>
