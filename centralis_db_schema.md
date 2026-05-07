@@ -63,6 +63,7 @@ CREATE TABLE public.canvas_groups (
   bg_color character varying,
   bg_opacity real,
   border_color character varying,
+  text_color character varying,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT canvas_groups_pkey PRIMARY KEY (id),

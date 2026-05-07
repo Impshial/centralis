@@ -146,6 +146,10 @@
             <span aria-hidden="true">+</span>
             Add Element
           </button>
+          <button class="tool-action" type="button" data-create-note>
+            <ph-note-pencil weight="bold" aria-hidden="true"></ph-note-pencil>
+            Add Note
+          </button>
           <div class="menu-wrap toolbar-options-menu">
             <button class="tool-action menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
               Options
@@ -333,6 +337,42 @@
         <div class="dialog-actions">
           <button class="secondary-action" type="button" data-transfer-options-cancel>Cancel</button>
           <button class="primary-action" type="submit" data-transfer-options-confirm>Continue</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="note-style-modal" hidden>
+    <section class="modal-dialog compact-dialog" role="dialog" aria-modal="true" aria-labelledby="note-style-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="note-style-title">Note Style</h2>
+          <p class="modal-subtitle">Customize this note.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close note style" data-close-note-style>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form class="modal-form" data-note-style-form>
+        <label class="form-field">
+          <span>Background</span>
+          <input type="color" name="note-bg-color" value="#fef3c7">
+        </label>
+        <label class="form-field">
+          <span>Border</span>
+          <input type="color" name="note-border-color" value="#d97706">
+        </label>
+        <label class="form-field">
+          <span>Text</span>
+          <input type="color" name="note-text-color" value="#2f2410">
+        </label>
+        <p class="form-status" data-note-style-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-close-note-style>Cancel</button>
+          <button class="primary-action" type="submit">Save</button>
         </div>
       </form>
     </section>

@@ -10,6 +10,11 @@
   const SUPABASE_TIMEOUT_MS = 15000;
   const ELEMENT_EXPORT_FORMAT = "centralis.element-export.v1";
   const RICH_DETAILS_EXPORT_FORMAT = "centralis.rich-details.v1";
+  const DEFAULT_NOTE_WIDTH = 260;
+  const DEFAULT_NOTE_HEIGHT = 180;
+  const DEFAULT_NOTE_BG_COLOR = "#fef3c7";
+  const DEFAULT_NOTE_BORDER_COLOR = "#d97706";
+  const DEFAULT_NOTE_TEXT_COLOR = "#2f2410";
   const DEFAULT_TRANSFER_OPTIONS = {
     connections: true,
     position: true,
@@ -127,6 +132,18 @@
   function sanitizeColor(color, fallback = "#64748b") {
     const clean = String(color || "").trim();
     return /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(clean) ? clean : fallback;
+  }
+
+  function hexToRgba(color, opacity = 1) {
+    const clean = sanitizeColor(color, DEFAULT_NOTE_BG_COLOR).replace("#", "");
+    const expanded = clean.length === 3
+      ? clean.split("").map((part) => `${part}${part}`).join("")
+      : clean.slice(0, 6);
+    const red = parseInt(expanded.slice(0, 2), 16);
+    const green = parseInt(expanded.slice(2, 4), 16);
+    const blue = parseInt(expanded.slice(4, 6), 16);
+    const alpha = Math.min(1, Math.max(0.1, Number(opacity || 1)));
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
   }
 
   const DEFAULT_UNIVERSE_FORMAT = {
@@ -328,6 +345,7 @@
   let elementTypes = [];
   let elements = [];
   let elementGroups = [];
+  let canvasNotes = [];
   let elementLinks = [];
   let imageRows = [];
   let overlayLayers = [];
@@ -382,6 +400,18 @@
       elementGroups = groupResponse.data || [];
     } else if (groupResponse.error.code !== "42P01") {
       console.warn("Could not load element groups:", groupResponse.error);
+    }
+
+    const noteResponse = await withTimeout(window.centralisSupabase
+      .from("canvas_notes")
+      .select("*")
+      .eq("universe_id", universeId)
+      .order("created_at", { ascending: true }), "Loading canvas notes");
+
+    if (!noteResponse.error) {
+      canvasNotes = noteResponse.data || [];
+    } else if (noteResponse.error.code !== "42P01") {
+      console.warn("Could not load canvas notes:", noteResponse.error);
     }
 
     const elementResponse = await withTimeout(window.centralisSupabase
@@ -473,6 +503,7 @@
   const Background = Flow.Background;
   const Controls = Flow.Controls;
   const Handle = Flow.Handle;
+  const NodeResizer = Flow.NodeResizer;
   const Position = Flow.Position;
   const EdgeLabelRenderer = Flow.EdgeLabelRenderer;
   const BaseEdge = Flow.BaseEdge;
@@ -742,11 +773,12 @@
     const data = props.data;
     const collapsed = Boolean(data.collapsed);
     const backgroundColor = sanitizeColor(data.backgroundColor, "#123034");
+    const resizeMode = Boolean(data.resizeMode);
 
     return React.createElement(
       "section",
       {
-        className: `group-flow-node${props.selected ? " is-selected" : ""}${collapsed ? " is-collapsed" : ""}${data.isDropTarget ? " is-drop-target" : ""}`,
+        className: `group-flow-node${props.selected ? " is-selected" : ""}${collapsed ? " is-collapsed" : ""}${data.isDropTarget ? " is-drop-target" : ""}${resizeMode ? " is-resize-mode" : ""}`,
         style: {
           "--group-bg-color": backgroundColor
         },
@@ -754,6 +786,31 @@
           event.stopPropagation();
         }
       },
+      NodeResizer && resizeMode && !collapsed && React.createElement(NodeResizer, {
+        isVisible: true,
+        minWidth: 280,
+        minHeight: 190,
+        handleClassName: "group-resize-handle nodrag nopan",
+        lineClassName: "group-resize-line",
+        onResize: (_event, params) => {
+          window.dispatchEvent(new CustomEvent("centralis:preview-resize-group", {
+            detail: {
+              groupId: data.recordId,
+              width: Math.round(Number(params?.width || data.expandedWidth || 360)),
+              height: Math.round(Number(params?.height || data.expandedHeight || 260))
+            }
+          }));
+        },
+        onResizeEnd: (_event, params) => {
+          window.dispatchEvent(new CustomEvent("centralis:resize-group", {
+            detail: {
+              groupId: data.recordId,
+              width: Math.round(Number(params?.width || data.expandedWidth || 360)),
+              height: Math.round(Number(params?.height || data.expandedHeight || 260))
+            }
+          }));
+        }
+      }),
       collapsed && React.createElement(Handle, { className: "node-grab node-grab-right", id: "right", type: "source", position: Position.Right, isConnectable: false }),
       collapsed && React.createElement(Handle, { className: "node-grab node-grab-left", id: "left", type: "target", position: Position.Left, isConnectable: false }),
       React.createElement(
@@ -817,6 +874,193 @@
     );
   }
 
+  function NoteNode(props) {
+    const data = props.data;
+    const bgColor = sanitizeColor(data.bgColor, DEFAULT_NOTE_BG_COLOR);
+    const borderColor = sanitizeColor(data.borderColor, DEFAULT_NOTE_BORDER_COLOR);
+    const textColor = sanitizeColor(data.textColor, DEFAULT_NOTE_TEXT_COLOR);
+    const noteRef = React.useRef(null);
+    const titleInputRef = React.useRef(null);
+    const contentInputRef = React.useRef(null);
+    const titleDisplayRef = React.useRef(null);
+    const contentDisplayRef = React.useRef(null);
+    const latestDraftRef = React.useRef({
+      title: data.title || "Note",
+      content: data.content || ""
+    });
+    const [isEditing, setIsEditing] = React.useState(false);
+    const [draftTitle, setDraftTitle] = React.useState(data.title || "Note");
+    const [draftContent, setDraftContent] = React.useState(data.content || "");
+
+    React.useEffect(() => {
+      latestDraftRef.current = {
+        title: draftTitle,
+        content: draftContent
+      };
+    }, [draftTitle, draftContent]);
+
+    function fitNoteToContent(persist = false) {
+      window.requestAnimationFrame(() => {
+        const noteElement = noteRef.current;
+        if (!noteElement) {
+          return;
+        }
+        const titleElement = isEditing ? titleInputRef.current : titleDisplayRef.current;
+        const contentElement = isEditing ? contentInputRef.current : contentDisplayRef.current;
+        if (!titleElement || !contentElement) {
+          return;
+        }
+
+        const noteRect = noteElement.getBoundingClientRect();
+        const titleHeight = Math.ceil(titleElement.scrollHeight || titleElement.getBoundingClientRect().height || 28);
+        const contentHeight = Math.ceil(contentElement.scrollHeight || contentElement.getBoundingClientRect().height || 0);
+        const desiredHeight = Math.max(DEFAULT_NOTE_HEIGHT, titleHeight + contentHeight + 40);
+        if (desiredHeight > noteRect.height + 2) {
+          dispatchResize(noteRect.width || DEFAULT_NOTE_WIDTH, desiredHeight, persist);
+        }
+      });
+    }
+
+    React.useEffect(() => {
+      fitNoteToContent(true);
+    }, [data.title, data.content, isEditing]);
+
+    React.useEffect(() => {
+      if (!isEditing) {
+        setDraftTitle(data.title || "Note");
+        setDraftContent(data.content || "");
+      }
+    }, [data.title, data.content, isEditing]);
+
+    function dispatchPatch(patch) {
+      window.dispatchEvent(new CustomEvent("centralis:update-note", {
+        detail: {
+          nodeId: props.id,
+          noteId: data.recordId,
+          patch
+        }
+      }));
+    }
+
+    function dispatchResize(width, height, persist = false) {
+      window.dispatchEvent(new CustomEvent(persist ? "centralis:resize-note" : "centralis:preview-resize-note", {
+        detail: {
+          nodeId: props.id,
+          noteId: data.recordId,
+          width: Math.round(Number(width || DEFAULT_NOTE_WIDTH)),
+          height: Math.round(Number(height || DEFAULT_NOTE_HEIGHT))
+        }
+      }));
+    }
+
+    React.useEffect(() => {
+      if (!isEditing) {
+        return undefined;
+      }
+
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+
+      function closeEditMode(event) {
+        if (noteRef.current?.contains(event.target)) {
+          return;
+        }
+        setIsEditing(false);
+        dispatchPatch({ ...latestDraftRef.current, flush: true });
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape") {
+          setIsEditing(false);
+          dispatchPatch({ ...latestDraftRef.current, flush: true });
+        }
+      }
+
+      document.addEventListener("pointerdown", closeEditMode, true);
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("pointerdown", closeEditMode, true);
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [isEditing]);
+
+    function enterEditMode(event) {
+      event.stopPropagation();
+      setIsEditing(true);
+    }
+
+    function updateTitle(value, flush = false) {
+      setDraftTitle(value);
+      dispatchPatch({ title: value, flush });
+    }
+
+    function updateContent(value, flush = false) {
+      setDraftContent(value);
+      dispatchPatch({ content: value, flush });
+      fitNoteToContent(flush);
+    }
+
+    return React.createElement(
+      "section",
+      {
+        ref: noteRef,
+        className: `note-flow-node${props.selected ? " is-selected" : ""}${isEditing ? " is-editing" : ""}`,
+        style: {
+          "--note-bg-color": bgColor,
+          "--note-border-color": borderColor,
+          "--note-text-color": textColor,
+          backgroundColor: bgColor,
+          borderColor,
+          color: textColor
+        },
+        onDoubleClick: enterEditMode
+      },
+      NodeResizer && React.createElement(NodeResizer, {
+        isVisible: true,
+        minWidth: 180,
+        minHeight: 120,
+        handleClassName: "note-resize-handle nodrag nopan",
+        lineClassName: "note-resize-line",
+        onResize: (_event, params) => dispatchResize(params?.width, params?.height, false),
+        onResizeEnd: (_event, params) => dispatchResize(params?.width, params?.height, true)
+      }),
+      isEditing
+        ? React.createElement("input", {
+          ref: titleInputRef,
+          className: "note-title-input nodrag nopan",
+          value: draftTitle,
+          "aria-label": "Note title",
+          placeholder: "Note",
+          onPointerDown: (event) => event.stopPropagation(),
+          onDoubleClick: (event) => event.stopPropagation(),
+          onChange: (event) => updateTitle(event.target.value),
+          onBlur: (event) => updateTitle(event.target.value, true)
+        })
+        : React.createElement(
+          "strong",
+          { ref: titleDisplayRef, className: "note-title-display" },
+          data.title || "Note"
+        ),
+      isEditing
+        ? React.createElement("textarea", {
+          ref: contentInputRef,
+          className: "note-content-input nodrag nopan",
+          value: draftContent,
+          "aria-label": "Note content",
+          placeholder: "Write a note...",
+          onPointerDown: (event) => event.stopPropagation(),
+          onDoubleClick: (event) => event.stopPropagation(),
+          onChange: (event) => updateContent(event.target.value),
+          onBlur: (event) => updateContent(event.target.value, true)
+        })
+        : React.createElement(
+          "p",
+          { ref: contentDisplayRef, className: "note-content-display" },
+          data.content || "Double-click to edit."
+        )
+    );
+  }
+
   function toUniverseNode(row) {
     return {
       id: `universe:${row.id}`,
@@ -869,6 +1113,31 @@
     };
   }
 
+  function toNoteNode(row) {
+    return {
+      id: `note:${row.id}`,
+      type: "note",
+      position: {
+        x: Number(row.position_x ?? 520),
+        y: Number(row.position_y ?? 220)
+      },
+      data: {
+        kind: "note",
+        recordId: row.id,
+        title: row.title || "Note",
+        content: row.content || "",
+        bgColor: sanitizeColor(row.bg_color, DEFAULT_NOTE_BG_COLOR),
+        borderColor: sanitizeColor(row.border_color, DEFAULT_NOTE_BORDER_COLOR),
+        textColor: sanitizeColor(row.text_color, DEFAULT_NOTE_TEXT_COLOR)
+      },
+      style: {
+        width: Number(row.width || DEFAULT_NOTE_WIDTH),
+        height: Number(row.height || DEFAULT_NOTE_HEIGHT)
+      },
+      draggable: true
+    };
+  }
+
   function toElementNode(row) {
     const elementType = elementTypes.find((type) => type.id === row.element_type_id) || null;
     const group = row.group_id ? elementGroups.find((item) => item.id === row.group_id) : null;
@@ -902,11 +1171,12 @@
   const initialNodes = [
     toUniverseNode(universe),
     ...elementGroups.map(toGroupNode),
-    ...elements.map(toElementNode)
+    ...elements.map(toElementNode),
+    ...canvasNotes.map(toNoteNode)
   ];
 
   function toRecordId(nodeId) {
-    return String(nodeId || "").replace(/^(universe|element|group):/, "");
+    return String(nodeId || "").replace(/^(universe|element|group|note):/, "");
   }
 
   function toNodeId(recordId) {
@@ -920,6 +1190,10 @@
 
   function isGroupNodeId(nodeId) {
     return String(nodeId || "").startsWith("group:");
+  }
+
+  function isNoteNodeId(nodeId) {
+    return String(nodeId || "").startsWith("note:");
   }
 
   function toLinkEdge(link) {
@@ -1865,6 +2139,12 @@
     if (node.data.kind === "universe") {
       payload.canvas_position_x = Number(node.position.x);
       payload.canvas_position_y = Number(node.position.y);
+    } else if (node.data.kind === "note") {
+      tableName = "canvas_notes";
+      payload.position_x = Number(node.position.x);
+      payload.position_y = Number(node.position.y);
+      payload.width = Number(node.style?.width || node.measured?.width || node.width || DEFAULT_NOTE_WIDTH);
+      payload.height = Number(node.style?.height || node.measured?.height || node.height || DEFAULT_NOTE_HEIGHT);
     } else if (node.data.kind === "group") {
       tableName = "element_groups";
       payload.position_x = Number(node.position.x);
@@ -1896,6 +2176,12 @@
 
   function estimateNodeSize(node, format = DEFAULT_UNIVERSE_FORMAT) {
     const hasTopImage = format.nodeImagePlacement === "top" && Boolean(node.data?.images?.length);
+    if (node.data?.kind === "note") {
+      return {
+        width: Number(node.measured?.width || node.width || node.style?.width || DEFAULT_NOTE_WIDTH),
+        height: Number(node.measured?.height || node.height || node.style?.height || DEFAULT_NOTE_HEIGHT)
+      };
+    }
     if (node.data?.kind === "group" && node.style?.width && node.style?.height) {
       return {
         width: Number(node.style.width),
@@ -1935,7 +2221,7 @@
   }
 
   function getLayoutNodes(currentNodes) {
-    return currentNodes.filter((node) => node.data?.kind === "group" || !node.parentId);
+    return currentNodes.filter((node) => node.data?.kind !== "note" && (node.data?.kind === "group" || !node.parentId));
   }
 
   function getLayoutOwnerId(nodeId, nodesById, layoutNodeIds) {
@@ -2050,7 +2336,7 @@
 
     for (let pass = 0; pass < 4; pass += 1) {
       const topLevelRects = nextNodes
-        .filter((node) => !node.parentId)
+        .filter((node) => !node.parentId && node.data?.kind !== "note")
         .map((node) => getTopLevelLayoutRect(node, format))
         .sort((left, right) => left.y - right.y || left.x - right.x);
       let movedAny = false;
@@ -2092,6 +2378,49 @@
     return nextNodes;
   }
 
+  function nudgeNotesAwayFromLayoutNodes(nodesToResolve, format = DEFAULT_UNIVERSE_FORMAT) {
+    const margin = Math.max(28, Number(format.nodeLayoutGap || 12) * 2);
+    const nextNodes = nodesToResolve.map((node) => ({ ...node }));
+    const layoutRects = nextNodes
+      .filter((node) => !node.parentId && node.data?.kind !== "note")
+      .map((node) => getTopLevelLayoutRect(node, format));
+
+    nextNodes.forEach((node, index) => {
+      if (node.data?.kind !== "note") {
+        return;
+      }
+      const size = estimateNodeSize(node, format);
+      let rect = {
+        id: node.id,
+        x: Number(node.position?.x || 0),
+        y: Number(node.position?.y || 0),
+        width: size.width,
+        height: size.height
+      };
+      for (let pass = 0; pass < 6; pass += 1) {
+        const overlap = layoutRects.find((layoutRect) => rectsOverlap(layoutRect, rect, margin));
+        if (!overlap) {
+          break;
+        }
+        rect = {
+          ...rect,
+          y: Math.round(overlap.y + overlap.height + margin)
+        };
+      }
+      if (rect.y !== Number(node.position?.y || 0)) {
+        nextNodes[index] = {
+          ...node,
+          position: {
+            x: Number(node.position?.x || 0),
+            y: rect.y
+          }
+        };
+      }
+    });
+
+    return nextNodes;
+  }
+
   function applyLayoutPositions(currentNodes, positionsById, format = DEFAULT_UNIVERSE_FORMAT) {
     const nextNodes = currentNodes.map((node) => {
       if (node.parentId) {
@@ -2104,7 +2433,7 @@
       };
     });
 
-    return resolveTopLevelLayoutCollisions(nextNodes, format);
+    return nudgeNotesAwayFromLayoutNodes(resolveTopLevelLayoutCollisions(nextNodes, format), format);
   }
 
   function createColumnAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
@@ -2817,7 +3146,10 @@
     const [richDetailsData, setRichDetailsData] = React.useState(null);
     const [richDetailsMode, setRichDetailsMode] = React.useState("view");
     const [contextMenu, setContextMenu] = React.useState(null);
+    const [canvasContextMenu, setCanvasContextMenu] = React.useState(null);
+    const [pendingNoteStyle, setPendingNoteStyle] = React.useState(null);
     const [dropTargetGroupId, setDropTargetGroupId] = React.useState("");
+    const [resizeGroupIds, setResizeGroupIds] = React.useState(() => new Set());
     const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
@@ -2833,7 +3165,8 @@
     const layerAssignmentsRef = React.useRef(layerAssignments);
     const activeLayerIdRef = React.useRef(activeLayerId);
     const dropTargetGroupIdRef = React.useRef("");
-    const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode, groupNode: GroupNode }), []);
+    const noteSaveTimersRef = React.useRef(new Map());
+    const nodeTypes = React.useMemo(() => ({ universe: UniverseNode, element: ElementNode, groupNode: GroupNode, note: NoteNode }), []);
     const activeLayer = React.useMemo(() => layers.find((layer) => layer.id === activeLayerId) || null, [layers, activeLayerId]);
     const activeLayerEntries = React.useMemo(() => getEntriesForLayer(activeLayerId, layerEntries), [activeLayerId, layerEntries]);
     const visibleLayerId = layerModeActive ? activeLayerId : "";
@@ -2921,6 +3254,10 @@
         .filter((node) => node.data?.kind === "group" && !snapshotNodeIds.has(node.id))
         .map((node) => node.data.recordId)
         .filter(Boolean);
+      const removedNoteIds = previousSnapshot.nodes
+        .filter((node) => node.data?.kind === "note" && !snapshotNodeIds.has(node.id))
+        .map((node) => node.data.recordId)
+        .filter(Boolean);
       const groupUpserts = snapshot.nodes
         .filter((node) => node.data?.kind === "group" && node.data?.recordId)
         .map((node) => ({
@@ -2958,6 +3295,22 @@
             updated_at: new Date().toISOString()
           };
         });
+      const noteUpserts = snapshot.nodes
+        .filter((node) => node.data?.kind === "note" && node.data?.recordId)
+        .map((node) => ({
+          id: node.data.recordId,
+          universe_id: universe.id,
+          title: node.data.title || "Note",
+          content: node.data.content || null,
+          position_x: Math.round(Number(node.position?.x || 0)),
+          position_y: Math.round(Number(node.position?.y || 0)),
+          width: Number(node.style?.width || node.measured?.width || node.width || DEFAULT_NOTE_WIDTH),
+          height: Number(node.style?.height || node.measured?.height || node.height || DEFAULT_NOTE_HEIGHT),
+          bg_color: sanitizeColor(node.data.bgColor, DEFAULT_NOTE_BG_COLOR),
+          border_color: sanitizeColor(node.data.borderColor, DEFAULT_NOTE_BORDER_COLOR),
+          text_color: sanitizeColor(node.data.textColor, DEFAULT_NOTE_TEXT_COLOR),
+          updated_at: new Date().toISOString()
+        }));
       const nextEdgeIds = new Set(snapshot.edges
         .filter((edge) => edge.data?.recordId && !String(edge.id).startsWith("proxy:"))
         .map((edge) => edge.data.recordId));
@@ -2973,11 +3326,17 @@
       if (removedGroupIds.length) {
         await window.centralisSupabase.from("element_groups").delete().in("id", removedGroupIds);
       }
+      if (removedNoteIds.length) {
+        await window.centralisSupabase.from("canvas_notes").delete().in("id", removedNoteIds);
+      }
       if (groupUpserts.length) {
         await window.centralisSupabase.from("element_groups").upsert(groupUpserts);
       }
       if (elementUpserts.length) {
         await window.centralisSupabase.from("elements").upsert(elementUpserts);
+      }
+      if (noteUpserts.length) {
+        await window.centralisSupabase.from("canvas_notes").upsert(noteUpserts);
       }
       await saveNodePositions(snapshot.nodes.filter((node) => node.data?.kind === "universe" && node.data?.recordId));
       await Promise.all(snapshot.edges.map((edge) => {
@@ -3090,6 +3449,9 @@
             ...node,
             selected: anchorContainer === "ungrouped"
           };
+        }
+        if (node.data?.kind === "note") {
+          return node;
         }
         if (node.data?.kind !== "element") {
           return { ...node, selected: false };
@@ -6185,7 +6547,7 @@
       if (!connection.source || !connection.target || connection.source === connection.target) {
         return;
       }
-      if (isGroupNodeId(connection.source) || isGroupNodeId(connection.target)) {
+      if (isGroupNodeId(connection.source) || isGroupNodeId(connection.target) || isNoteNodeId(connection.source) || isNoteNodeId(connection.target)) {
         return;
       }
       pushCanvasHistory();
@@ -6264,11 +6626,169 @@
       }
     }
 
+    function getViewportCenterPosition() {
+      const wrapperRect = reactFlowWrapper.current?.getBoundingClientRect();
+      if (!reactFlowInstance.current || !wrapperRect) {
+        return { x: Number(universe.canvas_position_x || 120) + 360, y: Number(universe.canvas_position_y || 120) + 80 };
+      }
+      return reactFlowInstance.current.project({
+        x: wrapperRect.width / 2,
+        y: wrapperRect.height / 2
+      });
+    }
+
+    async function createNoteAt(position = getViewportCenterPosition()) {
+      if (!window.centralisSupabase) {
+        setTransferStatus("Supabase is not available.", "error");
+        return null;
+      }
+
+      const id = createId();
+      const payload = {
+        id,
+        universe_id: universe.id,
+        title: "Note",
+        content: "",
+        position_x: Math.round(Number(position.x || 0)),
+        position_y: Math.round(Number(position.y || 0)),
+        width: DEFAULT_NOTE_WIDTH,
+        height: DEFAULT_NOTE_HEIGHT,
+        bg_color: DEFAULT_NOTE_BG_COLOR,
+        border_color: DEFAULT_NOTE_BORDER_COLOR,
+        text_color: DEFAULT_NOTE_TEXT_COLOR
+      };
+
+      pushCanvasHistory();
+      const { data, error } = await window.centralisSupabase
+        .from("canvas_notes")
+        .insert(payload)
+        .select("*")
+        .single();
+
+      if (error) {
+        setTransferStatus(`Could not create note: ${error.message}`, "error");
+        return null;
+      }
+
+      const noteNode = toNoteNode(data || payload);
+      setNodes((currentNodes) => [
+        ...currentNodes.map((node) => ({ ...node, selected: false })),
+        { ...noteNode, selected: true }
+      ]);
+      setTransferStatus("Note created.", "success");
+      return noteNode;
+    }
+
+    async function deleteNoteNode(node) {
+      if (!node?.data?.recordId || !window.centralisSupabase) {
+        return;
+      }
+      const confirmed = window.confirm(`Delete note "${node.data.title || "Note"}"?`);
+      if (!confirmed) {
+        return;
+      }
+
+      pushCanvasHistory();
+      const { error } = await window.centralisSupabase
+        .from("canvas_notes")
+        .delete()
+        .eq("id", node.data.recordId);
+
+      if (error) {
+        setTransferStatus(`Could not delete note: ${error.message}`, "error");
+        return;
+      }
+
+      setNodes((currentNodes) => currentNodes.filter((currentNode) => currentNode.id !== node.id));
+      setTransferStatus("Note deleted.", "success");
+    }
+
+    function scheduleNoteSave(nodeId, patch, flush = false) {
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        if (node.id !== nodeId || node.data?.kind !== "note") {
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...patch
+          }
+        };
+      }));
+      nodesRef.current = nodesRef.current.map((node) => {
+        if (node.id !== nodeId || node.data?.kind !== "note") {
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...patch
+          }
+        };
+      });
+
+      const existingTimer = noteSaveTimersRef.current.get(nodeId);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      const save = async () => {
+        noteSaveTimersRef.current.delete(nodeId);
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (!node?.data?.recordId || node.data.kind !== "note" || !window.centralisSupabase) {
+          return;
+        }
+        const { error } = await window.centralisSupabase
+          .from("canvas_notes")
+          .update({
+            title: node.data.title || "Note",
+            content: node.data.content || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", node.data.recordId);
+        if (error) {
+          console.error("Could not save note:", error);
+        }
+      };
+
+      if (flush) {
+        save();
+      } else {
+        noteSaveTimersRef.current.set(nodeId, window.setTimeout(save, 650));
+      }
+    }
+
+    function resizeNoteNode(nodeId, width, height, persist = false) {
+      const nextWidth = Math.max(180, Math.round(Number(width || DEFAULT_NOTE_WIDTH)));
+      const nextHeight = Math.max(120, Math.round(Number(height || DEFAULT_NOTE_HEIGHT)));
+      setNodes((currentNodes) => currentNodes.map((node) => (
+        node.id === nodeId
+          ? { ...node, style: { ...(node.style || {}), width: nextWidth, height: nextHeight } }
+          : node
+      )));
+      if (!persist || !window.centralisSupabase) {
+        return;
+      }
+      const node = nodesRef.current.find((item) => item.id === nodeId);
+      const noteId = node?.data?.recordId || toRecordId(nodeId);
+      window.centralisSupabase
+        .from("canvas_notes")
+        .update({ width: nextWidth, height: nextHeight, updated_at: new Date().toISOString() })
+        .eq("id", noteId)
+        .then(({ error }) => {
+          if (error) {
+            console.error("Could not save note size:", error);
+          }
+        });
+    }
+
     function handleConnectEnd(event) {
       const targetElement = event.target instanceof Element ? event.target : null;
       const targetIsPane = Boolean(targetElement?.classList?.contains("react-flow__pane"));
       const targetIsGroupCanvas = Boolean(targetElement?.closest(".group-flow-node"));
-      const targetIsConcreteNode = Boolean(targetElement?.closest(".element-flow-node, .universe-flow-node, .react-flow__handle"));
+      const targetIsConcreteNode = Boolean(targetElement?.closest(".element-flow-node, .universe-flow-node, .note-flow-node, .react-flow__handle"));
       if ((!targetIsPane && !targetIsGroupCanvas) || targetIsConcreteNode || !reactFlowInstance.current || !reactFlowWrapper.current) {
         return;
       }
@@ -6277,7 +6797,7 @@
       if (!state?.sourceNodeId) {
         return;
       }
-      if (isGroupNodeId(state.sourceNodeId)) {
+      if (isGroupNodeId(state.sourceNodeId) || isNoteNodeId(state.sourceNodeId)) {
         window.__centralisConnectionStart = null;
         return;
       }
@@ -6606,6 +7126,113 @@
       return fitGroupsInNodes(locallyLayoutedNodes, [groupId]);
     }
 
+    function getGroupResizeLayout(currentNodes, groupId, requestedWidth, requestedHeight) {
+      const groupNodeId = String(groupId).startsWith("group:") ? groupId : `group:${groupId}`;
+      const groupNode = currentNodes.find((node) => node.id === groupNodeId);
+      if (!groupNode || groupNode.data?.collapsed) {
+        return { nodes: currentNodes, groupUpdates: [], childUpdates: [] };
+      }
+
+      const childNodes = currentNodes.filter((node) => node.parentId === groupNodeId);
+      const requestedGroupWidth = Math.max(280, Math.round(Number(requestedWidth || groupNode.style?.width || 360)));
+      const requestedGroupHeight = Math.max(190, Math.round(Number(requestedHeight || groupNode.style?.height || 260)));
+      if (!childNodes.length) {
+        const groupUpdate = {
+          id: groupNode.data.recordId,
+          x: Math.round(Number(groupNode.position?.x || 0)),
+          y: Math.round(Number(groupNode.position?.y || 0)),
+          width: requestedGroupWidth,
+          height: requestedGroupHeight
+        };
+        return {
+          nodes: currentNodes.map((node) => node.id === groupNodeId
+            ? {
+                ...node,
+                style: { ...node.style, width: requestedGroupWidth, height: requestedGroupHeight },
+                data: { ...node.data, expandedWidth: requestedGroupWidth, expandedHeight: requestedGroupHeight }
+              }
+            : node),
+          groupUpdates: [groupUpdate],
+          childUpdates: []
+        };
+      }
+
+      const horizontalGap = 34;
+      const verticalGap = 34;
+      const paddingX = 44;
+      const paddingTop = 72;
+      const availableWidth = Math.max(120, requestedGroupWidth - paddingX * 2);
+      const sortedChildren = [...childNodes].sort((left, right) => {
+        const leftY = Number(left.position?.y || 0);
+        const rightY = Number(right.position?.y || 0);
+        return leftY - rightY || Number(left.position?.x || 0) - Number(right.position?.x || 0);
+      });
+      let cursorX = paddingX;
+      let cursorY = paddingTop;
+      let rowHeight = 0;
+      const normalizedChildren = new Map();
+      sortedChildren.forEach((node) => {
+        const size = estimateCanvasNodeSize(node);
+        if (cursorX > paddingX && cursorX + size.width > paddingX + availableWidth) {
+          cursorX = paddingX;
+          cursorY += rowHeight + verticalGap;
+          rowHeight = 0;
+        }
+        normalizedChildren.set(node.id, {
+          x: Math.round(cursorX),
+          y: Math.round(cursorY)
+        });
+        cursorX += size.width + horizontalGap;
+        rowHeight = Math.max(rowHeight, size.height);
+      });
+      const groupUpdate = {
+        id: groupNode.data.recordId,
+        x: Math.round(Number(groupNode.position?.x || 0)),
+        y: Math.round(Number(groupNode.position?.y || 0)),
+        width: requestedGroupWidth,
+        height: requestedGroupHeight
+      };
+      const childUpdates = childNodes.map((node) => ({
+        id: node.data.recordId,
+        ...(normalizedChildren.get(node.id) || node.position)
+      }));
+      return {
+        nodes: currentNodes.map((node) => {
+          if (node.id === groupNodeId) {
+            return {
+              ...node,
+              style: { ...node.style, width: requestedGroupWidth, height: requestedGroupHeight },
+              data: { ...node.data, expandedWidth: requestedGroupWidth, expandedHeight: requestedGroupHeight }
+            };
+          }
+          const position = normalizedChildren.get(node.id);
+          if (!position) {
+            return node;
+          }
+          return {
+            ...node,
+            position,
+            parentId: groupNodeId,
+            extent: "parent",
+            expandParent: false
+          };
+        }),
+        groupUpdates: [groupUpdate],
+        childUpdates
+      };
+    }
+
+    function previewResizeGroup(groupId, width, height) {
+      if (!groupId) {
+        return;
+      }
+      setNodes((currentNodes) => {
+        const fitted = getGroupResizeLayout(currentNodes, groupId, width, height);
+        nodesRef.current = fitted.nodes;
+        return fitted.nodes;
+      });
+    }
+
     async function autoLayoutGroup(groupId) {
       if (!groupId) {
         setTransferStatus("No group selected for auto layout.", "error");
@@ -6619,6 +7246,20 @@
       nodesRef.current = finalNodes;
       await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
       setTransferStatus("Auto-layout complete for group.", "success");
+      return true;
+    }
+
+    async function resizeAndLayoutGroup(groupId, width, height) {
+      if (!groupId) {
+        return false;
+      }
+      pushCanvasHistory();
+      const fitted = getGroupResizeLayout(nodesRef.current, groupId, width, height);
+      const finalNodes = fitted.nodes.map((node) => ({ ...node }));
+      setNodes(finalNodes);
+      nodesRef.current = finalNodes;
+      await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
+      setTransferStatus("Group resized.", "success");
       return true;
     }
 
@@ -8028,6 +8669,22 @@
     }, [nodes]);
 
     React.useEffect(() => {
+      const noteButton = document.querySelector("[data-create-note]");
+      if (!noteButton) {
+        return undefined;
+      }
+
+      function handleNoteClick() {
+        createNoteAt(getViewportCenterPosition());
+      }
+
+      noteButton.addEventListener("click", handleNoteClick);
+      return () => {
+        noteButton.removeEventListener("click", handleNoteClick);
+      };
+    }, []);
+
+    React.useEffect(() => {
       const undoButton = document.querySelector("[data-undo-canvas]");
       const redoButton = document.querySelector("[data-redo-canvas]");
       if (!undoButton || !redoButton) {
@@ -8164,14 +8821,148 @@
       function handleUpdateGroupColor(event) {
         updateGroupColor(event.detail?.groupId, event.detail?.color);
       }
+      function handlePreviewResizeGroup(event) {
+        previewResizeGroup(event.detail?.groupId, event.detail?.width, event.detail?.height);
+      }
+      function handleResizeGroup(event) {
+        resizeAndLayoutGroup(event.detail?.groupId, event.detail?.width, event.detail?.height);
+      }
 
       window.addEventListener("centralis:toggle-group", handleToggleGroup);
       window.addEventListener("centralis:update-group-color", handleUpdateGroupColor);
+      window.addEventListener("centralis:preview-resize-group", handlePreviewResizeGroup);
+      window.addEventListener("centralis:resize-group", handleResizeGroup);
       return () => {
         window.removeEventListener("centralis:toggle-group", handleToggleGroup);
         window.removeEventListener("centralis:update-group-color", handleUpdateGroupColor);
+        window.removeEventListener("centralis:preview-resize-group", handlePreviewResizeGroup);
+        window.removeEventListener("centralis:resize-group", handleResizeGroup);
       };
     }, []);
+
+    React.useEffect(() => {
+      function handleUpdateNote(event) {
+        const detail = event.detail || {};
+        const patch = { ...(detail.patch || {}) };
+        const flush = Boolean(patch.flush);
+        delete patch.flush;
+        scheduleNoteSave(detail.nodeId, patch, flush);
+      }
+      function handlePreviewResizeNote(event) {
+        resizeNoteNode(event.detail?.nodeId, event.detail?.width, event.detail?.height, false);
+      }
+      function handleResizeNote(event) {
+        resizeNoteNode(event.detail?.nodeId, event.detail?.width, event.detail?.height, true);
+      }
+
+      window.addEventListener("centralis:update-note", handleUpdateNote);
+      window.addEventListener("centralis:preview-resize-note", handlePreviewResizeNote);
+      window.addEventListener("centralis:resize-note", handleResizeNote);
+      return () => {
+        window.removeEventListener("centralis:update-note", handleUpdateNote);
+        window.removeEventListener("centralis:preview-resize-note", handlePreviewResizeNote);
+        window.removeEventListener("centralis:resize-note", handleResizeNote);
+        noteSaveTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+        noteSaveTimersRef.current.clear();
+      };
+    }, []);
+
+    React.useEffect(() => {
+      const modal = document.getElementById("note-style-modal");
+      const form = modal?.querySelector("[data-note-style-form]");
+      const closeButtons = modal?.querySelectorAll("[data-close-note-style]");
+      const status = modal?.querySelector("[data-note-style-status]");
+      if (!modal || !form) {
+        return undefined;
+      }
+
+      if (pendingNoteStyle?.nodeId) {
+        const node = nodesRef.current.find((item) => item.id === pendingNoteStyle.nodeId);
+        form.elements["note-bg-color"].value = sanitizeColor(node?.data?.bgColor, DEFAULT_NOTE_BG_COLOR);
+        form.elements["note-border-color"].value = sanitizeColor(node?.data?.borderColor, DEFAULT_NOTE_BORDER_COLOR);
+        form.elements["note-text-color"].value = sanitizeColor(node?.data?.textColor, DEFAULT_NOTE_TEXT_COLOR);
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-error");
+        }
+        modal.hidden = false;
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+        setPendingNoteStyle(null);
+      }
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const nodeId = pendingNoteStyle?.nodeId;
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        if (!node?.data?.recordId) {
+          closeModal();
+          return;
+        }
+        const formData = new FormData(form);
+        const bgColor = sanitizeColor(formData.get("note-bg-color"), DEFAULT_NOTE_BG_COLOR);
+        const borderColor = sanitizeColor(formData.get("note-border-color"), DEFAULT_NOTE_BORDER_COLOR);
+        const textColor = sanitizeColor(formData.get("note-text-color"), DEFAULT_NOTE_TEXT_COLOR);
+
+        const { error } = await window.centralisSupabase
+          .from("canvas_notes")
+          .update({
+            bg_color: bgColor,
+            border_color: borderColor,
+            text_color: textColor,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", node.data.recordId);
+
+        if (error) {
+          if (status) {
+            status.textContent = `Could not save style: ${error.message}`;
+            status.classList.add("is-error");
+          }
+          return;
+        }
+
+        setNodes((currentNodes) => currentNodes.map((currentNode) => (
+          currentNode.id === nodeId
+            ? {
+              ...currentNode,
+              data: {
+                ...currentNode.data,
+                bgColor,
+                borderColor,
+                textColor
+              }
+            }
+            : currentNode
+        )));
+        closeModal();
+      }
+
+      function handleBackdropClick(event) {
+        if (event.target === modal) {
+          closeModal();
+        }
+      }
+
+      function handleEscape(event) {
+        if (event.key === "Escape" && !modal.hidden) {
+          closeModal();
+        }
+      }
+
+      form.addEventListener("submit", handleSubmit);
+      modal.addEventListener("click", handleBackdropClick);
+      closeButtons.forEach((button) => button.addEventListener("click", closeModal));
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        form.removeEventListener("submit", handleSubmit);
+        modal.removeEventListener("click", handleBackdropClick);
+        closeButtons.forEach((button) => button.removeEventListener("click", closeModal));
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [pendingNoteStyle]);
 
     React.useEffect(() => {
       const toggle = document.querySelector("[data-toggle-layers-mode]");
@@ -8409,6 +9200,7 @@
       function handleEscape(event) {
         if (event.key === "Escape") {
           setContextMenu(null);
+          setCanvasContextMenu(null);
         }
       }
       document.addEventListener("keydown", handleEscape);
@@ -8446,10 +9238,11 @@
         ...node,
         data: {
           ...node.data,
-          isDropTarget: node.id === dropTargetGroupId
+          isDropTarget: node.id === dropTargetGroupId,
+          resizeMode: resizeGroupIds.has(node.data.recordId)
         }
       };
-    }), [nodes, dropTargetGroupId]);
+    }), [nodes, dropTargetGroupId, resizeGroupIds]);
 
     const renderedNodes = React.useMemo(() => getVisibleNodesForGroups(nodesWithDropTarget), [nodesWithDropTarget]);
     const renderedEdges = React.useMemo(() => getVisibleEdgesForGroups(edges, nodes), [edges, nodes]);
@@ -8470,8 +9263,38 @@
       });
     }, []);
 
+    const handlePaneContextMenu = React.useCallback((event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const wrapperRect = reactFlowWrapper.current?.getBoundingClientRect();
+      const canvasX = Math.max(8, (event.clientX || 0) - (wrapperRect?.left || 0));
+      const canvasY = Math.max(8, (event.clientY || 0) - (wrapperRect?.top || 0));
+      let position = { x: canvasX, y: canvasY };
+      if (reactFlowInstance.current) {
+        position = reactFlowInstance.current.project({ x: canvasX, y: canvasY });
+      }
+      setContextMenu(null);
+      setCanvasContextMenu({ x: canvasX, y: canvasY, position });
+    }, []);
+
     function closeContextMenu() {
       setContextMenu(null);
+      setCanvasContextMenu(null);
+    }
+
+    function toggleGroupResizeMode(groupId) {
+      if (!groupId) {
+        return;
+      }
+      setResizeGroupIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        if (nextIds.has(groupId)) {
+          nextIds.delete(groupId);
+        } else {
+          nextIds.add(groupId);
+        }
+        return nextIds;
+      });
     }
 
     const contextMenuNode = contextMenu
@@ -8486,6 +9309,7 @@
     const contextGroupId = contextMenuNode?.data?.kind === "group"
       ? contextMenuNode.data.recordId
       : contextSelectedElements[0]?.data?.groupId || "";
+    const contextGroupResizeMode = Boolean(contextGroupId && resizeGroupIds.has(contextGroupId));
 
     return React.createElement(
       "div",
@@ -8513,11 +9337,12 @@
         onNodeDrag: handleNodeDrag,
         onNodeDragStop: handleNodeDragStop,
         onNodeContextMenu: handleNodeContextMenu,
+        onPaneContextMenu: handlePaneContextMenu,
         onNodeClick: closeContextMenu,
         onPaneClick: closeContextMenu,
         onMoveStart: closeContextMenu,
         onConnectStart: (_event, params) => {
-          if (isGroupNodeId(params.nodeId)) {
+          if (isGroupNodeId(params.nodeId) || isNoteNodeId(params.nodeId)) {
             window.__centralisConnectionStart = null;
             return;
           }
@@ -8640,6 +9465,49 @@
           },
           "Delete"
         ),
+        contextMenuNode?.data?.kind === "note" && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              setPendingNoteStyle({ nodeId: contextMenuNode.id });
+            }
+          },
+          "Style"
+        ),
+        contextMenuNode?.data?.kind === "note" && React.createElement("div", {
+          className: "node-context-menu-separator",
+          role: "separator"
+        }),
+        contextMenuNode?.data?.kind === "note" && React.createElement(
+          "button",
+          {
+            className: "danger-menu-item",
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await deleteNoteNode(contextMenuNode);
+            }
+          },
+          "Delete"
+        ),
+        contextMenuNode?.data?.kind === "group" && React.createElement(
+          "button",
+          {
+            className: contextGroupResizeMode ? "is-active" : "",
+            type: "button",
+            "aria-pressed": contextGroupResizeMode ? "true" : "false",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              toggleGroupResizeMode(contextGroupId);
+            }
+          },
+          contextGroupResizeMode ? "Resize On" : "Resize"
+        ),
         contextMenuNode?.data?.kind === "group" && React.createElement(
           "button",
           {
@@ -8667,6 +9535,31 @@
             }
           },
           "Ungroup"
+        )
+      ),
+      canvasContextMenu && React.createElement(
+        "div",
+        {
+          className: "node-context-menu",
+          style: {
+            left: canvasContextMenu.x,
+            top: canvasContextMenu.y
+          },
+          onClick: closeContextMenu,
+          onContextMenu: (event) => event.preventDefault()
+        },
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              const position = canvasContextMenu.position;
+              closeContextMenu();
+              await createNoteAt(position);
+            }
+          },
+          "Add Note"
         )
       )
     );

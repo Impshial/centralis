@@ -1038,6 +1038,7 @@ body.dark-mode .moon-icon {
 .tool-action > ph-upload-simple,
 .tool-action > ph-download-simple,
 .tool-action > ph-selection-plus,
+.tool-action > ph-note-pencil,
 .tool-action > ph-arrow-counter-clockwise,
 .tool-action > ph-arrow-clockwise,
 .tool-action > ph-stack,
@@ -3463,6 +3464,26 @@ body.is-resizing-details {
   border-style: solid;
 }
 
+.group-flow-node.is-resize-mode {
+  border-style: solid;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 42%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.group-resize-line {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent) !important;
+}
+
+.group-resize-handle {
+  width: 12px !important;
+  height: 12px !important;
+  background: var(--accent-strong) !important;
+  border: 2px solid var(--surface) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 0 1px var(--line), 0 0 12px color-mix(in srgb, var(--accent) 36%, transparent) !important;
+}
+
 .group-flow-header {
   display: flex;
   align-items: start;
@@ -3540,6 +3561,106 @@ body.is-resizing-details {
   opacity: 1;
 }
 
+.note-flow-node {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-width: 180px;
+  min-height: 120px;
+  padding: 12px;
+  color: var(--note-text-color, #2f2410);
+  border: 1px solid color-mix(in srgb, var(--note-border-color, #d97706) 28%, rgb(47 36 16 / 46%));
+  border-left: 4px solid var(--note-border-color, #d97706);
+  border-radius: 8px;
+  box-shadow:
+    0 14px 30px rgb(0 0 0 / 18%),
+    inset 0 0 0 1px rgb(255 255 255 / 20%);
+  overflow: visible;
+}
+
+.note-flow-node.is-selected {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--note-border-color, #d97706) 62%, transparent),
+    0 14px 30px rgb(0 0 0 / 18%),
+    inset 0 0 0 1px rgb(255 255 255 / 20%);
+}
+
+.note-flow-node.is-editing {
+  cursor: text;
+}
+
+.note-title-display,
+.note-content-display {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.note-title-display {
+  min-height: 28px;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.note-content-display {
+  overflow: visible;
+  color: color-mix(in srgb, var(--note-text-color, #2f2410) 86%, transparent);
+  font-size: 0.86rem;
+  font-weight: 620;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.note-title-input,
+.note-content-input {
+  width: 100%;
+  color: var(--note-text-color, #2f2410);
+  background: transparent;
+  border: 0;
+  outline: none;
+  font: inherit;
+  -webkit-text-fill-color: var(--note-text-color, #2f2410);
+}
+
+.note-title-input {
+  min-height: 28px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.note-content-input {
+  min-height: 0;
+  overflow: hidden;
+  resize: none;
+  color: color-mix(in srgb, #2f2410 88%, transparent);
+  font-size: 0.86rem;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.note-title-input::placeholder,
+.note-content-input::placeholder {
+  color: color-mix(in srgb, var(--note-text-color, #2f2410) 46%, transparent);
+}
+
+.note-resize-line {
+  border-color: color-mix(in srgb, var(--note-border-color, #d97706) 50%, transparent) !important;
+}
+
+.note-resize-handle {
+  width: 9px !important;
+  height: 9px !important;
+  background: color-mix(in srgb, var(--note-border-color, #d97706) 82%, #ffffff) !important;
+  border: 1px solid color-mix(in srgb, var(--note-border-color, #d97706) 72%, #ffffff) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%) !important;
+  opacity: 0.8;
+}
+
 .node-context-menu {
   position: absolute;
   z-index: 50;
@@ -3570,6 +3691,11 @@ body.is-resizing-details {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 13%, transparent);
   outline: none;
+}
+
+.node-context-menu button.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .node-context-menu .danger-menu-item:hover,
