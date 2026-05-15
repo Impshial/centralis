@@ -1199,6 +1199,36 @@ function bindUniverseCardMenus() {
 }
 
 menuTriggers.forEach((trigger) => {
+  if (trigger.classList.contains("category-button")) {
+    const wrap = trigger.closest(".menu-wrap");
+
+    wrap?.addEventListener("mouseenter", () => {
+      closeMenus(trigger);
+      trigger.setAttribute("aria-expanded", "true");
+    });
+
+    wrap?.addEventListener("mouseleave", () => {
+      trigger.setAttribute("aria-expanded", "false");
+    });
+
+    wrap?.addEventListener("focusout", (event) => {
+      if (!wrap.contains(event.relatedTarget)) {
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    trigger.addEventListener("focus", () => {
+      closeMenus(trigger);
+      trigger.setAttribute("aria-expanded", "true");
+    });
+
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+    });
+
+    return;
+  }
+
   trigger.addEventListener("click", () => {
     const isOpen = trigger.getAttribute("aria-expanded") === "true";
     closeMenus(trigger);

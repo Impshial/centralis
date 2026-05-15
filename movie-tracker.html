@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movie Tracker | Centralis</title>
+  <link rel="stylesheet" href="styles.css?v=movie-tracker-v7">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="movie-tracker">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header">
+      <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+
+      <nav class="category-nav" aria-label="Primary categories">
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="World building">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M3.6 9h16.8"></path>
+              <path d="M3.6 15h16.8"></path>
+              <path d="M12 3a15 15 0 0 1 0 18"></path>
+              <path d="M12 3a15 15 0 0 0 0 18"></path>
+            </svg>
+            <span>World Building</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+            <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
+            <a href="chronicle.html" role="menuitem">Chronicle</a>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Entertainment">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+              <path d="M8 21h8"></path>
+              <path d="M12 18v3"></path>
+              <path d="m10 10 5 2-5 2z"></path>
+            </svg>
+            <span>Entertainment</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+            <button type="button" role="menuitem">Episode Roulette</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Utilities">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-5.1 5.1a2.1 2.1 0 0 0 3 3l5.1-5.1a4 4 0 0 0 5.4-5.4l-2.6 2.6-3-3z"></path>
+            </svg>
+            <span>Utilities</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="calendar.html" role="menuitem">Calendar</a>
+            <button type="button" role="menuitem">Tool One</button>
+            <button type="button" role="menuitem">Tool Two</button>
+            <button type="button" role="menuitem">Tool Three</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+            </svg>
+            <span>Settings</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <button type="button" role="menuitem">Preferences</button>
+            <button type="button" role="menuitem">Privacy</button>
+            <button type="button" role="menuitem">Shortcuts</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+          <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+          </svg>
+        </button>
+
+        <div class="menu-wrap user-menu">
+          <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4 21a8 8 0 0 1 16 0"></path>
+            </svg>
+          </button>
+          <div class="dropdown-menu align-right" role="menu">
+            <button type="button" role="menuitem">Profile</button>
+            <button type="button" role="menuitem">Account</button>
+            <button type="button" role="menuitem">Notifications</button>
+            <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="movie-page">
+      <section class="movie-main">
+        <section class="movie-list-card">
+          <div class="movie-list-header">
+            <div>
+              <h2>Your Movies</h2>
+              <p data-movie-count>Loading movies...</p>
+            </div>
+            <p class="movie-status" data-movie-status role="status"></p>
+          </div>
+          <div class="movie-table-shell">
+            <table class="movie-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" data-select-all-movies aria-label="Select all movies on page"></th>
+                  <th>Poster</th>
+                  <th>Title</th>
+                  <th>Year</th>
+                  <th>Director</th>
+                  <th>Franchise</th>
+                  <th>Collection</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody data-movie-rows></tbody>
+            </table>
+          </div>
+          <footer class="movie-pagination">
+            <button class="secondary-action" type="button" data-page-prev>Previous</button>
+            <span data-page-label>Page 1</span>
+            <button class="secondary-action" type="button" data-page-next>Next</button>
+          </footer>
+        </section>
+      </section>
+
+      <aside class="movie-side-panel" aria-label="Movie tools">
+        <div class="movie-sidebar-actions">
+          <button class="primary-action movie-wide-action" type="button" data-open-add-movie>
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            Add Movie
+          </button>
+        </div>
+        <div class="movie-actions-wrap">
+          <button class="secondary-action movie-wide-action" type="button" data-actions-toggle aria-expanded="false">
+            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+            Actions
+          </button>
+          <div class="movie-actions-menu" data-actions-menu hidden>
+            <button type="button" data-open-import><ph-upload-simple weight="bold"></ph-upload-simple>Import Movies</button>
+            <button type="button" data-bulk-downloaded disabled><ph-download-simple weight="bold"></ph-download-simple>Mark Downloaded (0)</button>
+            <button type="button" data-bulk-franchise disabled><ph-clapperboard weight="bold"></ph-clapperboard>Set Franchise (0)</button>
+            <button type="button" data-bulk-collection disabled><ph-clapperboard weight="bold"></ph-clapperboard>Set Collection (0)</button>
+            <hr>
+            <button type="button" data-open-omdb><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Process with OMDB</button>
+            <button type="button" data-open-tmdb><ph-image weight="bold"></ph-image>Fetch Posters</button>
+            <button type="button" data-open-franchises><ph-gear weight="bold"></ph-gear>Manage Franchises</button>
+            <button type="button" data-open-collections><ph-gear weight="bold"></ph-gear>Manage Collections</button>
+            <button type="button" data-export-movies><ph-download-simple weight="bold"></ph-download-simple>Export Movies</button>
+          </div>
+        </div>
+        <hr>
+        <section class="movie-tool-section">
+          <div class="movie-tool-heading">
+            <h2>Tools</h2>
+            <button type="button" data-refresh-movies aria-label="Refresh movies" title="Refresh movies">
+              <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+            </button>
+          </div>
+          <label class="movie-filter-field">
+            <span><ph-magnifying-glass weight="bold"></ph-magnifying-glass>Search</span>
+            <input type="search" data-search-movies placeholder="Title, director, actors...">
+          </label>
+          <label class="movie-filter-field">
+            <span><ph-sort-ascending weight="bold"></ph-sort-ascending>Sort</span>
+            <select data-sort-movies>
+              <option value="title-asc">A-Z</option>
+              <option value="title-desc">Z-A</option>
+              <option value="year-desc">Newest</option>
+              <option value="year-asc">Oldest</option>
+            </select>
+          </label>
+          <h3><ph-funnel weight="bold"></ph-funnel>Filters</h3>
+          <label class="movie-filter-field">
+            <span>Download Status</span>
+            <select data-filter-status>
+              <option value="all">All Movies</option>
+              <option value="downloaded">Downloaded</option>
+              <option value="missing">Not Downloaded</option>
+            </select>
+          </label>
+          <label class="movie-filter-field">
+            <span>Franchise</span>
+            <select data-filter-franchise></select>
+          </label>
+          <label class="movie-filter-field">
+            <span>Collection</span>
+            <select data-filter-collection></select>
+          </label>
+        </section>
+        <hr>
+        <section class="movie-statistics">
+          <button class="movie-section-toggle" type="button" data-statistics-toggle aria-expanded="true" aria-controls="movie-statistics-content">
+            <span>Statistics</span>
+            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+          </button>
+          <dl id="movie-statistics-content" data-movie-stats></dl>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="add-movie-modal" hidden>
+    <section class="modal-dialog movie-small-dialog" role="dialog" aria-modal="true" aria-labelledby="add-movie-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="add-movie-title">Add New Movie</h2>
+          <p class="modal-subtitle">Enter movie details. OMDB can fetch additional information later.</p>
+        </div>
+        <button class="modal-close" type="button" data-close-modal-target="add-movie-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      </div>
+      <form data-add-movie-form class="movie-form-grid">
+        <label class="form-field"><span>Title *</span><input name="title" placeholder="Movie title" required></label>
+        <label class="form-field"><span>Year Released *</span><input name="year_released" type="number" min="1888" max="3000" required></label>
+        <label class="form-field"><span>Franchise (Optional)</span><select name="franchise_id" data-add-franchise></select></label>
+        <label class="checkbox-field"><input type="checkbox" name="downloaded">Already Downloaded</label>
+        <p class="dialog-status" data-add-movie-status role="status"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-modal-target="add-movie-modal">Cancel</button>
+          <button class="primary-action" type="submit">Add Movie</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="movie-view-modal" hidden>
+    <section class="modal-dialog movie-view-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-view-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-view-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <div data-movie-view-content></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="movie-edit-modal" hidden>
+    <section class="modal-dialog movie-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-edit-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-edit-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <form data-edit-movie-form></form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="manager-modal" hidden>
+    <section class="modal-dialog movie-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="manager-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-modal-target="manager-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <div data-manager-content></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="movie-import-modal" hidden>
+    <section class="modal-dialog movie-small-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-import-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-import-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <h2 id="movie-import-title">Import Movies</h2>
+      <p class="modal-subtitle">Upload a CSV or JSON file with your movie list.</p>
+      <form data-import-form>
+        <label class="movie-drop-zone">
+          <input type="file" accept=".csv,.json,application/json,text/csv" data-import-file hidden>
+          <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+          <span data-import-file-label>Click to select CSV or JSON file</span>
+        </label>
+        <div class="movie-format-help">
+          <strong>Expected format:</strong>
+          <p>CSV columns or JSON fields: title, yearReleased, downloaded, franchise, collection</p>
+        </div>
+        <p class="dialog-status" data-import-status role="status"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-modal-target="movie-import-modal">Cancel</button>
+          <button class="primary-action" type="submit" disabled data-import-submit>Import</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="movie-process-modal" hidden>
+    <section class="modal-dialog movie-process-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-process-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-process-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <div data-process-content></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="movie-bulk-modal" hidden>
+    <section class="modal-dialog movie-small-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-bulk-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-bulk-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <form data-bulk-form></form>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="movie-tracker.js?v=movie-tracker-v7"></script>
+  <script>
+    window.setTimeout(() => {
+      if (!window.centralisMovieTrackerLoaded) {
+        const status = document.querySelector("[data-movie-status]");
+        if (status) {
+          status.textContent = "Movie Tracker script did not load. Check the browser console.";
+          status.classList.add("is-error");
+        }
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

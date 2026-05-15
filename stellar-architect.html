@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stellar Architect | Centralis</title>
+  <link rel="stylesheet" href="styles.css?v=stellar-v1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="stellar-architect">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header">
+      <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+
+      <nav class="category-nav" aria-label="Primary categories">
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="World building">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M3.6 9h16.8"></path>
+              <path d="M3.6 15h16.8"></path>
+              <path d="M12 3a15 15 0 0 1 0 18"></path>
+              <path d="M12 3a15 15 0 0 0 0 18"></path>
+            </svg>
+            <span>World Building</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+            <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
+            <a href="chronicle.html" role="menuitem">Chronicle</a>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Entertainment">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+              <path d="M8 21h8"></path>
+              <path d="M12 18v3"></path>
+              <path d="m10 10 5 2-5 2z"></path>
+            </svg>
+            <span>Entertainment</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+            <button type="button" role="menuitem">Episode Roulette</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Utilities">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-5.1 5.1a2.1 2.1 0 0 0 3 3l5.1-5.1a4 4 0 0 0 5.4-5.4l-2.6 2.6-3-3z"></path>
+            </svg>
+            <span>Utilities</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="calendar.html" role="menuitem">Calendar</a>
+            <button type="button" role="menuitem">Tool One</button>
+            <button type="button" role="menuitem">Tool Two</button>
+            <button type="button" role="menuitem">Tool Three</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+            </svg>
+            <span>Settings</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <button type="button" role="menuitem">Preferences</button>
+            <button type="button" role="menuitem">Privacy</button>
+            <button type="button" role="menuitem">Shortcuts</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+          <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+          </svg>
+        </button>
+
+        <div class="menu-wrap user-menu">
+          <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4 21a8 8 0 0 1 16 0"></path>
+            </svg>
+          </button>
+          <div class="dropdown-menu align-right" role="menu">
+            <button type="button" role="menuitem">Profile</button>
+            <button type="button" role="menuitem">Account</button>
+            <button type="button" role="menuitem">Notifications</button>
+            <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="stellar-page">
+      <section class="stellar-main" data-stellar-root>
+        <div class="stellar-loading">Loading Stellar Architect...</div>
+      </section>
+      <aside class="stellar-side-panel" aria-label="Star system hierarchy">
+        <button class="primary-action stellar-wide-action" type="button" data-open-generate-system data-stellar-side-generate>
+          <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+          Generate System
+        </button>
+        <div class="stellar-tree-shell" data-stellar-tree></div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="stellar-generate-modal" hidden>
+    <section class="modal-dialog stellar-generate-dialog" role="dialog" aria-modal="true" aria-labelledby="stellar-generate-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-stellar-modal aria-label="Close dialog">
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+      <h2 id="stellar-generate-title"><ph-star weight="fill" aria-hidden="true"></ph-star> Generate Star System</h2>
+      <p class="modal-subtitle">Create scientifically accurate stellar systems with customizable parameters.</p>
+      <form data-stellar-generate-form>
+        <h3>Basic Parameters</h3>
+        <div class="stellar-form-grid">
+          <label>
+            <span>Star Type Preference</span>
+            <select name="starType">
+              <option value="Random realistic main sequence">Random (Realistic)</option>
+              <option value="M-type red dwarf">M-type red dwarf</option>
+              <option value="K-type orange dwarf">K-type orange dwarf</option>
+              <option value="G-type yellow dwarf">G-type yellow dwarf</option>
+              <option value="F-type white star">F-type white star</option>
+              <option value="Binary-compatible primary">Binary-compatible primary</option>
+            </select>
+          </label>
+          <label>
+            <span>Number of Planets</span>
+            <select name="planetCount">
+              <option value="random">Random (1-12)</option>
+              <option value="few">Few (1-4)</option>
+              <option value="moderate">Moderate (3-7)</option>
+              <option value="many">Many (6-12)</option>
+            </select>
+          </label>
+        </div>
+        <h3>Additional Generation Options</h3>
+        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Planetary Images <span>Coming soon</span></label>
+        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Lifeforms on Habitable Planets <span>Coming soon</span></label>
+        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Planetary Details (Moons) <span>Use Generate Details after creation</span></label>
+        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Lifeforms on Habitable Moons <span>Coming soon</span></label>
+        <p class="dialog-status" data-stellar-generate-status role="status"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-stellar-modal>Cancel</button>
+          <button class="primary-action" type="submit">
+            <ph-star weight="fill" aria-hidden="true"></ph-star>
+            Generate System
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="stellar-details-modal" hidden>
+    <section class="modal-dialog stellar-details-dialog" role="dialog" aria-modal="true" aria-labelledby="stellar-details-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-stellar-details-modal aria-label="Close dialog">
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+      <header class="stellar-details-header">
+        <h2 id="stellar-details-title"><ph-gear-six weight="duotone" aria-hidden="true"></ph-gear-six> Generate Planetary Details</h2>
+        <p class="modal-subtitle">This will generate detailed information for all planets in the system, including their moons and orbital characteristics.</p>
+      </header>
+      <p class="stellar-details-confirm" data-stellar-details-message></p>
+      <p class="dialog-status" data-stellar-details-status role="status"></p>
+      <div class="dialog-actions stellar-details-actions">
+        <button class="secondary-action" type="button" data-close-stellar-details-modal>Cancel</button>
+        <button class="primary-action" type="button" data-confirm-stellar-details>Yes, Generate Details</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="stellar-life-modal" hidden>
+    <section class="modal-dialog stellar-life-dialog" role="dialog" aria-modal="true" aria-labelledby="stellar-life-title">
+      <button class="modal-close movie-floating-close" type="button" data-close-stellar-life-modal aria-label="Close dialog">
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+      <header class="stellar-life-header">
+        <h2 id="stellar-life-title"><ph-dna weight="duotone" aria-hidden="true"></ph-dna> <span data-stellar-life-title>Generate Life</span></h2>
+        <p class="modal-subtitle">Generate scientifically plausible alien lifeforms adapted to this body's unique environment and conditions.</p>
+      </header>
+      <button class="primary-action stellar-wide-action stellar-life-generate" type="button" data-confirm-stellar-life>Generate New Lifeforms</button>
+      <p class="stellar-life-note">Note: You can generate lifeforms multiple times to create diverse ecosystems. Each generation considers existing species and environmental conditions.</p>
+      <p class="dialog-status" data-stellar-life-status role="status"></p>
+      <div class="dialog-actions stellar-life-actions">
+        <button class="secondary-action" type="button" data-close-stellar-life-modal>Close</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="stellar-architect.js?v=stellar-v5"></script>
+  <script>
+    window.setTimeout(() => {
+      if (!window.centralisStellarLoaded) {
+        const root = document.querySelector("[data-stellar-root]");
+        if (root) root.innerHTML = '<div class="stellar-error">Stellar Architect script did not load. Check the browser console.</div>';
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

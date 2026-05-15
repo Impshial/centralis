@@ -773,12 +773,11 @@
     const data = props.data;
     const collapsed = Boolean(data.collapsed);
     const backgroundColor = sanitizeColor(data.backgroundColor, "#123034");
-    const resizeMode = Boolean(data.resizeMode);
 
     return React.createElement(
       "section",
       {
-        className: `group-flow-node${props.selected ? " is-selected" : ""}${collapsed ? " is-collapsed" : ""}${data.isDropTarget ? " is-drop-target" : ""}${resizeMode ? " is-resize-mode" : ""}`,
+        className: `group-flow-node${props.selected ? " is-selected" : ""}${collapsed ? " is-collapsed" : ""}${data.isDropTarget ? " is-drop-target" : ""}`,
         style: {
           "--group-bg-color": backgroundColor
         },
@@ -786,7 +785,7 @@
           event.stopPropagation();
         }
       },
-      NodeResizer && resizeMode && !collapsed && React.createElement(NodeResizer, {
+      NodeResizer && !collapsed && React.createElement(NodeResizer, {
         isVisible: true,
         minWidth: 280,
         minHeight: 190,
@@ -876,6 +875,7 @@
 
   function NoteNode(props) {
     const data = props.data;
+    const collapsed = Boolean(data.collapsed);
     const bgColor = sanitizeColor(data.bgColor, DEFAULT_NOTE_BG_COLOR);
     const borderColor = sanitizeColor(data.borderColor, DEFAULT_NOTE_BORDER_COLOR);
     const textColor = sanitizeColor(data.textColor, DEFAULT_NOTE_TEXT_COLOR);
@@ -900,25 +900,35 @@
     }, [draftTitle, draftContent]);
 
     function fitNoteToContent(persist = false) {
+      if (collapsed) {
+        return;
+      }
       window.requestAnimationFrame(() => {
         const noteElement = noteRef.current;
         if (!noteElement) {
           return;
         }
-        const titleElement = isEditing ? titleInputRef.current : titleDisplayRef.current;
-        const contentElement = isEditing ? contentInputRef.current : contentDisplayRef.current;
-        if (!titleElement || !contentElement) {
-          return;
-        }
-
         const noteRect = noteElement.getBoundingClientRect();
-        const titleHeight = Math.ceil(titleElement.scrollHeight || titleElement.getBoundingClientRect().height || 28);
-        const contentHeight = Math.ceil(contentElement.scrollHeight || contentElement.getBoundingClientRect().height || 0);
-        const desiredHeight = Math.max(DEFAULT_NOTE_HEIGHT, titleHeight + contentHeight + 40);
+        const desiredHeight = getNoteMinimumHeight();
         if (desiredHeight > noteRect.height + 2) {
           dispatchResize(noteRect.width || DEFAULT_NOTE_WIDTH, desiredHeight, persist);
         }
       });
+    }
+
+    function getNoteMinimumHeight() {
+      if (collapsed) {
+        return 72;
+      }
+      const titleElement = isEditing ? titleInputRef.current : titleDisplayRef.current;
+      const contentElement = isEditing ? contentInputRef.current : contentDisplayRef.current;
+      if (!titleElement || !contentElement) {
+        return DEFAULT_NOTE_HEIGHT;
+      }
+
+      const titleHeight = Math.ceil(titleElement.scrollHeight || titleElement.getBoundingClientRect().height || 28);
+      const contentHeight = Math.ceil(contentElement.scrollHeight || contentElement.getBoundingClientRect().height || 0);
+      return Math.max(DEFAULT_NOTE_HEIGHT, titleHeight + contentHeight + 40);
     }
 
     React.useEffect(() => {
@@ -943,12 +953,14 @@
     }
 
     function dispatchResize(width, height, persist = false) {
+      const nextWidth = Math.round(Number(width || DEFAULT_NOTE_WIDTH));
+      const nextHeight = Math.max(getNoteMinimumHeight(), Math.round(Number(height || DEFAULT_NOTE_HEIGHT)));
       window.dispatchEvent(new CustomEvent(persist ? "centralis:resize-note" : "centralis:preview-resize-note", {
         detail: {
           nodeId: props.id,
           noteId: data.recordId,
-          width: Math.round(Number(width || DEFAULT_NOTE_WIDTH)),
-          height: Math.round(Number(height || DEFAULT_NOTE_HEIGHT))
+          width: nextWidth,
+          height: nextHeight
         }
       }));
     }
@@ -1004,7 +1016,7 @@
       "section",
       {
         ref: noteRef,
-        className: `note-flow-node${props.selected ? " is-selected" : ""}${isEditing ? " is-editing" : ""}`,
+        className: `note-flow-node${props.selected ? " is-selected" : ""}${isEditing ? " is-editing" : ""}${collapsed ? " is-collapsed" : ""}`,
         style: {
           "--note-bg-color": bgColor,
           "--note-border-color": borderColor,
@@ -1015,7 +1027,7 @@
         },
         onDoubleClick: enterEditMode
       },
-      NodeResizer && React.createElement(NodeResizer, {
+      NodeResizer && !collapsed && React.createElement(NodeResizer, {
         isVisible: true,
         minWidth: 180,
         minHeight: 120,
@@ -1024,24 +1036,64 @@
         onResize: (_event, params) => dispatchResize(params?.width, params?.height, false),
         onResizeEnd: (_event, params) => dispatchResize(params?.width, params?.height, true)
       }),
-      isEditing
-        ? React.createElement("input", {
-          ref: titleInputRef,
-          className: "note-title-input nodrag nopan",
-          value: draftTitle,
-          "aria-label": "Note title",
-          placeholder: "Note",
-          onPointerDown: (event) => event.stopPropagation(),
-          onDoubleClick: (event) => event.stopPropagation(),
-          onChange: (event) => updateTitle(event.target.value),
-          onBlur: (event) => updateTitle(event.target.value, true)
-        })
-        : React.createElement(
-          "strong",
-          { ref: titleDisplayRef, className: "note-title-display" },
-          data.title || "Note"
-        ),
-      isEditing
+      React.createElement(
+        "div",
+        { className: "note-flow-header" },
+        isEditing
+          ? React.createElement("input", {
+            ref: titleInputRef,
+            className: "note-title-input nodrag nopan",
+            value: draftTitle,
+            "aria-label": "Note title",
+            placeholder: "Note",
+            onPointerDown: (event) => event.stopPropagation(),
+            onDoubleClick: (event) => event.stopPropagation(),
+            onChange: (event) => updateTitle(event.target.value),
+            onBlur: (event) => updateTitle(event.target.value, true)
+          })
+          : React.createElement(
+            "strong",
+            { ref: titleDisplayRef, className: "note-title-display" },
+            data.title || "Note"
+          ),
+        React.createElement(
+          "div",
+          { className: "note-flow-actions" },
+          React.createElement(
+            "button",
+            {
+              className: "note-toggle nodrag nopan",
+              type: "button",
+              "aria-label": "Note style",
+              title: "Note style",
+              onClick: (event) => {
+                event.stopPropagation();
+                window.dispatchEvent(new CustomEvent("centralis:style-note", {
+                  detail: { nodeId: props.id }
+                }));
+              }
+            },
+            React.createElement("ph-gear-six", { weight: "bold", "aria-hidden": "true" })
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "note-toggle nodrag nopan",
+              type: "button",
+              "aria-label": collapsed ? "Expand note" : "Collapse note",
+              title: collapsed ? "Expand note" : "Collapse note",
+              onClick: (event) => {
+                event.stopPropagation();
+                window.dispatchEvent(new CustomEvent("centralis:toggle-note", {
+                  detail: { nodeId: props.id, noteId: data.recordId, collapsed: !collapsed }
+                }));
+              }
+            },
+            React.createElement(collapsed ? "ph-arrows-out-simple" : "ph-arrows-in-simple", { weight: "bold", "aria-hidden": "true" })
+          )
+        )
+      ),
+      !collapsed && (isEditing
         ? React.createElement("textarea", {
           ref: contentInputRef,
           className: "note-content-input nodrag nopan",
@@ -1057,7 +1109,7 @@
           "p",
           { ref: contentDisplayRef, className: "note-content-display" },
           data.content || "Double-click to edit."
-        )
+        ))
     );
   }
 
@@ -1126,13 +1178,16 @@
         recordId: row.id,
         title: row.title || "Note",
         content: row.content || "",
+        collapsed: Boolean(row.is_collapsed),
         bgColor: sanitizeColor(row.bg_color, DEFAULT_NOTE_BG_COLOR),
         borderColor: sanitizeColor(row.border_color, DEFAULT_NOTE_BORDER_COLOR),
-        textColor: sanitizeColor(row.text_color, DEFAULT_NOTE_TEXT_COLOR)
+        textColor: sanitizeColor(row.text_color, DEFAULT_NOTE_TEXT_COLOR),
+        expandedWidth: Number(row.width || DEFAULT_NOTE_WIDTH),
+        expandedHeight: Number(row.height || DEFAULT_NOTE_HEIGHT)
       },
       style: {
-        width: Number(row.width || DEFAULT_NOTE_WIDTH),
-        height: Number(row.height || DEFAULT_NOTE_HEIGHT)
+        width: row.is_collapsed ? 260 : Number(row.width || DEFAULT_NOTE_WIDTH),
+        height: row.is_collapsed ? 72 : Number(row.height || DEFAULT_NOTE_HEIGHT)
       },
       draggable: true
     };
@@ -1547,15 +1602,25 @@
     });
   }
 
+  const MAX_IMAGE_PROMPT_LENGTH = 2200;
+
+  function clampImagePrompt(prompt, maxLength = MAX_IMAGE_PROMPT_LENGTH) {
+    const normalized = String(prompt || "").trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+    return `${normalized.slice(0, maxLength - 74).trimEnd()}\n\n[Prompt shortened to fit the image generation limit.]`;
+  }
+
   function createImagePrompt(node) {
     const meta = getNodeTypeMeta(node);
     const name = node.data?.name || "Untitled Node";
     const description = node.data?.description || "";
-    return [
+    return clampImagePrompt([
       `${name} is a ${meta.label.toLowerCase()} in a universe-building canvas.`,
       description,
       "Create a visually rich, cinematic concept image based on these details."
-    ].filter(Boolean).join(" ");
+    ].filter(Boolean).join(" "));
   }
 
   function createTypeOptionMarkup(type, selectedTypeId) {
@@ -2191,17 +2256,19 @@
     const measuredWidth = node.measured?.width || node.width || node.style?.width;
     const measuredHeight = node.measured?.height || node.height || node.style?.height;
     const width = Number(measuredWidth || (node.data?.kind === "universe" ? 280 : node.data?.kind === "group" ? 360 : 236));
-    if (measuredHeight) {
-      return { width, height: Number(measuredHeight) };
-    }
 
     const descriptionLength = String(node.data?.description || "").length;
     const blurbRows = descriptionLength > 92 ? 3 : descriptionLength > 44 ? 2 : 1;
     const baseHeight = node.data?.kind === "universe" ? 106 : 96;
     const imageHeight = hasTopImage ? 92 : 0;
+    const estimatedHeight = baseHeight + imageHeight + blurbRows * 18 + Number(format.nodeLayoutGap || 12);
+    if (measuredHeight) {
+      return { width, height: Math.max(Number(measuredHeight), estimatedHeight) };
+    }
+
     return {
       width,
-      height: baseHeight + imageHeight + blurbRows * 18 + Number(format.nodeLayoutGap || 12)
+      height: estimatedHeight
     };
   }
 
@@ -3149,7 +3216,6 @@
     const [canvasContextMenu, setCanvasContextMenu] = React.useState(null);
     const [pendingNoteStyle, setPendingNoteStyle] = React.useState(null);
     const [dropTargetGroupId, setDropTargetGroupId] = React.useState("");
-    const [resizeGroupIds, setResizeGroupIds] = React.useState(() => new Set());
     const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
@@ -3304,8 +3370,9 @@
           content: node.data.content || null,
           position_x: Math.round(Number(node.position?.x || 0)),
           position_y: Math.round(Number(node.position?.y || 0)),
-          width: Number(node.style?.width || node.measured?.width || node.width || DEFAULT_NOTE_WIDTH),
-          height: Number(node.style?.height || node.measured?.height || node.height || DEFAULT_NOTE_HEIGHT),
+          width: Number(node.data?.collapsed ? node.data?.expandedWidth || node.style?.width || DEFAULT_NOTE_WIDTH : node.style?.width || node.measured?.width || node.width || DEFAULT_NOTE_WIDTH),
+          height: Number(node.data?.collapsed ? node.data?.expandedHeight || node.style?.height || DEFAULT_NOTE_HEIGHT : node.style?.height || node.measured?.height || node.height || DEFAULT_NOTE_HEIGHT),
+          is_collapsed: Boolean(node.data?.collapsed),
           bg_color: sanitizeColor(node.data.bgColor, DEFAULT_NOTE_BG_COLOR),
           border_color: sanitizeColor(node.data.borderColor, DEFAULT_NOTE_BORDER_COLOR),
           text_color: sanitizeColor(node.data.textColor, DEFAULT_NOTE_TEXT_COLOR),
@@ -3483,7 +3550,8 @@
             });
         }
 
-        const nextNodes = normalizeElementSelection(applyNodeChanges(changes, currentNodes), changes);
+        const changedNodes = normalizeElementSelection(applyNodeChanges(changes, currentNodes), changes);
+        const nextNodes = clampGroupedChildPositions(changedNodes);
         const finishedPositionIds = new Set(changes
           .filter((change) => change.type === "position" && change.dragging === false)
           .map((change) => change.id));
@@ -4237,7 +4305,7 @@
         button.classList.add("is-busy");
         button.disabled = true;
         try {
-          await runAutoLayout();
+          await runAutoLayout({ fit: false });
         } catch (error) {
           console.error("Could not auto-layout canvas:", error);
         } finally {
@@ -4572,7 +4640,6 @@
               <span class="element-type-expand" aria-hidden="true"></span>
               ${createTypeIconMarkup(type.icon, type.color)}
               <span class="element-type-name">${escapeHtml(type.name)}</span>
-              <button class="secondary-action compact-action element-type-template-button" type="button" data-open-template-editor="${escapeHtml(type.id)}">Templates</button>
               <div class="element-type-actions">
                 <button type="button" data-edit-type="${escapeHtml(type.id)}" aria-label="Edit ${escapeHtml(type.name)}"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
                 <button type="button" data-delete-type="${escapeHtml(type.id)}" aria-label="Delete ${escapeHtml(type.name)}"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>
@@ -4966,12 +5033,9 @@
       }
 
       function handleListClick(event) {
-        const templateButton = event.target.closest("[data-open-template-editor]");
         const editButton = event.target.closest("[data-edit-type]");
         const deleteButton = event.target.closest("[data-delete-type]");
-        if (templateButton) {
-          openTemplateEditor(templateButton.dataset.openTemplateEditor);
-        } else if (editButton) {
+        if (editButton) {
           openEditor("edit", getElementTypeById(editButton.dataset.editType));
         } else if (deleteButton) {
           deleteType(deleteButton.dataset.deleteType);
@@ -5656,8 +5720,13 @@
             });
           });
           body.querySelector("[data-rich-generate-image]")?.addEventListener("click", () => {
+            const form = body.querySelector("[data-rich-details-form]");
             window.dispatchEvent(new CustomEvent("centralis:generate-image", {
-              detail: { nodeId: node.id, prompt: createImagePrompt(node) }
+              detail: {
+                nodeId: node.id,
+                prompt: buildRichDetailsImagePrompt(form),
+                source: "rich-details"
+              }
             }));
           });
           body.querySelector("[data-rich-image-upload]")?.addEventListener("change", (event) => {
@@ -5690,6 +5759,93 @@
           .flatMap((section) => section.fields.map((field) => ({ section, field })));
       }
 
+      function getRichFieldPromptValue(form, field, valuesByFieldId) {
+        const type = getTemplateFieldType(field);
+        const storedValue = getFieldStoredValue(valuesByFieldId, field);
+        const control = form?.querySelector(`[name="rich-field:${CSS.escape(field.id)}"]`);
+        if (!control) {
+          return type === "multi_select" ? storedValue.split("\n").filter(Boolean).join(", ") : storedValue;
+        }
+        if (type === "checkbox") {
+          return control.checked ? "Yes" : "";
+        }
+        if (type === "multi_select") {
+          return [...control.selectedOptions].map((option) => option.value).filter(Boolean).join(", ");
+        }
+        return control.value || "";
+      }
+
+      function buildRichDetailsImagePrompt(form) {
+        function appendPromptPart(parts, nextPart) {
+          const text = String(nextPart || "").trim();
+          if (!text) {
+            return false;
+          }
+          const candidate = [...parts, text].join("\n\n");
+          if (candidate.length > MAX_IMAGE_PROMPT_LENGTH) {
+            return false;
+          }
+          parts.push(text);
+          return true;
+        }
+
+        const valuesByFieldId = new Map((richDetailsData.values || []).map((value) => [value.template_field_id, value]));
+        const description = form?.querySelector('[name="rich-description"]')?.value?.trim() || node.data?.description || "";
+        const sectionModels = buildRichTemplateSectionModels(richDetailsData.sections || [], richDetailsData.fields || []);
+        const summaryValue = sectionModels.flatMap((section) => section.fields)
+          .map((field) => {
+            const normalizedLabel = getTemplateFieldLabel(field).trim().toLowerCase();
+            const normalizedKey = getTemplateFieldKey(field).trim().toLowerCase();
+            return normalizedLabel === "summary" || normalizedKey === "summary"
+              ? getRichFieldPromptValue(form, field, valuesByFieldId).trim()
+              : "";
+          })
+          .find(Boolean) || "";
+        const promptLines = [];
+        appendPromptPart(promptLines, "Create a visually rich, cinematic concept image for a universe-building canvas.");
+        appendPromptPart(promptLines, summaryValue || description ? `Description: ${summaryValue || description}` : "");
+
+        sectionModels.forEach((section) => {
+          const fieldLines = section.fields
+            .map((field) => {
+              const label = getTemplateFieldLabel(field);
+              const normalizedLabel = label.trim().toLowerCase();
+              const normalizedKey = getTemplateFieldKey(field).trim().toLowerCase();
+              if (["summary", "importance"].includes(normalizedLabel) || ["summary", "importance"].includes(normalizedKey)) {
+                return "";
+              }
+              if (normalizedLabel.includes("note") || normalizedKey.includes("note")) {
+                return "";
+              }
+              const rawValue = getRichFieldPromptValue(form, field, valuesByFieldId).trim();
+              const value = rawValue.length > 700 ? `${rawValue.slice(0, 697).trimEnd()}...` : rawValue;
+              return value ? `- ${label}: ${value}` : "";
+            })
+            .filter(Boolean);
+          if (fieldLines.length) {
+            appendPromptPart(promptLines, `${section.name || "Details"}:\n${fieldLines.join("\n")}`);
+          }
+        });
+
+        if (promptLines.join("\n\n").length >= MAX_IMAGE_PROMPT_LENGTH - 180) {
+          appendPromptPart(promptLines, "Some rich detail fields were omitted to keep the prompt within the image generation limit.");
+        }
+
+        const customFieldLines = [...(form?.querySelectorAll("[data-custom-field-row]") || [])]
+          .map((row) => {
+            const label = row.querySelector('[name="custom-name"]')?.value?.trim();
+            const value = row.querySelector('[name="custom-value"]')?.value?.trim();
+            return label && value ? `- ${label}: ${value}` : "";
+          })
+          .filter(Boolean);
+        if (customFieldLines.length) {
+          appendPromptPart(promptLines, `Custom details:\n${customFieldLines.join("\n")}`);
+        }
+
+        appendPromptPart(promptLines, "Use the details as visual guidance. Avoid UI elements, captions, watermarks, and readable text unless the prompt explicitly asks for them.");
+        return clampImagePrompt(promptLines.join("\n\n"));
+      }
+
       function buildRichDetailsSimpleExportPayload() {
         if (!node || !richDetailsData?.template) {
           throw new Error("This element does not have a Rich Details template.");
@@ -5701,6 +5857,7 @@
           exported_at: new Date().toISOString(),
           element_id: node.data?.recordId || toRecordId(node.id),
           template_id: richDetailsData.template.id,
+          description: node.data?.description || "",
           fields: getOrderedRichTemplateFields().map(({ field }) => ({
             field_key: getTemplateFieldKey(field),
             value: getRichDetailsExportValue(field, getFieldStoredValue(valuesByFieldId, field), true)
@@ -5724,6 +5881,7 @@
             id: richDetailsData.template.id,
             name: richDetailsData.template.name || "Rich Details Template"
           },
+          description: "",
           fields: getOrderedRichTemplateFields().map(({ section, field }) => {
             const choices = getFieldChoices(field);
             return {
@@ -5765,6 +5923,16 @@
         }));
       }
 
+      function getImportedRichDescription(payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, "description")) {
+          return { present: true, value: String(payload.description || "").trim() };
+        }
+        if (payload.element && Object.prototype.hasOwnProperty.call(payload.element, "description")) {
+          return { present: true, value: String(payload.element.description || "").trim() };
+        }
+        return { present: false, value: "" };
+      }
+
       async function importRichDetailsPayload(payload) {
         if (!node || !window.centralisSupabase) {
           throw new Error("Rich Details import is not available.");
@@ -5796,6 +5964,7 @@
           matchedByFieldId.set(field.id, { field, value: normalizeRichDetailsFieldValue(field, importedField?.value) });
         });
 
+        const importedDescription = getImportedRichDescription(payload);
         const now = new Date().toISOString();
         const clearResponses = [];
         const upsertRows = [];
@@ -5826,10 +5995,40 @@
           if (error) throw error;
         }
 
-        const refreshed = await fetchRichDetailsData(node);
+        if (importedDescription.present) {
+          const { error: descriptionError } = await window.centralisSupabase
+            .from("elements")
+            .update({
+              description: importedDescription.value || null,
+              updated_at: now
+            })
+            .eq("id", node.data.recordId);
+          if (descriptionError) throw descriptionError;
+
+          setNodes((currentNodes) => currentNodes.map((currentNode) => currentNode.id === node.id
+            ? {
+                ...currentNode,
+                data: {
+                  ...currentNode.data,
+                  description: importedDescription.value
+                }
+              }
+            : currentNode));
+        }
+
+        const nextNode = importedDescription.present
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                description: importedDescription.value
+              }
+            }
+          : node;
+        const refreshed = await fetchRichDetailsData(nextNode);
         setRichDetailsData({ loading: false, error: "", ...refreshed });
         setRichDetailsMode("view");
-        setRichStatus(`Imported ${upsertRows.length} values, cleared ${clearResponses.length}, skipped ${skipped}.`, "success");
+        setRichStatus(`Imported ${upsertRows.length} values, cleared ${clearResponses.length}, skipped ${skipped}${importedDescription.present ? ", updated description" : ""}.`, "success");
       }
 
       async function importRichDetailsFile(file) {
@@ -6112,10 +6311,13 @@
           return;
         }
 
-        setPendingImageGeneration({ nodeId: node.id });
-        promptInput.value = event.detail?.prompt || createImagePrompt(node);
+        setPendingImageGeneration({ nodeId: node.id, source: event.detail?.source || "" });
+        promptInput.maxLength = MAX_IMAGE_PROMPT_LENGTH;
+        promptInput.value = clampImagePrompt(event.detail?.prompt || createImagePrompt(node));
         if (subtitle) {
-          subtitle.textContent = `Describe the image you want to generate for ${node.data.name || "this node"}.`;
+          subtitle.textContent = event.detail?.source === "rich-details"
+            ? `Review or edit the generated image prompt for ${node.data.name || "this node"}.`
+            : `Describe the image you want to generate for ${node.data.name || "this node"}.`;
         }
         modal.hidden = false;
         promptInput.focus();
@@ -6128,9 +6330,7 @@
       }
 
       function handleBackdropClick(event) {
-        if (event.target === modal) {
-          closeGenerateModal();
-        }
+        event.stopPropagation();
       }
 
       function handleEscape(event) {
@@ -6161,16 +6361,17 @@
         }
 
         const meta = getNodeTypeMeta(node);
+        const isRichDetailsGeneration = pendingImageGeneration?.source === "rich-details";
         try {
           await callEdgeFunction("generate-object-image", {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               objectId: node.data.recordId,
               objectKind: node.data.kind,
-              elementType: meta.label,
-              name: node.data.name,
-              description: node.data.description,
-              extraPrompt: promptInput.value
+              elementType: isRichDetailsGeneration ? "" : meta.label,
+              name: isRichDetailsGeneration ? "" : node.data.name,
+              description: isRichDetailsGeneration ? "" : node.data.description,
+              extraPrompt: clampImagePrompt(promptInput.value)
             })
           });
           await refreshNodeImages(node);
@@ -6226,11 +6427,14 @@
         setDetailsMode("view");
       }
 
-      function handleRichDetails() {
+      function handleOpenInChronicle() {
         if (detailsNodeId) {
-          window.dispatchEvent(new CustomEvent("centralis:open-rich-details", {
-            detail: { nodeId: detailsNodeId }
-          }));
+          const node = nodes.find((currentNode) => currentNode.id === detailsNodeId);
+          if (node?.data?.kind === "element" && node.data.recordId) {
+            const universeSegment = encodeURIComponent(universeId || "");
+            const elementSegment = encodeURIComponent(node.data.recordId);
+            window.location.href = `chronicle.html#universe/${universeSegment}/element/${elementSegment}`;
+          }
         }
       }
 
@@ -6324,12 +6528,12 @@
         setDetailsMode("view");
       }
 
-      controls.richButton?.addEventListener("click", handleRichDetails);
+      controls.richButton?.addEventListener("click", handleOpenInChronicle);
       controls.editButton?.addEventListener("click", handleEdit);
       controls.cancelButton?.addEventListener("click", handleCancel);
       controls.saveButton?.addEventListener("click", handleSave);
       return () => {
-        controls.richButton?.removeEventListener("click", handleRichDetails);
+        controls.richButton?.removeEventListener("click", handleOpenInChronicle);
         controls.editButton?.removeEventListener("click", handleEdit);
         controls.cancelButton?.removeEventListener("click", handleCancel);
         controls.saveButton?.removeEventListener("click", handleSave);
@@ -6655,7 +6859,8 @@
         height: DEFAULT_NOTE_HEIGHT,
         bg_color: DEFAULT_NOTE_BG_COLOR,
         border_color: DEFAULT_NOTE_BORDER_COLOR,
-        text_color: DEFAULT_NOTE_TEXT_COLOR
+        text_color: DEFAULT_NOTE_TEXT_COLOR,
+        is_collapsed: false
       };
 
       pushCanvasHistory();
@@ -6765,7 +6970,15 @@
       const nextHeight = Math.max(120, Math.round(Number(height || DEFAULT_NOTE_HEIGHT)));
       setNodes((currentNodes) => currentNodes.map((node) => (
         node.id === nodeId
-          ? { ...node, style: { ...(node.style || {}), width: nextWidth, height: nextHeight } }
+          ? {
+            ...node,
+            style: { ...(node.style || {}), width: nextWidth, height: nextHeight },
+            data: {
+              ...node.data,
+              expandedWidth: nextWidth,
+              expandedHeight: nextHeight
+            }
+          }
           : node
       )));
       if (!persist || !window.centralisSupabase) {
@@ -6782,6 +6995,49 @@
             console.error("Could not save note size:", error);
           }
         });
+    }
+
+    async function toggleNoteCollapsed(nodeId, collapsed) {
+      if (!nodeId) return;
+      const noteNode = nodesRef.current.find((node) => node.id === nodeId);
+      const expandedWidth = Number(noteNode?.data?.expandedWidth || noteNode?.style?.width || DEFAULT_NOTE_WIDTH);
+      const expandedHeight = Number(noteNode?.data?.expandedHeight || noteNode?.style?.height || DEFAULT_NOTE_HEIGHT);
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        if (node.id !== nodeId || node.data?.kind !== "note") {
+          return node;
+        }
+        return {
+          ...node,
+          style: {
+            ...(node.style || {}),
+            width: collapsed ? 260 : Number(node.data.expandedWidth || expandedWidth),
+            height: collapsed ? 72 : Number(node.data.expandedHeight || expandedHeight)
+          },
+          data: {
+            ...node.data,
+            collapsed,
+            expandedWidth,
+            expandedHeight
+          }
+        };
+      }));
+
+      const noteId = noteNode?.data?.recordId || toRecordId(nodeId);
+      if (!noteId || !window.centralisSupabase) {
+        return;
+      }
+      const { error } = await window.centralisSupabase
+        .from("canvas_notes")
+        .update({
+          is_collapsed: collapsed,
+          width: expandedWidth,
+          height: expandedHeight,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", noteId);
+      if (error) {
+        console.error("Could not update note collapse state:", error);
+      }
     }
 
     function handleConnectEnd(event) {
@@ -6873,6 +7129,45 @@
 
     function estimateCanvasNodeSize(node) {
       return estimateNodeSize(node, universeFormatRef.current);
+    }
+
+    function getGroupedChildClampPosition(node, groupNode) {
+      if (!node?.parentId || !groupNode || groupNode.data?.collapsed) {
+        return node?.position || { x: 0, y: 0 };
+      }
+
+      const paddingX = 24;
+      const paddingTop = 60;
+      const paddingBottom = 24;
+      const childSize = estimateCanvasNodeSize(node);
+      const groupWidth = Number(groupNode.style?.width || groupNode.measured?.width || groupNode.width || groupNode.data?.expandedWidth || 280);
+      const groupHeight = Number(groupNode.style?.height || groupNode.measured?.height || groupNode.height || groupNode.data?.expandedHeight || 190);
+      const maxX = Math.max(paddingX, groupWidth - paddingX - childSize.width);
+      const maxY = Math.max(paddingTop, groupHeight - paddingBottom - childSize.height);
+      return {
+        x: Math.round(Math.min(Math.max(Number(node.position?.x || 0), paddingX), maxX)),
+        y: Math.round(Math.min(Math.max(Number(node.position?.y || 0), paddingTop), maxY))
+      };
+    }
+
+    function clampGroupedChildPositions(currentNodes) {
+      const nodesById = new Map(currentNodes.map((node) => [node.id, node]));
+      let changed = false;
+      const nextNodes = currentNodes.map((node) => {
+        if (node.data?.kind !== "element" || !node.parentId) {
+          return node;
+        }
+
+        const groupNode = nodesById.get(node.parentId);
+        const position = getGroupedChildClampPosition(node, groupNode);
+        if (position.x === Math.round(Number(node.position?.x || 0)) && position.y === Math.round(Number(node.position?.y || 0))) {
+          return node;
+        }
+
+        changed = true;
+        return { ...node, position };
+      });
+      return changed ? nextNodes : currentNodes;
     }
 
     function getGroupBounds(selectedNodes) {
@@ -7171,8 +7466,10 @@
       let cursorY = paddingTop;
       let rowHeight = 0;
       const normalizedChildren = new Map();
+      const childSizes = new Map();
       sortedChildren.forEach((node) => {
         const size = estimateCanvasNodeSize(node);
+        childSizes.set(node.id, size);
         if (cursorX > paddingX && cursorX + size.width > paddingX + availableWidth) {
           cursorX = paddingX;
           cursorY += rowHeight + verticalGap;
@@ -7185,12 +7482,22 @@
         cursorX += size.width + horizontalGap;
         rowHeight = Math.max(rowHeight, size.height);
       });
+      const requiredWidth = Math.max(requestedGroupWidth, ...sortedChildren.map((node) => {
+        const position = normalizedChildren.get(node.id);
+        const size = childSizes.get(node.id);
+        return Number(position?.x || 0) + Number(size?.width || 0) + paddingX;
+      }));
+      const requiredHeight = Math.max(requestedGroupHeight, ...sortedChildren.map((node) => {
+        const position = normalizedChildren.get(node.id);
+        const size = childSizes.get(node.id);
+        return Number(position?.y || 0) + Number(size?.height || 0) + 44;
+      }));
       const groupUpdate = {
         id: groupNode.data.recordId,
         x: Math.round(Number(groupNode.position?.x || 0)),
         y: Math.round(Number(groupNode.position?.y || 0)),
-        width: requestedGroupWidth,
-        height: requestedGroupHeight
+        width: Math.round(requiredWidth),
+        height: Math.round(requiredHeight)
       };
       const childUpdates = childNodes.map((node) => ({
         id: node.data.recordId,
@@ -7201,8 +7508,8 @@
           if (node.id === groupNodeId) {
             return {
               ...node,
-              style: { ...node.style, width: requestedGroupWidth, height: requestedGroupHeight },
-              data: { ...node.data, expandedWidth: requestedGroupWidth, expandedHeight: requestedGroupHeight }
+              style: { ...node.style, width: groupUpdate.width, height: groupUpdate.height },
+              data: { ...node.data, expandedWidth: groupUpdate.width, expandedHeight: groupUpdate.height }
             };
           }
           const position = normalizedChildren.get(node.id);
@@ -8854,14 +9161,27 @@
       function handleResizeNote(event) {
         resizeNoteNode(event.detail?.nodeId, event.detail?.width, event.detail?.height, true);
       }
+      function handleToggleNote(event) {
+        toggleNoteCollapsed(event.detail?.nodeId, Boolean(event.detail?.collapsed));
+      }
+      function handleStyleNote(event) {
+        const nodeId = event.detail?.nodeId;
+        if (nodeId) {
+          setPendingNoteStyle({ nodeId });
+        }
+      }
 
       window.addEventListener("centralis:update-note", handleUpdateNote);
       window.addEventListener("centralis:preview-resize-note", handlePreviewResizeNote);
       window.addEventListener("centralis:resize-note", handleResizeNote);
+      window.addEventListener("centralis:toggle-note", handleToggleNote);
+      window.addEventListener("centralis:style-note", handleStyleNote);
       return () => {
         window.removeEventListener("centralis:update-note", handleUpdateNote);
         window.removeEventListener("centralis:preview-resize-note", handlePreviewResizeNote);
         window.removeEventListener("centralis:resize-note", handleResizeNote);
+        window.removeEventListener("centralis:toggle-note", handleToggleNote);
+        window.removeEventListener("centralis:style-note", handleStyleNote);
         noteSaveTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
         noteSaveTimersRef.current.clear();
       };
@@ -9238,11 +9558,10 @@
         ...node,
         data: {
           ...node.data,
-          isDropTarget: node.id === dropTargetGroupId,
-          resizeMode: resizeGroupIds.has(node.data.recordId)
+          isDropTarget: node.id === dropTargetGroupId
         }
       };
-    }), [nodes, dropTargetGroupId, resizeGroupIds]);
+    }), [nodes, dropTargetGroupId]);
 
     const renderedNodes = React.useMemo(() => getVisibleNodesForGroups(nodesWithDropTarget), [nodesWithDropTarget]);
     const renderedEdges = React.useMemo(() => getVisibleEdgesForGroups(edges, nodes), [edges, nodes]);
@@ -9282,21 +9601,6 @@
       setCanvasContextMenu(null);
     }
 
-    function toggleGroupResizeMode(groupId) {
-      if (!groupId) {
-        return;
-      }
-      setResizeGroupIds((currentIds) => {
-        const nextIds = new Set(currentIds);
-        if (nextIds.has(groupId)) {
-          nextIds.delete(groupId);
-        } else {
-          nextIds.add(groupId);
-        }
-        return nextIds;
-      });
-    }
-
     const contextMenuNode = contextMenu
       ? nodes.find((node) => node.id === contextMenu.nodeId)
       : null;
@@ -9309,7 +9613,6 @@
     const contextGroupId = contextMenuNode?.data?.kind === "group"
       ? contextMenuNode.data.recordId
       : contextSelectedElements[0]?.data?.groupId || "";
-    const contextGroupResizeMode = Boolean(contextGroupId && resizeGroupIds.has(contextGroupId));
 
     return React.createElement(
       "div",
@@ -9493,20 +9796,6 @@
             }
           },
           "Delete"
-        ),
-        contextMenuNode?.data?.kind === "group" && React.createElement(
-          "button",
-          {
-            className: contextGroupResizeMode ? "is-active" : "",
-            type: "button",
-            "aria-pressed": contextGroupResizeMode ? "true" : "false",
-            onClick: (event) => {
-              event.stopPropagation();
-              closeContextMenu();
-              toggleGroupResizeMode(contextGroupId);
-            }
-          },
-          contextGroupResizeMode ? "Resize On" : "Resize"
         ),
         contextMenuNode?.data?.kind === "group" && React.createElement(
           "button",
