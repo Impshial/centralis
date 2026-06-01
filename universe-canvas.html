@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Universe Canvas | Centralis</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
-  <link rel="stylesheet" href="styles.css?v=rich-details-toast-1">
+  <link rel="stylesheet" href="styles.css?v=chronicle-preview-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="universe-canvas">
@@ -673,25 +673,12 @@
     <section class="modal-dialog rich-details-dialog" role="dialog" aria-modal="true" aria-labelledby="rich-details-title">
       <header class="rich-details-header">
         <div>
-          <p class="details-pane-kicker" data-rich-details-kind>Rich Details</p>
-          <h2 id="rich-details-title" data-rich-details-title>Rich Details</h2>
+          <p class="details-pane-kicker" data-rich-details-kind>Chronicle Modules</p>
+          <h2 id="rich-details-title" data-rich-details-title>Chronicle</h2>
         </div>
         <div class="rich-details-actions">
-          <div class="menu-wrap rich-details-transfer-menu">
-            <button class="secondary-action compact-action icon-only menu-trigger" type="button" aria-label="Import or export rich details" aria-haspopup="menu" aria-expanded="false" data-rich-details-transfer-trigger>
-              <ph-arrows-down-up weight="bold" aria-hidden="true"></ph-arrows-down-up>
-            </button>
-            <div class="dropdown-menu align-right" role="menu" hidden data-rich-details-transfer-menu>
-              <button type="button" role="menuitem" data-rich-details-import>Import Details</button>
-              <button type="button" role="menuitem" data-rich-details-export>Export Details</button>
-              <hr>
-              <button type="button" role="menuitem" data-rich-details-template>Get Template</button>
-            </div>
-          </div>
-          <button class="secondary-action compact-action" type="button" data-rich-details-edit>Edit</button>
-          <button class="secondary-action compact-action" type="button" data-rich-details-cancel hidden>Cancel</button>
-          <button class="primary-action compact-action" type="button" data-rich-details-save hidden>Save</button>
-          <button class="modal-close" type="button" aria-label="Close rich details" data-rich-details-close>
+          <button class="secondary-action compact-action" type="button" data-rich-details-edit>Edit in Chronicle</button>
+          <button class="modal-close" type="button" aria-label="Close Chronicle preview" data-rich-details-close>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18 6 6 18"></path>
               <path d="m6 6 12 12"></path>
@@ -776,6 +763,6 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
-  <script src="flow-canvas.js?v=rich-details-toast-1"></script>
+  <script src="flow-canvas.js?v=fit-view-dom-bounds-1"></script>
 </body>
 </html>

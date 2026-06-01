@@ -1,0 +1,1796 @@
+(() => {
+  const ELEMENTS_TABLE = "elements";
+  const ELEMENT_TYPES_TABLE = "element_types";
+  const UNIVERSES_TABLE = "universes";
+  const CHRONICLE_MODULES_TABLE = "chronicle_modules";
+  const ELEMENT_TYPE_TEMPLATES_TABLE = "element_type_templates";
+  const ELEMENT_TEMPLATE_SECTIONS_TABLE = "element_template_sections";
+  const ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "element_type_template_fields";
+  const ELEMENT_TEMPLATE_FIELD_VALUES_TABLE = "element_template_field_values";
+  const ELEMENT_CUSTOM_FIELDS_TABLE = "element_custom_fields";
+  const TEMPLATE_SECTION_MODULE_TYPE = "template_section";
+
+  const state = {
+    user: null,
+    pageMode: "home",
+    activeTab: "standalone",
+    selectedUniverseId: "",
+    search: "",
+    sort: "updated-desc",
+    elementTypes: [],
+    standaloneElements: [],
+    universeElements: [],
+    universes: [],
+    moduleCounts: new Map(),
+    universesById: new Map(),
+    routeContext: null,
+    workspace: createEmptyWorkspace(),
+    isLoading: true
+  };
+
+  const dom = {};
+
+  document.addEventListener("DOMContentLoaded", initChronicle);
+  window.addEventListener("hashchange", async () => {
+    if (state.pageMode !== "editor") {
+      return;
+    }
+    state.routeContext = parseRouteContext();
+    await loadRouteWorkspace();
+    renderRouteNotice();
+    renderWorkspace();
+  });
+
+  async function initChronicle() {
+    bindDom();
+    state.pageMode = document.body?.dataset.page === "chronicle-editor" ? "editor" : "home";
+    if (state.pageMode === "home") {
+      applyHomepageQueryState();
+    }
+    bindEvents();
+
+    try {
+      await waitForAuth();
+      state.user = await window.centralisGetCurrentAppUser();
+      if (!state.user) {
+        return;
+      }
+
+      state.routeContext = parseRouteContext();
+      await loadChronicleData();
+      if (state.pageMode === "editor") {
+        await loadRouteWorkspace();
+      }
+      state.isLoading = false;
+      renderAll();
+    } catch (error) {
+      console.error("Could not load Chronicle.", error);
+      state.isLoading = false;
+      setStatus(`Could not load Chronicle: ${error.message}`, true);
+      renderContent();
+    }
+  }
+
+  function bindDom() {
+    dom.content = document.querySelector("[data-chronicle-content]");
+    dom.status = document.querySelector("[data-chronicle-status]");
+    dom.search = document.querySelector("[data-chronicle-search]");
+    dom.sort = document.querySelector("[data-chronicle-sort]");
+    dom.universeFilter = document.querySelector("[data-chronicle-universe-filter]");
+    dom.universeFilterWrap = document.querySelector("[data-chronicle-universe-filter-wrap]");
+    dom.tabs = Array.from(document.querySelectorAll("[data-chronicle-tab]"));
+    dom.createButtons = Array.from(document.querySelectorAll("[data-chronicle-create]"));
+    dom.routeNotice = document.querySelector("[data-chronicle-route-notice]");
+    dom.workspace = document.querySelector("[data-chronicle-workspace]");
+    dom.createModal = document.getElementById("chronicle-create-modal");
+    dom.createForm = document.querySelector("[data-chronicle-create-form]");
+    dom.createName = document.querySelector("[data-chronicle-name]");
+    dom.createType = document.querySelector("[data-chronicle-type]");
+    dom.createDescription = document.querySelector("[data-chronicle-description]");
+    dom.createError = document.querySelector("[data-chronicle-create-error]");
+    dom.createSubmit = document.querySelector("[data-chronicle-create-submit]");
+  }
+
+  function bindEvents() {
+    dom.tabs.forEach((tab) => {
+      tab.addEventListener("click", async () => {
+        state.activeTab = tab.dataset.chronicleTab || "standalone";
+        writeHomepageQueryState();
+        if (state.activeTab === "universe") {
+          await loadChronicleData();
+        }
+        renderAll();
+      });
+    });
+
+    dom.search?.addEventListener("input", () => {
+      state.search = dom.search.value.trim();
+      writeHomepageQueryState();
+      renderContent();
+    });
+
+    dom.sort?.addEventListener("change", () => {
+      state.sort = dom.sort.value;
+      writeHomepageQueryState();
+      renderContent();
+    });
+
+    dom.universeFilter?.addEventListener("change", async () => {
+      state.selectedUniverseId = dom.universeFilter.value;
+      writeHomepageQueryState();
+      await loadChronicleData();
+      renderAll();
+    });
+
+    dom.createButtons.forEach((button) => button.addEventListener("click", openCreateDialog));
+    document.querySelector("[data-chronicle-create-close]")?.addEventListener("click", closeCreateDialog);
+    document.querySelector("[data-chronicle-create-cancel]")?.addEventListener("click", closeCreateDialog);
+    dom.createModal?.addEventListener("click", (event) => {
+      if (event.target === dom.createModal) {
+        closeCreateDialog();
+      }
+    });
+
+    dom.createForm?.addEventListener("submit", handleCreateElement);
+    dom.workspace?.addEventListener("click", handleWorkspaceClick);
+    dom.workspace?.addEventListener("change", handleWorkspaceChange);
+    dom.workspace?.addEventListener("submit", handleWorkspaceSubmit);
+  }
+
+  async function waitForAuth() {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (window.centralisSupabase && window.centralisGetCurrentAppUser) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error("Centralis auth did not initialize.");
+  }
+
+  async function loadChronicleData() {
+    setStatus("Loading Chronicle...");
+
+    const [typeResponse, moduleResponse, universeResponse, standaloneResponse] = await Promise.all([
+      window.centralisSupabase
+        .from(ELEMENT_TYPES_TABLE)
+        .select("id,name,icon,color")
+        .eq("user_id", state.user.id)
+        .order("name", { ascending: true }),
+      window.centralisSupabase
+        .from(CHRONICLE_MODULES_TABLE)
+        .select("element_id")
+        .eq("user_id", state.user.id)
+        .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE),
+      window.centralisSupabase
+        .from(UNIVERSES_TABLE)
+        .select("id,name")
+        .eq("user_id", state.user.id)
+        .order("name", { ascending: true }),
+      window.centralisSupabase
+        .from(ELEMENTS_TABLE)
+        .select("id,name,description,element_type_id,universe_id,updated_at,created_at")
+        .eq("user_id", state.user.id)
+        .is("universe_id", null)
+        .order("updated_at", { ascending: false })
+    ]);
+
+    throwIfError(typeResponse);
+    throwIfError(moduleResponse);
+    throwIfError(universeResponse);
+    throwIfError(standaloneResponse);
+
+    state.elementTypes = typeResponse.data || [];
+    state.universes = universeResponse.data || [];
+    state.universesById = new Map(state.universes.map((universe) => [universe.id, universe]));
+    state.moduleCounts = countModules(moduleResponse.data || []);
+    state.standaloneElements = standaloneResponse.data || [];
+
+    if (state.selectedUniverseId) {
+      const universeElementResponse = await window.centralisSupabase
+        .from(ELEMENTS_TABLE)
+        .select("id,name,description,element_type_id,universe_id,updated_at,created_at")
+        .eq("user_id", state.user.id)
+        .eq("universe_id", state.selectedUniverseId)
+        .order("updated_at", { ascending: false });
+
+      throwIfError(universeElementResponse);
+      state.universeElements = universeElementResponse.data || [];
+    } else {
+      state.universeElements = [];
+    }
+
+    setStatus("");
+  }
+
+  async function loadUniversesForElements(elements) {
+    const universeIds = Array.from(new Set(elements.map((element) => element.universe_id).filter(Boolean)));
+    state.universesById = new Map();
+    if (!universeIds.length) {
+      return;
+    }
+
+    const { data, error } = await window.centralisSupabase
+      .from(UNIVERSES_TABLE)
+      .select("id,name")
+      .in("id", universeIds)
+      .order("name", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    (data || []).forEach((universe) => state.universesById.set(universe.id, universe));
+  }
+
+  async function loadRouteWorkspace() {
+    const context = state.routeContext;
+    if (!context || !["standalone-element", "universe-element"].includes(context.type)) {
+      state.workspace = createEmptyWorkspace();
+      return;
+    }
+
+    state.workspace = { ...createEmptyWorkspace(), isOpen: true, isLoading: true, mode: "edit" };
+    renderWorkspace();
+
+    try {
+      const elementResponse = await window.centralisSupabase
+        .from(ELEMENTS_TABLE)
+        .select("id,name,description,element_type_id,universe_id,rich_template_id,updated_at,created_at")
+        .eq("user_id", state.user.id)
+        .eq("id", context.elementId)
+        .maybeSingle();
+
+      throwIfError(elementResponse);
+      const element = elementResponse.data;
+      if (!element) {
+        throw new Error("That element could not be found.");
+      }
+      if (context.universeId && element.universe_id !== context.universeId) {
+        throw new Error("That element does not belong to the linked Universe.");
+      }
+
+      const [universeResponse, moduleResponse, valueResponse, customResponse, imageResponse] = await Promise.all([
+        element.universe_id
+          ? window.centralisSupabase
+            .from(UNIVERSES_TABLE)
+            .select("id,name")
+            .eq("id", element.universe_id)
+            .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        window.centralisSupabase
+          .from(CHRONICLE_MODULES_TABLE)
+          .select("*")
+          .eq("user_id", state.user.id)
+          .eq("element_id", element.id)
+          .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE)
+          .order("sort_order", { ascending: true }),
+        window.centralisSupabase
+          .from(ELEMENT_TEMPLATE_FIELD_VALUES_TABLE)
+          .select("*")
+          .eq("element_id", element.id),
+        window.centralisSupabase
+          .from(ELEMENT_CUSTOM_FIELDS_TABLE)
+          .select("*")
+          .eq("element_id", element.id)
+          .order("sort_order", { ascending: true }),
+        fetchObjectImages([element.id])
+      ]);
+
+      throwIfError(universeResponse);
+      throwIfError(moduleResponse);
+      throwIfError(valueResponse);
+      throwIfError(customResponse);
+
+      const templates = element.element_type_id ? await fetchTemplatesForType(element.element_type_id) : [];
+      const selectedTemplateId = element.rich_template_id || (templates.length === 1 ? templates[0].id : "");
+      const template = selectedTemplateId ? templates.find((item) => item.id === selectedTemplateId) || null : null;
+      const templateDetails = template ? await fetchTemplateDetails(template.id) : { sections: [], fields: [] };
+
+      state.workspace = {
+        ...createEmptyWorkspace(),
+        isOpen: true,
+        mode: "edit",
+        element,
+        originalElementTypeId: element.element_type_id || "",
+        originalTemplateId: selectedTemplateId || "",
+        universe: universeResponse.data || null,
+        modules: moduleResponse.data || [],
+        templates,
+        template,
+        sections: templateDetails.sections,
+        fields: templateDetails.fields,
+        values: valueResponse.data || [],
+        customFields: customResponse.data || [],
+        images: normalizeImages(imageResponse.images || [])
+      };
+    } catch (error) {
+      console.error("Could not load Chronicle workspace.", error);
+      state.workspace = {
+        ...createEmptyWorkspace(),
+        isOpen: true,
+        error: getReadableError(error)
+      };
+    }
+  }
+
+  async function fetchTemplatesForType(elementTypeId) {
+    const response = await window.centralisSupabase
+      .from(ELEMENT_TYPE_TEMPLATES_TABLE)
+      .select("*")
+      .eq("element_type_id", elementTypeId)
+      .order("is_default", { ascending: false })
+      .order("name", { ascending: true });
+
+    throwIfError(response);
+    return response.data || [];
+  }
+
+  async function fetchTemplateDetails(templateId) {
+    const [sectionResponse, fieldResponse] = await Promise.all([
+      window.centralisSupabase
+        .from(ELEMENT_TEMPLATE_SECTIONS_TABLE)
+        .select("*")
+        .eq("template_id", templateId)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }),
+      window.centralisSupabase
+        .from(ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE)
+        .select("*")
+        .eq("template_id", templateId)
+        .order("sort_order", { ascending: true })
+    ]);
+
+    throwIfError(sectionResponse);
+    throwIfError(fieldResponse);
+
+    const hiddenSectionIds = new Set((sectionResponse.data || [])
+      .filter((section) => section.is_hidden)
+      .map((section) => section.id));
+
+    return {
+      sections: (sectionResponse.data || []).filter((section) => !section.is_hidden),
+      fields: (fieldResponse.data || [])
+        .filter((field) => !field.is_hidden && !hiddenSectionIds.has(field.section_id))
+        .sort(sortTemplateFields)
+    };
+  }
+
+  async function fetchObjectImages(objectIds) {
+    const ids = [...new Set((objectIds || []).filter(Boolean))];
+    if (!ids.length || !window.centralisSupabase?.functions) {
+      return { images: [] };
+    }
+
+    const response = await window.centralisSupabase.functions.invoke("list-object-images", {
+      body: { objectIds: ids }
+    });
+    throwIfError(response);
+    return response.data || { images: [] };
+  }
+
+  function normalizeImages(images = []) {
+    if (!Array.isArray(images) || !images.length) {
+      return [];
+    }
+
+    return [...images].sort((left, right) => {
+      if (Boolean(left.is_primary) !== Boolean(right.is_primary)) {
+        return left.is_primary ? -1 : 1;
+      }
+      return Number(left.sort_order || 0) - Number(right.sort_order || 0)
+        || String(left.created_at || "").localeCompare(String(right.created_at || ""));
+    });
+  }
+
+  function countModules(moduleRows) {
+    return moduleRows.reduce((counts, row) => {
+      if (row.element_id) {
+        counts.set(row.element_id, (counts.get(row.element_id) || 0) + 1);
+      }
+      return counts;
+    }, new Map());
+  }
+
+  function renderAll() {
+    renderTabs();
+    renderHomepageControls();
+    renderRouteNotice();
+    renderWorkspace();
+    renderCreateTypeOptions();
+    renderContent();
+  }
+
+  function renderTabs() {
+    dom.tabs.forEach((tab) => {
+      const isActive = tab.dataset.chronicleTab === state.activeTab;
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-selected", String(isActive));
+    });
+  }
+
+  function renderHomepageControls() {
+    if (dom.search && dom.search.value !== state.search) {
+      dom.search.value = state.search;
+    }
+    if (dom.sort && dom.sort.value !== state.sort) {
+      dom.sort.value = state.sort;
+    }
+    if (!dom.universeFilter || !dom.universeFilterWrap) {
+      return;
+    }
+
+    dom.universeFilterWrap.hidden = state.activeTab !== "universe";
+    dom.universeFilter.innerHTML = `
+      <option value="">Choose a universe</option>
+      ${state.universes.map((universe) => `<option value="${escapeHtml(universe.id)}"${universe.id === state.selectedUniverseId ? " selected" : ""}>${escapeHtml(universe.name)}</option>`).join("")}
+    `;
+  }
+
+  function renderRouteNotice() {
+    if (!dom.routeNotice) {
+      return;
+    }
+
+    const context = state.routeContext;
+    if (!context) {
+      dom.routeNotice.hidden = true;
+      dom.routeNotice.innerHTML = "";
+      return;
+    }
+
+    dom.routeNotice.hidden = true;
+  }
+
+  function renderWorkspace() {
+    if (!dom.workspace) {
+      return;
+    }
+
+    const workspace = state.workspace;
+    if (!workspace?.isOpen) {
+      dom.workspace.hidden = true;
+      dom.workspace.innerHTML = "";
+      return;
+    }
+
+    dom.workspace.hidden = false;
+
+    if (workspace.isLoading) {
+      dom.workspace.innerHTML = `<div class="chronicle-workspace is-loading">Loading element workspace...</div>`;
+      return;
+    }
+
+    if (workspace.error) {
+      dom.workspace.innerHTML = `
+        <div class="chronicle-workspace">
+          <div class="chronicle-workspace-header">
+            <div>
+              <p class="chronicle-eyebrow">Chronicle Editor</p>
+              <h2>Element unavailable</h2>
+              <p>${escapeHtml(workspace.error)}</p>
+            </div>
+            <div class="chronicle-workspace-actions">
+              ${renderBackToChronicleLink()}
+              ${renderBackToCanvasLink()}
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const element = workspace.element;
+    const type = getType(element.element_type_id);
+    const iconName = sanitizeIconName(type?.icon);
+    const valuesByFieldId = new Map(workspace.values.map((value) => [value.template_field_id, value]));
+    const assignedModules = getAssignedSectionModules(workspace);
+    const assignedModuleSectionIds = new Set(assignedModules.map((item) => item.section.id));
+    const canManageModules = Boolean(workspace.template?.id);
+    const headerImage = workspace.images?.[0] || null;
+
+    dom.workspace.innerHTML = `
+      <form class="chronicle-workspace" data-chronicle-workspace-form>
+        <div class="chronicle-workspace-header">
+          <div class="chronicle-workspace-title">
+            <div class="chronicle-type-icon" style="--type-color:${escapeHtml(type?.color || "#6366f1")}">
+              <ph-${escapeHtml(iconName)} weight="duotone" aria-hidden="true"></ph-${escapeHtml(iconName)}>
+            </div>
+            <div>
+              <p class="chronicle-eyebrow">${escapeHtml(workspace.universe?.name || "Standalone Element")}</p>
+              <h2 data-chronicle-workspace-title>${escapeHtml(element.name)}</h2>
+              <p data-chronicle-workspace-type>${escapeHtml(type?.name || "No element type")}</p>
+            </div>
+          </div>
+          <div class="chronicle-workspace-actions">
+            ${renderBackToChronicleLink()}
+            ${renderBackToCanvasLink()}
+            <button class="primary-action" type="submit" data-chronicle-workspace-save>Save Element</button>
+          </div>
+        </div>
+        ${headerImage ? renderWorkspaceImageHeader(headerImage, element.name) : ""}
+        <section class="chronicle-editor-section chronicle-editor-basics">
+          <h3>Basics</h3>
+          <div class="chronicle-basics-fields">
+            <label class="form-field">
+              <span>Name</span>
+              <input type="text" name="workspace-name" value="${escapeHtml(element.name)}" required autocomplete="off">
+            </label>
+            <label class="form-field">
+              <span>Element Type</span>
+              <select name="workspace-element-type" data-chronicle-element-type-select>
+                <option value="">No type</option>
+                ${state.elementTypes.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === element.element_type_id ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="form-field">
+              <span>Template</span>
+              <select name="workspace-template" data-chronicle-template-select>
+                <option value="">No template</option>
+                ${workspace.templates.map((item) => `<option value="${escapeHtml(item.id)}"${workspace.template?.id === item.id ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+          <label class="form-field">
+            <span>Description</span>
+            <textarea name="workspace-description" rows="6">${escapeHtml(element.description || "")}</textarea>
+          </label>
+          ${renderTemplateChoiceHint(workspace)}
+        </section>
+        <div class="chronicle-workspace-grid">
+          <aside class="chronicle-module-sidebar">
+            <section class="chronicle-editor-section">
+              <h3>Modules</h3>
+              ${canManageModules
+                ? renderModuleChecklist(workspace, assignedModuleSectionIds)
+                : '<p class="chronicle-muted">Choose a template before adding section modules.</p>'}
+            </section>
+          </aside>
+          <section class="chronicle-module-board" aria-label="Chronicle module board">
+            ${assignedModules.length
+              ? assignedModules.map(({ module, section, fields }) => renderModuleCard(module, section, fields, valuesByFieldId)).join("")
+              : `<div class="chronicle-empty chronicle-board-empty">
+                  <h2>No modules assigned</h2>
+                  <p>Add a section module from the sidebar to start editing this element's extra descriptors.</p>
+                </div>`}
+          </section>
+        </div>
+      </form>
+    `;
+  }
+
+  function renderBackToCanvasLink() {
+    const universeId = state.routeContext?.universeId || state.workspace?.element?.universe_id || "";
+    if (!universeId) {
+      return "";
+    }
+
+    return `
+      <a class="secondary-action compact-action" href="universe-canvas.html?universe_id=${encodeURIComponent(universeId)}">
+        Back to Canvas
+      </a>
+    `;
+  }
+
+  function renderWorkspaceImageHeader(image, elementName) {
+    const imageUrl = image?.image_url || "";
+    if (!imageUrl) {
+      return "";
+    }
+
+    return `
+      <figure class="chronicle-editor-image-header">
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(elementName || "Element image")}">
+      </figure>
+    `;
+  }
+
+  function renderBackToChronicleLink() {
+    return `
+      <a class="secondary-action compact-action" href="${escapeHtml(getReturnToChronicleUrl())}">
+        Back to Chronicle
+      </a>
+    `;
+  }
+
+  function renderTemplateChoiceHint(workspace) {
+    if (!workspace.element?.element_type_id) {
+      return '<p class="chronicle-muted">Choose an element type to see templates and section modules.</p>';
+    }
+    if (workspace.templates.length > 1 && !workspace.template) {
+      return '<p class="chronicle-muted">Choose a template to unlock its section modules.</p>';
+    }
+    if (!workspace.templates.length) {
+      return '<p class="chronicle-muted">This element type does not have templates yet.</p>';
+    }
+    return "";
+  }
+
+  function renderModuleChecklist(workspace, assignedSectionIds) {
+    if (!workspace.sections.length) {
+      return '<p class="chronicle-muted">This template does not have visible sections yet.</p>';
+    }
+
+    const fieldsBySectionId = groupFieldsBySection(workspace.fields);
+    return `
+      <div class="chronicle-module-checklist">
+        ${workspace.sections.map((section) => {
+          const fields = fieldsBySectionId.get(section.id) || [];
+          const isAssigned = assignedSectionIds.has(section.id);
+          return `
+            <details class="chronicle-module-option${isAssigned ? " is-assigned" : ""}" data-section-id="${escapeHtml(section.id)}">
+              <summary>
+                <span>
+                  <strong>${escapeHtml(section.name || "Untitled Section")}</strong>
+                  <em>${fields.length} ${fields.length === 1 ? "field" : "fields"}</em>
+                </span>
+                <button class="${isAssigned ? "ghost-action" : "secondary-action"} compact-action" type="button" data-${isAssigned ? "remove" : "add"}-module="${escapeHtml(section.id)}">
+                  ${isAssigned ? "Remove" : "Add"}
+                </button>
+              </summary>
+              ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+              ${fields.length ? `
+                <ul>
+                  ${fields.map((field) => `<li>${escapeHtml(getTemplateFieldLabel(field))}</li>`).join("")}
+                </ul>
+              ` : '<p>No fields in this section.</p>'}
+            </details>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function getAssignedSectionModules(workspace) {
+    const sectionsById = new Map(workspace.sections.map((section) => [section.id, section]));
+    const fieldsBySectionId = groupFieldsBySection(workspace.fields);
+    return workspace.modules
+      .filter((module) => module.module_type === TEMPLATE_SECTION_MODULE_TYPE)
+      .map((module) => {
+        const sectionId = getModuleSectionId(module);
+        const section = sectionsById.get(sectionId);
+        if (!section) {
+          return null;
+        }
+        return {
+          module,
+          section,
+          fields: fieldsBySectionId.get(section.id) || []
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => Number(left.module.sort_order || 0) - Number(right.module.sort_order || 0) || left.section.name.localeCompare(right.section.name));
+  }
+
+  function renderModuleCard(module, section, fields, valuesByFieldId) {
+    const isCollapsed = isModuleCollapsed(module);
+    const fieldGridClass = fields.length > 1 ? "chronicle-template-fields is-multi-field" : "chronicle-template-fields";
+    return `
+      <article class="chronicle-module-card${isCollapsed ? " is-collapsed" : ""}" data-module-id="${escapeHtml(module.id)}" data-section-id="${escapeHtml(section.id)}">
+        <div class="chronicle-module-card-header">
+          <div>
+            <h3>${escapeHtml(section.name || module.title || "Untitled Module")}</h3>
+            ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+          </div>
+          <div class="chronicle-module-card-actions">
+            <button class="icon-button" type="button" data-toggle-module="${escapeHtml(module.id)}" aria-expanded="${String(!isCollapsed)}" aria-label="${isCollapsed ? "Expand" : "Collapse"} ${escapeHtml(section.name || "module")}">
+              <ph-caret-${isCollapsed ? "down" : "up"} aria-hidden="true"></ph-caret-${isCollapsed ? "down" : "up"}>
+            </button>
+            <button class="icon-button" type="button" data-remove-module="${escapeHtml(section.id)}" aria-label="Remove ${escapeHtml(section.name || "module")}">
+              <ph-x aria-hidden="true"></ph-x>
+            </button>
+          </div>
+        </div>
+        <div class="${fieldGridClass}"${isCollapsed ? " hidden" : ""}>
+          ${fields.length
+            ? fields.map((field) => renderWorkspaceField(field, valuesByFieldId.get(field.id)?.value || "")).join("")
+            : '<p class="chronicle-muted">This section does not have fields yet.</p>'}
+        </div>
+      </article>
+    `;
+  }
+
+  function isModuleCollapsed(module) {
+    return module?.data?.collapsed === true;
+  }
+
+  function groupFieldsBySection(fields = []) {
+    return fields.reduce((map, field) => {
+      const key = field.section_id || "";
+      const list = map.get(key) || [];
+      list.push(field);
+      map.set(key, list.sort(sortTemplateFields));
+      return map;
+    }, new Map());
+  }
+
+  function getModuleSectionId(module) {
+    return module?.data?.section_id || "";
+  }
+
+  function getModuleTemplateId(module) {
+    return module?.data?.template_id || "";
+  }
+
+  function getNextModuleSortOrder(modules = []) {
+    const sortOrders = modules
+      .filter((module) => module.module_type === TEMPLATE_SECTION_MODULE_TYPE)
+      .map((module) => Number(module.sort_order || 0));
+    return sortOrders.length ? Math.max(...sortOrders) + 10 : 10;
+  }
+
+  function sortModules(left, right) {
+    return Number(left.sort_order || 0) - Number(right.sort_order || 0)
+      || String(left.title || "").localeCompare(String(right.title || ""));
+  }
+
+  function renderWorkspaceTemplateFields(sections, fields, valuesByFieldId) {
+    if (!fields.length) {
+      return `<p class="chronicle-muted">No template fields are available for this element.</p>`;
+    }
+
+    return buildSectionModels(sections, fields).map((section) => `
+      <div class="chronicle-template-section">
+        <div class="chronicle-template-section-header">
+          <strong>${escapeHtml(section.name)}</strong>
+          ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+        </div>
+        <div class="chronicle-template-fields">
+          ${section.fields.map((field) => renderWorkspaceField(field, valuesByFieldId.get(field.id)?.value || "")).join("")}
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function renderWorkspaceField(field, value) {
+    const type = getTemplateFieldType(field);
+    const label = getTemplateFieldLabel(field);
+    const hint = field.hint_text || field.description || "";
+    const placeholder = field.placeholder || "";
+    const required = field.is_required ? " required" : "";
+    const name = `workspace-field:${field.id}`;
+    const options = getTemplateFieldOptions(field);
+    let control = "";
+
+    if (type === "textarea" || type === "rich_text") {
+      control = `<textarea name="${escapeHtml(name)}" rows="5" placeholder="${escapeHtml(placeholder)}"${required}>${escapeHtml(value)}</textarea>`;
+    } else if (type === "checkbox") {
+      const checked = ["true", "1", "yes", "on"].includes(String(value).toLowerCase()) ? " checked" : "";
+      control = `<label class="chronicle-checkbox"><input type="checkbox" name="${escapeHtml(name)}"${checked}> <span>${escapeHtml(placeholder || "Enabled")}</span></label>`;
+    } else if (type === "select" || type === "multi_select") {
+      const selectedValues = new Set(String(value || "").split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean));
+      control = `
+        <select name="${escapeHtml(name)}"${type === "multi_select" ? " multiple" : ""}${required}>
+          ${type === "select" ? '<option class="chronicle-select-placeholder" value="">Select...</option>' : ""}
+          ${options.map((option) => `<option value="${escapeHtml(option)}"${selectedValues.has(option) || value === option ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+        </select>
+      `;
+    } else {
+      const inputType = type === "number" || type === "date" || type === "url" ? type : "text";
+      control = `<input type="${inputType}" name="${escapeHtml(name)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}"${required}>`;
+    }
+
+    return `
+      <label class="form-field chronicle-template-field${isWideTemplateField(field) ? " is-wide" : ""}">
+        <span>${escapeHtml(label)}</span>
+        ${control}
+        ${hint ? `<em>${escapeHtml(hint)}</em>` : ""}
+      </label>
+    `;
+  }
+
+  function isWideTemplateField(field) {
+    const type = getTemplateFieldType(field);
+    return type === "textarea" || type === "rich_text";
+  }
+
+  function renderWorkspaceCustomFields(customFields) {
+    const rows = customFields.length ? customFields : [{ id: "", name: "", value: "" }];
+    return rows.map((field) => renderWorkspaceCustomField(field)).join("");
+  }
+
+  function renderWorkspaceCustomField(field) {
+    return `
+      <div class="chronicle-custom-field-row" data-custom-field-row data-custom-field-id="${escapeHtml(field.id || "")}">
+        <input type="text" name="custom-name" value="${escapeHtml(field.name || "")}" placeholder="Field name">
+        <textarea name="custom-value" rows="3" placeholder="Value">${escapeHtml(field.value || "")}</textarea>
+        <button class="icon-button" type="button" data-chronicle-remove-custom-field aria-label="Remove custom field">
+          <ph-trash aria-hidden="true"></ph-trash>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderWorkspaceModules(modules) {
+    if (!modules.length) {
+      return `<p class="chronicle-muted">No Chronicle modules yet. Saving this workspace will keep the element ready for modules.</p>`;
+    }
+
+    return `
+      <div class="chronicle-module-list">
+        ${modules.map((module) => `
+          <article class="chronicle-module-row">
+            <strong>${escapeHtml(module.title || "Untitled Module")}</strong>
+            <span>${escapeHtml(formatModuleType(module.module_type))}</span>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderCreateTypeOptions() {
+    if (!dom.createType) {
+      return;
+    }
+
+    if (!state.elementTypes.length) {
+      dom.createType.innerHTML = `<option value="">No element types available</option>`;
+      dom.createType.disabled = true;
+      return;
+    }
+
+    dom.createType.disabled = false;
+    dom.createType.innerHTML = state.elementTypes
+      .map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.name)}</option>`)
+      .join("");
+  }
+
+  function renderContent() {
+    if (!dom.content) {
+      return;
+    }
+
+    if (state.isLoading) {
+      dom.content.innerHTML = `<div class="chronicle-empty">Loading Chronicle...</div>`;
+      return;
+    }
+
+    const rows = getVisibleRows();
+    if (state.activeTab === "standalone") {
+      renderStandalone(rows);
+    } else {
+      renderUniverseElements(rows);
+    }
+  }
+
+  function renderStandalone(rows) {
+    if (!rows.length) {
+      dom.content.innerHTML = `
+        <div class="chronicle-empty">
+          <h2>No standalone elements yet</h2>
+          <p>Create a standalone element to develop ideas outside a Universe.</p>
+          <button class="primary-action" type="button" data-chronicle-create>
+            <ph-plus aria-hidden="true"></ph-plus>
+            Create Element
+          </button>
+        </div>
+      `;
+      dom.content.querySelector("[data-chronicle-create]")?.addEventListener("click", openCreateDialog);
+      return;
+    }
+
+    dom.content.innerHTML = `
+      <div class="chronicle-list" role="list">
+        ${rows.map((row) => renderElementRow(row)).join("")}
+      </div>
+    `;
+  }
+
+  function renderUniverseElements(rows) {
+    if (!state.selectedUniverseId) {
+      dom.content.innerHTML = `
+        <div class="chronicle-empty">
+          <h2>Choose a universe</h2>
+          <p>Select a universe above to browse every element in its canvas.</p>
+        </div>
+      `;
+      return;
+    }
+
+    if (!rows.length) {
+      const universeName = state.universesById.get(state.selectedUniverseId)?.name || "this universe";
+      dom.content.innerHTML = `
+        <div class="chronicle-empty">
+          <h2>No elements found</h2>
+          <p>${escapeHtml(universeName)} does not have any matching elements yet.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const groups = rows.reduce((map, row) => {
+      const universe = state.universesById.get(row.universe_id);
+      const key = row.universe_id || "unknown";
+      if (!map.has(key)) {
+        map.set(key, {
+          universeName: universe?.name || "Unknown Universe",
+          rows: []
+        });
+      }
+      map.get(key).rows.push(row);
+      return map;
+    }, new Map());
+
+    dom.content.innerHTML = Array.from(groups.values())
+      .map((group) => `
+        <section class="chronicle-universe-group">
+          <h2>${escapeHtml(group.universeName)}</h2>
+          <div class="chronicle-list" role="list">
+            ${group.rows.map((row) => renderElementRow(row, group.universeName)).join("")}
+          </div>
+        </section>
+      `)
+      .join("");
+  }
+
+  function renderElementRow(row, universeName = "") {
+    const type = getType(row.element_type_id);
+    const modules = state.moduleCounts.get(row.id) || 0;
+    const description = row.description?.trim() || "No description yet.";
+    const updatedAt = row.updated_at || row.created_at;
+    const iconName = sanitizeIconName(type?.icon);
+    const editorHref = getEditorHref(row);
+    return `
+      <a class="chronicle-row" role="listitem" data-element-id="${escapeHtml(row.id)}" href="${escapeHtml(editorHref)}" aria-label="Open ${escapeHtml(row.name)} in Chronicle editor">
+        <div class="chronicle-type-icon" style="--type-color:${escapeHtml(type?.color || "#6366f1")}">
+          <ph-${escapeHtml(iconName)} weight="duotone" aria-hidden="true"></ph-${escapeHtml(iconName)}>
+        </div>
+        <div class="chronicle-row-main">
+          <div class="chronicle-row-title">
+            <h3>${escapeHtml(row.name)}</h3>
+            <span>${escapeHtml(type?.name || "No type")}</span>
+          </div>
+          <p>${escapeHtml(createBlurb(description, 150))}</p>
+        </div>
+        <dl class="chronicle-row-meta">
+          ${universeName ? `<div><dt>Universe</dt><dd>${escapeHtml(universeName)}</dd></div>` : ""}
+          <div><dt>Modules</dt><dd>${escapeHtml(formatModuleCount(modules))}</dd></div>
+          <div><dt>Updated</dt><dd>${formatDate(updatedAt)}</dd></div>
+        </dl>
+      </a>
+    `;
+  }
+
+  function getVisibleRows() {
+    const source = state.activeTab === "standalone" ? state.standaloneElements : state.universeElements;
+    const normalizedSearch = normalizeSearch(state.search);
+
+    const filtered = normalizedSearch
+      ? source.filter((row) => normalizeSearch([
+        row.name,
+        row.description,
+        getType(row.element_type_id)?.name,
+        state.universesById.get(row.universe_id)?.name
+      ].filter(Boolean).join(" ")).includes(normalizedSearch))
+      : [...source];
+
+    return filtered.sort((a, b) => {
+      if (state.sort === "name-asc") {
+        return a.name.localeCompare(b.name);
+      }
+      if (state.sort === "type-asc") {
+        return (getType(a.element_type_id)?.name || "").localeCompare(getType(b.element_type_id)?.name || "");
+      }
+      return new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0);
+    });
+  }
+
+  function formatModuleCount(count) {
+    if (!count) {
+      return "Not started";
+    }
+    return `${count} ${count === 1 ? "module" : "modules"}`;
+  }
+
+  function getType(typeId) {
+    return state.elementTypes.find((type) => type.id === typeId) || null;
+  }
+
+  async function handleWorkspaceClick(event) {
+    const toggleModuleButton = event.target.closest("[data-toggle-module]");
+    if (toggleModuleButton) {
+      await toggleSectionModule(toggleModuleButton.dataset.toggleModule);
+      return;
+    }
+
+    const addModuleButton = event.target.closest("[data-add-module]");
+    if (addModuleButton) {
+      await addSectionModule(addModuleButton.dataset.addModule);
+      return;
+    }
+
+    const removeModuleButton = event.target.closest("[data-remove-module]");
+    if (removeModuleButton) {
+      await removeSectionModule(removeModuleButton.dataset.removeModule);
+      return;
+    }
+
+    const addButton = event.target.closest("[data-chronicle-add-custom-field]");
+    if (addButton) {
+      const list = dom.workspace?.querySelector("[data-chronicle-custom-fields]");
+      list?.insertAdjacentHTML("beforeend", renderWorkspaceCustomField({ id: "", name: "", value: "" }));
+      return;
+    }
+
+    const removeButton = event.target.closest("[data-chronicle-remove-custom-field]");
+    if (removeButton) {
+      const row = removeButton.closest("[data-custom-field-row]");
+      const id = row?.dataset.customFieldId;
+      if (id) {
+        const marker = document.createElement("input");
+        marker.type = "hidden";
+        marker.name = "deleted-custom-field-id";
+        marker.value = id;
+        dom.workspace?.querySelector("[data-chronicle-workspace-form]")?.appendChild(marker);
+      }
+      row?.remove();
+    }
+  }
+
+  async function handleWorkspaceChange(event) {
+    const target = event.target;
+    if (target.matches("[data-chronicle-element-type-select]")) {
+      await updateWorkspaceElementType(target.value);
+      return;
+    }
+
+    if (target.matches("[data-chronicle-template-select]")) {
+      await updateWorkspaceTemplate(target.value);
+    }
+  }
+
+  async function updateWorkspaceElementType(elementTypeId) {
+    const nextTemplates = elementTypeId ? await fetchTemplatesForType(elementTypeId) : [];
+    const nextTemplate = nextTemplates.length === 1 ? nextTemplates[0] : null;
+    const templateDetails = nextTemplate ? await fetchTemplateDetails(nextTemplate.id) : { sections: [], fields: [] };
+    state.workspace = {
+      ...state.workspace,
+      element: {
+        ...state.workspace.element,
+        element_type_id: elementTypeId || null,
+        rich_template_id: nextTemplate?.id || null
+      },
+      templates: nextTemplates,
+      template: nextTemplate,
+      sections: templateDetails.sections,
+      fields: templateDetails.fields,
+      modules: []
+    };
+    renderWorkspace();
+  }
+
+  async function updateWorkspaceTemplate(templateId) {
+    const nextTemplate = templateId
+      ? state.workspace.templates.find((template) => template.id === templateId) || null
+      : null;
+    const templateDetails = nextTemplate ? await fetchTemplateDetails(nextTemplate.id) : { sections: [], fields: [] };
+    state.workspace = {
+      ...state.workspace,
+      element: {
+        ...state.workspace.element,
+        rich_template_id: nextTemplate?.id || null
+      },
+      template: nextTemplate,
+      sections: templateDetails.sections,
+      fields: templateDetails.fields,
+      modules: state.workspace.modules.filter((module) => getModuleTemplateId(module) === nextTemplate?.id)
+    };
+    renderWorkspace();
+  }
+
+  async function addSectionModule(sectionId) {
+    if (!state.workspace?.element?.id || !state.workspace.template?.id || !sectionId) {
+      return;
+    }
+
+    const section = state.workspace.sections.find((item) => item.id === sectionId);
+    if (!section) {
+      return;
+    }
+
+    const existingResponse = await window.centralisSupabase
+      .from(CHRONICLE_MODULES_TABLE)
+      .select("*")
+      .eq("user_id", state.user.id)
+      .eq("element_id", state.workspace.element.id)
+      .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE)
+      .eq("data->>section_id", sectionId)
+      .maybeSingle();
+
+    throwIfError(existingResponse);
+    let nextModule = existingResponse.data || null;
+    if (!nextModule) {
+      const insertResponse = await window.centralisSupabase
+        .from(CHRONICLE_MODULES_TABLE)
+        .insert({
+          element_id: state.workspace.element.id,
+          user_id: state.user.id,
+          module_type: TEMPLATE_SECTION_MODULE_TYPE,
+          source: "manual",
+          title: section.name || "Untitled Section",
+          sort_order: getNextModuleSortOrder(state.workspace.modules),
+          data: {
+            section_id: section.id,
+            template_id: state.workspace.template.id
+          }
+        })
+        .select("*")
+        .single();
+      throwIfError(insertResponse);
+      nextModule = insertResponse.data;
+    }
+
+    if (nextModule && !state.workspace.modules.some((module) => module.id === nextModule.id)) {
+      state.workspace = {
+        ...state.workspace,
+        modules: [...state.workspace.modules, nextModule].sort(sortModules)
+      };
+      renderWorkspace();
+    }
+  }
+
+  async function toggleSectionModule(moduleId) {
+    if (!state.workspace?.element?.id || !moduleId) {
+      return;
+    }
+
+    const module = state.workspace.modules.find((item) => item.id === moduleId);
+    if (!module) {
+      return;
+    }
+
+    const nextData = {
+      ...(module.data || {}),
+      collapsed: !isModuleCollapsed(module)
+    };
+    const updateResponse = await window.centralisSupabase
+      .from(CHRONICLE_MODULES_TABLE)
+      .update({
+        data: nextData,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", module.id)
+      .eq("user_id", state.user.id)
+      .eq("element_id", state.workspace.element.id);
+
+    throwIfError(updateResponse);
+
+    state.workspace = {
+      ...state.workspace,
+      modules: state.workspace.modules.map((item) => item.id === module.id ? { ...item, data: nextData } : item)
+    };
+    renderWorkspace();
+  }
+
+  async function removeSectionModule(sectionId) {
+    if (!state.workspace?.element?.id || !sectionId) {
+      return;
+    }
+
+    const deleteResponse = await window.centralisSupabase
+      .from(CHRONICLE_MODULES_TABLE)
+      .delete()
+      .eq("user_id", state.user.id)
+      .eq("element_id", state.workspace.element.id)
+      .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE)
+      .eq("data->>section_id", sectionId);
+    throwIfError(deleteResponse);
+
+    state.workspace = {
+      ...state.workspace,
+      modules: state.workspace.modules.filter((module) => getModuleSectionId(module) !== sectionId)
+    };
+    renderWorkspace();
+  }
+
+  async function handleWorkspaceSubmit(event) {
+    if (!event.target.matches("[data-chronicle-workspace-form]")) {
+      return;
+    }
+
+    event.preventDefault();
+    if (!state.workspace?.element) {
+      return;
+    }
+
+    const form = event.target;
+    const saveButton = form.querySelector("[data-chronicle-workspace-save]");
+    const formData = new FormData(form);
+    const name = String(formData.get("workspace-name") || "").trim();
+    const description = String(formData.get("workspace-description") || "").trim();
+    const elementTypeId = String(formData.get("workspace-element-type") || "");
+    const templateId = String(formData.get("workspace-template") || "");
+
+    if (!name) {
+      setWorkspaceStatus("Name is required.", "error");
+      form.querySelector('[name="workspace-name"]')?.focus();
+      return;
+    }
+
+    if (saveButton) {
+      saveButton.disabled = true;
+    }
+
+    try {
+      const element = state.workspace.element;
+      const typeChanged = elementTypeId !== (state.workspace.originalElementTypeId || "");
+      const templateChanged = templateId !== (state.workspace.originalTemplateId || "");
+      const nextTemplateId = typeChanged ? "" : templateId;
+      const elementResponse = await window.centralisSupabase
+        .from(ELEMENTS_TABLE)
+        .update({
+          name,
+          description: description || null,
+          element_type_id: elementTypeId || null,
+          rich_template_id: nextTemplateId || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", element.id)
+        .eq("user_id", state.user.id);
+
+      throwIfError(elementResponse);
+
+      if (typeChanged || templateChanged) {
+        const moduleDeleteResponse = await window.centralisSupabase
+          .from(CHRONICLE_MODULES_TABLE)
+          .delete()
+          .eq("user_id", state.user.id)
+          .eq("element_id", element.id)
+          .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE);
+        throwIfError(moduleDeleteResponse);
+      }
+
+      const assignedFieldIds = new Set(getAssignedSectionModules(state.workspace)
+        .flatMap((item) => item.fields.map((field) => field.id)));
+      const savedTemplateValues = [];
+      const valueResponses = await Promise.all(state.workspace.fields
+        .filter((field) => assignedFieldIds.has(field.id))
+        .map((field) => {
+        const value = readTemplateFieldValue(form, field);
+        if (!hasMeaningfulValue(value)) {
+          return window.centralisSupabase
+            .from(ELEMENT_TEMPLATE_FIELD_VALUES_TABLE)
+            .delete()
+            .eq("element_id", element.id)
+            .eq("template_field_id", field.id);
+        }
+
+        savedTemplateValues.push({
+          element_id: element.id,
+          template_field_id: field.id,
+          value,
+          updated_at: new Date().toISOString()
+        });
+        return window.centralisSupabase
+          .from(ELEMENT_TEMPLATE_FIELD_VALUES_TABLE)
+          .upsert(savedTemplateValues[savedTemplateValues.length - 1], { onConflict: "element_id,template_field_id" });
+      }));
+      throwFirstSupabaseError(valueResponses);
+
+      const deletedCustomFieldIdsFromRows = [];
+      const customRows = [...form.querySelectorAll("[data-custom-field-row]")];
+      const customResponses = await Promise.all(customRows.map((row, index) => {
+        const id = row.dataset.customFieldId;
+        const customName = String(row.querySelector('[name="custom-name"]')?.value || "").trim();
+        const customValue = String(row.querySelector('[name="custom-value"]')?.value || "").trim();
+        if (!hasMeaningfulValue(customName) && !hasMeaningfulValue(customValue)) {
+          if (id) {
+            deletedCustomFieldIdsFromRows.push(id);
+          }
+          return id
+            ? window.centralisSupabase.from(ELEMENT_CUSTOM_FIELDS_TABLE).delete().eq("id", id)
+            : Promise.resolve();
+        }
+        if (id) {
+          return window.centralisSupabase
+            .from(ELEMENT_CUSTOM_FIELDS_TABLE)
+            .update({ name: customName || "Untitled Field", value: customValue || null, sort_order: index })
+            .eq("id", id);
+        }
+        return window.centralisSupabase
+          .from(ELEMENT_CUSTOM_FIELDS_TABLE)
+          .insert({ element_id: element.id, name: customName || "Untitled Field", value: customValue || null, sort_order: index })
+          .select("*")
+          .single();
+      }));
+      throwFirstSupabaseError(customResponses);
+
+      const deletedCustomFieldIds = [...form.querySelectorAll('[name="deleted-custom-field-id"]')]
+        .map((input) => input.value)
+        .filter(Boolean);
+      const allDeletedCustomFieldIds = [...new Set([...deletedCustomFieldIds, ...deletedCustomFieldIdsFromRows])];
+      if (deletedCustomFieldIds.length) {
+        const deleteResponse = await window.centralisSupabase
+          .from(ELEMENT_CUSTOM_FIELDS_TABLE)
+          .delete()
+          .in("id", deletedCustomFieldIds);
+        throwIfError(deleteResponse);
+      }
+
+      if (typeChanged || templateChanged) {
+        await loadChronicleData();
+        await loadRouteWorkspace();
+        renderAll();
+      } else {
+        syncWorkspaceAfterSave({
+          name,
+          description,
+          elementTypeId,
+          templateId: nextTemplateId,
+          savedTemplateValues,
+          customRows,
+          customResponses,
+          deletedCustomFieldIds: allDeletedCustomFieldIds
+        });
+      }
+      setWorkspaceStatus("Element saved.", "success");
+    } catch (error) {
+      console.error("Could not save Chronicle workspace.", error);
+      setWorkspaceStatus(`Could not save element: ${getReadableError(error)}`, "error");
+    } finally {
+      if (saveButton) {
+        saveButton.disabled = false;
+      }
+    }
+  }
+
+  function openCreateDialog() {
+    if (!dom.createModal) {
+      return;
+    }
+    renderCreateTypeOptions();
+    clearCreateError();
+    dom.createForm?.reset();
+    dom.createModal.hidden = false;
+    requestAnimationFrame(() => dom.createName?.focus());
+  }
+
+  function closeCreateDialog() {
+    if (dom.createModal) {
+      dom.createModal.hidden = true;
+    }
+    clearCreateError();
+  }
+
+  async function handleCreateElement(event) {
+    event.preventDefault();
+    if (!state.user) {
+      showCreateError("You need to be signed in to create an element.");
+      return;
+    }
+
+    const name = dom.createName.value.trim();
+    const elementTypeId = dom.createType.value;
+    const description = dom.createDescription.value.trim();
+    if (!name) {
+      showCreateError("Name is required.");
+      return;
+    }
+    if (!elementTypeId) {
+      showCreateError("Choose an element type.");
+      return;
+    }
+
+    setCreateBusy(true);
+    try {
+      const { data, error } = await window.centralisSupabase
+        .from(ELEMENTS_TABLE)
+        .insert({
+          user_id: state.user.id,
+          universe_id: null,
+          element_type_id: elementTypeId,
+          name,
+          description: description || null,
+          position_x: 0,
+          position_y: 0,
+          is_collapsed: false
+        })
+        .select("id")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      closeCreateDialog();
+      const elementId = data?.id;
+      if (!elementId) {
+        throw new Error("The new element was created, but its id was not returned.");
+      }
+      window.location.href = getEditorHref({ id: elementId, universe_id: null });
+    } catch (error) {
+      console.error("Could not create Chronicle element.", error);
+      showCreateError(`Could not create element: ${error.message}`);
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
+  function parseRouteContext() {
+    const parts = window.location.hash.replace(/^#/, "").split("/").filter(Boolean);
+    if (parts[0] === "universe" && parts[2] === "element" && parts[1] && parts[3]) {
+      return {
+        type: "universe-element",
+        universeId: parts[1],
+        elementId: parts[3]
+      };
+    }
+    if (parts[0] === "element" && parts[1]) {
+      return {
+        type: "standalone-element",
+        universeId: "",
+        elementId: parts[1]
+      };
+    }
+    return null;
+  }
+
+  function applyHomepageQueryState() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const sort = params.get("sort");
+    state.activeTab = tab === "universe" ? "universe" : "standalone";
+    state.selectedUniverseId = params.get("universe_id") || "";
+    state.search = params.get("q") || "";
+    state.sort = ["updated-desc", "name-asc", "type-asc"].includes(sort) ? sort : "updated-desc";
+  }
+
+  function writeHomepageQueryState() {
+    if (state.pageMode !== "home") {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (state.activeTab !== "standalone") {
+      params.set("tab", state.activeTab);
+    }
+    if (state.activeTab === "universe" && state.selectedUniverseId) {
+      params.set("universe_id", state.selectedUniverseId);
+    }
+    if (state.search) {
+      params.set("q", state.search);
+    }
+    if (state.sort !== "updated-desc") {
+      params.set("sort", state.sort);
+    }
+
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    window.history.replaceState({}, "", nextUrl);
+  }
+
+  function getHomepageUrl() {
+    const query = window.location.search || "";
+    return `chronicle.html${query}`;
+  }
+
+  function getReturnToChronicleUrl() {
+    const returnUrl = new URLSearchParams(window.location.search).get("return");
+    if (returnUrl && /^chronicle\.html(?:\?|$)/.test(returnUrl)) {
+      return returnUrl;
+    }
+    return "chronicle.html";
+  }
+
+  function getEditorHref(row) {
+    const returnParam = encodeURIComponent(getHomepageUrl());
+    if (row.universe_id) {
+      return `chronicle-editor.html?return=${returnParam}#universe/${encodeURIComponent(row.universe_id)}/element/${encodeURIComponent(row.id)}`;
+    }
+    return `chronicle-editor.html?return=${returnParam}#element/${encodeURIComponent(row.id)}`;
+  }
+
+  function setStatus(message, isError = false) {
+    if (!dom.status) {
+      return;
+    }
+    dom.status.textContent = message || "";
+    dom.status.hidden = !message;
+    dom.status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function showCreateError(message) {
+    if (!dom.createError) {
+      return;
+    }
+    dom.createError.textContent = message;
+    dom.createError.hidden = false;
+  }
+
+  function clearCreateError() {
+    if (!dom.createError) {
+      return;
+    }
+    dom.createError.textContent = "";
+    dom.createError.hidden = true;
+  }
+
+  function setCreateBusy(isBusy) {
+    if (dom.createSubmit) {
+      dom.createSubmit.disabled = isBusy;
+      dom.createSubmit.textContent = isBusy ? "Creating..." : "Create Element";
+    }
+  }
+
+  function createEmptyWorkspace() {
+    return {
+      isOpen: false,
+      isLoading: false,
+      error: "",
+      mode: "view",
+      element: null,
+      originalElementTypeId: "",
+      originalTemplateId: "",
+      universe: null,
+      modules: [],
+      templates: [],
+      template: null,
+      sections: [],
+      fields: [],
+      values: [],
+      customFields: [],
+      images: []
+    };
+  }
+
+  function buildSectionModels(sections = [], fields = []) {
+    const sectionMap = new Map((sections || []).map((section) => [section.id, { ...section, fields: [] }]));
+    const unsectioned = {
+      id: "unsectioned",
+      name: "Details",
+      description: "",
+      sort_order: 999999,
+      fields: []
+    };
+
+    fields.forEach((field) => {
+      const section = field.section_id ? sectionMap.get(field.section_id) : null;
+      (section || unsectioned).fields.push(field);
+    });
+
+    return [...sectionMap.values(), unsectioned]
+      .filter((section) => section.fields.length)
+      .map((section) => ({ ...section, fields: [...section.fields].sort(sortTemplateFields) }))
+      .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || left.name.localeCompare(right.name));
+  }
+
+  function sortTemplateFields(left, right) {
+    return Number(left.sort_order || 0) - Number(right.sort_order || 0) || getTemplateFieldLabel(left).localeCompare(getTemplateFieldLabel(right));
+  }
+
+  function getTemplateFieldLabel(field) {
+    return field.label || field.name || field.field_key || "Untitled Field";
+  }
+
+  function getTemplateFieldType(field) {
+    return String(field.field_type || field.type || "text").toLowerCase();
+  }
+
+  function getTemplateFieldOptions(field) {
+    const options = parseFieldOptions(field.options);
+    if (Array.isArray(options.choices)) {
+      return options.choices.map((option) => String(option).trim()).filter(Boolean);
+    }
+    if (Array.isArray(options)) {
+      return options.map((option) => String(option?.label ?? option?.value ?? option).trim()).filter(Boolean);
+    }
+    if (options && typeof options === "object") {
+      const values = Object.values(options);
+      if (values.every((value) => typeof value === "string" || typeof value === "number")) {
+        return values.map((option) => String(option).trim()).filter(Boolean);
+      }
+    }
+    return String(field.options_text || field.options || "")
+      .split(/\r?\n|,/)
+      .map((option) => option.trim())
+      .filter(Boolean);
+  }
+
+  function parseFieldOptions(options) {
+    if (!options) {
+      return {};
+    }
+    if (typeof options === "object") {
+      return options;
+    }
+    try {
+      return JSON.parse(options);
+    } catch {
+      return {};
+    }
+  }
+
+  function readTemplateFieldValue(form, field) {
+    const fieldType = getTemplateFieldType(field);
+    const control = form.elements.namedItem(`workspace-field:${field.id}`);
+    if (fieldType === "checkbox") {
+      return control?.checked ? "true" : "";
+    }
+    if (fieldType === "multi_select") {
+      return control ? [...control.selectedOptions].map((option) => option.value).join("\n") : "";
+    }
+    return String(control?.value || "").trim();
+  }
+
+  function hasMeaningfulValue(value) {
+    return String(value ?? "").trim().length > 0;
+  }
+
+  function syncWorkspaceAfterSave({
+    name,
+    description,
+    elementTypeId,
+    templateId,
+    savedTemplateValues,
+    customRows,
+    customResponses,
+    deletedCustomFieldIds
+  }) {
+    const updatedAt = new Date().toISOString();
+    const savedValueMap = new Map((savedTemplateValues || []).map((value) => [value.template_field_id, value]));
+    const assignedFieldIds = new Set(getAssignedSectionModules(state.workspace)
+      .flatMap((item) => item.fields.map((field) => field.id)));
+    const nextValues = state.workspace.values
+      .filter((value) => !assignedFieldIds.has(value.template_field_id) || savedValueMap.has(value.template_field_id))
+      .map((value) => savedValueMap.get(value.template_field_id) || value);
+
+    savedValueMap.forEach((value, fieldId) => {
+      if (!nextValues.some((item) => item.template_field_id === fieldId)) {
+        nextValues.push(value);
+      }
+    });
+
+    const insertedCustomFields = (customResponses || [])
+      .map((response) => response?.data)
+      .filter(Boolean);
+    const insertedBySignature = new Map(insertedCustomFields.map((field) => [
+      `${field.sort_order}:${field.name || ""}:${field.value || ""}`,
+      field
+    ]));
+    const deletedIds = new Set(deletedCustomFieldIds || []);
+    const nextCustomFields = (customRows || []).map((row, index) => {
+      const id = row.dataset.customFieldId;
+      const customName = String(row.querySelector('[name="custom-name"]')?.value || "").trim();
+      const customValue = String(row.querySelector('[name="custom-value"]')?.value || "").trim();
+      if (!hasMeaningfulValue(customName) && !hasMeaningfulValue(customValue)) {
+        return null;
+      }
+      if (id) {
+        return {
+          id,
+          element_id: state.workspace.element.id,
+          name: customName || "Untitled Field",
+          value: customValue || null,
+          sort_order: index
+        };
+      }
+      return insertedBySignature.get(`${index}:${customName || "Untitled Field"}:${customValue || ""}`) || null;
+    }).filter((field) => field && !deletedIds.has(field.id));
+
+    state.workspace = {
+      ...state.workspace,
+      element: {
+        ...state.workspace.element,
+        name,
+        description: description || null,
+        element_type_id: elementTypeId || null,
+        rich_template_id: templateId || null,
+        updated_at: updatedAt
+      },
+      values: nextValues,
+      customFields: nextCustomFields
+    };
+
+    const title = dom.workspace?.querySelector("[data-chronicle-workspace-title]");
+    if (title) {
+      title.textContent = name;
+    }
+    const typeLabel = dom.workspace?.querySelector("[data-chronicle-workspace-type]");
+    if (typeLabel) {
+      typeLabel.textContent = getType(elementTypeId)?.name || "No element type";
+    }
+  }
+
+  function setWorkspaceStatus(message, tone = "") {
+    if (!message) {
+      return;
+    }
+    showToast(message, tone);
+  }
+
+  function showToast(message, tone = "") {
+    const container = getToastContainer();
+    const toast = document.createElement("div");
+    toast.className = "chronicle-toast";
+    toast.classList.toggle("is-error", tone === "error");
+    toast.classList.toggle("is-success", tone === "success");
+    toast.setAttribute("role", tone === "error" ? "alert" : "status");
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    window.setTimeout(() => {
+      toast.classList.add("is-hiding");
+      toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+    }, tone === "error" ? 5200 : 3200);
+  }
+
+  function getToastContainer() {
+    if (dom.toastContainer?.isConnected) {
+      return dom.toastContainer;
+    }
+    const container = document.createElement("div");
+    container.className = "chronicle-toast-stack";
+    container.setAttribute("aria-live", "polite");
+    container.setAttribute("aria-atomic", "true");
+    document.body.appendChild(container);
+    dom.toastContainer = container;
+    return container;
+  }
+
+  function throwFirstSupabaseError(responses) {
+    const failed = responses.find((response) => response?.error);
+    if (failed) {
+      throw failed.error;
+    }
+  }
+
+  function throwIfError(response) {
+    if (response?.error) {
+      throw response.error;
+    }
+  }
+
+  function getReadableError(error) {
+    return error?.message || String(error || "Unknown error");
+  }
+
+  function normalizeSearch(value) {
+    return String(value || "").trim().toLocaleLowerCase();
+  }
+
+  function sanitizeIconName(icon) {
+    const clean = String(icon || "")
+      .trim()
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .replace(/[\s_]+/g, "-")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return clean || "cube";
+  }
+
+  function createBlurb(value, limit) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (text.length <= limit) {
+      return text;
+    }
+    return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+  }
+
+  function formatDate(value) {
+    if (!value) {
+      return "Never";
+    }
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    }).format(new Date(value));
+  }
+
+  function formatModuleType(value) {
+    return String(value || "module")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+})();

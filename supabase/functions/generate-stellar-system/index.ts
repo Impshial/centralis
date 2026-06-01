@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
   describeError,
@@ -212,19 +213,12 @@ Deno.serve(async (req) => {
     const starType = text(body.starType, "Random realistic main sequence") || "Random realistic main sequence";
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "You create scientifically plausible fictional star systems for a worldbuilding app. Respond only with valid JSON.",
-        },
-        { role: "user", content: buildPrompt({ systemCode, starType, planetCount }) },
-      ],
+    const generatedText = await generateJsonText(openai, {
+      system: "You create scientifically plausible fictional star systems for a worldbuilding app. Respond only with valid JSON.",
+      prompt: buildPrompt({ systemCode, starType, planetCount }),
     });
 
-    const generated = parseJson(completion.choices[0]?.message?.content || "{}");
+    const generated = parseJson(generatedText || "{}");
     const supabase = createAdminClient();
 
     const planets = Array.isArray(generated.planets) ? generated.planets.slice(0, planetCount) as GeneratedPlanet[] : [];

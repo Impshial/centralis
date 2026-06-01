@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
   describeError,
@@ -147,16 +148,12 @@ function buildLifeformsPrompt(body: Record<string, unknown>) {
 }
 
 async function generateJson(openai: OpenAI, system: string, prompt: string, temperature = 0.4) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    response_format: { type: "json_object" },
+  const generatedText = await generateJsonText(openai, {
+    system,
+    prompt,
     temperature,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: prompt },
-    ],
   });
-  return parseJson(completion.choices[0]?.message?.content || "{}");
+  return parseJson(generatedText || "{}");
 }
 
 Deno.serve(async (req) => {

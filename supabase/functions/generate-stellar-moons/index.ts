@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
   describeError,
@@ -127,19 +128,12 @@ Deno.serve(async (req) => {
 
     const moonCount = clampInt(body.moonCount, 0, 12, likelyMoonCount(planet));
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "You create scientifically plausible moon data for a fictional star-system builder. Respond only with valid JSON.",
-        },
-        { role: "user", content: buildPrompt(planet, moonCount) },
-      ],
+    const generatedText = await generateJsonText(openai, {
+      system: "You create scientifically plausible moon data for a fictional star-system builder. Respond only with valid JSON.",
+      prompt: buildPrompt(planet, moonCount),
     });
 
-    const generated = parseJson(completion.choices[0]?.message?.content || "{}");
+    const generated = parseJson(generatedText || "{}");
     const moons = Array.isArray(generated.moons) ? generated.moons.slice(0, moonCount) : [];
 
     const { error: deleteError } = await supabase

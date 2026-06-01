@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
   describeError,
@@ -154,24 +155,14 @@ Deno.serve(async (req) => {
     const { data: existingLifeforms, error: existingError } = await existingQuery;
     if (existingError) throw existingError;
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
+    const generatedText = await generateJsonText(openai, {
+      system: "You are an expert astrobiologist generating scientifically plausible alien lifeforms. Respond with valid JSON only.",
+      prompt: buildLifeformsPrompt(sourceBody, planetId ? "planet" : "moon", count, existingLifeforms || []),
       temperature: 0.9,
-      max_tokens: 3000,
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert astrobiologist generating scientifically plausible alien lifeforms. Respond with valid JSON only.",
-        },
-        {
-          role: "user",
-          content: buildLifeformsPrompt(sourceBody, planetId ? "planet" : "moon", count, existingLifeforms || []),
-        },
-      ],
+      maxOutputTokens: 3000,
     });
 
-    const generated = parseJson(completion.choices[0]?.message?.content || "{}");
+    const generated = parseJson(generatedText || "{}");
     const lifeforms = Array.isArray(generated.lifeforms) ? generated.lifeforms.slice(0, count) : [];
     const rows = lifeforms.map((lifeform: Record<string, unknown>, index: number) => {
       const fallbackDesignation = `GQ9-${sourceBody.designation || sourceBody.name}-${String(index + 1).padStart(3, "0")}`;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chronicle | Centralis</title>
-  <link rel="stylesheet" href="styles.css?v=chronicle-v1">
+  <link rel="stylesheet" href="styles.css?v=chronicle-v9">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="chronicle">
@@ -113,19 +113,81 @@
     </div>
   </header>
 
-  <main class="landing-page" aria-label="Chronicle">
-    <div class="landing-toolbar">
-      <h1>Chronicle</h1>
-    </div>
-    <section class="chronicle-placeholder" aria-label="Chronicle overview">
-      <h2>Advanced element development workspace</h2>
-      <p>Chronicle will become the dedicated place to expand elements with modular templates, histories, timelines, maps, mythologies, and focused AI assistance.</p>
+  <main class="chronicle-page" aria-label="Chronicle">
+    <section class="chronicle-hero" aria-label="Chronicle overview">
+      <div>
+        <p class="chronicle-eyebrow">World Building</p>
+        <h1>Chronicle</h1>
+        <p>Advanced element development for standalone ideas and Universe-linked elements.</p>
+      </div>
+      <button class="primary-action" type="button" data-chronicle-create>
+        <ph-plus aria-hidden="true"></ph-plus>
+        Create Element
+      </button>
+    </section>
+
+    <section class="chronicle-panel" aria-label="Chronicle elements">
+      <div class="chronicle-controls">
+        <div class="chronicle-tabs" role="tablist" aria-label="Chronicle element views">
+          <button class="is-active" type="button" role="tab" aria-selected="true" data-chronicle-tab="standalone">Standalone</button>
+          <button type="button" role="tab" aria-selected="false" data-chronicle-tab="universe">Universe Elements</button>
+        </div>
+        <label class="chronicle-field chronicle-search">
+          <span>Search</span>
+          <input type="search" placeholder="Name, type, universe, description..." data-chronicle-search>
+        </label>
+        <label class="chronicle-field chronicle-universe-filter" data-chronicle-universe-filter-wrap hidden>
+          <span>Universe</span>
+          <select data-chronicle-universe-filter>
+            <option value="">Choose a universe</option>
+          </select>
+        </label>
+        <label class="chronicle-field">
+          <span>Sort</span>
+          <select data-chronicle-sort>
+            <option value="updated-desc">Recently Updated</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="type-asc">Type A-Z</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="chronicle-status" data-chronicle-status>Loading Chronicle...</p>
+      <div class="chronicle-content" data-chronicle-content></div>
     </section>
   </main>
+  </div>
+
+  <div class="modal-backdrop" id="chronicle-create-modal" hidden>
+    <div class="modal-dialog chronicle-create-dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-create-title">
+      <button class="modal-close" type="button" data-chronicle-create-close aria-label="Close create element dialog">&times;</button>
+      <h2 id="chronicle-create-title">Create Element</h2>
+      <p>Create a standalone Chronicle element. You can attach it to a Universe later.</p>
+      <form class="chronicle-create-form" data-chronicle-create-form>
+        <label class="form-field">
+          <span>Name</span>
+          <input type="text" data-chronicle-name placeholder="Element name" required>
+        </label>
+        <label class="form-field">
+          <span>Element Type</span>
+          <select data-chronicle-type required></select>
+        </label>
+        <label class="form-field">
+          <span>Description</span>
+          <textarea data-chronicle-description rows="5" placeholder="Brief description..."></textarea>
+        </label>
+        <p class="modal-error" data-chronicle-create-error hidden></p>
+        <div class="modal-actions">
+          <button class="ghost-action" type="button" data-chronicle-create-cancel>Cancel</button>
+          <button class="primary-action" type="submit" data-chronicle-create-submit>Create Element</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="chronicle.js?v=editor-image-header-1"></script>
 </body>
 </html>

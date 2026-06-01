@@ -10,6 +10,7 @@
   const SUPABASE_TIMEOUT_MS = 15000;
   const ELEMENT_EXPORT_FORMAT = "centralis.element-export.v1";
   const RICH_DETAILS_EXPORT_FORMAT = "centralis.rich-details.v1";
+  const CHRONICLE_TEMPLATE_SECTION_MODULE_TYPE = "template_section";
   const DEFAULT_NOTE_WIDTH = 260;
   const DEFAULT_NOTE_HEIGHT = 180;
   const DEFAULT_NOTE_BG_COLOR = "#fef3c7";
@@ -21,6 +22,7 @@
     richDetails: true,
     customFields: true
   };
+  const LINK_EDGE_Z_INDEX = 0;
   const params = new URLSearchParams(window.location.search);
   let universeId = params.get("universe_id");
   const titleElement = document.querySelector("[data-universe-title]");
@@ -53,12 +55,31 @@
     return `element-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  function createPreviewText(description) {
+    return String(description || "")
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .filter((line) => !/^#{1,6}\s+/.test(line.trim()))
+      .join("\n")
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+      .replace(/^\s*>\s?/gm, "")
+      .replace(/^\s*[-*+]\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      .replace(/(\*\*|__)(.*?)\1/g, "$2")
+      .replace(/(\*|_)(.*?)\1/g, "$2")
+      .replace(/[#*_~]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function createBlurb(description) {
-    if (!description) {
+    const trimmed = createPreviewText(description);
+    if (!trimmed) {
       return "No description yet.";
     }
 
-    const trimmed = description.trim();
     return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
   }
 
@@ -114,6 +135,129 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function getCssSafeId(value) {
+    const raw = String(value ?? "");
+    if (window.CSS?.escape) {
+      return window.CSS.escape(raw);
+    }
+    return raw.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function renderInlineMarkdown(value) {
+    return escapeHtml(value)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+      .replace(/_([^_\n]+)_/g, "<em>$1</em>")
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      )
+      .replace(/\n/g, "<br>");
+  }
+
+  function renderMarkdownDescription(value) {
+    const markdown = String(value || "").trim();
+    if (!markdown) {
+      return '<p class="details-description-text details-description-markdown is-empty">No description yet.</p>';
+    }
+
+    const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+    const blocks = [];
+    let paragraphLines = [];
+    let listType = "";
+    let listItems = [];
+    let codeLines = null;
+
+    function flushParagraph() {
+      const text = paragraphLines.join("\n").trim();
+      if (text) {
+        blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
+      }
+      paragraphLines = [];
+    }
+
+    function flushList() {
+      if (listType && listItems.length) {
+        const items = listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("");
+        blocks.push(`<${listType}>${items}</${listType}>`);
+      }
+      listType = "";
+      listItems = [];
+    }
+
+    function flushCode() {
+      if (codeLines) {
+        blocks.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        codeLines = null;
+      }
+    }
+
+    lines.forEach((line) => {
+      if (line.trim().startsWith("```")) {
+        if (codeLines) {
+          flushCode();
+        } else {
+          flushParagraph();
+          flushList();
+          codeLines = [];
+        }
+        return;
+      }
+
+      if (codeLines) {
+        codeLines.push(line);
+        return;
+      }
+
+      if (!line.trim()) {
+        flushParagraph();
+        flushList();
+        return;
+      }
+
+      const heading = line.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        flushList();
+        const level = heading[1].length;
+        blocks.push(`<h${level}>${renderInlineMarkdown(heading[2].trim())}</h${level}>`);
+        return;
+      }
+
+      const quote = line.match(/^>\s?(.+)$/);
+      if (quote) {
+        flushParagraph();
+        flushList();
+        blocks.push(`<blockquote>${renderInlineMarkdown(quote[1].trim())}</blockquote>`);
+        return;
+      }
+
+      const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+      const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+      if (unordered || ordered) {
+        flushParagraph();
+        const nextListType = unordered ? "ul" : "ol";
+        if (listType && listType !== nextListType) {
+          flushList();
+        }
+        listType = nextListType;
+        listItems.push((unordered || ordered)[1].trim());
+        return;
+      }
+
+      flushList();
+      paragraphLines.push(line);
+    });
+
+    flushParagraph();
+    flushList();
+    flushCode();
+
+    return `<div class="details-description-text details-description-markdown">${blocks.join("")}</div>`;
   }
 
   function sanitizeIconName(icon) {
@@ -297,6 +441,10 @@
     return error?.message || error?.error || error?.details || error?.hint || "Unknown error";
   }
 
+  function getElementOwnerId() {
+    return universe.user_id || currentAppUser?.id || window.centralisCurrentAppUser?.id || null;
+  }
+
   async function callEdgeFunction(name, options = {}) {
     if (!window.centralisSupabase || !window.CENTRALIS_SUPABASE_CONFIG) {
       throw new Error("Supabase is not available yet.");
@@ -351,9 +499,9 @@
   let overlayLayers = [];
   let overlayLayerEntries = [];
   let overlayLayerAssignments = [];
+  let currentAppUser = window.centralisCurrentAppUser || null;
 
   if (window.centralisSupabase && universeId) {
-    let currentAppUser = window.centralisCurrentAppUser || null;
     if (!currentAppUser && window.centralisGetCurrentAppUser) {
       try {
         currentAppUser = await window.centralisGetCurrentAppUser();
@@ -502,6 +650,7 @@
   const ReactFlowComponent = Flow.default || Flow.ReactFlow;
   const Background = Flow.Background;
   const Controls = Flow.Controls;
+  const ControlButton = Flow.ControlButton;
   const Handle = Flow.Handle;
   const NodeResizer = Flow.NodeResizer;
   const Position = Flow.Position;
@@ -576,6 +725,19 @@
     window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
       detail: { nodeId }
     }));
+  }
+
+  function getChronicleEditorUrl(node) {
+    const elementId = node?.data?.recordId;
+    if (!elementId) {
+      return "chronicle.html";
+    }
+    const elementSegment = encodeURIComponent(elementId);
+    const nodeUniverseId = node?.data?.universeId || universeId || "";
+    if (nodeUniverseId) {
+      return `chronicle-editor.html#universe/${encodeURIComponent(nodeUniverseId)}/element/${elementSegment}`;
+    }
+    return `chronicle-editor.html#element/${elementSegment}`;
   }
 
   function UniverseNode(props) {
@@ -1261,7 +1423,7 @@
       targetHandle: "left",
       label: link.label || undefined,
       type: "deletable",
-      zIndex: 20,
+      zIndex: LINK_EDGE_Z_INDEX,
       data: {
         recordId: link.id,
         format
@@ -1976,6 +2138,42 @@
     `).join("");
   }
 
+  function renderChroniclePreviewModules(data) {
+    const modules = data?.modules || [];
+    const sectionsById = new Map((data?.sections || []).map((section) => [section.id, section]));
+    const valuesByFieldId = new Map((data?.values || []).map((value) => [value.template_field_id, value]));
+    const fieldsBySectionId = (data?.fields || []).reduce((map, field) => {
+      const key = field.section_id || "";
+      const list = map.get(key) || [];
+      list.push(field);
+      map.set(key, sortTemplateFields(list));
+      return map;
+    }, new Map());
+
+    if (!modules.length) {
+      return '<p class="details-empty">No Chronicle modules assigned.</p>';
+    }
+
+    return modules.map((module) => {
+      const sectionId = getChronicleModuleSectionId(module);
+      const section = sectionsById.get(sectionId);
+      const fields = fieldsBySectionId.get(sectionId) || [];
+      return `
+        <section class="rich-template-section chronicle-preview-module">
+          <div class="rich-template-section-header">
+            <h3>${escapeHtml(section?.name || module.title || "Untitled Module")}</h3>
+            ${section?.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+          </div>
+          ${fields.length ? `
+            <dl class="rich-template-fields">
+              ${fields.map((field) => renderRichFieldValue(field, getFieldStoredValue(valuesByFieldId, field))).join("")}
+            </dl>
+          ` : '<p class="details-empty">No fields in this module.</p>'}
+        </section>
+      `;
+    }).join("");
+  }
+
   function renderCustomFields(customFields = [], mode = "edit") {
     if (mode === "view") {
       if (!customFields.length) {
@@ -2128,7 +2326,7 @@
         </dl>
       </section>
       ${renderCollapsibleDetailsSection("images", "Images", renderImageGallery(images, nodeId))}
-      ${renderCollapsibleDetailsSection("description", "Description", `<p class="details-description-text">${escapeHtml(description)}</p>`)}
+      ${renderCollapsibleDetailsSection("description", "Description", renderMarkdownDescription(description))}
       <section class="details-section">
         <dl class="details-fields">
           <div>
@@ -2636,11 +2834,14 @@
 
     try {
       const layout = await new Elk().layout(graph);
-      const positionsById = new Map((layout.children || []).map((child) => [
+      const layoutChildren = layout.children || [];
+      const layoutMinX = layoutChildren.length ? Math.min(...layoutChildren.map((child) => Number(child.x || 0))) : 0;
+      const layoutMinY = layoutChildren.length ? Math.min(...layoutChildren.map((child) => Number(child.y || 0))) : 0;
+      const positionsById = new Map(layoutChildren.map((child) => [
         child.id,
         {
-          x: Math.round((minX + Number(child.x || 0)) / 12) * 12,
-          y: Math.round((minY + Number(child.y || 0)) / 12) * 12
+          x: Math.round((minX + Number(child.x || 0) - layoutMinX) / 12) * 12,
+          y: Math.round((minY + Number(child.y || 0) - layoutMinY) / 12) * 12
         }
       ]));
 
@@ -2839,6 +3040,103 @@
     return Boolean(elementResponse.data?.rich_template_id
       || (valueResponse.data || []).some((row) => hasMeaningfulValue(row.value))
       || (customResponse.data || []).some((row) => hasMeaningfulValue(row.name) || hasMeaningfulValue(row.value)));
+  }
+
+  async function elementHasChronicleModules(elementId) {
+    if (!window.centralisSupabase || !elementId) {
+      return false;
+    }
+
+    const response = await window.centralisSupabase
+      .from("chronicle_modules")
+      .select("id")
+      .eq("element_id", elementId)
+      .eq("module_type", CHRONICLE_TEMPLATE_SECTION_MODULE_TYPE)
+      .limit(1);
+
+    if (response.error) {
+      console.error("Could not check Chronicle modules:", response.error);
+      return false;
+    }
+
+    return Boolean((response.data || []).length);
+  }
+
+  function getChronicleModuleSectionId(module) {
+    return module?.data?.section_id || "";
+  }
+
+  function getChronicleModuleTemplateId(module) {
+    return module?.data?.template_id || "";
+  }
+
+  async function fetchChroniclePreviewData(node) {
+    if (!window.centralisSupabase || !node?.data?.recordId) {
+      return { modules: [], sections: [], fields: [], values: [] };
+    }
+
+    const [moduleResponse, valueResponse] = await Promise.all([
+      window.centralisSupabase
+        .from("chronicle_modules")
+        .select("*")
+        .eq("element_id", node.data.recordId)
+        .eq("module_type", CHRONICLE_TEMPLATE_SECTION_MODULE_TYPE)
+        .order("sort_order", { ascending: true }),
+      window.centralisSupabase
+        .from("element_template_field_values")
+        .select("*")
+        .eq("element_id", node.data.recordId)
+    ]);
+
+    if (moduleResponse.error) {
+      throw moduleResponse.error;
+    }
+    if (valueResponse.error) {
+      throw valueResponse.error;
+    }
+
+    const modules = (moduleResponse.data || [])
+      .filter((module) => getChronicleModuleSectionId(module))
+      .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || String(left.title || "").localeCompare(String(right.title || "")));
+    const sectionIds = [...new Set(modules.map(getChronicleModuleSectionId).filter(Boolean))];
+    const templateIds = [...new Set(modules.map(getChronicleModuleTemplateId).filter(Boolean))];
+
+    if (!sectionIds.length || !templateIds.length) {
+      return { modules, sections: [], fields: [], values: valueResponse.data || [] };
+    }
+
+    const [sectionResponse, fieldResponse] = await Promise.all([
+      window.centralisSupabase
+        .from("element_template_sections")
+        .select("*")
+        .in("id", sectionIds),
+      window.centralisSupabase
+        .from("element_type_template_fields")
+        .select("*")
+        .in("template_id", templateIds)
+        .in("section_id", sectionIds)
+        .order("sort_order", { ascending: true })
+    ]);
+
+    if (sectionResponse.error) {
+      throw sectionResponse.error;
+    }
+    if (fieldResponse.error) {
+      throw fieldResponse.error;
+    }
+
+    const visibleSectionIds = new Set((sectionResponse.data || [])
+      .filter((section) => !section.is_hidden)
+      .map((section) => section.id));
+    const fields = dedupeTemplateFields(fieldResponse.data || [])
+      .filter((field) => !field.is_hidden && visibleSectionIds.has(field.section_id));
+
+    return {
+      modules: modules.filter((module) => visibleSectionIds.has(getChronicleModuleSectionId(module))),
+      sections: sectionResponse.data || [],
+      fields,
+      values: valueResponse.data || []
+    };
   }
 
   async function fetchRichDetailsData(node) {
@@ -3236,6 +3534,66 @@
     const activeLayer = React.useMemo(() => layers.find((layer) => layer.id === activeLayerId) || null, [layers, activeLayerId]);
     const activeLayerEntries = React.useMemo(() => getEntriesForLayer(activeLayerId, layerEntries), [activeLayerId, layerEntries]);
     const visibleLayerId = layerModeActive ? activeLayerId : "";
+    const fitCanvasToRenderedNodes = React.useCallback((options = {}) => {
+      const instance = reactFlowInstance.current;
+      const wrapper = reactFlowWrapper.current;
+      const flowNodes = getVisibleNodesForGroups(nodesRef.current).filter((node) => !node.hidden);
+      if (!instance || !wrapper || !flowNodes.length) {
+        return;
+      }
+
+      const viewport = typeof instance.getViewport === "function" ? instance.getViewport() : null;
+      const currentZoom = Number(
+        (typeof instance.getZoom === "function" ? instance.getZoom() : viewport?.zoom) || 1
+      );
+      const nodesById = new Map(nodesRef.current.map((node) => [node.id, node]));
+      const rects = flowNodes.map((node) => {
+        const position = getAbsoluteNodePosition(node, nodesById);
+        const domNode = wrapper.querySelector(`.react-flow__node[data-id="${getCssSafeId(node.id)}"]`);
+        const domRect = domNode?.getBoundingClientRect();
+        const fallbackSize = estimateCanvasNodeSize(node);
+        return {
+          x: position.x,
+          y: position.y,
+          width: Math.max(1, Number(domRect?.width || 0) / currentZoom || fallbackSize.width),
+          height: Math.max(1, Number(domRect?.height || 0) / currentZoom || fallbackSize.height)
+        };
+      });
+      const minX = Math.min(...rects.map((rect) => rect.x));
+      const minY = Math.min(...rects.map((rect) => rect.y));
+      const maxX = Math.max(...rects.map((rect) => rect.x + rect.width));
+      const maxY = Math.max(...rects.map((rect) => rect.y + rect.height));
+      const bounds = {
+        x: minX,
+        y: minY,
+        width: Math.max(1, maxX - minX),
+        height: Math.max(1, maxY - minY)
+      };
+      const padding = Number(options.padding ?? 0.06);
+      const viewportWidth = Math.max(1, wrapper.clientWidth || wrapper.getBoundingClientRect().width);
+      const viewportHeight = Math.max(1, wrapper.clientHeight || wrapper.getBoundingClientRect().height);
+      const nextZoom = Math.min(
+        2.5,
+        Math.max(
+          0.08,
+          Math.min(
+            viewportWidth / (bounds.width * (1 + padding * 2)),
+            viewportHeight / (bounds.height * (1 + padding * 2))
+          )
+        )
+      );
+      const nextViewport = {
+        x: (viewportWidth - bounds.width * nextZoom) / 2 - bounds.x * nextZoom,
+        y: (viewportHeight - bounds.height * nextZoom) / 2 - bounds.y * nextZoom,
+        zoom: nextZoom
+      };
+
+      if (typeof instance.setViewport === "function") {
+        instance.setViewport(nextViewport, { duration: Number(options.duration ?? 360) });
+      } else {
+        instance.fitView?.({ padding, duration: Number(options.duration ?? 360) });
+      }
+    }, []);
 
     React.useEffect(() => {
       nodesRef.current = nodes;
@@ -3339,6 +3697,7 @@
           background_color: sanitizeColor(node.data?.backgroundColor, "#123034"),
           updated_at: new Date().toISOString()
         }));
+      const elementOwnerId = getElementOwnerId();
       const elementUpserts = snapshot.nodes
         .filter((node) => node.data?.kind === "element" && node.data?.recordId)
         .map((node) => {
@@ -3348,6 +3707,7 @@
           const absoluteY = groupId ? Number(groupNode?.position?.y || 0) + Number(node.position?.y || 0) : Number(node.position?.y || 0);
           return {
             id: node.data.recordId,
+            user_id: elementOwnerId,
             universe_id: universe.id,
             name: node.data.name || "Untitled Element",
             description: node.data.description || null,
@@ -3400,6 +3760,9 @@
         await window.centralisSupabase.from("element_groups").upsert(groupUpserts);
       }
       if (elementUpserts.length) {
+        if (!elementOwnerId) {
+          throw new Error("Could not determine the signed-in user for restored elements.");
+        }
         await window.centralisSupabase.from("elements").upsert(elementUpserts);
       }
       if (noteUpserts.length) {
@@ -3743,7 +4106,7 @@
       }));
     }, []);
 
-    const openRichDetails = React.useCallback(async (nodeId) => {
+    const openChroniclePreview = React.useCallback(async (nodeId) => {
       const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
       if (!node || node.data?.kind !== "element") {
         return;
@@ -3756,15 +4119,10 @@
       setRichDetailsNodeId(nodeId);
       setRichDetailsData({ loading: true, error: "", template: null, sections: [], fields: [], values: [], customFields: [] });
       try {
-        const data = await fetchRichDetailsData(node);
-        if (data.template?.id && node.data?.richTemplateId !== data.template.id) {
-          setNodes((currentNodes) => currentNodes.map((currentNode) => currentNode.id === nodeId
-            ? { ...currentNode, data: { ...currentNode.data, richTemplateId: data.template.id } }
-            : currentNode));
-        }
+        const data = await fetchChroniclePreviewData(node);
         setRichDetailsData({ loading: false, error: "", ...data });
       } catch (error) {
-        setRichDetailsData({ loading: false, error: getReadableError(error), template: null, fields: [], values: [], customFields: [] });
+        setRichDetailsData({ loading: false, error: getReadableError(error), modules: [], sections: [], fields: [], values: [] });
       }
     }, []);
 
@@ -3777,14 +4135,14 @@
 
       if (fit) {
         window.setTimeout(() => {
-          reactFlowInstance.current?.fitView({ padding: 0.18, duration: 360 });
+          fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 });
         }, 50);
       }
 
       if (persist) {
         await saveNodePositions(nextNodes);
       }
-    }, []);
+    }, [fitCanvasToRenderedNodes]);
 
     const setNodeImages = React.useCallback((nodeId, images, options = {}) => {
       if (!Array.isArray(images)) {
@@ -5465,8 +5823,8 @@
         }
 
         async function routeDetailsOpen() {
-          if (node.data?.kind === "element" && await elementHasRichDetails(node.data.recordId)) {
-            openRichDetails(nodeId);
+          if (node.data?.kind === "element" && await elementHasChronicleModules(node.data.recordId)) {
+            openChroniclePreview(nodeId);
             return;
           }
 
@@ -5481,7 +5839,7 @@
 
       function handleOpenRichDetails(event) {
         if (event.detail?.nodeId) {
-          openRichDetails(event.detail.nodeId);
+          openChroniclePreview(event.detail.nodeId);
         }
       }
 
@@ -5491,7 +5849,7 @@
         window.removeEventListener("centralis:view-node-details", handleViewDetails);
         window.removeEventListener("centralis:open-rich-details", handleOpenRichDetails);
       };
-    }, [openRichDetails]);
+    }, [openChroniclePreview]);
 
     React.useEffect(() => {
       const modal = document.getElementById("rich-details-modal");
@@ -5567,85 +5925,26 @@
 
         const meta = getNodeTypeMeta(node);
         modal.hidden = false;
-        if (title) title.textContent = `Rich Details for ${node.data?.name || "Untitled Node"}`;
-        if (kind) kind.textContent = meta.label;
-        if (editButton) editButton.hidden = richDetailsMode === "edit";
-        if (cancelButton) cancelButton.hidden = richDetailsMode !== "edit";
-        if (saveButton) saveButton.hidden = richDetailsMode !== "edit";
-        if (transferWrap) transferWrap.hidden = richDetailsMode === "edit";
+        if (title) title.textContent = node.data?.name || "Untitled Node";
+        if (kind) kind.textContent = "Chronicle Modules";
+        if (editButton) {
+          editButton.hidden = false;
+          editButton.textContent = "Edit in Chronicle";
+        }
+        if (cancelButton) cancelButton.hidden = true;
+        if (saveButton) saveButton.hidden = true;
+        if (transferWrap) transferWrap.hidden = true;
         if (richDetailsData?.loading) {
-          body.innerHTML = '<p class="details-empty">Loading rich details...</p>';
+          body.innerHTML = '<p class="details-empty">Loading Chronicle modules...</p>';
           return;
         }
         if (richDetailsData?.error) {
-          body.innerHTML = `<p class="form-status is-error">Could not load rich details: ${escapeHtml(richDetailsData.error)}</p>`;
+          body.innerHTML = `<p class="form-status is-error">Could not load Chronicle modules: ${escapeHtml(richDetailsData.error)}</p>`;
           return;
         }
 
-        const linkedNodes = getLinkedNodes(node.id, nodes, edges);
-        const valuesByFieldId = new Map((richDetailsData?.values || []).map((value) => [value.template_field_id, value]));
-        const isEditMode = richDetailsMode === "edit";
-        const templateMarkup = richDetailsData?.template
-          ? renderRichTemplateSections(richDetailsData?.sections || [], richDetailsData?.fields || [], valuesByFieldId, isEditMode ? "edit" : "view")
-          : node.data?.elementType?.id
-            ? `<section class="rich-template-section"><div class="rich-template-section-header"><h3>No Rich Details Template</h3><p>This element type does not have a template yet. Open Types to add one.</p></div></section>`
-            : `<section class="rich-template-section"><div class="rich-template-section-header"><h3>No Element Type</h3><p>Choose an element type before adding Rich Details template fields.</p></div></section>`;
-        body.innerHTML = isEditMode ? `
-          <form class="rich-details-form" data-rich-details-form>
-            <section class="rich-details-section rich-details-basics">
-              <label class="form-field">
-                <span>Name</span>
-                <input type="text" name="rich-name" value="${escapeHtml(node.data?.name || "")}" autocomplete="off">
-              </label>
-              <label class="form-field is-textarea-field">
-                <span>Description</span>
-                <textarea name="rich-description" rows="6" placeholder="Brief description...">${escapeHtml(node.data?.description || "")}</textarea>
-              </label>
-            </section>
-            <section class="rich-details-section">
-              <h3>Images</h3>
-              ${renderImageGallery(node.data?.images || [], node.id)}
-              <div class="image-actions">
-                <button class="secondary-action image-action-button" type="button" data-rich-generate-image>
-                  <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
-                  Generate
-                </button>
-                <div class="image-upload-row">
-                  <label class="secondary-action image-action-button" for="rich-details-image-upload">
-                    <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
-                    Upload
-                  </label>
-                  <input id="rich-details-image-upload" type="file" accept="image/*" data-rich-image-upload hidden>
-                  <p class="form-status image-upload-status" data-image-upload-status role="status"></p>
-                </div>
-              </div>
-            </section>
-            <section class="rich-details-section">
-              <h3>Element Type</h3>
-              ${createDetailsTypePickerMarkup(node.data?.elementType?.id || "")}
-              <div class="rich-template-name-row">
-                <span>Element Template</span>
-                <strong>${escapeHtml(richDetailsData?.template?.name || "No template selected")}</strong>
-              </div>
-            </section>
-            <section class="rich-details-section">
-              <h3>Linked Elements</h3>
-              <div class="linked-node-list">
-                ${renderLinkedNodeCards(linkedNodes)}
-              </div>
-            </section>
-            ${templateMarkup}
-            <section class="rich-details-section">
-              <div class="rich-section-title-row">
-                <h3>Custom Fields</h3>
-                <button class="secondary-action compact-action" type="button" data-add-custom-field>Add Field</button>
-              </div>
-              <div class="custom-fields-list" data-custom-fields-list>
-                ${renderCustomFields(richDetailsData?.customFields || [], "edit")}
-              </div>
-            </section>
-          </form>
-        ` : `
+        const templateMarkup = renderChroniclePreviewModules(richDetailsData);
+        body.innerHTML = `
           <div class="rich-details-form rich-details-view">
             ${node.data?.images?.length ? `
               <section class="rich-details-section rich-details-images">
@@ -5660,7 +5959,7 @@
                 </div>
                 <div class="rich-view-field is-textarea-field">
                   <dt>Description</dt>
-                  <dd class="${hasMeaningfulValue(node.data?.description) ? "" : "is-empty"}">${escapeHtml(hasMeaningfulValue(node.data?.description) ? node.data.description : "--")}</dd>
+                  <dd class="${hasMeaningfulValue(node.data?.description) ? "" : "is-empty"}">${hasMeaningfulValue(node.data?.description) ? renderMarkdownDescription(node.data.description) : "--"}</dd>
                 </div>
               </dl>
             </section>
@@ -5673,71 +5972,13 @@
                   </span>
                   ${escapeHtml(meta.label)}
                 </span>
-                <div class="rich-template-name-row">
-                  <span>Element Template</span>
-                  <strong>${escapeHtml(richDetailsData?.template?.name || "No template selected")}</strong>
-                </div>
-              </div>
-            </section>
-            <section class="rich-details-section">
-              <h3>Linked Elements</h3>
-              <div class="linked-node-list">
-                ${renderLinkedNodeCards(linkedNodes)}
               </div>
             </section>
             ${templateMarkup}
-            <section class="rich-details-section">
-              <h3>Custom Fields</h3>
-              ${renderCustomFields(richDetailsData?.customFields || [], "view")}
-            </section>
           </div>
         `;
 
-        if (isEditMode) {
-          setupDetailsTypePicker(body);
-        }
         setupImageGallery(body);
-        body.querySelectorAll("[data-linked-node-id]").forEach((button) => {
-          button.addEventListener("click", () => {
-            closeRichDetails();
-            openNodeDetails(button.dataset.linkedNodeId);
-          });
-        });
-        if (isEditMode) {
-          body.querySelector("[data-add-custom-field]")?.addEventListener("click", addCustomFieldRow);
-          body.querySelectorAll("[data-remove-custom-field]").forEach((button) => {
-            button.addEventListener("click", () => {
-              const row = button.closest("[data-custom-field-row]");
-              const customFieldId = row?.dataset.customFieldId;
-              if (customFieldId) {
-                const marker = document.createElement("input");
-                marker.type = "hidden";
-                marker.name = "deleted-custom-field-id";
-                marker.value = customFieldId;
-                body.querySelector("[data-rich-details-form]")?.appendChild(marker);
-              }
-              row?.remove();
-            });
-          });
-          body.querySelector("[data-rich-generate-image]")?.addEventListener("click", () => {
-            const form = body.querySelector("[data-rich-details-form]");
-            window.dispatchEvent(new CustomEvent("centralis:generate-image", {
-              detail: {
-                nodeId: node.id,
-                prompt: buildRichDetailsImagePrompt(form),
-                source: "rich-details"
-              }
-            }));
-          });
-          body.querySelector("[data-rich-image-upload]")?.addEventListener("change", (event) => {
-            const file = event.target.files?.[0];
-            if (file) {
-              window.dispatchEvent(new CustomEvent("centralis:upload-image", {
-                detail: { nodeId: node.id, file }
-              }));
-            }
-          });
-        }
       }
 
       function closeRichTransferMenu() {
@@ -6077,9 +6318,9 @@
       }
 
       function showRichEditMode() {
-        setRichStatus("");
-        closeRichTransferMenu();
-        setRichDetailsMode("edit");
+        if (node?.data?.recordId) {
+          window.location.href = getChronicleEditorUrl(node);
+        }
       }
 
       function cancelRichEditMode() {
@@ -6242,7 +6483,7 @@
         document.removeEventListener("keydown", handleRichTransferKeydown);
         closeButtons.forEach((button) => button.removeEventListener("click", closeRichDetails));
       };
-    }, [richDetailsNodeId, richDetailsData, richDetailsMode, nodes, edges, openRichDetails]);
+    }, [richDetailsNodeId, richDetailsData, richDetailsMode, nodes, edges, openChroniclePreview]);
 
 
     React.useEffect(() => {
@@ -6433,7 +6674,7 @@
           if (node?.data?.kind === "element" && node.data.recordId) {
             const universeSegment = encodeURIComponent(universeId || "");
             const elementSegment = encodeURIComponent(node.data.recordId);
-            window.location.href = `chronicle.html#universe/${universeSegment}/element/${elementSegment}`;
+            window.location.href = `chronicle-editor.html#universe/${universeSegment}/element/${elementSegment}`;
           }
         }
       }
@@ -6591,10 +6832,15 @@
         };
 
         try {
+        const elementOwnerId = getElementOwnerId();
+        if (!elementOwnerId) {
+          throw new Error("Could not determine the signed-in user for this element.");
+        }
         const { data: savedElement, error } = await withTimeout(window.centralisSupabase
           .from("elements")
           .insert({
             id,
+            user_id: elementOwnerId,
             universe_id: universe.id,
             element_type_id: elementTypeId || null,
             name,
@@ -6634,7 +6880,7 @@
             sourceHandle: pendingLink.sourceHandle || "right",
             targetHandle: "left",
             type: "deletable",
-            zIndex: 20,
+            zIndex: LINK_EDGE_Z_INDEX,
             data: { recordId: linkId, format: universeFormat },
             style: {
               stroke: universeFormat.strokeColor,
@@ -6766,7 +7012,7 @@
         sourceHandle: connection.sourceHandle || "right",
         targetHandle: connection.targetHandle || "left",
         type: "deletable",
-        zIndex: 20,
+        zIndex: LINK_EDGE_Z_INDEX,
         data: { recordId: id, format: universeFormat },
         style: {
           stroke: universeFormat.strokeColor,
@@ -7901,6 +8147,11 @@
       pushCanvasHistory();
       const offset = 28;
       const now = new Date().toISOString();
+      const elementOwnerId = getElementOwnerId();
+      if (!elementOwnerId) {
+        setTransferStatus("Could not determine the signed-in user for duplicated elements.", "error");
+        return false;
+      }
       const payloads = selectedNodes.map((node) => {
         const isGrouped = Boolean(node.data?.groupId);
         const groupNode = isGrouped ? nodesRef.current.find((currentNode) => currentNode.id === `group:${node.data.groupId}`) : null;
@@ -7908,6 +8159,7 @@
         const nextY = Math.round(Number(node.position?.y || 0) + offset);
         return {
           id: createId(),
+          user_id: elementOwnerId,
           universe_id: universe.id,
           element_type_id: node.data?.elementType?.id || null,
           rich_template_id: node.data?.richTemplateId || null,
@@ -8657,6 +8909,10 @@
       const oldToNewRecordId = new Map();
       const importedRows = [];
       const now = new Date().toISOString();
+      const elementOwnerId = getElementOwnerId();
+      if (!elementOwnerId) {
+        throw new Error("Could not determine the signed-in user for imported elements.");
+      }
       let skippedRichFields = 0;
 
       for (const [index, sourceElement] of sourceElements.entries()) {
@@ -8677,6 +8933,7 @@
           .from("elements")
           .insert({
             id,
+            user_id: elementOwnerId,
             universe_id: universe.id,
             element_type_id: type?.id || null,
             rich_template_id: template?.id || null,
@@ -9628,11 +9885,14 @@
         edges: renderedEdges,
         nodeTypes,
         edgeTypes,
-        fitView: true,
+        fitView: false,
         minZoom: 0.08,
         maxZoom: 2.5,
         onInit: (instance) => {
           reactFlowInstance.current = instance;
+          window.requestAnimationFrame(() => {
+            window.setTimeout(() => fitCanvasToRenderedNodes({ padding: 0.06, duration: 0 }), 80);
+          });
         },
         onNodesChange: handleNodesChange,
         onEdgesChange: handleEdgesChange,
@@ -9666,7 +9926,20 @@
         proOptions: { hideAttribution: true }
       },
       React.createElement(Background, { gap: 18, size: 1 }),
-      React.createElement(Controls, null)
+      React.createElement(
+        Controls,
+        { showFitView: !ControlButton },
+        ControlButton && React.createElement(
+          ControlButton,
+          {
+            type: "button",
+            title: "Fit view",
+            "aria-label": "Fit view",
+            onClick: () => fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 })
+          },
+          React.createElement("ph-corners-out", { "aria-hidden": "true" })
+        )
+      )
       ),
         contextMenu && React.createElement(
         "div",

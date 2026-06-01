@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { getImageBase64, IMAGE_MODEL, IMAGE_QUALITY, IMAGE_SIZE } from "../_shared/openai-config.ts";
 import {
   createImageKey,
   createSignedImageUrl,
@@ -58,35 +59,36 @@ Deno.serve(async (req) => {
     const prompt = createPrompt(body);
     const client = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
     const result = await client.images.generate({
-      model: "dall-e-3",
+      model: IMAGE_MODEL,
       prompt,
       n: 1,
-      size: "1024x1024",
-      quality: "standard",
-      response_format: "b64_json",
+      size: IMAGE_SIZE,
+      quality: IMAGE_QUALITY,
       user: user.id,
     });
+    const imageBase64 = getImageBase64(result);
     const generated = result.data?.[0];
-    if (!generated?.b64_json) {
+    if (!imageBase64) {
       return jsonResponse({ error: "OpenAI did not return image data." }, 502);
     }
 
+    const revisedPrompt = generated?.revised_prompt || null;
     const key = createImageKey(user.id, objectId, "png");
     const imageUrl = await uploadImageBytes({
-      bytes: base64ToBytes(generated.b64_json),
+      bytes: base64ToBytes(imageBase64),
       key,
       contentType: "image/png",
     });
     const image = await insertImageRow({
       objectId,
       imageUrl,
-      provider: "openai:dall-e-3",
-      prompt: generated.revised_prompt || prompt,
+      provider: `openai:${IMAGE_MODEL}`,
+      prompt: revisedPrompt || prompt,
       generationSettings: {
-        model: "dall-e-3",
-        size: "1024x1024",
-        quality: "standard",
-        revised_prompt: generated.revised_prompt || null,
+        model: IMAGE_MODEL,
+        size: IMAGE_SIZE,
+        quality: IMAGE_QUALITY,
+        revised_prompt: revisedPrompt,
       },
       userId: user.id,
     });
