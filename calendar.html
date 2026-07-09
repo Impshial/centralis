@@ -4,13 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Calendar | Centralis</title>
-  <link rel="stylesheet" href="styles.css?v=calendar-v5">
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="styles.css?v=action-sizing-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="calendar">
   <div class="app-shell">
   <header class="site-header" aria-label="Centralis main header">
-    <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+    <a class="brand" href="index.html" aria-label="Centralis home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+          <path d="M9 5v14"></path>
+          <path d="M5 10h14"></path>
+        </svg>
+      </span>
+      <span>Centralis</span>
+    </a>
 
     <nav class="category-nav" aria-label="Primary categories">
       <div class="menu-wrap">
@@ -43,6 +54,7 @@
         </button>
         <div class="dropdown-menu" role="menu">
           <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+          <a href="chat-repository.html" role="menuitem">Chat Repository</a>
           <button type="button" role="menuitem">Episode Roulette</button>
         </div>
       </div>
@@ -56,7 +68,7 @@
         </button>
         <div class="dropdown-menu" role="menu">
           <a href="calendar.html" role="menuitem">Calendar</a>
-          <button type="button" role="menuitem">Tool One</button>
+          <a href="useful-things.html" role="menuitem">Useful Things</a>
           <button type="button" role="menuitem">Tool Two</button>
           <button type="button" role="menuitem">Tool Three</button>
         </div>
@@ -214,7 +226,7 @@
     </section>
   </div>
 
-  <div class="modal-backdrop" id="event-modal" hidden>
+  <div class="modal-backdrop" id="event-modal" data-strict-modal hidden>
     <section class="modal-dialog event-dialog" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
       <div class="modal-header">
         <h2 id="event-modal-title">New Event</h2>
@@ -297,7 +309,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="script.js?v=centralis-header-1"></script>
   <script src="calendar.js?v=calendar-v5"></script>
   <script>
     window.setTimeout(() => {

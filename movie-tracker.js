@@ -751,13 +751,17 @@ document.querySelectorAll("[data-close-modal-target]").forEach((button) => {
 
 document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
   backdrop.addEventListener("click", (event) => {
-    if (event.target === backdrop) backdrop.hidden = true;
+    if (event.target === backdrop && backdrop.dataset.strictModal === undefined) backdrop.hidden = true;
   });
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    document.querySelectorAll(".modal-backdrop").forEach((modal) => { modal.hidden = true; });
+    document.querySelectorAll(".modal-backdrop").forEach((modal) => {
+      if (modal.dataset.strictModal === undefined) {
+        modal.hidden = true;
+      }
+    });
     els.actionsMenu.hidden = true;
   }
 });

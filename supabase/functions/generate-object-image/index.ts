@@ -18,9 +18,15 @@ function createPrompt(input: {
   name?: string;
   description?: string;
   extraPrompt?: string;
+  promptOverride?: string;
 }) {
+  const promptOverride = String(input.promptOverride || "").trim();
+  if (promptOverride) {
+    return promptOverride;
+  }
+
   const parts = [
-    "Create a polished concept art image for the Centralis universe builder.",
+    "Create a polished concept art image for a Centralis creative repository item.",
     `Subject kind: ${input.objectKind || "object"}.`,
     input.elementType ? `Element type: ${input.elementType}.` : "",
     input.name ? `Name: ${input.name}.` : "",

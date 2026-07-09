@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Repository | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.min.css">
+  <link rel="stylesheet" href="styles.css?v=action-sizing-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="chat-repository">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header">
+      <a class="brand" href="index.html" aria-label="Centralis home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+            <path d="M9 5v14"></path>
+            <path d="M5 10h14"></path>
+          </svg>
+        </span>
+        <span>Centralis</span>
+      </a>
+
+      <nav class="category-nav" aria-label="Primary categories">
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
+            <span>World Building</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+            <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
+            <a href="chronicle.html" role="menuitem">Chronicle</a>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
+            <span>Entertainment</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+            <a href="chat-repository.html" role="menuitem">Chat Repository</a>
+            <button type="button" role="menuitem">Episode Roulette</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
+            <span>Utilities</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="calendar.html" role="menuitem">Calendar</a>
+            <a href="useful-things.html" role="menuitem">Useful Things</a>
+            <button type="button" role="menuitem">Tool Two</button>
+            <button type="button" role="menuitem">Tool Three</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
+            <span>Settings</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <button type="button" role="menuitem">Preferences</button>
+            <button type="button" role="menuitem">Privacy</button>
+            <button type="button" role="menuitem">Shortcuts</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+          <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+          </svg>
+        </button>
+
+        <div class="menu-wrap user-menu">
+          <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4 21a8 8 0 0 1 16 0"></path>
+            </svg>
+          </button>
+          <div class="dropdown-menu align-right" role="menu">
+            <button type="button" role="menuitem">Profile</button>
+            <button type="button" role="menuitem">Account</button>
+            <button type="button" role="menuitem">Notifications</button>
+            <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="chat-repository-page" aria-labelledby="chat-repository-title">
+      <section class="chat-repository-toolbar">
+        <div>
+          <p class="chat-repository-eyebrow">Utilities</p>
+          <h1 id="chat-repository-title">Chat Repository</h1>
+          <p>Keep your exported chat logs together and open them without leaving Centralis.</p>
+        </div>
+        <div class="chat-repository-toolbar-actions">
+          <button class="primary-action" type="button" data-open-chat-raw-import>
+            <ph-clipboard-text weight="bold" aria-hidden="true"></ph-clipboard-text>
+            Paste Raw Chat HTML
+          </button>
+          <button class="primary-action" type="button" data-open-chat-upload hidden>
+            <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+            Upload New Chat Log
+          </button>
+        </div>
+      </section>
+
+      <section class="chat-repository-controls" aria-label="Repository display options">
+        <p class="chat-repository-count" data-chat-log-count>Loading chat logs...</p>
+        <div class="chat-repository-control-actions">
+          <label class="chat-repository-search">
+            <span class="sr-only">Search chat logs</span>
+            <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+            <input type="search" placeholder="Search chat logs..." autocomplete="off" data-chat-search>
+          </label>
+          <div class="chat-view-switcher" role="group" aria-label="Choose repository view">
+            <button type="button" data-chat-view="card" aria-pressed="true" title="Card view">
+              <ph-squares-four weight="bold" aria-hidden="true"></ph-squares-four>
+              <span>Card</span>
+            </button>
+            <button type="button" data-chat-view="wide" aria-pressed="false" title="Full width card view">
+              <ph-rows weight="bold" aria-hidden="true"></ph-rows>
+              <span>Full Width</span>
+            </button>
+            <button type="button" data-chat-view="list" aria-pressed="false" title="List view">
+              <ph-list weight="bold" aria-hidden="true"></ph-list>
+              <span>List</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <p class="chat-repository-status" data-chat-repository-status role="status"></p>
+      <section class="chat-log-grid is-card-view" data-chat-log-grid aria-live="polite">
+        <p class="empty-state">Loading chat logs...</p>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="chat-upload-modal" hidden>
+    <section class="modal-dialog chat-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-upload-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="chat-upload-title">Upload New Chat Log</h2>
+          <p class="modal-subtitle">Add an HTML export and the details you want shown in your repository.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close upload dialog" data-close-chat-upload>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form class="chat-upload-form" data-chat-upload-form>
+        <label class="form-field">
+          <span>HTML Chat Log</span>
+          <input type="file" name="file" accept=".html,.htm,text/html" required>
+          <small>HTML files up to 10 MB.</small>
+        </label>
+        <label class="form-field">
+          <span>Title</span>
+          <input type="text" name="title" maxlength="200" autocomplete="off" required>
+        </label>
+        <label class="form-field">
+          <span>Summary</span>
+          <textarea name="summary" maxlength="2000" required></textarea>
+        </label>
+        <label class="chat-upload-option">
+          <input type="checkbox" name="generateImage" checked>
+          <span>Generate Image</span>
+        </label>
+        <p class="form-status" data-chat-upload-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-close-chat-upload>Cancel</button>
+          <button class="primary-action" type="submit" data-chat-upload-submit>Upload</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop chat-reader-backdrop" id="chat-raw-import-modal" hidden>
+    <section class="modal-dialog chat-reader-dialog chat-raw-import-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-raw-import-title">
+      <header class="chat-reader-header">
+        <div>
+          <p>Chat Repository</p>
+          <h2 id="chat-raw-import-title">Paste Raw Chat HTML</h2>
+        </div>
+        <div class="chat-editor-header-actions">
+          <button class="secondary-action chat-reader-close" type="button" data-chat-raw-import-parse>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            Parse/Generate
+          </button>
+          <button class="secondary-action chat-reader-close" type="button" data-close-chat-raw-import>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+            Cancel
+          </button>
+          <button class="primary-action chat-reader-close" type="button" data-chat-raw-import-save disabled>
+            <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
+            Save
+          </button>
+        </div>
+      </header>
+      <div class="chat-raw-import-body">
+        <section class="chat-raw-import-panel">
+          <label class="form-field">
+            <span>Raw conversation HTML</span>
+            <textarea rows="12" spellcheck="false" placeholder="Paste the copied message-list HTML here..." data-chat-raw-html></textarea>
+          </label>
+          <label class="form-field">
+            <span>Import Instructions</span>
+            <textarea rows="5" placeholder="Saved instructions for title and summary generation..." data-chat-raw-instructions></textarea>
+            <small>Saved in this browser and sent only to the metadata generator.</small>
+          </label>
+          <label class="chat-upload-option">
+            <input type="checkbox" data-chat-raw-generate-image checked>
+            <span>Generate Image</span>
+          </label>
+          <p class="form-status" data-chat-raw-status role="status"></p>
+        </section>
+
+        <section class="chat-raw-import-review" data-chat-raw-review hidden>
+          <div class="chat-raw-import-fields">
+            <label class="form-field">
+              <span>Title</span>
+              <input type="text" maxlength="200" autocomplete="off" data-chat-raw-title>
+            </label>
+            <label class="form-field">
+              <span>Summary</span>
+              <textarea maxlength="2000" data-chat-raw-summary></textarea>
+            </label>
+          </div>
+          <p class="chat-raw-import-counts" data-chat-raw-counts></p>
+          <div class="chat-raw-import-preview">
+            <span>Generated HTML Preview</span>
+            <iframe
+              data-chat-raw-preview
+              title="Generated chat log preview"
+              sandbox=""
+              referrerpolicy="no-referrer"
+            ></iframe>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop chat-reader-backdrop" id="chat-reader-modal" hidden>
+    <section class="modal-dialog chat-reader-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-reader-title">
+      <header class="chat-reader-header">
+        <div>
+          <p>Chat Repository</p>
+          <h2 id="chat-reader-title" data-chat-reader-title>Chat Log</h2>
+        </div>
+        <div class="chat-editor-header-actions">
+          <button class="secondary-action chat-reader-close" type="button" data-chat-reader-edit>
+            <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
+            Edit
+          </button>
+          <button class="secondary-action chat-reader-close" type="button" data-close-chat-reader>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+            Close
+          </button>
+        </div>
+      </header>
+      <div class="chat-reader-body">
+        <p class="chat-reader-status" data-chat-reader-status role="status">Loading chat log...</p>
+        <iframe
+          data-chat-reader-frame
+          title="Chat log reader"
+          sandbox="allow-popups"
+          referrerpolicy="no-referrer"
+          hidden
+        ></iframe>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop chat-reader-backdrop" id="chat-editor-modal" hidden>
+    <section class="modal-dialog chat-reader-dialog chat-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-editor-title">
+      <header class="chat-reader-header">
+        <div>
+          <p>Chat Repository</p>
+          <h2 id="chat-editor-title" data-chat-editor-title>Edit Chat Log</h2>
+        </div>
+        <div class="chat-editor-header-actions">
+          <button class="secondary-action chat-reader-close" type="button" data-chat-editor-generate-image>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            Generate Image
+          </button>
+          <button class="secondary-action chat-reader-close" type="button" data-chat-editor-upload-image>
+            <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+            Upload Image
+          </button>
+          <input type="file" accept="image/*" data-chat-editor-image-input hidden>
+          <button class="secondary-action chat-reader-close" type="button" data-close-chat-editor>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+            Close
+          </button>
+          <button class="primary-action chat-reader-close" type="button" data-chat-editor-save>
+            <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
+            Save
+          </button>
+        </div>
+      </header>
+      <div class="chat-editor-body">
+        <section class="chat-editor-image-section" data-chat-editor-image-section hidden>
+          <div class="chat-editor-image-preview" data-chat-editor-image-preview>
+            <div class="chat-editor-image-actions">
+              <button class="secondary-action chat-reader-close" type="button" data-chat-editor-view-image>
+                <ph-image-square weight="bold" aria-hidden="true"></ph-image-square>
+                View Image
+              </button>
+              <button class="secondary-action chat-reader-close is-danger" type="button" data-chat-editor-delete-image>
+                <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+                Delete
+              </button>
+            </div>
+          </div>
+        </section>
+        <div class="chat-editor-fields">
+          <label class="form-field">
+            <span>Title</span>
+            <input type="text" maxlength="200" autocomplete="off" data-chat-editor-title-input>
+          </label>
+          <label class="form-field">
+            <span>Summary</span>
+            <textarea maxlength="2000" data-chat-editor-summary-input></textarea>
+          </label>
+        </div>
+        <p class="chat-reader-status" data-chat-editor-status role="status"></p>
+        <div class="chat-editor-panes">
+          <label class="chat-editor-pane">
+            <span>HTML Source</span>
+            <textarea spellcheck="false" data-chat-editor-source></textarea>
+          </label>
+          <div class="chat-editor-pane chat-editor-preview">
+            <span>Preview</span>
+            <iframe
+              data-chat-editor-preview
+              title="Edited chat log preview"
+              sandbox=""
+              referrerpolicy="no-referrer"
+            ></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop chat-image-prompt-backdrop" id="chat-image-prompt-modal" hidden>
+    <section class="modal-dialog chat-image-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-image-prompt-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="chat-image-prompt-title" data-chat-image-prompt-title>Review Image Prompt</h2>
+          <p class="modal-subtitle" data-chat-image-prompt-subtitle>Edit the prompt before Centralis generates the image.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close image prompt dialog" data-close-chat-image-prompt>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <form class="chat-image-prompt-form" data-chat-image-prompt-form>
+        <label class="form-field">
+          <span>Image generation prompt</span>
+          <textarea rows="14" spellcheck="true" data-chat-image-prompt-text></textarea>
+          <small>This is the full prompt that will be sent for image generation.</small>
+        </label>
+        <p class="form-status" data-chat-image-prompt-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-close-chat-image-prompt>Cancel</button>
+          <button class="primary-action" type="submit" data-chat-image-prompt-submit>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            Generate Image
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/xml/xml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/css/css.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=centralis-header-1"></script>
+  <script src="chat-repository.js?v=chat-deeplink-1"></script>
+</body>
+</html>

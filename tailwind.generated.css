@@ -1,0 +1,1429 @@
+/*
+  Tailwind-generated stylesheet entrypoint for Stellar Architect.
+  The local Tailwind CLI is not available in this environment, so this file
+  carries the compiled component layer needed by stellar-architect.html.
+*/
+
+:root {
+  color-scheme: dark;
+  --header-height: 76px;
+  --ink: #edf4f5;
+  --muted: #a9b7bd;
+  --line: #304149;
+  --surface: #121a1f;
+  --page: #0c1115;
+  --accent: #78d5c8;
+  --accent-strong: #5146b8;
+  --primary-button-text: #001018;
+  --primary-button-bg: #78d5c8;
+  --primary-button-border: #78d5c8;
+  --primary-button-hover-bg: #91e1d7;
+  --primary-button-hover-border: #a8ebe3;
+  --field: #121212;
+  --menu-shadow: 0 18px 40px rgb(0 0 0 / 34%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--page);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+a {
+  color: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  font-weight: 400;
+  opacity: 1;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: var(--page);
+}
+
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: var(--header-height);
+  padding: 0 24px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(18px);
+}
+
+.brand {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 1.5rem;
+  font-weight: 820;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0078ff, #09d9ff);
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 9px;
+  box-shadow: 0 0 18px rgb(0 169 255 / 34%);
+}
+
+.brand-mark svg,
+.icon-button svg,
+.category-button svg,
+.modal-close svg,
+.stellar-generate-redesign-close svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brand-mark svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+.category-nav,
+.header-actions,
+.stellar-page-actions,
+.stellar-section-actions,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+}
+
+.category-nav {
+  justify-self: start;
+  justify-content: flex-start;
+  gap: 2px;
+}
+
+.menu-wrap {
+  position: relative;
+}
+
+.category-nav .menu-wrap {
+  flex: 0 0 auto;
+}
+
+.category-nav .menu-wrap::after {
+  position: absolute;
+  right: 0;
+  bottom: -8px;
+  left: 0;
+  height: 8px;
+  content: "";
+}
+
+.category-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.category-button {
+  width: auto;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.category-button svg {
+  display: none;
+}
+
+.category-button span {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 720;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.icon-button {
+  width: 46px;
+  height: 46px;
+}
+
+.icon-button svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.8;
+}
+
+.category-button:hover,
+.category-button:focus-visible,
+.icon-button:hover,
+.icon-button:focus-visible,
+.secondary-action:hover,
+.secondary-action:focus-visible {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: none;
+}
+
+.category-button:active,
+.icon-button:active {
+  transform: translateY(1px);
+}
+
+.header-actions {
+  justify-self: end;
+  gap: 6px;
+}
+
+.user-button {
+  border-radius: 999px;
+}
+
+.moon-icon,
+body.dark-mode .sun-icon {
+  display: none;
+}
+
+body.dark-mode .moon-icon {
+  display: block;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  z-index: 20;
+  display: none;
+  min-width: 176px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  transform: translateX(-50%);
+}
+
+.dropdown-menu.align-right {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.category-nav .dropdown-menu {
+  left: 0;
+  transform: none;
+}
+
+.menu-trigger[aria-expanded="true"] + .dropdown-menu,
+.category-nav .menu-wrap:hover > .dropdown-menu,
+.category-nav .menu-wrap:focus-within > .dropdown-menu {
+  display: grid;
+  gap: 2px;
+}
+
+.dropdown-menu button,
+.dropdown-menu a {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 620;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dropdown-menu button:hover,
+.dropdown-menu button:focus-visible,
+.dropdown-menu a:hover,
+.dropdown-menu a:focus-visible {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  outline: none;
+}
+
+.primary-action,
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.primary-action {
+  padding: 0 16px;
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border: 1px solid var(--primary-button-border);
+  box-shadow: none;
+  transition: filter 160ms ease;
+}
+
+.primary-action:hover,
+.primary-action:focus-visible {
+  background: var(--primary-button-hover-bg);
+  border-color: var(--primary-button-hover-border);
+  filter: none;
+  outline: none;
+}
+
+.secondary-action {
+  padding: 0 16px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.primary-action:disabled,
+.secondary-action:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+  opacity: 0.58;
+}
+
+.stellar-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 370px;
+  min-height: 0;
+  height: calc(100vh - var(--header-height));
+  margin-top: var(--header-height);
+  color: #f7fbff;
+  background: #080d12;
+}
+
+.stellar-main {
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid rgb(148 163 184 / 16%);
+}
+
+.stellar-side-panel {
+  position: sticky;
+  top: var(--header-height);
+  height: calc(100vh - var(--header-height));
+  padding: 16px;
+  overflow-y: auto;
+  background: #11151b;
+}
+
+.stellar-wide-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 8px;
+}
+
+.stellar-tree-shell {
+  margin-top: 24px;
+}
+
+.stellar-tree-shell h2 {
+  margin: 0 0 14px;
+  color: #a9b6c2;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stellar-tree-list,
+.stellar-tree-children,
+.stellar-body-list {
+  display: grid;
+  gap: 8px;
+}
+
+.stellar-body-list {
+  gap: 16px;
+}
+
+.stellar-tree-children {
+  margin: 8px 0 8px 20px;
+}
+
+.stellar-tree-folder > .stellar-tree-children {
+  margin-left: 38px;
+}
+
+.stellar-tree-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px;
+}
+
+.stellar-tree-toggle,
+.stellar-tree-toggle-spacer {
+  width: 18px;
+  height: 34px;
+}
+
+.stellar-tree-toggle {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: #9db2c5;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.stellar-tree-toggle:hover,
+.stellar-tree-toggle:focus-visible,
+.stellar-tree-folder-label:hover,
+.stellar-tree-folder-label:focus-visible {
+  color: #f7fbff;
+  background: rgb(148 163 184 / 12%);
+  outline: none;
+}
+
+.stellar-tree-toggle.is-expanded {
+  transform: rotate(90deg);
+}
+
+.stellar-tree-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 8px;
+  color: #e9f2fb;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.stellar-tree-item:hover,
+.stellar-tree-item.is-selected {
+  background: rgb(148 163 184 / 14%);
+}
+
+.stellar-tree-folder-label {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.stellar-tree-folder-label span,
+.stellar-tree-folder-label em {
+  font-weight: 850;
+}
+
+.stellar-tree-item span {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stellar-tree-item em {
+  grid-column: 2;
+  margin-top: -8px;
+  color: #9db2c5;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.stellar-tree-item ph-star,
+.stellar-panel h2 ph-star,
+.stellar-empty-state ph-star {
+  color: #ffc400;
+}
+
+.stellar-tree-item ph-planet {
+  color: #00d2ff;
+}
+
+.stellar-tree-item ph-moon {
+  color: #9ca3af;
+}
+
+.stellar-tree-item ph-users,
+.stellar-tree-item ph-dna {
+  color: #22c55e;
+}
+
+.stellar-landing,
+.stellar-detail-scroll {
+  height: calc(100vh - var(--header-height));
+  padding: 28px;
+  overflow-y: auto;
+}
+
+.stellar-detail-scroll {
+  height: calc(100vh - var(--header-height) - 62px);
+  padding-inline: max(28px, 15vw);
+}
+
+.stellar-page-title {
+  margin: -28px -28px 28px;
+  padding: 26px 28px 24px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(99 102 241 / 28%), transparent 35%),
+    linear-gradient(90deg, rgb(15 23 42 / 96%), rgb(30 41 59 / 72%), rgb(15 23 42 / 96%));
+  border-bottom: 1px solid rgb(148 163 184 / 12%);
+}
+
+.stellar-page-title h1 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 48px);
+}
+
+.stellar-page-title p {
+  margin: 8px 0 0;
+  color: #d4deea;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.stellar-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.stellar-system-card,
+.stellar-body-row,
+.stellar-panel,
+.stellar-empty-state {
+  background: #151a21;
+  border: 1px solid rgb(148 163 184 / 16%);
+  border-radius: 8px;
+}
+
+.stellar-system-card {
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.stellar-system-card:hover {
+  border-color: rgb(99 102 241 / 55%);
+  transform: translateY(-2px);
+}
+
+.stellar-card-image {
+  position: relative;
+  min-height: 172px;
+  background: #0d1117;
+}
+
+.stellar-placeholder {
+  display: grid;
+  width: 100%;
+  min-height: 100%;
+  place-items: center;
+  gap: 8px;
+  color: #7890a5;
+  background:
+    radial-gradient(circle at 30% 20%, rgb(96 165 250 / 22%), transparent 30%),
+    radial-gradient(circle at 70% 50%, rgb(248 113 113 / 18%), transparent 28%),
+    #111827;
+}
+
+.stellar-placeholder ph-planet {
+  font-size: 42px;
+}
+
+.stellar-planet-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stellar-planet-dots span {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+}
+
+.stellar-planet-dots em {
+  color: #d5e5f5;
+  font-style: normal;
+}
+
+.stellar-card-body {
+  padding: 20px;
+}
+
+.stellar-card-body h2 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.stellar-card-body p,
+.stellar-muted {
+  color: #a9b6c2;
+}
+
+.stellar-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.stellar-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: rgb(148 163 184 / 12%);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stellar-detail-toolbar .is-orange {
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border: 1px solid var(--primary-button-border);
+}
+
+.stellar-habitability-badge.is-habitable {
+  color: #4ade80;
+  background: rgb(22 163 74 / 20%);
+}
+
+.stellar-habitability-badge.is-too-hot {
+  color: #f87171;
+  background: rgb(220 38 38 / 20%);
+}
+
+.stellar-habitability-badge.is-too-cold {
+  color: #60a5fa;
+  background: rgb(37 99 235 / 20%);
+}
+
+.stellar-habitability-badge.is-gas-giant {
+  color: #c084fc;
+  background: rgb(147 51 234 / 20%);
+}
+
+.stellar-habitability-badge.is-no-atmosphere,
+.stellar-habitability-badge.is-unknown {
+  color: #9ca3af;
+  background: rgb(75 85 99 / 20%);
+}
+
+.stellar-habitability-badge.is-asteroid-belt {
+  color: #fbbf24;
+  background: rgb(217 119 6 / 20%);
+}
+
+.stellar-type-badge.is-asteroid-type {
+  border-color: #f59e0b;
+}
+
+.stellar-detail-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  height: 62px;
+  padding: 0 28px;
+  background: #0f1319;
+  border-bottom: 1px solid rgb(148 163 184 / 16%);
+}
+
+.stellar-page-actions {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.stellar-detail-toolbar h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stellar-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #bdd1e3;
+  text-decoration: none;
+}
+
+.stellar-panel {
+  padding: 24px;
+  margin-bottom: 22px;
+}
+
+.stellar-panel h2,
+.stellar-section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  color: #00d2ff;
+  font-size: 26px;
+}
+
+.stellar-panel h2.is-green,
+.stellar-section-heading .is-green {
+  color: #22c55e;
+}
+
+.stellar-panel h2.is-red,
+.stellar-section-heading .is-red {
+  color: #ff5c61;
+}
+
+.stellar-split-card {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 24px;
+}
+
+.stellar-split-card .stellar-placeholder,
+.stellar-row-image {
+  width: 120px;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.stellar-stat-grid,
+.stellar-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 24px;
+}
+
+.stellar-mini-grid {
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 12px 18px;
+}
+
+.stellar-stat span {
+  display: block;
+  margin-bottom: 5px;
+  color: #9db2c5;
+  font-size: 13px;
+}
+
+.stellar-stat strong {
+  color: #ffffff;
+  font-size: 17px;
+}
+
+.stellar-description {
+  color: #d4deea;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.stellar-zone strong {
+  display: block;
+  margin-top: 4px;
+  color: #00d2ff;
+  font-size: 18px;
+}
+
+.stellar-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stellar-section-heading h2 {
+  margin: 0;
+}
+
+.stellar-section-heading span {
+  color: #c9d5e1;
+}
+
+.stellar-section-actions {
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.stellar-body-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.stellar-lifeform-row {
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: start;
+}
+
+.stellar-body-row:hover {
+  border-color: rgb(0 210 255 / 42%);
+}
+
+.stellar-body-row .stellar-row-image {
+  display: grid;
+  width: 72px;
+  min-height: 72px;
+  place-items: center;
+  color: #7aa5c8;
+  background: #1f2430;
+}
+
+.stellar-lifeform-image-block {
+  display: grid;
+  width: 112px;
+  gap: 8px;
+}
+
+.stellar-lifeform-image {
+  display: grid;
+  width: 112px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  place-items: center;
+  color: #7f8ea3;
+  background: #20242d;
+  border-radius: 5px;
+  font-size: 0.86rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.stellar-lifeform-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stellar-lifeform-image-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
+  gap: 8px;
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border: 1px solid var(--primary-button-border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.stellar-lifeform-image-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.stellar-lifeform-image-block.is-large {
+  width: min(420px, 100%);
+  margin: 28px 0 18px;
+}
+
+.stellar-lifeform-image-block.is-large .stellar-lifeform-image {
+  width: min(420px, 100%);
+  aspect-ratio: 16 / 10;
+}
+
+.stellar-lifeform-image-block.is-large .stellar-lifeform-image-action {
+  max-width: 180px;
+}
+
+.stellar-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stellar-row-title h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.stellar-row-title h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.stellar-row-title h3 a:hover {
+  color: #67e8f9;
+}
+
+.stellar-row-main p {
+  color: #d4deea;
+  font-style: italic;
+}
+
+.stellar-planet-hero {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  margin: 30px 0;
+}
+
+.stellar-planet-hero .stellar-placeholder {
+  min-height: 110px;
+  border-radius: 8px;
+}
+
+.stellar-empty-state,
+.stellar-loading,
+.stellar-error {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 30px;
+  text-align: center;
+}
+
+.stellar-empty-state ph-star {
+  font-size: 36px;
+}
+
+.stellar-error {
+  color: #ff6b6b;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 46%);
+}
+
+.modal-dialog {
+  width: min(448px, 100%);
+  padding: 22px 24px 24px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+}
+
+.modal-close,
+.stellar-generate-redesign-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+}
+
+.modal-close svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.8;
+}
+
+.modal-close:hover,
+.modal-close:focus-visible {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  outline: none;
+}
+
+.movie-floating-close {
+  float: right;
+}
+
+.modal-subtitle {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.dialog-status {
+  min-height: 20px;
+  margin: 0;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  font-weight: 720;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  gap: 14px;
+  padding-top: 12px;
+}
+
+#stellar-generate-modal {
+  background: rgb(0 0 0 / 65%);
+}
+
+.modal-dialog.stellar-generate-redesign {
+  position: relative;
+  width: min(820px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 18% 8%, rgb(79 70 229 / 18%), transparent 28%),
+    radial-gradient(circle at 78% 2%, rgb(14 165 233 / 10%), transparent 30%),
+    rgb(2 6 23 / 96%);
+  border: 1px solid rgb(51 65 85 / 92%);
+  border-radius: 22px;
+  box-shadow:
+    0 32px 90px rgb(0 0 0 / 58%),
+    inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.modal-dialog.stellar-generate-redesign form {
+  display: grid;
+}
+
+.modal-dialog.stellar-generate-redesign form > div:first-child {
+  display: grid;
+  gap: 22px;
+  padding: 28px 48px 22px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-header {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: center;
+  max-width: 620px;
+  gap: 20px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-orb {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  background: rgb(29 78 216 / 30%);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 7px rgb(37 99 235 / 14%),
+    0 0 28px rgb(79 70 229 / 40%);
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-orb > div {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  background: rgb(37 99 235 / 42%);
+  border-radius: 999px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-orb ph-star {
+  color: #ffffff;
+  font-size: 26px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-close {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #cbd5e1;
+  background: rgb(15 23 42 / 82%);
+  border: 1px solid rgb(51 65 85 / 90%);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-close svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.9;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-close:hover,
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-close:focus-visible {
+  color: #ffffff;
+  border-color: #64748b;
+  outline: 2px solid rgb(96 165 250 / 70%);
+  outline-offset: 2px;
+}
+
+.modal-dialog.stellar-generate-redesign h2 {
+  display: block;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+.modal-dialog.stellar-generate-redesign .modal-subtitle {
+  max-width: 600px;
+  margin: 8px 0 0;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.modal-dialog.stellar-generate-redesign h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 760;
+}
+
+.modal-dialog.stellar-generate-redesign h3 ph-sliders-horizontal,
+.modal-dialog.stellar-generate-redesign h3 ph-cube {
+  color: #3b82f6;
+  font-size: 21px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-section {
+  display: grid;
+  gap: 16px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-section + .stellar-generate-redesign-section {
+  padding-top: 20px;
+  border-top: 1px solid rgb(51 65 85 / 80%);
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-form-grid label {
+  display: grid;
+  gap: 10px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-form-grid label span {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-form-grid select {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 42px 0 16px;
+  appearance: none;
+  color: #ffffff;
+  background:
+    linear-gradient(45deg, transparent 50%, #cbd5e1 50%) calc(100% - 21px) 19px / 6px 6px no-repeat,
+    linear-gradient(135deg, #cbd5e1 50%, transparent 50%) calc(100% - 15px) 19px / 6px 6px no-repeat,
+    rgb(15 23 42 / 82%);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  font-size: 0.95rem;
+  font-weight: 650;
+  outline: none;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-form-grid select:focus {
+  border-color: #60a5fa;
+  box-shadow:
+    0 0 0 3px rgb(59 130 246 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 46px;
+  gap: 14px;
+  margin: 0;
+  padding: 0 16px;
+  color: #ffffff;
+  background: rgb(15 23 42 / 45%);
+  border: 1px solid rgb(51 65 85 / 80%);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option > span:last-child {
+  justify-self: end;
+  padding: 6px 12px;
+  color: #bfdbfe;
+  background: rgb(59 130 246 / 15%);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option ph-info {
+  margin-left: 6px;
+  color: #94a3b8;
+  font-size: 16px;
+  vertical-align: -3px;
+}
+
+.modal-dialog.stellar-generate-redesign .dialog-status {
+  min-height: 18px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  padding: 20px 48px;
+  background: rgb(2 6 23 / 45%);
+  border-top: 1px solid #1e293b;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-cancel,
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 760;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-cancel {
+  justify-self: start;
+  color: #cbd5e1;
+  background: rgb(15 23 42 / 70%);
+  border: 1px solid #334155;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  min-width: 210px;
+  gap: 12px;
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border: 1px solid var(--primary-button-border);
+  box-shadow: none;
+  font-weight: 400;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit ph-star {
+  font-size: 22px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit:hover,
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit:focus-visible {
+  background: var(--primary-button-hover-bg);
+  border-color: var(--primary-button-hover-border);
+  filter: none;
+  outline: 2px solid rgb(147 197 253 / 85%);
+  outline-offset: 2px;
+}
+
+.modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.stellar-details-dialog,
+.stellar-life-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.stellar-details-dialog h2,
+.stellar-life-dialog h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.stellar-details-header .modal-subtitle,
+.stellar-life-header .modal-subtitle {
+  margin-bottom: 18px;
+}
+
+.stellar-details-confirm,
+.stellar-life-note {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.stellar-details-actions,
+.stellar-life-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 1100px) {
+  .stellar-page {
+    grid-template-columns: 1fr;
+  }
+
+  .stellar-side-panel {
+    position: static;
+    height: auto;
+    border-top: 1px solid rgb(148 163 184 / 16%);
+  }
+
+  .stellar-detail-scroll {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --header-height: 62px;
+  }
+
+  .site-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .brand {
+    font-size: 1.1rem;
+  }
+
+  .category-nav {
+    grid-column: 1 / -1;
+    order: 2;
+    overflow-x: auto;
+  }
+
+  .stellar-page {
+    height: auto;
+    min-height: calc(100vh - var(--header-height));
+  }
+
+  .stellar-form-grid,
+  .modal-dialog.stellar-generate-redesign .stellar-form-grid,
+  .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-footer,
+  .stellar-stat-grid,
+  .stellar-mini-grid,
+  .stellar-split-card,
+  .stellar-body-row,
+  .stellar-planet-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-dialog.stellar-generate-redesign {
+    width: min(560px, calc(100vw - 24px));
+  }
+
+  .modal-dialog.stellar-generate-redesign form > div:first-child,
+  .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-footer {
+    padding: 22px;
+  }
+
+  .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-header {
+    grid-template-columns: 1fr;
+    padding-right: 54px;
+  }
+
+  .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit {
+    justify-self: stretch;
+    min-width: 0;
+  }
+}

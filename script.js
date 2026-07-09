@@ -1,3 +1,125 @@
+const CENTRALIS_HEADER_MARKUP = `
+  <a class="brand" href="index.html" aria-label="Centralis home">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+        <path d="M9 5v14"></path>
+        <path d="M5 10h14"></path>
+      </svg>
+    </span>
+    <span>Centralis</span>
+  </a>
+
+  <nav class="category-nav" aria-label="Primary categories">
+    <div class="menu-wrap">
+      <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="World building">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M3.6 9h16.8"></path>
+          <path d="M3.6 15h16.8"></path>
+          <path d="M12 3a15 15 0 0 1 0 18"></path>
+          <path d="M12 3a15 15 0 0 0 0 18"></path>
+        </svg>
+        <span>World Building</span>
+      </button>
+      <div class="dropdown-menu" role="menu">
+        <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+        <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
+        <a href="chronicle.html" role="menuitem">Chronicle</a>
+      </div>
+    </div>
+
+    <div class="menu-wrap">
+      <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Entertainment">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+          <path d="M8 21h8"></path>
+          <path d="M12 18v3"></path>
+          <path d="m10 10 5 2-5 2z"></path>
+        </svg>
+        <span>Entertainment</span>
+      </button>
+      <div class="dropdown-menu" role="menu">
+        <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+        <a href="chat-repository.html" role="menuitem">Chat Repository</a>
+        <button type="button" role="menuitem">Episode Roulette</button>
+      </div>
+    </div>
+
+    <div class="menu-wrap">
+      <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Utilities">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-5.1 5.1a2.1 2.1 0 0 0 3 3l5.1-5.1a4 4 0 0 0 5.4-5.4l-2.6 2.6-3-3z"></path>
+        </svg>
+        <span>Utilities</span>
+      </button>
+      <div class="dropdown-menu" role="menu">
+        <a href="calendar.html" role="menuitem">Calendar</a>
+        <a href="useful-things.html" role="menuitem">Useful Things</a>
+        <button type="button" role="menuitem">Tool Two</button>
+        <button type="button" role="menuitem">Tool Three</button>
+      </div>
+    </div>
+
+    <div class="menu-wrap">
+      <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+        </svg>
+        <span>Settings</span>
+      </button>
+      <div class="dropdown-menu" role="menu">
+        <button type="button" role="menuitem">Preferences</button>
+        <button type="button" role="menuitem">Privacy</button>
+        <button type="button" role="menuitem">Shortcuts</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="header-actions">
+    <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+      <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2"></path>
+        <path d="M12 20v2"></path>
+        <path d="m4.93 4.93 1.41 1.41"></path>
+        <path d="m17.66 17.66 1.41 1.41"></path>
+        <path d="M2 12h2"></path>
+        <path d="M20 12h2"></path>
+        <path d="m6.34 17.66-1.41 1.41"></path>
+        <path d="m19.07 4.93-1.41 1.41"></path>
+      </svg>
+      <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+      </svg>
+    </button>
+
+    <div class="menu-wrap user-menu">
+      <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 21a8 8 0 0 1 16 0"></path>
+        </svg>
+      </button>
+      <div class="dropdown-menu align-right" role="menu">
+        <button type="button" role="menuitem">Profile</button>
+        <button type="button" role="menuitem">Account</button>
+        <button type="button" role="menuitem">Notifications</button>
+        <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+      </div>
+    </div>
+  </div>
+`;
+
+function renderCentralisHeader() {
+  document.querySelectorAll(".site-header").forEach((header) => {
+    header.innerHTML = CENTRALIS_HEADER_MARKUP;
+  });
+}
+
+renderCentralisHeader();
+
 const menuTriggers = document.querySelectorAll(".menu-trigger");
 const themeToggle = document.querySelector(".theme-toggle");
 const modalOpeners = document.querySelectorAll("[data-open-modal]");
@@ -9,6 +131,11 @@ const authStatus = document.querySelector("[data-auth-status]");
 const universeStatus = document.querySelector("[data-universe-status]");
 const deleteUniverseStatus = document.querySelector("[data-delete-universe-status]");
 const universeList = document.querySelector("[data-universe-list]");
+const homeChronicleList = document.querySelector("[data-home-chronicle-list]");
+const homeChatLogList = document.querySelector("[data-home-chat-log-list]");
+const homeUniverseCount = document.querySelector("[data-home-universe-count]");
+const homeChronicleCount = document.querySelector("[data-home-chronicle-count]");
+const homeChatLogCount = document.querySelector("[data-home-chat-log-count]");
 const googleAuthButton = document.querySelector("[data-auth-google]");
 const signOutButtons = document.querySelectorAll("[data-sign-out]");
 const createUniverseButtons = document.querySelectorAll("[data-create-universe]");
@@ -24,6 +151,8 @@ const ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "element_type_template_fields";
 const ELEMENTS_TABLE = "elements";
 const ELEMENT_LINKS_TABLE = "element_links";
 const SUPABASE_TIMEOUT_MS = 15000;
+const HOMEPAGE_ICON_READY_TIMEOUT_MS = 1200;
+const HOME_SECTION_CACHE_PREFIX = "centralis-home-section-v2";
 const DEFAULT_UNIVERSE_POSITION = { x: 120, y: 120 };
 const DEFAULT_UNIVERSE_FORMAT = {
   fmt_stroke_color: "#3b82f6",
@@ -40,9 +169,11 @@ let supabaseClient = null;
 let currentAppUser = null;
 let currentUserSettings = null;
 let profileLoadPromise = null;
+let elementTypeSeedPromise = null;
 let pendingUniverseDelete = null;
+let homepageIconReadyPromise = null;
 
-window.centralisScriptVersion = "seed-diagnostics-3";
+window.centralisScriptVersion = "centralis-header-1";
 console.warn("Centralis script loaded", window.centralisScriptVersion);
 
 if (window.supabase && window.CENTRALIS_SUPABASE_CONFIG) {
@@ -98,6 +229,170 @@ function createBlurb(description) {
 
   const trimmed = description.trim();
   return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+}
+
+function formatShortDate(value) {
+  if (!value) return "No date";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function setHomeCount(element, count, noun) {
+  if (!element) return;
+  element.textContent = count === 1 ? `1 ${noun}` : `${count} ${noun}s`;
+}
+
+function getHomeSectionCacheKey(section) {
+  if (!currentAppUser?.id) {
+    return null;
+  }
+
+  return `${HOME_SECTION_CACHE_PREFIX}:${currentAppUser.id}:${section}`;
+}
+
+function readHomeSectionCache(section) {
+  const key = getHomeSectionCacheKey(section);
+  if (!key) {
+    return null;
+  }
+
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(key) || "null");
+    if (!cached?.html) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+
+    return cached;
+  } catch (error) {
+    sessionStorage.removeItem(key);
+    return null;
+  }
+}
+
+function writeHomeSectionCache(section, listElement, countElement) {
+  const key = getHomeSectionCacheKey(section);
+  if (!key || !listElement) {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(key, JSON.stringify({
+      createdAt: Date.now(),
+      html: listElement.innerHTML,
+      countText: countElement?.textContent || "",
+    }));
+  } catch (error) {
+    console.warn("Could not cache homepage section:", error);
+  }
+}
+
+function restoreHomeSectionCache(section, listElement, countElement, afterRestore) {
+  const cached = readHomeSectionCache(section);
+  if (!cached?.html || !listElement) {
+    return false;
+  }
+
+  listElement.innerHTML = cached.html;
+  if (countElement) {
+    countElement.textContent = cached.countText || "";
+  }
+  afterRestore?.();
+  return true;
+}
+
+function normalizeObjectImages(images = []) {
+  if (!Array.isArray(images) || !images.length) {
+    return [];
+  }
+
+  return [...images].sort((left, right) => {
+    if (Boolean(left.is_primary) !== Boolean(right.is_primary)) {
+      return left.is_primary ? -1 : 1;
+    }
+    return Number(left.sort_order || 0) - Number(right.sort_order || 0);
+  });
+}
+
+async function fetchPrimaryImagesByObjectId(objectIds) {
+  const uniqueObjectIds = [...new Set((objectIds || []).filter(Boolean))];
+  if (!uniqueObjectIds.length || !supabaseClient) {
+    return new Map();
+  }
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("list-object-images", {
+      body: { objectIds: uniqueObjectIds },
+    });
+    if (error) {
+      throw error;
+    }
+
+    const imagesByObjectId = new Map();
+    for (const image of data?.images || []) {
+      const list = imagesByObjectId.get(image.object_id) || [];
+      list.push(image);
+      imagesByObjectId.set(image.object_id, list);
+    }
+
+    return new Map([...imagesByObjectId.entries()].map(([objectId, images]) => [
+      objectId,
+      normalizeObjectImages(images)[0],
+    ]));
+  } catch (error) {
+    console.warn("Could not load homepage card images:", error);
+    return new Map();
+  }
+}
+
+function getHomeCardImageClass(image) {
+  return image?.image_url ? " home-card-with-image" : "";
+}
+
+function getHomeCardImageStyle(image) {
+  if (!image?.image_url) {
+    return "";
+  }
+
+  return ` style="--home-card-image: url('${escapeHtml(image.image_url)}')"`;
+}
+
+function toggleHomeSection(button) {
+  const panel = button.closest(".home-panel");
+  const body = panel?.querySelector("[data-home-section-body]");
+  if (!panel || !body) return;
+
+  const isExpanded = button.getAttribute("aria-expanded") !== "false";
+  const label = button.querySelector(".sr-only");
+  const title = panel.querySelector("h2")?.textContent?.trim() || "section";
+  button.setAttribute("aria-expanded", String(!isExpanded));
+  panel.classList.toggle("is-collapsed", isExpanded);
+  body.hidden = isExpanded;
+  if (label) {
+    label.textContent = `${isExpanded ? "Expand" : "Collapse"} ${title}`;
+  }
+}
+
+function isSameDocumentLink(anchor) {
+  if (!anchor?.href) {
+    return false;
+  }
+
+  const targetUrl = new URL(anchor.href, window.location.href);
+  return targetUrl.origin === window.location.origin
+    && targetUrl.pathname === window.location.pathname
+    && targetUrl.search === window.location.search
+    && targetUrl.hash === window.location.hash;
 }
 
 function createUniverseDeleteMenu(universe) {
@@ -400,17 +695,49 @@ function cleanAuthUrl() {
   window.history.replaceState({}, document.title, nextUrl);
 }
 
-function showSignedInApp() {
+function waitForHomepageIcons() {
+  if (document.body.dataset.page !== "home") {
+    return Promise.resolve();
+  }
+
+  if (!homepageIconReadyPromise) {
+    const iconNames = [
+      "ph-arrow-right",
+      "ph-planet",
+      "ph-chats-circle",
+      "ph-file-text",
+      "ph-dots-three-vertical",
+      "ph-caret-up",
+    ];
+    const iconPromises = iconNames.map((name) => customElements.whenDefined(name).catch(() => null));
+    const timeoutPromise = new Promise((resolve) => {
+      window.setTimeout(resolve, HOMEPAGE_ICON_READY_TIMEOUT_MS);
+    });
+
+    homepageIconReadyPromise = Promise.race([
+      Promise.all(iconPromises),
+      timeoutPromise,
+    ]);
+  }
+
+  return homepageIconReadyPromise;
+}
+
+async function revealHomeElement(element) {
+  if (!element) return;
+  await waitForHomepageIcons();
+  element.hidden = false;
+}
+
+async function showSignedInApp() {
   if (authLanding) {
     authLanding.hidden = true;
   }
 
-  if (appShell) {
-    appShell.hidden = false;
-  }
+  await revealHomeElement(appShell);
 }
 
-function showSignedOutLanding() {
+async function showSignedOutLanding() {
   if (document.body.dataset.authRequired === "true") {
     window.location.href = "index.html";
     return;
@@ -420,9 +747,7 @@ function showSignedOutLanding() {
     appShell.hidden = true;
   }
 
-  if (authLanding) {
-    authLanding.hidden = false;
-  }
+  await revealHomeElement(authLanding);
 }
 
 async function ensureUserProfile(authUser) {
@@ -535,14 +860,20 @@ async function prepareSignedInUser(authUser) {
     currentAppUser = await ensureUserProfile(authUser);
     window.centralisCurrentAppUser = currentAppUser;
     currentUserSettings = await ensureUserSettings(currentAppUser.id);
-    try {
-      await ensureUserElementTypeLibrary(currentAppUser.id);
-    } catch (error) {
-      console.error("Could not finish element type library seeding:", error);
-      window.centralisElementTypeSeedError = error;
-    }
+    startElementTypeLibrarySeed(currentAppUser.id);
     applyUserSettings(currentUserSettings);
-    await loadUniverseCards();
+    const homepageDataPromise = Promise.all([
+      loadUniverseCards(),
+      loadRecentChronicleElements(),
+      loadRecentChatLogs()
+    ]);
+    if (document.body.dataset.page === "home") {
+      homepageDataPromise.catch((error) => {
+        console.warn("Could not refresh homepage data:", error);
+      });
+    } else {
+      await homepageDataPromise;
+    }
     return currentAppUser;
   })();
 
@@ -553,33 +884,63 @@ async function prepareSignedInUser(authUser) {
   }
 }
 
+function startElementTypeLibrarySeed(userId) {
+  if (!userId || elementTypeSeedPromise) {
+    return elementTypeSeedPromise;
+  }
+
+  elementTypeSeedPromise = ensureUserElementTypeLibrary(userId)
+    .catch((error) => {
+      console.error("Could not finish element type library seeding:", error);
+      window.centralisElementTypeSeedError = error;
+    })
+    .finally(() => {
+      elementTypeSeedPromise = null;
+    });
+  return elementTypeSeedPromise;
+}
+
 async function loadUniverseCards() {
   if (!universeList || !supabaseClient || !currentAppUser) {
     return;
   }
 
-  universeList.innerHTML = '<p class="empty-state">Loading universes...</p>';
+  const restoredFromCache = restoreHomeSectionCache("universes", universeList, homeUniverseCount, bindUniverseCardMenus);
+  if (!restoredFromCache) {
+    universeList.innerHTML = '<p class="empty-state">Loading universes...</p>';
+    if (homeUniverseCount) homeUniverseCount.textContent = "Loading...";
+  }
 
   try {
   const { data, error } = await withTimeout(supabaseClient
     .from(UNIVERSE_TABLE)
     .select("id,name,description,updated_at")
     .eq("user_id", currentAppUser.id)
-    .order("updated_at", { ascending: false }), "Loading universes");
+    .order("updated_at", { ascending: false })
+    .limit(8), "Loading universes");
 
   if (error) {
     universeList.innerHTML = `<p class="empty-state is-error">Could not load universes: ${getReadableError(error)}</p>`;
+    if (homeUniverseCount) homeUniverseCount.textContent = "Error";
     return;
   }
 
   if (!data?.length) {
     universeList.innerHTML = '<p class="empty-state">No universes yet.</p>';
+    setHomeCount(homeUniverseCount, 0, "universe");
+    writeHomeSectionCache("universes", universeList, homeUniverseCount);
     return;
   }
 
-  universeList.innerHTML = data.map((universe) => `
+  setHomeCount(homeUniverseCount, data.length, "universe");
+
+  const primaryImagesByObjectId = await fetchPrimaryImagesByObjectId(data.map((universe) => universe.id));
+
+  universeList.innerHTML = data.map((universe) => {
+    const image = primaryImagesByObjectId.get(universe.id);
+    return `
     <article class="universe-card-wrap">
-      <a class="universe-card" href="universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}">
+      <a class="universe-card${getHomeCardImageClass(image)}" href="universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}"${getHomeCardImageStyle(image)}>
         <span class="card-icon" aria-hidden="true">
           <ph-planet weight="duotone"></ph-planet>
         </span>
@@ -588,10 +949,141 @@ async function loadUniverseCards() {
       </a>
       ${createUniverseDeleteMenu(universe)}
     </article>
-  `).join("");
+  `;
+  }).join("");
   bindUniverseCardMenus();
+  writeHomeSectionCache("universes", universeList, homeUniverseCount);
   } catch (error) {
     universeList.innerHTML = `<p class="empty-state is-error">Could not load universes: ${getReadableError(error)}</p>`;
+    if (homeUniverseCount) homeUniverseCount.textContent = "Error";
+  }
+}
+
+async function loadRecentChronicleElements() {
+  if (!homeChronicleList || !supabaseClient || !currentAppUser) {
+    return;
+  }
+
+  const restoredFromCache = restoreHomeSectionCache("chronicle", homeChronicleList, homeChronicleCount);
+  if (!restoredFromCache) {
+    homeChronicleList.innerHTML = '<p class="empty-state">Loading Chronicle elements...</p>';
+    if (homeChronicleCount) homeChronicleCount.textContent = "Loading...";
+  }
+
+  try {
+    const { data, error } = await withTimeout(supabaseClient
+      .from(ELEMENTS_TABLE)
+      .select("id,name,description,universe_id,updated_at,element_type_id")
+      .eq("user_id", currentAppUser.id)
+      .order("updated_at", { ascending: false })
+      .limit(8), "Loading recent Chronicle elements");
+
+    if (error) {
+      homeChronicleList.innerHTML = `<p class="empty-state is-error">Could not load Chronicle elements: ${getReadableError(error)}</p>`;
+      if (homeChronicleCount) homeChronicleCount.textContent = "Error";
+      return;
+    }
+
+    if (!data?.length) {
+      homeChronicleList.innerHTML = '<p class="empty-state">No Chronicle elements yet.</p>';
+      setHomeCount(homeChronicleCount, 0, "element");
+      writeHomeSectionCache("chronicle", homeChronicleList, homeChronicleCount);
+      return;
+    }
+
+    setHomeCount(homeChronicleCount, data.length, "element");
+
+    const universeIds = [...new Set(data.map((element) => element.universe_id).filter(Boolean))];
+    let universesById = new Map();
+    if (universeIds.length) {
+      const universeResponse = await withTimeout(supabaseClient
+        .from(UNIVERSE_TABLE)
+        .select("id,name")
+        .in("id", universeIds), "Loading Chronicle universe names");
+      if (!universeResponse.error) {
+        universesById = new Map((universeResponse.data || []).map((universe) => [universe.id, universe]));
+      }
+    }
+
+    const primaryImagesByObjectId = await fetchPrimaryImagesByObjectId(data.map((element) => element.id));
+
+    homeChronicleList.innerHTML = data.map((element) => {
+      const universe = universesById.get(element.universe_id);
+      const image = primaryImagesByObjectId.get(element.id);
+      const href = element.universe_id
+        ? `chronicle-editor.html#universe/${encodeURIComponent(element.universe_id)}/element/${encodeURIComponent(element.id)}`
+        : `chronicle-editor.html#element/${encodeURIComponent(element.id)}`;
+      return `
+        <a class="home-chronicle-card${getHomeCardImageClass(image)}" href="${href}"${getHomeCardImageStyle(image)}>
+          <span class="home-chronicle-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
+          <span class="home-chronicle-main">
+            <strong>${escapeHtml(element.name || "Untitled Element")}</strong>
+            <span>${escapeHtml(universe?.name || "Standalone Element")}</span>
+            <em>${escapeHtml(createBlurb(element.description))}</em>
+          </span>
+        </a>
+      `;
+    }).join("");
+    writeHomeSectionCache("chronicle", homeChronicleList, homeChronicleCount);
+  } catch (error) {
+    homeChronicleList.innerHTML = `<p class="empty-state is-error">Could not load Chronicle elements: ${getReadableError(error)}</p>`;
+    if (homeChronicleCount) homeChronicleCount.textContent = "Error";
+  }
+}
+
+async function loadRecentChatLogs() {
+  if (!homeChatLogList || !supabaseClient || !currentAppUser) {
+    return;
+  }
+
+  const restoredFromCache = restoreHomeSectionCache("chat-logs", homeChatLogList, homeChatLogCount);
+  if (!restoredFromCache) {
+    homeChatLogList.innerHTML = '<p class="empty-state">Loading chat logs...</p>';
+    if (homeChatLogCount) homeChatLogCount.textContent = "Loading...";
+  }
+
+  try {
+    const { data, error } = await withTimeout(supabaseClient
+      .from("chat_logs")
+      .select("id,title,summary,file_size,created_at,updated_at")
+      .eq("user_id", currentAppUser.id)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(8), "Loading recent chat logs");
+
+    if (error) {
+      homeChatLogList.innerHTML = `<p class="empty-state is-error">Could not load chat logs: ${getReadableError(error)}</p>`;
+      if (homeChatLogCount) homeChatLogCount.textContent = "Error";
+      return;
+    }
+
+    if (!data?.length) {
+      homeChatLogList.innerHTML = '<p class="empty-state">No chat logs yet.</p>';
+      setHomeCount(homeChatLogCount, 0, "log");
+      writeHomeSectionCache("chat-logs", homeChatLogList, homeChatLogCount);
+      return;
+    }
+
+    setHomeCount(homeChatLogCount, data.length, "log");
+    const primaryImagesByObjectId = await fetchPrimaryImagesByObjectId(data.map((chatLog) => chatLog.id));
+
+    homeChatLogList.innerHTML = data.map((chatLog) => {
+      const image = primaryImagesByObjectId.get(chatLog.id);
+      return `
+      <a class="home-chat-log-card${getHomeCardImageClass(image)}" href="chat-repository.html?chatLogId=${encodeURIComponent(chatLog.id)}"${getHomeCardImageStyle(image)}>
+        <span class="home-chronicle-icon" aria-hidden="true"><ph-chats-circle weight="duotone"></ph-chats-circle></span>
+        <span class="home-chronicle-main">
+          <strong>${escapeHtml(chatLog.title || "Untitled Chat Log")}</strong>
+          <span>${escapeHtml(formatShortDate(chatLog.updated_at || chatLog.created_at))} · ${escapeHtml(formatFileSize(chatLog.file_size))}</span>
+          <em>${escapeHtml(createBlurb(chatLog.summary))}</em>
+        </span>
+      </a>
+    `;
+    }).join("");
+    writeHomeSectionCache("chat-logs", homeChatLogList, homeChatLogCount);
+  } catch (error) {
+    homeChatLogList.innerHTML = `<p class="empty-state is-error">Could not load chat logs: ${getReadableError(error)}</p>`;
+    if (homeChatLogCount) homeChatLogCount.textContent = "Error";
   }
 }
 
@@ -693,45 +1185,11 @@ async function ensureUserElementTypeLibrary(userId) {
     return;
   }
 
-  console.warn("Element type library seed starting", { userId });
-
-  const { data: beforeDiagnostics, error: beforeDiagnosticsError } = await withTimeout(supabaseClient
-    .rpc("get_element_type_seed_diagnostics", { p_user_id: userId }), "Loading element type seed diagnostics");
-
-  if (beforeDiagnosticsError) {
-    console.warn("Could not load element type seed diagnostics before seeding.", beforeDiagnosticsError);
-  } else {
-    window.centralisSeedDiagnostics = {
-      ...(window.centralisSeedDiagnostics || {}),
-      before: beforeDiagnostics
-    };
-    console.warn("Element type seed diagnostics before", beforeDiagnostics);
-  }
-
   const { data, error } = await withTimeout(supabaseClient
     .rpc("ensure_user_element_type_library", { p_user_id: userId }), "Seeding user element type library");
 
   if (error) {
     throw error;
-  }
-
-  window.centralisSeedDiagnostics = {
-    ...(window.centralisSeedDiagnostics || {}),
-    seed: data
-  };
-  console.warn("Element type library seed result", data);
-
-  const { data: afterDiagnostics, error: afterDiagnosticsError } = await withTimeout(supabaseClient
-    .rpc("get_element_type_seed_diagnostics", { p_user_id: userId }), "Loading element type seed diagnostics");
-
-  if (afterDiagnosticsError) {
-    console.warn("Could not load element type seed diagnostics after seeding.", afterDiagnosticsError);
-  } else {
-    window.centralisSeedDiagnostics = {
-      ...(window.centralisSeedDiagnostics || {}),
-      after: afterDiagnostics
-    };
-    console.warn("Element type seed diagnostics after", afterDiagnostics);
   }
 
   return data;
@@ -1059,9 +1517,9 @@ async function refreshAuthView() {
 
   if (!supabaseClient) {
     if (document.body.dataset.authRequired === "true" && appShell) {
-      appShell.hidden = false;
+      await revealHomeElement(appShell);
     } else {
-      showSignedOutLanding();
+      await showSignedOutLanding();
     }
     setAuthStatus("Supabase is not available yet. Refresh the page and try again.", "error");
     return;
@@ -1074,7 +1532,7 @@ async function refreshAuthView() {
       return;
     }
 
-    showSignedOutLanding();
+    await showSignedOutLanding();
     if (authUrlMessage) {
       setAuthStatus(authUrlMessage, "error");
       openModal(document.getElementById("auth-modal"));
@@ -1086,14 +1544,14 @@ async function refreshAuthView() {
   if (data.session) {
     try {
       await prepareSignedInUser(data.session.user);
-      showSignedInApp();
+      await showSignedInApp();
       cleanAuthUrl();
     } catch (profileError) {
       console.error(profileError);
       if (document.body.dataset.authRequired === "true" && appShell) {
-        appShell.hidden = false;
+        await revealHomeElement(appShell);
       } else {
-        showSignedOutLanding();
+        await showSignedOutLanding();
       }
       setAuthStatus(`Login worked, but loading your profile failed: ${getReadableError(profileError)}`, "error");
     }
@@ -1105,7 +1563,7 @@ async function refreshAuthView() {
     return;
   }
 
-  showSignedOutLanding();
+  await showSignedOutLanding();
 
   if (authUrlMessage) {
     setAuthStatus(authUrlMessage, "error");
@@ -1242,6 +1700,22 @@ document.querySelectorAll(".dropdown-menu button, .dropdown-menu a").forEach((it
   });
 });
 
+if (document.body.dataset.page === "home") {
+  document.querySelectorAll('a[href="index.html"], a[href="./index.html"]').forEach((anchor) => {
+    anchor.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      if (isSameDocumentLink(anchor)) {
+        event.preventDefault();
+        closeMenus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+  });
+}
+
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".menu-wrap")) {
     closeMenus();
@@ -1297,6 +1771,10 @@ modalOpeners.forEach((opener) => {
 
 modalClosers.forEach((closer) => {
   closer.addEventListener("click", closeModal);
+});
+
+document.querySelectorAll("[data-home-section-toggle]").forEach((button) => {
+  button.addEventListener("click", () => toggleHomeSection(button));
 });
 
 document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
@@ -1487,7 +1965,7 @@ if (authForm) {
     try {
       await prepareSignedInUser(response.data.user);
       closeModal();
-      showSignedInApp();
+      await showSignedInApp();
       setAuthStatus("");
     } catch (profileError) {
       console.error(profileError);
@@ -1549,9 +2027,9 @@ signOutButtons.forEach((button) => {
 });
 
 if (supabaseClient) {
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
+  supabaseClient.auth.onAuthStateChange(async (_event, session) => {
     if (session) {
-      showSignedInApp();
+      await showSignedInApp();
       window.setTimeout(() => {
         prepareSignedInUser(session.user).catch((profileError) => {
           console.error(profileError);
@@ -1566,7 +2044,7 @@ if (supabaseClient) {
       return;
     }
 
-    showSignedOutLanding();
+    await showSignedOutLanding();
   });
 }
 

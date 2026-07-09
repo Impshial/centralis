@@ -4,13 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stellar Architect | Centralis</title>
-  <link rel="stylesheet" href="styles.css?v=stellar-v1">
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="stellar-architect">
   <div class="app-shell">
     <header class="site-header" aria-label="Centralis main header">
-      <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+      <a class="brand" href="index.html" aria-label="Centralis home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+            <path d="M9 5v14"></path>
+            <path d="M5 10h14"></path>
+          </svg>
+        </span>
+        <span>Centralis</span>
+      </a>
 
       <nav class="category-nav" aria-label="Primary categories">
         <div class="menu-wrap">
@@ -43,6 +53,7 @@
           </button>
           <div class="dropdown-menu" role="menu">
             <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+            <a href="chat-repository.html" role="menuitem">Chat Repository</a>
             <button type="button" role="menuitem">Episode Roulette</button>
           </div>
         </div>
@@ -55,9 +66,9 @@
             <span>Utilities</span>
           </button>
           <div class="dropdown-menu" role="menu">
-            <a href="calendar.html" role="menuitem">Calendar</a>
-            <button type="button" role="menuitem">Tool One</button>
-            <button type="button" role="menuitem">Tool Two</button>
+          <a href="calendar.html" role="menuitem">Calendar</a>
+          <a href="useful-things.html" role="menuitem">Useful Things</a>
+          <button type="button" role="menuitem">Tool Two</button>
             <button type="button" role="menuitem">Tool Three</button>
           </div>
         </div>
@@ -127,47 +138,89 @@
     </main>
   </div>
 
-  <div class="modal-backdrop" id="stellar-generate-modal" hidden>
-    <section class="modal-dialog stellar-generate-dialog" role="dialog" aria-modal="true" aria-labelledby="stellar-generate-title">
-      <button class="modal-close movie-floating-close" type="button" data-close-stellar-modal aria-label="Close dialog">
-        <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+  <div class="modal-backdrop !bg-black/65" id="stellar-generate-modal" hidden>
+    <section class="modal-dialog stellar-generate-dialog stellar-generate-redesign !w-[min(1180px,calc(100vw_-_48px))] !max-w-none !overflow-hidden !rounded-[32px] !border !border-slate-700/90 !bg-slate-950/95 !p-0 !text-white shadow-[0_32px_90px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,255,255,0.04)]" role="dialog" aria-modal="true" aria-labelledby="stellar-generate-title">
+      <button class="stellar-generate-redesign-close !absolute right-10 top-9 grid !h-14 !w-14 place-items-center rounded-xl border border-slate-700/90 bg-slate-900/80 text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:border-slate-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400/70" type="button" data-close-stellar-modal aria-label="Close dialog">
+        <svg class="h-7 w-7" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
       </button>
-      <h2 id="stellar-generate-title"><ph-star weight="fill" aria-hidden="true"></ph-star> Generate Star System</h2>
-      <p class="modal-subtitle">Create scientifically accurate stellar systems with customizable parameters.</p>
-      <form data-stellar-generate-form>
-        <h3>Basic Parameters</h3>
-        <div class="stellar-form-grid">
-          <label>
-            <span>Star Type Preference</span>
-            <select name="starType">
-              <option value="Random realistic main sequence">Random (Realistic)</option>
-              <option value="M-type red dwarf">M-type red dwarf</option>
-              <option value="K-type orange dwarf">K-type orange dwarf</option>
-              <option value="G-type yellow dwarf">G-type yellow dwarf</option>
-              <option value="F-type white star">F-type white star</option>
-              <option value="Binary-compatible primary">Binary-compatible primary</option>
-            </select>
-          </label>
-          <label>
-            <span>Number of Planets</span>
-            <select name="planetCount">
-              <option value="random">Random (1-12)</option>
-              <option value="few">Few (1-4)</option>
-              <option value="moderate">Moderate (3-7)</option>
-              <option value="many">Many (6-12)</option>
-            </select>
-          </label>
+      <form class="grid gap-0" data-stellar-generate-form>
+        <div class="grid gap-16 px-11 pb-9 pt-12 sm:px-16 lg:px-20">
+          <header class="stellar-generate-redesign-header grid max-w-[720px] grid-cols-[112px_minmax(0,1fr)] items-center gap-8">
+            <div class="stellar-generate-redesign-orb grid h-[96px] w-[96px] place-items-center rounded-full bg-blue-700/30 shadow-[0_0_0_10px_rgba(37,99,235,0.14),0_0_46px_rgba(79,70,229,0.45)]">
+              <div class="grid h-[72px] w-[72px] place-items-center rounded-full bg-blue-600/40 text-white">
+                <ph-star class="text-[42px]" weight="fill" aria-hidden="true"></ph-star>
+              </div>
+            </div>
+            <div>
+              <h2 class="!m-0 !block !text-[clamp(2rem,4vw,3.1rem)] !font-extrabold !leading-tight tracking-[-0.02em] text-white" id="stellar-generate-title">Generate Star System</h2>
+              <p class="!mt-4 max-w-[600px] !text-[1.45rem] !font-medium !leading-relaxed !text-slate-400">Create scientifically accurate stellar systems with customizable parameters.</p>
+            </div>
+          </header>
+
+          <section class="stellar-generate-redesign-section grid gap-8">
+            <h3 class="!m-0 flex items-center gap-5 !text-[1.55rem] !font-bold !text-white">
+              <ph-sliders-horizontal class="text-[30px] text-blue-500" aria-hidden="true"></ph-sliders-horizontal>
+              Basic Parameters
+            </h3>
+            <div class="stellar-form-grid grid grid-cols-1 gap-8 lg:grid-cols-2">
+              <label class="grid gap-4">
+                <span class="text-[1.28rem] font-semibold text-slate-400">Star Type Preference</span>
+                <select class="!h-[66px] !w-full !rounded-xl !border !border-slate-700 !bg-slate-900/80 !px-6 !text-[1.35rem] !font-semibold !text-white outline-none transition focus:!border-blue-400 focus:!ring-2 focus:!ring-blue-500/30" name="starType">
+                  <option value="Random realistic main sequence">Random (Realistic)</option>
+                  <option value="M-type red dwarf">M-type red dwarf</option>
+                  <option value="K-type orange dwarf">K-type orange dwarf</option>
+                  <option value="G-type yellow dwarf">G-type yellow dwarf</option>
+                  <option value="F-type white star">F-type white star</option>
+                  <option value="Binary-compatible primary">Binary-compatible primary</option>
+                </select>
+              </label>
+              <label class="grid gap-4">
+                <span class="text-[1.28rem] font-semibold text-slate-400">Number of Planets</span>
+                <select class="!h-[66px] !w-full !rounded-xl !border !border-slate-700 !bg-slate-900/80 !px-6 !text-[1.35rem] !font-semibold !text-white outline-none transition focus:!border-blue-400 focus:!ring-2 focus:!ring-blue-500/30" name="planetCount">
+                  <option value="random">Random (1-12)</option>
+                  <option value="few">Few (1-4)</option>
+                  <option value="moderate">Moderate (3-7)</option>
+                  <option value="many">Many (6-12)</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="stellar-generate-redesign-section grid gap-5 border-t border-slate-700/80 pt-9">
+            <h3 class="!m-0 flex items-center gap-5 !text-[1.55rem] !font-bold !text-white">
+              <ph-cube class="text-[30px] text-blue-500" aria-hidden="true"></ph-cube>
+              Additional Generation Options
+            </h3>
+            <div class="grid gap-3">
+              <label class="stellar-generate-redesign-option grid min-h-[66px] grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-5 rounded-xl border border-slate-700/80 bg-slate-900/45 px-6 text-[1.38rem] font-semibold text-white">
+                <input class="h-7 w-7 rounded-md border-slate-700 bg-slate-950" type="checkbox" disabled>
+                <span>Generate Planetary Images <ph-info class="ml-2 inline-block align-[-3px] text-[22px] text-slate-400" aria-hidden="true"></ph-info></span>
+                <span class="rounded-lg bg-blue-500/15 px-4 py-2 text-[1.05rem] font-semibold text-blue-200">Coming soon</span>
+              </label>
+              <label class="stellar-generate-redesign-option grid min-h-[66px] grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-5 rounded-xl border border-slate-700/80 bg-slate-900/45 px-6 text-[1.38rem] font-semibold text-white">
+                <input class="h-7 w-7 rounded-md border-slate-700 bg-slate-950" type="checkbox" disabled>
+                <span>Generate Lifeforms on Habitable Planets <ph-info class="ml-2 inline-block align-[-3px] text-[22px] text-slate-400" aria-hidden="true"></ph-info></span>
+                <span class="rounded-lg bg-blue-500/15 px-4 py-2 text-[1.05rem] font-semibold text-blue-200">Coming soon</span>
+              </label>
+              <label class="stellar-generate-redesign-option grid min-h-[66px] grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-5 rounded-xl border border-slate-700/80 bg-slate-900/45 px-6 text-[1.38rem] font-semibold text-white">
+                <input class="h-7 w-7 rounded-md border-slate-700 bg-slate-950" type="checkbox" disabled>
+                <span>Generate Planetary Details (Moons) <ph-info class="ml-2 inline-block align-[-3px] text-[22px] text-slate-400" aria-hidden="true"></ph-info></span>
+                <span class="rounded-lg bg-blue-500/15 px-4 py-2 text-[1.05rem] font-semibold text-blue-200">Use Generate Details after creation</span>
+              </label>
+              <label class="stellar-generate-redesign-option grid min-h-[66px] grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-5 rounded-xl border border-slate-700/80 bg-slate-900/45 px-6 text-[1.38rem] font-semibold text-white">
+                <input class="h-7 w-7 rounded-md border-slate-700 bg-slate-950" type="checkbox" disabled>
+                <span>Generate Lifeforms on Habitable Moons <ph-info class="ml-2 inline-block align-[-3px] text-[22px] text-slate-400" aria-hidden="true"></ph-info></span>
+                <span class="rounded-lg bg-blue-500/15 px-4 py-2 text-[1.05rem] font-semibold text-blue-200">Coming soon</span>
+              </label>
+            </div>
+            <p class="dialog-status min-h-5 !m-0 !text-sm !font-bold" data-stellar-generate-status role="status"></p>
+          </section>
         </div>
-        <h3>Additional Generation Options</h3>
-        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Planetary Images <span>Coming soon</span></label>
-        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Lifeforms on Habitable Planets <span>Coming soon</span></label>
-        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Planetary Details (Moons) <span>Use Generate Details after creation</span></label>
-        <label class="stellar-disabled-option"><input type="checkbox" disabled> Generate Lifeforms on Habitable Moons <span>Coming soon</span></label>
-        <p class="dialog-status" data-stellar-generate-status role="status"></p>
-        <div class="dialog-actions">
-          <button class="secondary-action" type="button" data-close-stellar-modal>Cancel</button>
-          <button class="primary-action" type="submit">
-            <ph-star weight="fill" aria-hidden="true"></ph-star>
+
+        <div class="stellar-generate-redesign-footer grid grid-cols-2 items-center border-t border-slate-800 bg-slate-950/45 px-11 py-8 sm:px-16 lg:px-20">
+          <button class="stellar-generate-redesign-cancel justify-self-start rounded-xl border border-slate-700 bg-slate-900/70 px-8 py-5 text-[1.35rem] font-bold text-slate-300 transition hover:border-slate-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400/70" type="button" data-close-stellar-modal>Cancel</button>
+          <button class="stellar-generate-redesign-submit inline-flex min-h-[66px] min-w-[300px] items-center justify-center gap-4 justify-self-end rounded-xl border border-blue-400/70 bg-blue-600 px-8 py-5 text-[1.35rem] font-extrabold text-white shadow-[0_0_32px_rgba(37,99,235,0.45)] transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-wait disabled:opacity-70" type="submit">
+            <ph-star class="text-[28px]" weight="fill" aria-hidden="true"></ph-star>
             Generate System
           </button>
         </div>
@@ -213,7 +266,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="script.js?v=centralis-header-1"></script>
   <script src="stellar-architect.js?v=stellar-v5"></script>
   <script>
     window.setTimeout(() => {

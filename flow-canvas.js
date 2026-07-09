@@ -150,6 +150,7 @@
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/~~([^~]+)~~/g, "<del>$1</del>")
       .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
       .replace(/_([^_\n]+)_/g, "<em>$1</em>")
       .replace(
@@ -159,8 +160,14 @@
       .replace(/\n/g, "<br>");
   }
 
+  function normalizeMarkdownPreviewValue(value) {
+    return String(value || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/\\([\\`*_[\]{}()#+\-.!>])/g, "$1");
+  }
+
   function renderMarkdownDescription(value) {
-    const markdown = String(value || "").trim();
+    const markdown = normalizeMarkdownPreviewValue(value).trim();
     if (!markdown) {
       return '<p class="details-description-text details-description-markdown is-empty">No description yet.</p>';
     }
@@ -526,76 +533,77 @@
     }
 
     const typeOwnerId = universe.user_id || currentAppUser?.id;
-    if (typeOwnerId) {
-      const typeResponse = await withTimeout(window.centralisSupabase
-        .from("element_types")
-        .select("id,name,icon,color")
-        .eq("user_id", typeOwnerId)
-        .order("name", { ascending: true }), "Loading element types");
+    const safeCanvasQuery = (query, label) => withTimeout(query, label)
+      .catch((error) => ({ data: null, error }));
+    const [
+      typeResponse,
+      groupResponse,
+      noteResponse,
+      elementResponse,
+      linkResponse,
+      layerResponse
+    ] = await Promise.all([
+      typeOwnerId
+        ? safeCanvasQuery(window.centralisSupabase
+          .from("element_types")
+          .select("id,name,icon,color")
+          .eq("user_id", typeOwnerId)
+          .order("name", { ascending: true }), "Loading element types")
+        : Promise.resolve({ data: [], error: null }),
+      safeCanvasQuery(window.centralisSupabase
+        .from("element_groups")
+        .select("*")
+        .eq("universe_id", universeId)
+        .order("created_at", { ascending: true }), "Loading element groups"),
+      safeCanvasQuery(window.centralisSupabase
+        .from("canvas_notes")
+        .select("*")
+        .eq("universe_id", universeId)
+        .order("created_at", { ascending: true }), "Loading canvas notes"),
+      safeCanvasQuery(window.centralisSupabase
+        .from("elements")
+        .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y")
+        .eq("universe_id", universeId)
+        .order("created_at", { ascending: true }), "Loading elements"),
+      safeCanvasQuery(window.centralisSupabase
+        .from("element_links")
+        .select("id,source_element_id,target_element_id,label,stroke_color,stroke_width,stroke_style,path_type")
+        .eq("universe_id", universeId)
+        .order("created_at", { ascending: true }), "Loading element links"),
+      safeCanvasQuery(window.centralisSupabase
+        .from("universe_layers")
+        .select("*")
+        .eq("universe_id", universeId)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }), "Loading overlay layers")
+    ]);
 
-      if (!typeResponse.error) {
-        elementTypes = typeResponse.data || [];
-      }
+    if (!typeResponse.error) {
+      elementTypes = typeResponse.data || [];
     }
-
-    const groupResponse = await withTimeout(window.centralisSupabase
-      .from("element_groups")
-      .select("*")
-      .eq("universe_id", universeId)
-      .order("created_at", { ascending: true }), "Loading element groups");
-
     if (!groupResponse.error) {
       elementGroups = groupResponse.data || [];
     } else if (groupResponse.error.code !== "42P01") {
       console.warn("Could not load element groups:", groupResponse.error);
     }
-
-    const noteResponse = await withTimeout(window.centralisSupabase
-      .from("canvas_notes")
-      .select("*")
-      .eq("universe_id", universeId)
-      .order("created_at", { ascending: true }), "Loading canvas notes");
-
     if (!noteResponse.error) {
       canvasNotes = noteResponse.data || [];
     } else if (noteResponse.error.code !== "42P01") {
       console.warn("Could not load canvas notes:", noteResponse.error);
     }
-
-    const elementResponse = await withTimeout(window.centralisSupabase
-      .from("elements")
-      .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y")
-      .eq("universe_id", universeId)
-      .order("created_at", { ascending: true }), "Loading elements");
-
     if (!elementResponse.error) {
       elements = elementResponse.data || [];
     }
-
-    const linkResponse = await withTimeout(window.centralisSupabase
-      .from("element_links")
-      .select("id,source_element_id,target_element_id,label,stroke_color,stroke_width,stroke_style,path_type")
-      .eq("universe_id", universeId)
-      .order("created_at", { ascending: true }), "Loading element links");
-
     if (!linkResponse.error) {
       elementLinks = linkResponse.data || [];
     }
+    if (!layerResponse.error) {
+      overlayLayers = layerResponse.data || [];
+    } else if (layerResponse.error.code !== "42P01") {
+      console.warn("Could not load overlay layers:", layerResponse.error);
+    }
 
     try {
-      const layerResponse = await withTimeout(window.centralisSupabase
-        .from("universe_layers")
-        .select("*")
-        .eq("universe_id", universeId)
-        .order("sort_order", { ascending: true })
-        .order("name", { ascending: true }), "Loading overlay layers");
-
-      if (!layerResponse.error) {
-        overlayLayers = layerResponse.data || [];
-      } else if (layerResponse.error.code !== "42P01") {
-        console.warn("Could not load overlay layers:", layerResponse.error);
-      }
-
       const layerIds = overlayLayers.map((layer) => layer.id).filter(Boolean);
       if (layerIds.length) {
         const [entryResponse, assignmentResponse] = await Promise.all([
@@ -1295,21 +1303,37 @@
     };
   }
 
-  function getGroupChildCount(groupId, rows = elements) {
-    return rows.filter((row) => row.group_id === groupId).length;
+  function getGroupChildCount(groupId, elementRows = elements, groupRows = elementGroups) {
+    const elementCount = elementRows.filter((row) => row.group_id === groupId).length;
+    const groupCount = groupRows.filter((row) => row.parent_group_id === groupId).length;
+    return elementCount + groupCount;
   }
 
   function toGroupNode(row) {
+    const parentGroup = row.parent_group_id
+      ? elementGroups.find((item) => item.id === row.parent_group_id)
+      : null;
+    const isNested = Boolean(parentGroup);
+    const fallbackX = isNested
+      ? Number(row.position_x ?? 320) - Number(parentGroup.position_x ?? 0)
+      : Number(row.position_x ?? 320);
+    const fallbackY = isNested
+      ? Number(row.position_y ?? 160) - Number(parentGroup.position_y ?? 0)
+      : Number(row.position_y ?? 160);
     return {
       id: `group:${row.id}`,
       type: "groupNode",
       position: {
-        x: Number(row.position_x ?? 320),
-        y: Number(row.position_y ?? 160)
+        x: Number(isNested ? row.group_position_x ?? fallbackX : row.position_x ?? 320),
+        y: Number(isNested ? row.group_position_y ?? fallbackY : row.position_y ?? 160)
       },
+      parentId: isNested ? `group:${row.parent_group_id}` : undefined,
+      extent: isNested ? "parent" : undefined,
+      expandParent: false,
       data: {
         kind: "group",
         recordId: row.id,
+        parentGroupId: isNested ? row.parent_group_id : null,
         name: row.name || "Untitled Group",
         description: row.description || "",
         backgroundColor: sanitizeColor(row.background_color, "#123034"),
@@ -1322,7 +1346,7 @@
         width: row.is_collapsed ? 260 : Number(row.width || 360),
         height: row.is_collapsed ? 96 : Number(row.height || 260)
       },
-      zIndex: -1,
+      zIndex: isNested ? 0 : -1,
       draggable: true
     };
   }
@@ -1385,9 +1409,30 @@
     };
   }
 
+  function sortGroupsByParent(groupRows) {
+    const rowsById = new Map(groupRows.map((row) => [row.id, row]));
+    const visited = new Set();
+    const sorted = [];
+
+    function visit(row) {
+      if (!row || visited.has(row.id)) {
+        return;
+      }
+      const parentRow = row.parent_group_id ? rowsById.get(row.parent_group_id) : null;
+      if (parentRow) {
+        visit(parentRow);
+      }
+      visited.add(row.id);
+      sorted.push(row);
+    }
+
+    groupRows.forEach(visit);
+    return sorted;
+  }
+
   const initialNodes = [
     toUniverseNode(universe),
-    ...elementGroups.map(toGroupNode),
+    ...sortGroupsByParent(elementGroups).map(toGroupNode),
     ...elements.map(toElementNode),
     ...canvasNotes.map(toNoteNode)
   ];
@@ -1444,11 +1489,23 @@
       .map((node) => node.id));
   }
 
+  function getCollapsedAncestorId(node, nodesById, collapsedGroupIds) {
+    let parentId = node?.parentId || "";
+    while (parentId) {
+      if (collapsedGroupIds.has(parentId)) {
+        return parentId;
+      }
+      parentId = nodesById.get(parentId)?.parentId || "";
+    }
+    return null;
+  }
+
   function getVisibleNodesForGroups(nodesToRender) {
     const collapsedGroupIds = getCollapsedGroupIds(nodesToRender);
+    const nodesById = new Map(nodesToRender.map((node) => [node.id, node]));
     return nodesToRender.map((node) => ({
       ...node,
-      hidden: node.parentId && collapsedGroupIds.has(node.parentId) ? true : node.hidden
+      hidden: getCollapsedAncestorId(node, nodesById, collapsedGroupIds) ? true : node.hidden
     }));
   }
 
@@ -1461,8 +1518,8 @@
     edgesToRender.forEach((edge) => {
       const sourceNode = nodesById.get(edge.source);
       const targetNode = nodesById.get(edge.target);
-      const sourceGroupId = sourceNode?.parentId && collapsedGroupIds.has(sourceNode.parentId) ? sourceNode.parentId : null;
-      const targetGroupId = targetNode?.parentId && collapsedGroupIds.has(targetNode.parentId) ? targetNode.parentId : null;
+      const sourceGroupId = getCollapsedAncestorId(sourceNode, nodesById, collapsedGroupIds);
+      const targetGroupId = getCollapsedAncestorId(targetNode, nodesById, collapsedGroupIds);
 
       if (!sourceGroupId && !targetGroupId) {
         visibleEdges.push(edge);
@@ -1968,21 +2025,48 @@
     return field.default_value === undefined || field.default_value === null ? "" : String(field.default_value);
   }
 
-  function renderRichFieldValue(field, value) {
+  function renderRichFieldValue(field, value, options = {}) {
     const label = getTemplateFieldLabel(field);
     const type = getTemplateFieldType(field);
+    const hasValue = hasMeaningfulValue(value);
+    const isTextarea = isRichTextareaType(type);
+    const wikiClass = options.wiki ? " is-wiki-field" : "";
     let displayValue = hasMeaningfulValue(value) ? value : "--";
     if (type === "checkbox" && hasMeaningfulValue(value)) {
       displayValue = value === "true" ? "Yes" : "No";
     } else if (type === "multi_select") {
       displayValue = String(value).split("\n").filter(Boolean).join(", ");
     }
+    const renderedValue = isTextarea && hasValue
+      ? renderMarkdownDescription(value)
+      : escapeHtml(displayValue);
 
     return `
-      <div class="rich-view-field${isRichTextareaType(type) ? " is-textarea-field" : ""}" data-template-field-id="${escapeHtml(field.id)}">
+      <div class="rich-view-field${isTextarea ? " is-textarea-field" : ""}${wikiClass}" data-template-field-id="${escapeHtml(field.id)}">
         <dt>${escapeHtml(label)}</dt>
-        <dd class="${hasMeaningfulValue(value) ? "" : "is-empty"}">${escapeHtml(displayValue)}</dd>
+        <dd class="${hasValue ? "" : "is-empty"}">${renderedValue}</dd>
       </div>
+    `;
+  }
+
+  function renderChronicleWikiFields(fields, valuesByFieldId) {
+    if (!fields.length) {
+      return '<p class="details-empty">No fields in this module.</p>';
+    }
+
+    const scalarFields = fields.filter((field) => !isRichTextareaType(getTemplateFieldType(field)));
+    const proseFields = fields.filter((field) => isRichTextareaType(getTemplateFieldType(field)));
+    return `
+      ${scalarFields.length ? `
+        <dl class="chronicle-wiki-facts">
+          ${scalarFields.map((field) => renderRichFieldValue(field, getFieldStoredValue(valuesByFieldId, field), { wiki: true })).join("")}
+        </dl>
+      ` : ""}
+      ${proseFields.length ? `
+        <div class="chronicle-wiki-prose-fields">
+          ${proseFields.map((field) => renderRichFieldValue(field, getFieldStoredValue(valuesByFieldId, field), { wiki: true })).join("")}
+        </div>
+      ` : ""}
     `;
   }
 
@@ -2159,16 +2243,12 @@
       const section = sectionsById.get(sectionId);
       const fields = fieldsBySectionId.get(sectionId) || [];
       return `
-        <section class="rich-template-section chronicle-preview-module">
+        <section class="rich-template-section chronicle-preview-module chronicle-wiki-section">
           <div class="rich-template-section-header">
             <h3>${escapeHtml(section?.name || module.title || "Untitled Module")}</h3>
             ${section?.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
           </div>
-          ${fields.length ? `
-            <dl class="rich-template-fields">
-              ${fields.map((field) => renderRichFieldValue(field, getFieldStoredValue(valuesByFieldId, field))).join("")}
-            </dl>
-          ` : '<p class="details-empty">No fields in this module.</p>'}
+          ${renderChronicleWikiFields(fields, valuesByFieldId)}
         </section>
       `;
     }).join("");
@@ -2410,8 +2490,17 @@
       payload.height = Number(node.style?.height || node.measured?.height || node.height || DEFAULT_NOTE_HEIGHT);
     } else if (node.data.kind === "group") {
       tableName = "element_groups";
-      payload.position_x = Number(node.position.x);
-      payload.position_y = Number(node.position.y);
+      if (node.parentId || node.data?.parentGroupId) {
+        payload.parent_group_id = node.data.parentGroupId || toRecordId(node.parentId);
+        payload.group_position_x = Number(node.position.x);
+        payload.group_position_y = Number(node.position.y);
+      } else {
+        payload.parent_group_id = null;
+        payload.group_position_x = null;
+        payload.group_position_y = null;
+        payload.position_x = Number(node.position.x);
+        payload.position_y = Number(node.position.y);
+      }
       if (node.style?.width && node.style?.height && !node.data?.collapsed) {
         payload.width = Number(node.style.width);
         payload.height = Number(node.style.height);
@@ -2475,18 +2564,17 @@
       x: Number(node?.position?.x || 0),
       y: Number(node?.position?.y || 0)
     };
-    const parent = node?.parentId ? nodesById.get(node.parentId) : null;
-    if (!parent) {
-      return position;
+    let parent = node?.parentId ? nodesById.get(node.parentId) : null;
+    while (parent) {
+      position.x += Number(parent.position?.x || 0);
+      position.y += Number(parent.position?.y || 0);
+      parent = parent.parentId ? nodesById.get(parent.parentId) : null;
     }
-    return {
-      x: Number(parent.position?.x || 0) + position.x,
-      y: Number(parent.position?.y || 0) + position.y
-    };
+    return position;
   }
 
   function getLayoutNodes(currentNodes) {
-    return currentNodes.filter((node) => node.data?.kind !== "note" && (node.data?.kind === "group" || !node.parentId));
+    return currentNodes.filter((node) => node.data?.kind !== "note" && !node.parentId);
   }
 
   function getLayoutOwnerId(nodeId, nodesById, layoutNodeIds) {
@@ -2497,8 +2585,12 @@
     if (layoutNodeIds.has(node.id)) {
       return node.id;
     }
-    if (node.parentId && layoutNodeIds.has(node.parentId)) {
-      return node.parentId;
+    let parentId = node.parentId || "";
+    while (parentId) {
+      if (layoutNodeIds.has(parentId)) {
+        return parentId;
+      }
+      parentId = nodesById.get(parentId)?.parentId || "";
     }
     return null;
   }
@@ -3682,37 +3774,43 @@
         .filter((node) => node.data?.kind === "note" && !snapshotNodeIds.has(node.id))
         .map((node) => node.data.recordId)
         .filter(Boolean);
+      const snapshotNodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
       const groupUpserts = snapshot.nodes
         .filter((node) => node.data?.kind === "group" && node.data?.recordId)
-        .map((node) => ({
-          id: node.data.recordId,
-          universe_id: universe.id,
-          name: node.data.name || "Untitled Group",
-          description: node.data.description || null,
-          position_x: Number(node.position?.x || 0),
-          position_y: Number(node.position?.y || 0),
-          width: Number(node.data?.collapsed ? node.data?.expandedWidth || node.style?.width || 360 : node.style?.width || 360),
-          height: Number(node.data?.collapsed ? node.data?.expandedHeight || node.style?.height || 260 : node.style?.height || 260),
-          is_collapsed: Boolean(node.data?.collapsed),
-          background_color: sanitizeColor(node.data?.backgroundColor, "#123034"),
-          updated_at: new Date().toISOString()
-        }));
+        .map((node) => {
+          const parentGroupId = node.data?.parentGroupId || toRecordId(node.parentId);
+          const absolutePosition = getAbsoluteNodePosition(node, snapshotNodesById);
+          return {
+            id: node.data.recordId,
+            universe_id: universe.id,
+            name: node.data.name || "Untitled Group",
+            description: node.data.description || null,
+            parent_group_id: parentGroupId || null,
+            group_position_x: parentGroupId ? Math.round(Number(node.position?.x || 0)) : null,
+            group_position_y: parentGroupId ? Math.round(Number(node.position?.y || 0)) : null,
+            position_x: Math.round(absolutePosition.x),
+            position_y: Math.round(absolutePosition.y),
+            width: Number(node.data?.collapsed ? node.data?.expandedWidth || node.style?.width || 360 : node.style?.width || 360),
+            height: Number(node.data?.collapsed ? node.data?.expandedHeight || node.style?.height || 260 : node.style?.height || 260),
+            is_collapsed: Boolean(node.data?.collapsed),
+            background_color: sanitizeColor(node.data?.backgroundColor, "#123034"),
+            updated_at: new Date().toISOString()
+          };
+        });
       const elementOwnerId = getElementOwnerId();
       const elementUpserts = snapshot.nodes
         .filter((node) => node.data?.kind === "element" && node.data?.recordId)
         .map((node) => {
           const groupId = node.data?.groupId || null;
-          const groupNode = groupId ? snapshot.nodes.find((item) => item.id === `group:${groupId}`) : null;
-          const absoluteX = groupId ? Number(groupNode?.position?.x || 0) + Number(node.position?.x || 0) : Number(node.position?.x || 0);
-          const absoluteY = groupId ? Number(groupNode?.position?.y || 0) + Number(node.position?.y || 0) : Number(node.position?.y || 0);
+          const absolutePosition = getAbsoluteNodePosition(node, snapshotNodesById);
           return {
             id: node.data.recordId,
             user_id: elementOwnerId,
             universe_id: universe.id,
             name: node.data.name || "Untitled Element",
             description: node.data.description || null,
-            position_x: Math.round(absoluteX),
-            position_y: Math.round(absoluteY),
+            position_x: Math.round(absolutePosition.x),
+            position_y: Math.round(absolutePosition.y),
             element_type_id: node.data.elementType?.id || null,
             rich_template_id: node.data.richTemplateId || null,
             group_id: groupId,
@@ -5768,13 +5866,13 @@
       }
 
       function handleBackdropClick(event) {
-        if (event.target === modal) {
+        if (event.target === modal && modal.dataset.strictModal === undefined) {
           closeAddElementModal();
         }
       }
 
       function handleEscape(event) {
-        if (event.key === "Escape" && !modal.hidden) {
+        if (event.key === "Escape" && !modal.hidden && modal.dataset.strictModal === undefined) {
           closeAddElementModal();
         }
       }
@@ -5926,7 +6024,7 @@
         const meta = getNodeTypeMeta(node);
         modal.hidden = false;
         if (title) title.textContent = node.data?.name || "Untitled Node";
-        if (kind) kind.textContent = "Chronicle Modules";
+        if (kind) kind.textContent = "Chronicle Details";
         if (editButton) {
           editButton.hidden = false;
           editButton.textContent = "Edit in Chronicle";
@@ -5946,11 +6044,26 @@
         const templateMarkup = renderChroniclePreviewModules(richDetailsData);
         body.innerHTML = `
           <div class="rich-details-form rich-details-view">
-            ${node.data?.images?.length ? `
-              <section class="rich-details-section rich-details-images">
-                ${renderImageGallery(node.data.images, node.id)}
-              </section>
-            ` : ""}
+            <section class="rich-details-section rich-details-images chronicle-preview-images">
+              <div class="rich-section-title-row chronicle-preview-image-header">
+                <h3>Images</h3>
+                <div class="image-actions">
+                  <button class="secondary-action image-action-button" type="button" data-generate-image>
+                    <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+                    Generate
+                  </button>
+                  <div class="image-upload-row">
+                    <label class="secondary-action image-action-button" for="rich-details-image-upload">
+                      <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                      Upload
+                    </label>
+                    <input id="rich-details-image-upload" type="file" accept="image/*" data-image-upload hidden>
+                  </div>
+                </div>
+              </div>
+              ${renderImageGallery(node.data.images, node.id)}
+              <p class="form-status image-upload-status" data-image-upload-status role="status"></p>
+            </section>
             <section class="rich-details-section rich-details-basics">
               <dl class="rich-template-fields rich-basics-fields">
                 <div class="rich-view-field">
@@ -5979,6 +6092,23 @@
         `;
 
         setupImageGallery(body);
+        body.querySelector("[data-generate-image]")?.addEventListener("click", () => {
+          window.dispatchEvent(new CustomEvent("centralis:generate-image", {
+            detail: { nodeId: node.id, prompt: createImagePrompt(node), source: "rich-details" }
+          }));
+        });
+        body.querySelector("[data-image-upload]")?.addEventListener("change", (event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            window.dispatchEvent(new CustomEvent("centralis:upload-image", {
+              detail: {
+                nodeId: node.id,
+                file,
+                statusElement: body.querySelector("[data-image-upload-status]")
+              }
+            }));
+          }
+        });
       }
 
       function closeRichTransferMenu() {
@@ -6490,7 +6620,7 @@
       async function handleUploadImage(event) {
         const { nodeId, file } = event.detail || {};
         const node = nodes.find((currentNode) => currentNode.id === nodeId);
-        const status = document.querySelector("[data-image-upload-status]");
+        const status = event.detail?.statusElement || document.querySelector("[data-image-upload-status]");
         if (!node || !file || !window.centralisSupabase) {
           return;
         }
@@ -6593,16 +6723,13 @@
         }
 
         form.dataset.generating = "true";
-        if (submitButton) {
-          submitButton.disabled = true;
-        }
-        if (status) {
-          status.textContent = "Generating image...";
-          status.classList.remove("is-error", "is-success");
-        }
-
         const meta = getNodeTypeMeta(node);
         const isRichDetailsGeneration = pendingImageGeneration?.source === "rich-details";
+        const extraPrompt = clampImagePrompt(promptInput.value);
+        closeGenerateModal();
+        setDetailsMode("view");
+        showCanvasToast("Image generation started. It will finish in the background.", "success");
+
         try {
           await callEdgeFunction("generate-object-image", {
             headers: { "Content-Type": "application/json" },
@@ -6612,20 +6739,13 @@
               elementType: isRichDetailsGeneration ? "" : meta.label,
               name: isRichDetailsGeneration ? "" : node.data.name,
               description: isRichDetailsGeneration ? "" : node.data.description,
-              extraPrompt: clampImagePrompt(promptInput.value)
+              extraPrompt
             })
           });
           await refreshNodeImages(node);
+          showCanvasToast(`Image generated for ${node.data.name || "this element"}.`, "success");
         } catch (error) {
-          if (submitButton) {
-            submitButton.disabled = false;
-          }
-          form.dataset.generating = "false";
-
-          if (status) {
-            status.textContent = `Could not generate image: ${getReadableError(error)}`;
-            status.classList.add("is-error");
-          }
+          showCanvasToast(`Could not generate image: ${getReadableError(error)}`, "error");
           return;
         }
 
@@ -6633,9 +6753,6 @@
           submitButton.disabled = false;
         }
         form.dataset.generating = "false";
-
-        closeGenerateModal();
-        setDetailsMode("view");
       }
 
       window.addEventListener("centralis:generate-image", handleGenerateRequest);
@@ -7365,12 +7482,51 @@
       }
     }
 
+    function showCanvasToast(message, tone = "") {
+      const container = getCanvasToastContainer();
+      const toast = document.createElement("div");
+      toast.className = "chronicle-toast";
+      toast.classList.toggle("is-error", tone === "error");
+      toast.classList.toggle("is-success", tone === "success");
+      toast.setAttribute("role", tone === "error" ? "alert" : "status");
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      window.setTimeout(() => {
+        toast.classList.add("is-hiding");
+        toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+      }, tone === "error" ? 5200 : 3200);
+    }
+
+    function getCanvasToastContainer() {
+      let container = document.querySelector("[data-canvas-toast-stack]");
+      if (container) {
+        return container;
+      }
+      container = document.createElement("div");
+      container.className = "chronicle-toast-stack";
+      container.dataset.canvasToastStack = "true";
+      container.setAttribute("aria-live", "polite");
+      container.setAttribute("aria-atomic", "true");
+      document.body.appendChild(container);
+      return container;
+    }
+
     function getSelectedElementNodes() {
       return nodesRef.current.filter((node) => node.selected && node.data?.kind === "element");
     }
 
     function getSelectedUngroupedElementNodes() {
       return getSelectedElementNodes().filter((node) => !node.parentId && !node.data?.groupId);
+    }
+
+    function getSelectedGroupableNodes() {
+      return nodesRef.current.filter((node) => {
+        if (!node.selected || node.parentId) {
+          return false;
+        }
+        return node.data?.kind === "element" || node.data?.kind === "group";
+      });
     }
 
     function estimateCanvasNodeSize(node) {
@@ -7438,12 +7594,16 @@
       };
     }
 
-    function getGroupFitPatch(groupNode, childNodes) {
+    function getGroupFitPatch(groupNode, childNodes, allNodes = nodesRef.current) {
       const padding = 44;
       const headerOffset = 28;
       if (!groupNode) {
         return null;
       }
+      const nodesById = new Map(allNodes.map((node) => [node.id, node]));
+      const parentPosition = groupNode.parentId
+        ? getAbsoluteNodePosition(nodesById.get(groupNode.parentId), nodesById)
+        : { x: 0, y: 0 };
       if (!childNodes.length) {
         return {
           group: {
@@ -7457,26 +7617,29 @@
       }
 
       const absoluteRects = childNodes.map((node) => {
-        const size = estimateCanvasNodeSize(node);
-        const x = Number(groupNode.position?.x || 0) + Number(node.position?.x || 0);
-        const y = Number(groupNode.position?.y || 0) + Number(node.position?.y || 0);
-        return { node, x, y, width: size.width, height: size.height };
+        const rect = getNodeAbsoluteRect(node, allNodes);
+        return { node, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
       });
       const minX = Math.min(...absoluteRects.map((rect) => rect.x));
       const minY = Math.min(...absoluteRects.map((rect) => rect.y));
       const maxX = Math.max(...absoluteRects.map((rect) => rect.x + rect.width));
       const maxY = Math.max(...absoluteRects.map((rect) => rect.y + rect.height));
-      const group = {
+      const groupAbsolute = {
         x: Math.round(minX - padding),
         y: Math.round(minY - padding - headerOffset),
         width: Math.max(280, Math.round(maxX - minX + padding * 2)),
         height: Math.max(190, Math.round(maxY - minY + padding * 2 + headerOffset))
       };
+      const group = {
+        ...groupAbsolute,
+        x: Math.round(groupAbsolute.x - parentPosition.x),
+        y: Math.round(groupAbsolute.y - parentPosition.y)
+      };
       const children = new Map(absoluteRects.map((rect) => [
         rect.node.id,
         {
-          x: Math.round(rect.x - group.x),
-          y: Math.round(rect.y - group.y)
+          x: Math.round(rect.x - groupAbsolute.x),
+          y: Math.round(rect.y - groupAbsolute.y)
         }
       ]));
       return { group, children };
@@ -7505,18 +7668,41 @@
       };
     }
 
-    function isElementGroupDropCandidate(node) {
-      return node?.data?.kind === "element" && !node.parentId && !node.data?.groupId;
+    function isGroupDropCandidate(node) {
+      if (node?.data?.kind === "element") {
+        return !node.parentId && !node.data?.groupId;
+      }
+      return node?.data?.kind === "group";
     }
 
-    function findElementDropTargetGroup(draggedNode, allNodes = nodesRef.current) {
-      if (!isElementGroupDropCandidate(draggedNode)) {
+    function isGroupDescendant(candidateGroupNode, ancestorGroupNode, nodesById) {
+      let parentId = candidateGroupNode?.parentId || "";
+      while (parentId) {
+        if (parentId === ancestorGroupNode?.id) {
+          return true;
+        }
+        parentId = nodesById.get(parentId)?.parentId || "";
+      }
+      return false;
+    }
+
+    function findDropTargetGroup(draggedNode, allNodes = nodesRef.current) {
+      if (!isGroupDropCandidate(draggedNode)) {
         return null;
       }
 
+      const nodesById = new Map(allNodes.map((node) => [node.id, node]));
       const draggedRect = getNodeAbsoluteRect(draggedNode, allNodes);
       const candidateGroups = allNodes
-        .filter((node) => node.data?.kind === "group")
+        .filter((node) => {
+          if (node.data?.kind !== "group" || node.id === draggedNode.id || node.id === draggedNode.parentId || node.data?.collapsed) {
+            return false;
+          }
+          if (draggedNode.data?.kind === "group" && isGroupDescendant(node, draggedNode, nodesById)) {
+            return false;
+          }
+          return true;
+        })
         .map((groupNode) => {
           const groupRect = getNodeAbsoluteRect(groupNode, allNodes);
           const isInside = draggedRect.centerX >= groupRect.x
@@ -7546,12 +7732,13 @@
           return;
         }
         const childNodes = nextNodes.filter((node) => node.parentId === groupNodeId);
-        const patch = getGroupFitPatch(groupNode, childNodes);
+        const patch = getGroupFitPatch(groupNode, childNodes, nextNodes);
         if (!patch) {
           return;
         }
         groupUpdates.push({
           id: groupNode.data.recordId,
+          parentGroupId: groupNode.data?.parentGroupId || toRecordId(groupNode.parentId),
           ...patch.group,
           collapsed: Boolean(groupNode.data?.collapsed)
         });
@@ -7560,6 +7747,7 @@
           if (childNode?.data?.recordId) {
             childUpdates.push({
               id: childNode.data.recordId,
+              kind: childNode.data.kind,
               ...position
             });
           }
@@ -7600,7 +7788,13 @@
       await Promise.all([
         ...groupUpdates.map((group) => window.centralisSupabase
           .from("element_groups")
-          .update({
+          .update(group.parentGroupId ? {
+            group_position_x: group.x,
+            group_position_y: group.y,
+            width: group.width,
+            height: group.height,
+            updated_at: now
+          } : {
             position_x: group.x,
             position_y: group.y,
             width: group.width,
@@ -7609,7 +7803,7 @@
           })
           .eq("id", group.id)),
         ...childUpdates.map((child) => window.centralisSupabase
-          .from("elements")
+          .from(child.kind === "group" ? "element_groups" : "elements")
           .update({
             group_position_x: child.x,
             group_position_y: child.y,
@@ -7680,6 +7874,7 @@
       if (!childNodes.length) {
         const groupUpdate = {
           id: groupNode.data.recordId,
+          parentGroupId: groupNode.data?.parentGroupId || toRecordId(groupNode.parentId),
           x: Math.round(Number(groupNode.position?.x || 0)),
           y: Math.round(Number(groupNode.position?.y || 0)),
           width: requestedGroupWidth,
@@ -7740,6 +7935,7 @@
       }));
       const groupUpdate = {
         id: groupNode.data.recordId,
+        parentGroupId: groupNode.data?.parentGroupId || toRecordId(groupNode.parentId),
         x: Math.round(Number(groupNode.position?.x || 0)),
         y: Math.round(Number(groupNode.position?.y || 0)),
         width: Math.round(requiredWidth),
@@ -7747,6 +7943,7 @@
       };
       const childUpdates = childNodes.map((node) => ({
         id: node.data.recordId,
+        kind: node.data.kind,
         ...(normalizedChildren.get(node.id) || node.position)
       }));
       return {
@@ -7834,9 +8031,9 @@
     }
 
     async function createGroupFromSelection(name) {
-      const selectedNodes = getSelectedUngroupedElementNodes();
+      const selectedNodes = getSelectedGroupableNodes();
       if (!selectedNodes.length) {
-        setTransferStatus("Select one or more ungrouped elements to group.", "error");
+        setTransferStatus("Select one or more top-level elements or groups to group.", "error");
         return false;
       }
 
@@ -7871,15 +8068,32 @@
         return false;
       }
 
-      const updates = await Promise.all(selectedNodes.map((node) => window.centralisSupabase
-        .from("elements")
-        .update({
-          group_id: id,
-          group_position_x: Math.round(node.position.x - bounds.x),
-          group_position_y: Math.round(node.position.y - bounds.y),
-          updated_at: now
-        })
-        .eq("id", node.data.recordId)));
+      const updates = await Promise.all(selectedNodes.map((node) => {
+        const relativePosition = {
+          x: Math.round(node.position.x - bounds.x),
+          y: Math.round(node.position.y - bounds.y)
+        };
+        if (node.data?.kind === "group") {
+          return window.centralisSupabase
+            .from("element_groups")
+            .update({
+              parent_group_id: id,
+              group_position_x: relativePosition.x,
+              group_position_y: relativePosition.y,
+              updated_at: now
+            })
+            .eq("id", node.data.recordId);
+        }
+        return window.centralisSupabase
+          .from("elements")
+          .update({
+            group_id: id,
+            group_position_x: relativePosition.x,
+            group_position_y: relativePosition.y,
+            updated_at: now
+          })
+          .eq("id", node.data.recordId);
+      }));
 
       const failed = updates.find((response) => response.error);
       if (failed?.error) {
@@ -7906,13 +8120,15 @@
             parentId: groupNode.id,
             extent: "parent",
             expandParent: false,
+            zIndex: node.data?.kind === "group" ? 0 : node.zIndex,
             position: {
               x: Math.round(node.position.x - bounds.x),
               y: Math.round(node.position.y - bounds.y)
             },
             data: {
               ...node.data,
-              groupId: id
+              groupId: node.data?.kind === "element" ? id : node.data?.groupId,
+              parentGroupId: node.data?.kind === "group" ? id : node.data?.parentGroupId
             }
           };
         });
@@ -7928,16 +8144,16 @@
       return true;
     }
 
-    async function addElementNodeToGroup(draggedNode, targetGroupNode) {
+    async function addNodeToGroup(draggedNode, targetGroupNode) {
       const currentNodes = nodesRef.current;
       const storedElementNode = currentNodes.find((node) => node.id === draggedNode?.id);
       const elementNode = storedElementNode ? { ...storedElementNode, position: draggedNode.position } : draggedNode;
       const groupNode = currentNodes.find((node) => node.id === targetGroupNode?.id) || targetGroupNode;
-      if (!isElementGroupDropCandidate(elementNode) || !groupNode?.data?.recordId) {
+      if (!isGroupDropCandidate(elementNode) || !groupNode?.data?.recordId || elementNode.id === groupNode.id) {
         return false;
       }
 
-      const elementName = elementNode.data?.name || "this element";
+      const elementName = elementNode.data?.name || (elementNode.data?.kind === "group" ? "this group" : "this element");
       const groupName = groupNode.data?.name || "this group";
       const confirmed = window.confirm(`Do you want to add "${elementName}" to this group ("${groupName}")?`);
       if (!confirmed) {
@@ -7953,16 +8169,24 @@
       };
       const now = new Date().toISOString();
 
-      const { error } = await window.centralisSupabase
-        .from("elements")
-        .update({
+      const payload = elementNode.data?.kind === "group" ? {
+        parent_group_id: groupNode.data.recordId,
+        group_position_x: relativePosition.x,
+        group_position_y: relativePosition.y,
+        position_x: Math.round(absolutePosition.x),
+        position_y: Math.round(absolutePosition.y),
+        updated_at: now
+      } : {
           group_id: groupNode.data.recordId,
           group_position_x: relativePosition.x,
           group_position_y: relativePosition.y,
           position_x: Math.round(absolutePosition.x),
           position_y: Math.round(absolutePosition.y),
           updated_at: now
-        })
+        };
+      const { error } = await window.centralisSupabase
+        .from(elementNode.data?.kind === "group" ? "element_groups" : "elements")
+        .update(payload)
         .eq("id", elementNode.data.recordId);
 
       if (error) {
@@ -7979,10 +8203,12 @@
             parentId: groupNode.id,
             extent: "parent",
             expandParent: false,
+            zIndex: node.data?.kind === "group" ? 0 : node.zIndex,
             position: relativePosition,
             data: {
               ...node.data,
-              groupId: groupNode.data.recordId
+              groupId: node.data?.kind === "element" ? groupNode.data.recordId : node.data?.groupId,
+              parentGroupId: node.data?.kind === "group" ? groupNode.data.recordId : node.data?.parentGroupId
             }
           };
         }
@@ -8012,17 +8238,34 @@
       pushCanvasHistory();
       const childNodes = nodesRef.current.filter((node) => node.parentId === groupNode.id);
       const now = new Date().toISOString();
-      const updates = await Promise.all(childNodes.map((node) => window.centralisSupabase
-        .from("elements")
-        .update({
-          group_id: null,
-          group_position_x: null,
-          group_position_y: null,
-          position_x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
-          position_y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0)),
-          updated_at: now
-        })
-        .eq("id", node.data.recordId)));
+      const nodesById = new Map(nodesRef.current.map((node) => [node.id, node]));
+      const updates = await Promise.all(childNodes.map((node) => {
+        const absolutePosition = getAbsoluteNodePosition(node, nodesById);
+        if (node.data?.kind === "group") {
+          return window.centralisSupabase
+            .from("element_groups")
+            .update({
+              parent_group_id: null,
+              group_position_x: null,
+              group_position_y: null,
+              position_x: Math.round(absolutePosition.x),
+              position_y: Math.round(absolutePosition.y),
+              updated_at: now
+            })
+            .eq("id", node.data.recordId);
+        }
+        return window.centralisSupabase
+          .from("elements")
+          .update({
+            group_id: null,
+            group_position_x: null,
+            group_position_y: null,
+            position_x: Math.round(absolutePosition.x),
+            position_y: Math.round(absolutePosition.y),
+            updated_at: now
+          })
+          .eq("id", node.data.recordId);
+      }));
 
       const failed = updates.find((response) => response.error);
       if (failed?.error) {
@@ -8041,6 +8284,10 @@
       }
 
       const childIds = new Set(childNodes.map((node) => node.id));
+      const childPositions = new Map(childNodes.map((node) => [
+        node.id,
+        getAbsoluteNodePosition(node, nodesById)
+      ]));
       setNodes((currentNodes) => currentNodes
         .filter((node) => node.id !== groupNode.id)
         .map((node) => {
@@ -8052,14 +8299,16 @@
             parentId: undefined,
             extent: undefined,
             expandParent: undefined,
+            zIndex: node.data?.kind === "group" ? -1 : node.zIndex,
             selected: true,
             position: {
-              x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
-              y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0))
+              x: Math.round(childPositions.get(node.id)?.x || 0),
+              y: Math.round(childPositions.get(node.id)?.y || 0)
             },
             data: {
               ...node.data,
-              groupId: null
+              groupId: node.data?.kind === "element" ? null : node.data?.groupId,
+              parentGroupId: node.data?.kind === "group" ? null : node.data?.parentGroupId
             }
           };
         }));
@@ -8083,14 +8332,15 @@
       pushCanvasHistory();
       const selectedIds = new Set(selectedNodes.map((node) => node.id));
       const now = new Date().toISOString();
+      const nodesById = new Map(nodesRef.current.map((node) => [node.id, node]));
       const updates = await Promise.all(selectedNodes.map((node) => window.centralisSupabase
         .from("elements")
         .update({
           group_id: null,
           group_position_x: null,
           group_position_y: null,
-          position_x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
-          position_y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0)),
+          position_x: Math.round(getAbsoluteNodePosition(node, nodesById).x),
+          position_y: Math.round(getAbsoluteNodePosition(node, nodesById).y),
           updated_at: now
         })
         .eq("id", node.data.recordId)));
@@ -8113,8 +8363,8 @@
           expandParent: undefined,
           selected: true,
           position: {
-            x: Math.round(Number(groupNode.position?.x || 0) + Number(node.position?.x || 0)),
-            y: Math.round(Number(groupNode.position?.y || 0) + Number(node.position?.y || 0))
+            x: Math.round(getAbsoluteNodePosition(node, nodesById).x),
+            y: Math.round(getAbsoluteNodePosition(node, nodesById).y)
           },
           data: {
             ...node.data,
@@ -8152,9 +8402,10 @@
         setTransferStatus("Could not determine the signed-in user for duplicated elements.", "error");
         return false;
       }
+      const nodesById = new Map(nodesRef.current.map((currentNode) => [currentNode.id, currentNode]));
       const payloads = selectedNodes.map((node) => {
         const isGrouped = Boolean(node.data?.groupId);
-        const groupNode = isGrouped ? nodesRef.current.find((currentNode) => currentNode.id === `group:${node.data.groupId}`) : null;
+        const absolutePosition = getAbsoluteNodePosition(node, nodesById);
         const nextX = Math.round(Number(node.position?.x || 0) + offset);
         const nextY = Math.round(Number(node.position?.y || 0) + offset);
         return {
@@ -8168,8 +8419,8 @@
           group_id: isGrouped ? node.data.groupId : null,
           group_position_x: isGrouped ? nextX : null,
           group_position_y: isGrouped ? nextY : null,
-          position_x: isGrouped ? Math.round(Number(groupNode?.position?.x || 0) + nextX) : nextX,
-          position_y: isGrouped ? Math.round(Number(groupNode?.position?.y || 0) + nextY) : nextY,
+          position_x: isGrouped ? Math.round(absolutePosition.x + offset) : nextX,
+          position_y: isGrouped ? Math.round(absolutePosition.y + offset) : nextY,
           updated_at: now
         };
       });
@@ -9219,7 +9470,7 @@
         return undefined;
       }
 
-      const selectedCount = nodes.filter((node) => node.selected && node.data?.kind === "element" && !node.parentId && !node.data?.groupId).length;
+      const selectedCount = nodes.filter((node) => node.selected && !node.parentId && (node.data?.kind === "element" || node.data?.kind === "group")).length;
       groupButton.hidden = selectedCount < 1;
 
       function handleGroupClick() {
@@ -9790,7 +10041,7 @@
       closeContextMenu();
       const storedNode = nodesRef.current.find((item) => item.id === node.id);
       const currentNode = storedNode ? { ...storedNode, position: node.position } : node;
-      const targetGroup = findElementDropTargetGroup(currentNode, nodesRef.current);
+      const targetGroup = findDropTargetGroup(currentNode, nodesRef.current);
       setGroupDropTarget(targetGroup?.id || "");
     }, []);
 
@@ -9799,12 +10050,12 @@
       const currentNodes = nodesRef.current;
       const storedNode = currentNodes.find((item) => item.id === node.id);
       const currentNode = storedNode ? { ...storedNode, position: node.position } : node;
-      const targetGroup = findElementDropTargetGroup(currentNode, currentNodes);
+      const targetGroup = findDropTargetGroup(currentNode, currentNodes);
       setGroupDropTarget("");
       if (!targetGroup) {
         return;
       }
-      await addElementNodeToGroup(currentNode, targetGroup);
+      await addNodeToGroup(currentNode, targetGroup);
     }, []);
 
     const nodesWithDropTarget = React.useMemo(() => nodes.map((node) => {

@@ -128,6 +128,11 @@ export function createS3Client() {
     region: Deno.env.get("IDRIVE_E2_REGION") || "us-east-1",
     endpoint,
     forcePathStyle: true,
+    // iDrive e2 is S3-compatible, but its optional checksum response can
+    // trigger a signed/unsigned CRC32 conversion error in the AWS SDK's
+    // Deno stream collector. Required checksums remain enabled.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: getEnv("IDRIVE_E2_ACCESS_KEY_ID"),
       secretAccessKey: getEnv("IDRIVE_E2_SECRET_ACCESS_KEY"),

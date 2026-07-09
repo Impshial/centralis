@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Useful Things | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="styles.css?v=action-sizing-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="useful-things">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header">
+      <a class="brand" href="index.html" aria-label="Centralis home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+            <path d="M9 5v14"></path>
+            <path d="M5 10h14"></path>
+          </svg>
+        </span>
+        <span>Centralis</span>
+      </a>
+
+      <nav class="category-nav" aria-label="Primary categories">
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="World building">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M3.6 9h16.8"></path>
+              <path d="M3.6 15h16.8"></path>
+              <path d="M12 3a15 15 0 0 1 0 18"></path>
+              <path d="M12 3a15 15 0 0 0 0 18"></path>
+            </svg>
+            <span>World Building</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="universe-builder.html" role="menuitem">Universe Builder</a>
+            <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
+            <a href="chronicle.html" role="menuitem">Chronicle</a>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Entertainment">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+              <path d="M8 21h8"></path>
+              <path d="M12 18v3"></path>
+              <path d="m10 10 5 2-5 2z"></path>
+            </svg>
+            <span>Entertainment</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+            <a href="chat-repository.html" role="menuitem">Chat Repository</a>
+            <button type="button" role="menuitem">Episode Roulette</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Utilities">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-5.1 5.1a2.1 2.1 0 0 0 3 3l5.1-5.1a4 4 0 0 0 5.4-5.4l-2.6 2.6-3-3z"></path>
+            </svg>
+            <span>Utilities</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <a href="calendar.html" role="menuitem">Calendar</a>
+            <a href="useful-things.html" role="menuitem">Useful Things</a>
+            <button type="button" role="menuitem">Tool Two</button>
+            <button type="button" role="menuitem">Tool Three</button>
+          </div>
+        </div>
+
+        <div class="menu-wrap">
+          <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+            </svg>
+            <span>Settings</span>
+          </button>
+          <div class="dropdown-menu" role="menu">
+            <button type="button" role="menuitem">Preferences</button>
+            <button type="button" role="menuitem">Privacy</button>
+            <button type="button" role="menuitem">Shortcuts</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
+          <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
+          </svg>
+        </button>
+
+        <div class="menu-wrap user-menu">
+          <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4 21a8 8 0 0 1 16 0"></path>
+            </svg>
+          </button>
+          <div class="dropdown-menu align-right" role="menu">
+            <button type="button" role="menuitem">Profile</button>
+            <button type="button" role="menuitem">Account</button>
+            <button type="button" role="menuitem">Notifications</button>
+            <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="useful-things-page" aria-labelledby="useful-things-title">
+      <header class="useful-things-header">
+        <h1 id="useful-things-title">Useful Things</h1>
+      </header>
+
+      <section class="useful-things-workspace" aria-label="Useful Things workspace">
+        <div class="useful-things-tabs-shell">
+          <nav class="useful-things-tab-list" role="tablist" aria-orientation="vertical" aria-label="Useful Things utilities">
+            <button
+              class="useful-things-tab is-active"
+              type="button"
+              role="tab"
+              id="useful-tab-text-converter"
+              aria-selected="true"
+              aria-controls="useful-panel-text-converter"
+              data-useful-tab="text-converter"
+            >
+              <span>Text Converter</span>
+              <small>AI-assisted format changes</small>
+            </button>
+          </nav>
+
+          <section
+            class="useful-things-tab-panel is-active"
+            role="tabpanel"
+            id="useful-panel-text-converter"
+            aria-labelledby="useful-tab-text-converter"
+            data-useful-panel="text-converter"
+          >
+            <div class="text-converter-header">
+              <h2>Convert text into useful formats</h2>
+            </div>
+
+            <p class="text-converter-status" data-text-converter-status role="status" aria-live="polite"></p>
+
+            <div class="text-converter-body">
+              <section class="text-converter-pane" aria-labelledby="text-converter-input-title">
+                <div class="text-converter-pane-header">
+                  <h3 id="text-converter-input-title">Input</h3>
+                  <label class="text-converter-mode-field" for="text-converter-mode">
+                    <span>Input mode</span>
+                    <select id="text-converter-mode" data-text-converter-mode>
+                      <option value="wysiwyg">WYSIWYG</option>
+                      <option value="raw">Raw Text</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="text-converter-rich-wrap" data-rich-input-wrap>
+                  <div class="text-converter-rich-toolbar" role="toolbar" aria-label="WYSIWYG formatting controls">
+                    <button type="button" data-rich-command="undo" title="Undo" aria-label="Undo">
+                      <ph-arrow-counter-clockwise weight="bold" aria-hidden="true"></ph-arrow-counter-clockwise>
+                    </button>
+                    <button type="button" data-rich-command="redo" title="Redo" aria-label="Redo">
+                      <ph-arrow-clockwise weight="bold" aria-hidden="true"></ph-arrow-clockwise>
+                    </button>
+                    <select data-rich-heading aria-label="Heading style" title="Heading style">
+                      <option value="P">Paragraph</option>
+                      <option value="H1">Heading 1</option>
+                      <option value="H2">Heading 2</option>
+                      <option value="H3">Heading 3</option>
+                    </select>
+                    <button type="button" data-rich-command="bold" title="Bold" aria-label="Bold">
+                      <ph-text-b weight="bold" aria-hidden="true"></ph-text-b>
+                    </button>
+                    <button type="button" data-rich-command="italic" title="Italic" aria-label="Italic">
+                      <ph-text-italic weight="bold" aria-hidden="true"></ph-text-italic>
+                    </button>
+                    <button type="button" data-rich-command="underline" title="Underline" aria-label="Underline">
+                      <ph-text-underline weight="bold" aria-hidden="true"></ph-text-underline>
+                    </button>
+                    <button type="button" data-rich-command="strikeThrough" title="Strikethrough" aria-label="Strikethrough">
+                      <ph-text-strikethrough weight="bold" aria-hidden="true"></ph-text-strikethrough>
+                    </button>
+                    <button type="button" data-rich-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">
+                      <ph-list-bullets weight="bold" aria-hidden="true"></ph-list-bullets>
+                    </button>
+                    <button type="button" data-rich-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">
+                      <ph-list-numbers weight="bold" aria-hidden="true"></ph-list-numbers>
+                    </button>
+                    <button type="button" data-rich-block="blockquote" title="Quote" aria-label="Quote">
+                      <ph-quotes weight="bold" aria-hidden="true"></ph-quotes>
+                    </button>
+                    <button type="button" data-rich-link title="Insert link" aria-label="Insert link">
+                      <ph-link weight="bold" aria-hidden="true"></ph-link>
+                    </button>
+                    <button type="button" data-rich-inline-code title="Inline code" aria-label="Inline code">
+                      <ph-code weight="bold" aria-hidden="true"></ph-code>
+                    </button>
+                    <button type="button" data-rich-block="pre" title="Code block" aria-label="Code block">
+                      <ph-brackets-curly weight="bold" aria-hidden="true"></ph-brackets-curly>
+                    </button>
+                    <button type="button" data-rich-command="justifyLeft" title="Align left" aria-label="Align left">
+                      <ph-text-align-left weight="bold" aria-hidden="true"></ph-text-align-left>
+                    </button>
+                    <button type="button" data-rich-command="justifyCenter" title="Align center" aria-label="Align center">
+                      <ph-text-align-center weight="bold" aria-hidden="true"></ph-text-align-center>
+                    </button>
+                    <button type="button" data-rich-command="justifyRight" title="Align right" aria-label="Align right">
+                      <ph-text-align-right weight="bold" aria-hidden="true"></ph-text-align-right>
+                    </button>
+                    <button type="button" data-rich-command="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule">
+                      <ph-minus weight="bold" aria-hidden="true"></ph-minus>
+                    </button>
+                    <button type="button" data-rich-command="removeFormat" title="Clear formatting" aria-label="Clear formatting">
+                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                    </button>
+                  </div>
+                  <div
+                    class="text-converter-rich-editor"
+                    contenteditable="true"
+                    data-text-rich-editor
+                    role="textbox"
+                    aria-multiline="true"
+                    aria-label="WYSIWYG input"
+                  ></div>
+                </div>
+
+                <textarea
+                  class="text-converter-raw-input"
+                  rows="20"
+                  data-text-raw-input
+                  aria-label="Raw text input"
+                  hidden
+                ></textarea>
+              </section>
+
+              <section class="text-converter-actions" aria-label="Conversion targets">
+                <div class="text-converter-action-group" aria-label="Available conversions">
+                  <button class="primary-action" type="button" data-convert-target="markdown">Markdown</button>
+                  <button class="primary-action" type="button" data-convert-target="html">HTML</button>
+                  <button class="primary-action" type="button" data-convert-target="plain-text">Plain Text</button>
+                  <button class="primary-action" type="button" data-convert-target="json">JSON</button>
+                  <button class="primary-action" type="button" data-convert-target="yaml">YAML</button>
+                  <button class="primary-action" type="button" data-convert-target="xml">XML</button>
+                  <button class="primary-action" type="button" data-convert-target="csv">CSV</button>
+                  <button class="primary-action" type="button" data-convert-target="tsv">TSV</button>
+                  <button class="primary-action" type="button" data-convert-target="markdown-table">Markdown Table</button>
+                  <button class="primary-action" type="button" data-convert-target="json-lines">JSON Lines</button>
+                  <button class="primary-action" type="button" data-convert-target="sql-inserts">SQL Inserts</button>
+                  <button class="primary-action" type="button" data-convert-target="outline">Outline</button>
+                  <button class="primary-action" type="button" data-convert-target="bullet-list">Bullet List</button>
+                  <button class="primary-action" type="button" data-convert-target="numbered-list">Numbered List</button>
+                  <button class="primary-action" type="button" data-convert-target="summary">Summary</button>
+                </div>
+              </section>
+
+              <section class="text-converter-pane" aria-labelledby="text-converter-output-title">
+                <div class="text-converter-pane-header">
+                  <h3 id="text-converter-output-title">Output</h3>
+                </div>
+                <textarea
+                  class="text-converter-output"
+                  rows="20"
+                  data-text-output
+                  aria-label="Converted output"
+                  readonly
+                ></textarea>
+              </section>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=centralis-header-1"></script>
+  <script src="useful-things.js?v=useful-things-tight-1"></script>
+</body>
+</html>

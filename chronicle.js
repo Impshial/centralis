@@ -9,6 +9,13 @@
   const ELEMENT_TEMPLATE_FIELD_VALUES_TABLE = "element_template_field_values";
   const ELEMENT_CUSTOM_FIELDS_TABLE = "element_custom_fields";
   const TEMPLATE_SECTION_MODULE_TYPE = "template_section";
+  const MAX_IMAGE_PROMPT_LENGTH = 3900;
+  const IS_CHRONICLE_EDITOR_PAGE = document.body?.dataset.page === "chronicle-editor";
+  const EDITOR_TOP_SCROLL_DELAYS = [0, 16, 50, 140, 320, 700, 1200];
+
+  if (IS_CHRONICLE_EDITOR_PAGE && "scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
 
   const state = {
     user: null,
@@ -17,6 +24,7 @@
     selectedUniverseId: "",
     search: "",
     sort: "updated-desc",
+    activeImageGenerationElementId: "",
     elementTypes: [],
     standaloneElements: [],
     universeElements: [],
@@ -25,7 +33,10 @@
     universesById: new Map(),
     routeContext: null,
     workspace: createEmptyWorkspace(),
-    isLoading: true
+    isLoading: true,
+    markdownEditors: new Map(),
+    activeTextEditorDialog: null,
+    topScrollGeneration: 0
   };
 
   const dom = {};
@@ -35,15 +46,23 @@
     if (state.pageMode !== "editor") {
       return;
     }
+    scrollEditorToTop({ stubborn: true });
     state.routeContext = parseRouteContext();
     await loadRouteWorkspace();
     renderRouteNotice();
     renderWorkspace();
+    scrollEditorToTop({ stubborn: true });
   });
 
   async function initChronicle() {
     bindDom();
     state.pageMode = document.body?.dataset.page === "chronicle-editor" ? "editor" : "home";
+    if (state.pageMode === "editor" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    if (state.pageMode === "editor") {
+      scrollEditorToTop({ stubborn: true });
+    }
     if (state.pageMode === "home") {
       applyHomepageQueryState();
     }
@@ -63,6 +82,9 @@
       }
       state.isLoading = false;
       renderAll();
+      if (state.pageMode === "editor") {
+        scrollEditorToTop({ stubborn: true });
+      }
     } catch (error) {
       console.error("Could not load Chronicle.", error);
       state.isLoading = false;
@@ -89,6 +111,16 @@
     dom.createDescription = document.querySelector("[data-chronicle-description]");
     dom.createError = document.querySelector("[data-chronicle-create-error]");
     dom.createSubmit = document.querySelector("[data-chronicle-create-submit]");
+    dom.textEditorModal = document.getElementById("chronicle-text-editor-modal");
+    dom.textEditorHost = document.querySelector("[data-chronicle-text-editor-host]");
+    dom.textEditorFallback = document.querySelector("[data-chronicle-text-editor-fallback]");
+    dom.textEditorSubtitle = document.querySelector("[data-chronicle-text-editor-subtitle]");
+    dom.generateImageModal = document.getElementById("chronicle-generate-image-modal");
+    dom.generateImageForm = document.querySelector("[data-chronicle-generate-image-form]");
+    dom.generateImagePrompt = document.querySelector("[data-chronicle-generate-image-prompt]");
+    dom.generateImageSubtitle = document.querySelector("[data-chronicle-generate-image-subtitle]");
+    dom.generateImageStatus = document.querySelector("[data-chronicle-generate-image-status]");
+    dom.generateImageSubmit = document.querySelector("[data-chronicle-generate-image-submit]");
   }
 
   function bindEvents() {
@@ -126,7 +158,7 @@
     document.querySelector("[data-chronicle-create-close]")?.addEventListener("click", closeCreateDialog);
     document.querySelector("[data-chronicle-create-cancel]")?.addEventListener("click", closeCreateDialog);
     dom.createModal?.addEventListener("click", (event) => {
-      if (event.target === dom.createModal) {
+      if (event.target === dom.createModal && !isStrictModal(dom.createModal)) {
         closeCreateDialog();
       }
     });
@@ -135,6 +167,41 @@
     dom.workspace?.addEventListener("click", handleWorkspaceClick);
     dom.workspace?.addEventListener("change", handleWorkspaceChange);
     dom.workspace?.addEventListener("submit", handleWorkspaceSubmit);
+    document.querySelector("[data-chronicle-text-editor-close]")?.addEventListener("click", closeTextEditorDialog);
+    document.querySelector("[data-chronicle-text-editor-cancel]")?.addEventListener("click", closeTextEditorDialog);
+    document.querySelector("[data-chronicle-text-editor-apply]")?.addEventListener("click", applyTextEditorDialog);
+    dom.textEditorModal?.addEventListener("click", (event) => {
+      if (event.target === dom.textEditorModal && !isStrictModal(dom.textEditorModal)) {
+        closeTextEditorDialog();
+      }
+    });
+    document.querySelector("[data-chronicle-generate-image-close]")?.addEventListener("click", closeGenerateImageDialog);
+    document.querySelector("[data-chronicle-generate-image-cancel]")?.addEventListener("click", closeGenerateImageDialog);
+    dom.generateImageForm?.addEventListener("submit", handleGenerateImageSubmit);
+    dom.generateImageModal?.addEventListener("click", (event) => {
+      if (event.target === dom.generateImageModal && !isStrictModal(dom.generateImageModal)) {
+        closeGenerateImageDialog();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && dom.generateImageModal && !dom.generateImageModal.hidden) {
+        closeGenerateImageDialog();
+      }
+    });
+
+    if (state.pageMode === "editor") {
+      ["wheel", "touchstart", "pointerdown", "keydown"].forEach((eventName) => {
+        window.addEventListener(eventName, cancelPendingEditorTopScroll, { passive: true });
+      });
+    }
+  }
+
+  function cancelPendingEditorTopScroll() {
+    state.topScrollGeneration += 1;
+  }
+
+  function isStrictModal(modal) {
+    return Boolean(modal?.dataset?.strictModal !== undefined);
   }
 
   async function waitForAuth() {
@@ -400,6 +467,32 @@
     renderContent();
   }
 
+  function forceEditorScrollTop() {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.querySelector(".app-shell")?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
+    document.querySelector(".chronicle-editor-page")?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
+  }
+
+  function scrollEditorToTop(options = {}) {
+    if (state.pageMode !== "editor") {
+      return;
+    }
+
+    const generation = state.topScrollGeneration + 1;
+    state.topScrollGeneration = generation;
+    const delays = options.stubborn ? EDITOR_TOP_SCROLL_DELAYS : [0, 16];
+    delays.forEach((delay) => {
+      window.setTimeout(() => {
+        if (state.topScrollGeneration !== generation) {
+          return;
+        }
+        forceEditorScrollTop();
+      }, delay);
+    });
+  }
+
   function renderTabs() {
     dom.tabs.forEach((tab) => {
       const isActive = tab.dataset.chronicleTab === state.activeTab;
@@ -446,6 +539,8 @@
       return;
     }
 
+    destroyInlineMarkdownEditors();
+
     const workspace = state.workspace;
     if (!workspace?.isOpen) {
       dom.workspace.hidden = true;
@@ -491,23 +586,25 @@
     dom.workspace.innerHTML = `
       <form class="chronicle-workspace" data-chronicle-workspace-form>
         <div class="chronicle-workspace-header">
-          <div class="chronicle-workspace-title">
-            <div class="chronicle-type-icon" style="--type-color:${escapeHtml(type?.color || "#6366f1")}">
-              <ph-${escapeHtml(iconName)} weight="duotone" aria-hidden="true"></ph-${escapeHtml(iconName)}>
-            </div>
-            <div>
-              <p class="chronicle-eyebrow">${escapeHtml(workspace.universe?.name || "Standalone Element")}</p>
-              <h2 data-chronicle-workspace-title>${escapeHtml(element.name)}</h2>
-              <p data-chronicle-workspace-type>${escapeHtml(type?.name || "No element type")}</p>
+          <div class="chronicle-workspace-title-stack">
+            ${renderBackToChronicleLink()}
+            <div class="chronicle-workspace-title">
+              <div class="chronicle-type-icon" style="--type-color:${escapeHtml(type?.color || "#6366f1")}">
+                <ph-${escapeHtml(iconName)} weight="duotone" aria-hidden="true"></ph-${escapeHtml(iconName)}>
+              </div>
+              <div>
+                <p class="chronicle-eyebrow">${escapeHtml(workspace.universe?.name || "Standalone Element")}</p>
+                <h2 data-chronicle-workspace-title>${escapeHtml(element.name)}</h2>
+                <p data-chronicle-workspace-type>${escapeHtml(type?.name || "No element type")}</p>
+              </div>
             </div>
           </div>
           <div class="chronicle-workspace-actions">
-            ${renderBackToChronicleLink()}
             ${renderBackToCanvasLink()}
             <button class="primary-action" type="submit" data-chronicle-workspace-save>Save Element</button>
           </div>
         </div>
-        ${headerImage ? renderWorkspaceImageHeader(headerImage, element.name) : ""}
+        ${renderWorkspaceImagePanel(headerImage, element.name)}
         <section class="chronicle-editor-section chronicle-editor-basics">
           <h3>Basics</h3>
           <div class="chronicle-basics-fields">
@@ -556,6 +653,7 @@
         </div>
       </form>
     `;
+    initializeInlineMarkdownEditors();
   }
 
   function renderBackToCanvasLink() {
@@ -565,7 +663,7 @@
     }
 
     return `
-      <a class="secondary-action compact-action" href="universe-canvas.html?universe_id=${encodeURIComponent(universeId)}">
+      <a class="secondary-action compact-action chronicle-nav-button" href="universe-canvas.html?universe_id=${encodeURIComponent(universeId)}">
         Back to Canvas
       </a>
     `;
@@ -580,14 +678,38 @@
     return `
       <figure class="chronicle-editor-image-header">
         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(elementName || "Element image")}">
+        <a class="chronicle-editor-view-image" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer">
+          <ph-arrow-square-out weight="bold" aria-hidden="true"></ph-arrow-square-out>
+          View Image
+        </a>
       </figure>
+    `;
+  }
+
+  function renderWorkspaceImagePanel(image, elementName) {
+    const imageMarkup = image?.image_url ? renderWorkspaceImageHeader(image, elementName) : "";
+
+    return `
+      <section class="chronicle-editor-image-panel">
+        <div class="chronicle-editor-image-actions">
+          <div>
+            <p class="chronicle-eyebrow">Image</p>
+            <h3>${image?.image_url ? "Primary Image" : "Generate Concept Art"}</h3>
+          </div>
+          <button class="primary-action compact-action" type="button" data-chronicle-generate-image>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            ${image?.image_url ? "Generate New Image" : "Generate Image"}
+          </button>
+        </div>
+        ${imageMarkup}
+      </section>
     `;
   }
 
   function renderBackToChronicleLink() {
     return `
-      <a class="secondary-action compact-action" href="${escapeHtml(getReturnToChronicleUrl())}">
-        Back to Chronicle
+      <a class="secondary-action compact-action chronicle-nav-button chronicle-homepage-button" href="${escapeHtml(getReturnToChronicleUrl())}">
+        Chronicle Homepage
       </a>
     `;
   }
@@ -743,6 +865,7 @@
 
   function renderWorkspaceField(field, value) {
     const type = getTemplateFieldType(field);
+    const isTextareaType = type === "textarea" || type === "rich_text";
     const label = getTemplateFieldLabel(field);
     const hint = field.hint_text || field.description || "";
     const placeholder = field.placeholder || "";
@@ -751,8 +874,8 @@
     const options = getTemplateFieldOptions(field);
     let control = "";
 
-    if (type === "textarea" || type === "rich_text") {
-      control = `<textarea name="${escapeHtml(name)}" rows="5" placeholder="${escapeHtml(placeholder)}"${required}>${escapeHtml(value)}</textarea>`;
+    if (isTextareaType) {
+      control = renderMarkdownTextareaControl({ name, value, placeholder });
     } else if (type === "checkbox") {
       const checked = ["true", "1", "yes", "on"].includes(String(value).toLowerCase()) ? " checked" : "";
       control = `<label class="chronicle-checkbox"><input type="checkbox" name="${escapeHtml(name)}"${checked}> <span>${escapeHtml(placeholder || "Enabled")}</span></label>`;
@@ -769,12 +892,36 @@
       control = `<input type="${inputType}" name="${escapeHtml(name)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}"${required}>`;
     }
 
+    if (isTextareaType) {
+      return `
+        <div class="form-field chronicle-template-field is-textarea-field${isWideTemplateField(field) ? " is-wide" : ""}">
+          <div class="chronicle-textarea-field-header">
+            <span>${escapeHtml(label)}</span>
+            <button class="icon-button chronicle-text-edit-button" type="button" data-open-text-editor aria-label="Open Text Editor" title="Open Text Editor">
+              <ph-pencil-simple aria-hidden="true"></ph-pencil-simple>
+            </button>
+          </div>
+          ${control}
+          ${hint ? `<em>${escapeHtml(hint)}</em>` : ""}
+        </div>
+      `;
+    }
+
     return `
       <label class="form-field chronicle-template-field${isWideTemplateField(field) ? " is-wide" : ""}">
         <span>${escapeHtml(label)}</span>
         ${control}
         ${hint ? `<em>${escapeHtml(hint)}</em>` : ""}
       </label>
+    `;
+  }
+
+  function renderMarkdownTextareaControl({ name, value, placeholder }) {
+    return `
+      <div class="chronicle-markdown-field" data-markdown-field>
+        <div class="chronicle-toast-editor-host" data-toast-editor-host></div>
+        <textarea class="chronicle-markdown-fallback" name="${escapeHtml(name)}" rows="5" placeholder="${escapeHtml(placeholder)}" data-markdown-textarea hidden>${escapeHtml(value)}</textarea>
+      </div>
     `;
   }
 
@@ -986,6 +1133,18 @@
   }
 
   async function handleWorkspaceClick(event) {
+    const textEditorButton = event.target.closest("[data-open-text-editor]");
+    if (textEditorButton) {
+      openTextEditorDialog(textEditorButton);
+      return;
+    }
+
+    const generateImageButton = event.target.closest("[data-chronicle-generate-image]");
+    if (generateImageButton) {
+      openGenerateImageDialog();
+      return;
+    }
+
     const toggleModuleButton = event.target.closest("[data-toggle-module]");
     if (toggleModuleButton) {
       await toggleSectionModule(toggleModuleButton.dataset.toggleModule);
@@ -1026,6 +1185,353 @@
     }
   }
 
+  function clampImagePrompt(prompt, maxLength = MAX_IMAGE_PROMPT_LENGTH) {
+    const normalized = String(prompt || "").trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, maxLength - 74).trimEnd()}\n\n[Prompt shortened to fit the image generation limit.]`;
+  }
+
+  function createWorkspaceImagePrompt() {
+    const workspace = state.workspace;
+    const element = workspace?.element;
+    if (!element) {
+      return "";
+    }
+
+    const type = getType(element.element_type_id);
+    const assignedModules = getAssignedSectionModules(workspace);
+    const moduleDetails = assignedModules
+      .map(({ section, fields }) => {
+        const values = fields
+          .map((field) => {
+            const value = workspace.values.find((item) => item.template_field_id === field.id);
+            const text = getStoredTemplateFieldValue(value);
+            return text ? `${getTemplateFieldLabel(field)}: ${text}` : "";
+          })
+          .filter(Boolean);
+        return values.length ? `${section.name}: ${values.join("; ")}` : "";
+      })
+      .filter(Boolean);
+    const customDetails = workspace.customFields
+      .map((field) => [field.name, field.value].filter(Boolean).join(": "))
+      .filter(Boolean);
+
+    return clampImagePrompt([
+      `Create a cinematic concept art image for this Chronicle element.`,
+      `Name: ${element.name || "Untitled Element"}.`,
+      type?.name ? `Element type: ${type.name}.` : "",
+      workspace.universe?.name ? `Universe: ${workspace.universe.name}.` : "",
+      element.description ? `Description: ${element.description}.` : "",
+      moduleDetails.length ? `Module details: ${moduleDetails.join(" | ")}.` : "",
+      customDetails.length ? `Custom details: ${customDetails.join(" | ")}.` : "",
+      "Do not include text, labels, logos, UI, or watermarks."
+    ].filter(Boolean).join("\n"));
+  }
+
+  function getStoredTemplateFieldValue(valueRow) {
+    if (!valueRow) {
+      return "";
+    }
+
+    return String(valueRow.value_text ?? valueRow.value_number ?? valueRow.value_boolean ?? valueRow.value_json ?? "").trim();
+  }
+
+  function setGenerateImageStatus(message, tone = "") {
+    if (!dom.generateImageStatus) {
+      return;
+    }
+    dom.generateImageStatus.textContent = message || "";
+    dom.generateImageStatus.classList.toggle("is-error", tone === "error");
+    dom.generateImageStatus.classList.toggle("is-success", tone === "success");
+  }
+
+  function setGenerateImageBusy(isBusy) {
+    if (dom.generateImageForm) {
+      dom.generateImageForm.dataset.generating = String(isBusy);
+    }
+    if (dom.generateImageSubmit) {
+      dom.generateImageSubmit.disabled = isBusy;
+      dom.generateImageSubmit.innerHTML = isBusy
+        ? "Generating..."
+        : '<ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>Generate';
+    }
+  }
+
+  function openGenerateImageDialog() {
+    const element = state.workspace?.element;
+    if (!element || !dom.generateImageModal || !dom.generateImagePrompt) {
+      return;
+    }
+
+    state.activeImageGenerationElementId = element.id;
+    dom.generateImagePrompt.maxLength = MAX_IMAGE_PROMPT_LENGTH;
+    dom.generateImagePrompt.value = createWorkspaceImagePrompt();
+    if (dom.generateImageSubtitle) {
+      dom.generateImageSubtitle.textContent = `Review or edit the generated image prompt for ${element.name || "this element"}.`;
+    }
+    setGenerateImageStatus("");
+    setGenerateImageBusy(false);
+    dom.generateImageModal.hidden = false;
+    dom.generateImagePrompt.focus();
+  }
+
+  function closeGenerateImageDialog() {
+    if (dom.generateImageModal) {
+      dom.generateImageModal.hidden = true;
+    }
+    state.activeImageGenerationElementId = "";
+    dom.generateImageForm?.reset();
+    setGenerateImageStatus("");
+    setGenerateImageBusy(false);
+  }
+
+  async function refreshWorkspaceImages() {
+    const elementId = state.workspace?.element?.id;
+    if (!elementId) {
+      return;
+    }
+
+    const imageResponse = await fetchObjectImages([elementId]);
+    state.workspace = {
+      ...state.workspace,
+      images: normalizeImages(imageResponse.images || [])
+    };
+    renderWorkspace();
+  }
+
+  async function handleGenerateImageSubmit(event) {
+    event.preventDefault();
+    if (dom.generateImageForm?.dataset.generating === "true") {
+      return;
+    }
+
+    const element = state.workspace?.element;
+    if (!element || state.activeImageGenerationElementId !== element.id) {
+      setGenerateImageStatus("No active element is selected.", "error");
+      return;
+    }
+
+    const type = getType(element.element_type_id);
+    setGenerateImageBusy(true);
+    setGenerateImageStatus("Generating image...");
+
+    try {
+      const response = await window.centralisSupabase.functions.invoke("generate-object-image", {
+        body: {
+          objectId: element.id,
+          objectKind: "element",
+          elementType: type?.name || "",
+          name: element.name || "",
+          description: element.description || "",
+          extraPrompt: clampImagePrompt(dom.generateImagePrompt?.value || createWorkspaceImagePrompt())
+        }
+      });
+      throwIfError(response);
+      closeGenerateImageDialog();
+      setWorkspaceStatus("Image generated.", "success");
+      await refreshWorkspaceImages();
+    } catch (error) {
+      setGenerateImageStatus(`Could not generate image: ${getReadableError(error)}`, "error");
+      setGenerateImageBusy(false);
+    }
+  }
+
+  function initializeInlineMarkdownEditors() {
+    if (state.pageMode !== "editor" || !dom.workspace) {
+      return;
+    }
+
+    const Editor = getToastEditorConstructor();
+    dom.workspace.querySelectorAll("[data-markdown-field]").forEach((field) => {
+      if (state.markdownEditors.has(field)) {
+        return;
+      }
+
+      const textarea = field.querySelector("[data-markdown-textarea]");
+      const host = field.querySelector("[data-toast-editor-host]");
+      if (!textarea || !host) {
+        return;
+      }
+
+      if (!Editor) {
+        textarea.hidden = false;
+        return;
+      }
+
+      textarea.hidden = true;
+      const editor = new Editor({
+        el: host,
+        height: "280px",
+        initialValue: textarea.value || "",
+        initialEditType: "wysiwyg",
+        previewStyle: "tab",
+        placeholder: textarea.placeholder || "",
+        theme: "dark",
+        usageStatistics: false,
+        hideModeSwitch: true,
+        toolbarItems: []
+      });
+      editor.on("change", () => {
+        textarea.value = editor.getMarkdown();
+      });
+      state.markdownEditors.set(field, editor);
+    });
+  }
+
+  function destroyInlineMarkdownEditors() {
+    if (!state.markdownEditors?.size) {
+      return;
+    }
+
+    state.markdownEditors.forEach((editor) => {
+      try {
+        editor.destroy();
+      } catch (error) {
+        console.warn("Could not destroy Chronicle text editor.", error);
+      }
+    });
+    state.markdownEditors.clear();
+  }
+
+  function syncTextareaFromToastEditor(field) {
+    const editor = state.markdownEditors.get(field);
+    const textarea = field?.querySelector("[data-markdown-textarea]");
+    if (editor && textarea) {
+      textarea.value = editor.getMarkdown();
+    }
+  }
+
+  function syncToastEditorFromTextarea(field) {
+    const editor = state.markdownEditors.get(field);
+    const textarea = field?.querySelector("[data-markdown-textarea]");
+    if (editor && textarea) {
+      editor.setMarkdown(textarea.value || "", false);
+    }
+  }
+
+  function syncAllInlineMarkdownEditors() {
+    state.markdownEditors.forEach((editor, field) => {
+      const textarea = field?.querySelector("[data-markdown-textarea]");
+      if (textarea) {
+        textarea.value = editor.getMarkdown();
+      }
+    });
+  }
+
+  function openTextEditorDialog(button) {
+    const wrapper = button.closest(".chronicle-template-field");
+    const field = wrapper?.querySelector("[data-markdown-field]") || button.closest("[data-markdown-field]");
+    const textarea = field?.querySelector("[data-markdown-textarea]");
+    if (!field || !textarea || !dom.textEditorModal) {
+      return;
+    }
+
+    syncTextareaFromToastEditor(field);
+    closeTextEditorDialog();
+
+    const label = wrapper?.querySelector(".chronicle-textarea-field-header > span")?.textContent?.trim()
+      || field.closest(".chronicle-template-field")?.querySelector(":scope > span")?.textContent?.trim()
+      || "Text";
+    const title = document.getElementById("chronicle-text-editor-title");
+    if (title) {
+      title.textContent = `Edit ${label}`;
+    }
+    if (dom.textEditorSubtitle) {
+      dom.textEditorSubtitle.textContent = "Use Normal or Markdown mode. Apply writes the Markdown back to the field.";
+    }
+
+    state.activeTextEditorDialog = {
+      field,
+      textarea,
+      editor: null
+    };
+    dom.textEditorModal.hidden = false;
+
+    const Editor = getToastEditorConstructor();
+    if (Editor && dom.textEditorHost) {
+      dom.textEditorHost.hidden = false;
+      dom.textEditorHost.innerHTML = "";
+      if (dom.textEditorFallback) {
+        dom.textEditorFallback.hidden = true;
+      }
+      const editor = new Editor({
+        el: dom.textEditorHost,
+        height: "520px",
+        initialValue: textarea.value || "",
+        initialEditType: "wysiwyg",
+        previewStyle: "tab",
+        placeholder: textarea.placeholder || "",
+        theme: "dark",
+        usageStatistics: false,
+        toolbarItems: getMarkdownToolbarItems()
+      });
+      state.activeTextEditorDialog.editor = editor;
+      requestAnimationFrame(() => editor.focus());
+      return;
+    }
+
+    if (dom.textEditorFallback) {
+      dom.textEditorFallback.hidden = false;
+      dom.textEditorFallback.value = textarea.value || "";
+      requestAnimationFrame(() => dom.textEditorFallback?.focus());
+    }
+  }
+
+  function closeTextEditorDialog() {
+    if (state.activeTextEditorDialog?.editor) {
+      try {
+        state.activeTextEditorDialog.editor.destroy();
+      } catch (error) {
+        console.warn("Could not destroy Chronicle dialog editor.", error);
+      }
+    }
+
+    state.activeTextEditorDialog = null;
+    if (dom.textEditorHost) {
+      dom.textEditorHost.innerHTML = "";
+      dom.textEditorHost.hidden = false;
+    }
+    if (dom.textEditorFallback) {
+      dom.textEditorFallback.hidden = true;
+      dom.textEditorFallback.value = "";
+    }
+    if (dom.textEditorModal) {
+      dom.textEditorModal.hidden = true;
+    }
+  }
+
+  function applyTextEditorDialog() {
+    const active = state.activeTextEditorDialog;
+    if (!active?.textarea) {
+      closeTextEditorDialog();
+      return;
+    }
+
+    const markdown = active.editor
+      ? active.editor.getMarkdown()
+      : String(dom.textEditorFallback?.value || "");
+    active.textarea.value = markdown;
+    syncToastEditorFromTextarea(active.field);
+    closeTextEditorDialog();
+  }
+
+  function getToastEditorConstructor() {
+    return window.toastui?.Editor || null;
+  }
+
+  function getMarkdownToolbarItems() {
+    return [
+      ["heading", "bold", "italic", "strike"],
+      ["hr", "quote"],
+      ["ul", "ol"],
+      ["code", "codeblock"],
+      ["link"]
+    ];
+  }
+
   async function handleWorkspaceChange(event) {
     const target = event.target;
     if (target.matches("[data-chronicle-element-type-select]")) {
@@ -1053,7 +1559,8 @@
       template: nextTemplate,
       sections: templateDetails.sections,
       fields: templateDetails.fields,
-      modules: []
+      modules: [],
+      modulesResetPending: true
     };
     renderWorkspace();
   }
@@ -1072,7 +1579,8 @@
       template: nextTemplate,
       sections: templateDetails.sections,
       fields: templateDetails.fields,
-      modules: state.workspace.modules.filter((module) => getModuleTemplateId(module) === nextTemplate?.id)
+      modules: state.workspace.modules.filter((module) => getModuleTemplateId(module) === nextTemplate?.id),
+      modulesResetPending: true
     };
     renderWorkspace();
   }
@@ -1194,15 +1702,27 @@
 
     const form = event.target;
     const saveButton = form.querySelector("[data-chronicle-workspace-save]");
+    syncAllInlineMarkdownEditors();
     const formData = new FormData(form);
     const name = String(formData.get("workspace-name") || "").trim();
     const description = String(formData.get("workspace-description") || "").trim();
     const elementTypeId = String(formData.get("workspace-element-type") || "");
     const templateId = String(formData.get("workspace-template") || "");
+    const assignedFieldIds = new Set(getAssignedSectionModules(state.workspace)
+      .flatMap((item) => item.fields.map((field) => field.id)));
+    const missingRequiredField = state.workspace.fields
+      .filter((field) => assignedFieldIds.has(field.id) && field.is_required)
+      .find((field) => !hasMeaningfulValue(readTemplateFieldValue(form, field)));
 
     if (!name) {
       setWorkspaceStatus("Name is required.", "error");
       form.querySelector('[name="workspace-name"]')?.focus();
+      return;
+    }
+
+    if (missingRequiredField) {
+      setWorkspaceStatus(`${getTemplateFieldLabel(missingRequiredField)} is required.`, "error");
+      focusTemplateFieldControl(form, missingRequiredField);
       return;
     }
 
@@ -1212,8 +1732,10 @@
 
     try {
       const element = state.workspace.element;
-      const typeChanged = elementTypeId !== (state.workspace.originalElementTypeId || "");
-      const templateChanged = templateId !== (state.workspace.originalTemplateId || "");
+      const hasPendingModuleReset = Boolean(state.workspace.modulesResetPending);
+      const typeChanged = hasPendingModuleReset && elementTypeId !== (state.workspace.originalElementTypeId || "");
+      const templateChanged = hasPendingModuleReset && templateId !== (state.workspace.originalTemplateId || "");
+      const shouldResetModules = typeChanged || templateChanged;
       const nextTemplateId = typeChanged ? "" : templateId;
       const elementResponse = await window.centralisSupabase
         .from(ELEMENTS_TABLE)
@@ -1229,7 +1751,7 @@
 
       throwIfError(elementResponse);
 
-      if (typeChanged || templateChanged) {
+      if (shouldResetModules) {
         const moduleDeleteResponse = await window.centralisSupabase
           .from(CHRONICLE_MODULES_TABLE)
           .delete()
@@ -1239,8 +1761,6 @@
         throwIfError(moduleDeleteResponse);
       }
 
-      const assignedFieldIds = new Set(getAssignedSectionModules(state.workspace)
-        .flatMap((item) => item.fields.map((field) => field.id)));
       const savedTemplateValues = [];
       const valueResponses = await Promise.all(state.workspace.fields
         .filter((field) => assignedFieldIds.has(field.id))
@@ -1306,22 +1826,17 @@
         throwIfError(deleteResponse);
       }
 
-      if (typeChanged || templateChanged) {
-        await loadChronicleData();
-        await loadRouteWorkspace();
-        renderAll();
-      } else {
-        syncWorkspaceAfterSave({
-          name,
-          description,
-          elementTypeId,
-          templateId: nextTemplateId,
-          savedTemplateValues,
-          customRows,
-          customResponses,
-          deletedCustomFieldIds: allDeletedCustomFieldIds
-        });
-      }
+      syncWorkspaceAfterSave({
+        name,
+        description,
+        elementTypeId,
+        templateId: nextTemplateId,
+        savedTemplateValues,
+        customRows,
+        customResponses,
+        deletedCustomFieldIds: allDeletedCustomFieldIds,
+        clearAssignedModules: shouldResetModules
+      });
       setWorkspaceStatus("Element saved.", "success");
     } catch (error) {
       console.error("Could not save Chronicle workspace.", error);
@@ -1522,6 +2037,7 @@
       originalTemplateId: "",
       universe: null,
       modules: [],
+      modulesResetPending: false,
       templates: [],
       template: null,
       sections: [],
@@ -1611,6 +2127,19 @@
     return String(control?.value || "").trim();
   }
 
+  function focusTemplateFieldControl(form, field) {
+    const control = form.elements.namedItem(`workspace-field:${field.id}`);
+    const wrapper = control?.closest?.("[data-markdown-field]");
+    if (wrapper) {
+      const editor = state.markdownEditors.get(wrapper);
+      if (editor) {
+        editor.focus();
+        return;
+      }
+    }
+    control?.focus?.();
+  }
+
   function hasMeaningfulValue(value) {
     return String(value ?? "").trim().length > 0;
   }
@@ -1623,7 +2152,8 @@
     savedTemplateValues,
     customRows,
     customResponses,
-    deletedCustomFieldIds
+    deletedCustomFieldIds,
+    clearAssignedModules = false
   }) {
     const updatedAt = new Date().toISOString();
     const savedValueMap = new Map((savedTemplateValues || []).map((value) => [value.template_field_id, value]));
@@ -1668,6 +2198,10 @@
 
     state.workspace = {
       ...state.workspace,
+      originalElementTypeId: elementTypeId || "",
+      originalTemplateId: templateId || "",
+      modules: clearAssignedModules ? [] : state.workspace.modules,
+      modulesResetPending: false,
       element: {
         ...state.workspace.element,
         name,
@@ -1783,6 +2317,122 @@
     return String(value || "module")
       .replace(/[_-]+/g, " ")
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function renderInlineMarkdown(value) {
+    return escapeHtml(value)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/~~([^~]+)~~/g, "<del>$1</del>")
+      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+      .replace(/_([^_\n]+)_/g, "<em>$1</em>")
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      )
+      .replace(/\n/g, "<br>");
+  }
+
+  function renderMarkdownValue(value, emptyText = "") {
+    const markdown = String(value || "").trim();
+    if (!markdown) {
+      return `<p class="is-empty">${escapeHtml(emptyText || "No text yet.")}</p>`;
+    }
+
+    const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+    const blocks = [];
+    let paragraphLines = [];
+    let listType = "";
+    let listItems = [];
+    let codeLines = null;
+
+    function flushParagraph() {
+      const text = paragraphLines.join("\n").trim();
+      if (text) {
+        blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
+      }
+      paragraphLines = [];
+    }
+
+    function flushList() {
+      if (listType && listItems.length) {
+        const items = listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("");
+        blocks.push(`<${listType}>${items}</${listType}>`);
+      }
+      listType = "";
+      listItems = [];
+    }
+
+    function flushCode() {
+      if (codeLines) {
+        blocks.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        codeLines = null;
+      }
+    }
+
+    lines.forEach((line) => {
+      if (line.trim().startsWith("```")) {
+        if (codeLines) {
+          flushCode();
+        } else {
+          flushParagraph();
+          flushList();
+          codeLines = [];
+        }
+        return;
+      }
+
+      if (codeLines) {
+        codeLines.push(line);
+        return;
+      }
+
+      if (!line.trim()) {
+        flushParagraph();
+        flushList();
+        return;
+      }
+
+      const heading = line.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        flushList();
+        const level = heading[1].length;
+        blocks.push(`<h${level}>${renderInlineMarkdown(heading[2].trim())}</h${level}>`);
+        return;
+      }
+
+      const quote = line.match(/^>\s?(.+)$/);
+      if (quote) {
+        flushParagraph();
+        flushList();
+        blocks.push(`<blockquote>${renderInlineMarkdown(quote[1].trim())}</blockquote>`);
+        return;
+      }
+
+      const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+      const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+      if (unordered || ordered) {
+        flushParagraph();
+        const nextListType = unordered ? "ul" : "ol";
+        if (listType && listType !== nextListType) {
+          flushList();
+        }
+        listType = nextListType;
+        listItems.push((unordered || ordered)[1].trim());
+        return;
+      }
+
+      flushList();
+      paragraphLines.push(line);
+    });
+
+    flushParagraph();
+    flushList();
+    flushCode();
+
+    return blocks.join("");
   }
 
   function escapeHtml(value) {

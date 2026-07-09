@@ -4,17 +4,62 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Centralis</title>
-  <link rel="stylesheet" href="styles.css?v=details-pane-1">
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="preload" href="assets/centralis-icon.svg" as="image" type="image/svg+xml">
+  <link rel="preload" href="assets/centralis-landing-bg.png" as="image" type="image/png">
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="dns-prefetch" href="https://unpkg.com">
+  <link rel="modulepreload" href="https://unpkg.com/@phosphor-icons/webcomponents@2.1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=action-sizing-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-page="home">
-  <section class="auth-landing" aria-label="Centralis login">
-    <button class="primary-action auth-open-button" type="button" data-open-modal="auth-modal">Login/Create Account</button>
+  <section class="auth-landing" aria-label="Centralis landing page" hidden>
+    <header class="landing-header">
+      <a class="landing-brand" href="index.html" aria-label="Centralis home">
+        <span class="landing-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+            <path d="M9 5v14"></path>
+            <path d="M5 10h14"></path>
+          </svg>
+        </span>
+        <span>Centralis</span>
+      </a>
+      <nav class="landing-auth-actions" aria-label="Account actions">
+        <button class="landing-sign-in" type="button" data-open-modal="auth-modal">Sign In</button>
+        <button class="landing-create-account" type="button" data-open-modal="auth-modal">Create Account</button>
+      </nav>
+    </header>
+
+    <main class="landing-hero">
+      <h1><span>Your Universe,</span><span>Perfectly Organized.</span></h1>
+      <p>An ambitious all-in-one creative platform. A single home for people who do it all. Worldbuilding, deep tracking, productivity, and command center operations in one cohesive ecosystem.</p>
+      <div class="landing-actions">
+        <button class="landing-primary-action" type="button" data-open-modal="auth-modal">
+          <span>Start Building</span>
+          <ph-arrow-right weight="bold" aria-hidden="true"></ph-arrow-right>
+        </button>
+      </div>
+    </main>
   </section>
 
   <div class="app-shell" hidden>
   <header class="site-header" aria-label="Centralis main header">
-    <a class="brand" href="index.html" aria-label="Centralis home">Centralis</a>
+    <a class="brand" href="index.html" aria-label="Centralis home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+          <path d="M9 5v14"></path>
+          <path d="M5 10h14"></path>
+        </svg>
+      </span>
+      <span>Centralis</span>
+    </a>
 
     <nav class="category-nav" aria-label="Primary categories">
       <div class="menu-wrap">
@@ -47,6 +92,7 @@
         </button>
         <div class="dropdown-menu" role="menu">
           <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
+          <a href="chat-repository.html" role="menuitem">Chat Repository</a>
           <button type="button" role="menuitem">Episode Roulette</button>
         </div>
       </div>
@@ -60,7 +106,7 @@
         </button>
         <div class="dropdown-menu" role="menu">
           <a href="calendar.html" role="menuitem">Calendar</a>
-          <button type="button" role="menuitem">Tool One</button>
+          <a href="useful-things.html" role="menuitem">Useful Things</a>
           <button type="button" role="menuitem">Tool Two</button>
           <button type="button" role="menuitem">Tool Three</button>
         </div>
@@ -117,8 +163,72 @@
     </div>
   </header>
 
-  <main class="page">
-    <h1>homepage</h1>
+  <main class="page home-dashboard">
+    <header class="home-dashboard-header">
+      <h1>Centralis Dashboard</h1>
+    </header>
+
+    <section class="home-work-grid" aria-label="Recent work">
+      <article class="home-panel">
+        <div class="home-panel-header">
+          <div>
+            <p class="home-eyebrow">Worldbuilding</p>
+            <h2>Recent Universes</h2>
+          </div>
+          <div class="home-panel-actions">
+            <span data-home-universe-count>Loading...</span>
+            <a href="universe-builder.html">View all</a>
+            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
+              <span class="sr-only">Collapse Recent Universes</span>
+              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
+            </button>
+          </div>
+        </div>
+        <div class="home-section-body home-universe-list" data-home-section-body data-universe-list>
+          <p class="empty-state">Loading universes...</p>
+        </div>
+      </article>
+
+      <article class="home-panel">
+        <div class="home-panel-header">
+          <div>
+            <p class="home-eyebrow">Chronicle</p>
+            <h2>Recent Elements</h2>
+          </div>
+          <div class="home-panel-actions">
+            <span data-home-chronicle-count>Loading...</span>
+            <a href="chronicle.html">Open Chronicle</a>
+            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
+              <span class="sr-only">Collapse Recent Elements</span>
+              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
+            </button>
+          </div>
+        </div>
+        <div class="home-section-body home-chronicle-list" data-home-section-body data-home-chronicle-list>
+          <p class="empty-state">Loading Chronicle elements...</p>
+        </div>
+      </article>
+
+      <article class="home-panel">
+        <div class="home-panel-header">
+          <div>
+            <p class="home-eyebrow">Chat Repository</p>
+            <h2>Recent Chat Logs</h2>
+          </div>
+          <div class="home-panel-actions">
+            <span data-home-chat-log-count>Loading...</span>
+            <a href="chat-repository.html">Open Repository</a>
+            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
+              <span class="sr-only">Collapse Recent Chat Logs</span>
+              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
+            </button>
+          </div>
+        </div>
+        <div class="home-section-body home-chat-log-list" data-home-section-body data-home-chat-log-list>
+          <p class="empty-state">Loading chat logs...</p>
+        </div>
+      </article>
+    </section>
   </main>
   </div>
 
@@ -167,6 +277,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=seed-diagnostics-3"></script>
+  <script src="script.js?v=centralis-header-1"></script>
 </body>
 </html>

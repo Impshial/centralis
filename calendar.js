@@ -944,6 +944,9 @@ document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
     if (event.target !== backdrop) {
       return;
     }
+    if (backdrop.dataset.strictModal !== undefined) {
+      return;
+    }
     closeCalendarModal();
     closeEventModal();
   });
@@ -951,8 +954,12 @@ document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    closeCalendarModal();
-    closeEventModal();
+    if (calendarModal?.dataset.strictModal === undefined) {
+      closeCalendarModal();
+    }
+    if (eventModal?.dataset.strictModal === undefined) {
+      closeEventModal();
+    }
   }
 });
 

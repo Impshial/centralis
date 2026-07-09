@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="centralis-bg" x1="10" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0078ff"/>
+      <stop offset="1" stop-color="#09d9ff"/>
+    </linearGradient>
+    <filter id="centralis-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#041018"/>
+  <rect x="7" y="7" width="50" height="50" rx="13" fill="url(#centralis-bg)" filter="url(#centralis-glow)"/>
+  <rect x="19" y="19" width="26" height="26" rx="3.5" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M27 19v26M19 29h26" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+</svg>
