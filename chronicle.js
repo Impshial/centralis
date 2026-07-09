@@ -745,7 +745,7 @@
                   <strong>${escapeHtml(section.name || "Untitled Section")}</strong>
                   <em>${fields.length} ${fields.length === 1 ? "field" : "fields"}</em>
                 </span>
-                <button class="${isAssigned ? "ghost-action" : "secondary-action"} compact-action" type="button" data-${isAssigned ? "remove" : "add"}-module="${escapeHtml(section.id)}">
+                <button class="secondary-action compact-action" type="button" data-${isAssigned ? "remove" : "add"}-module="${escapeHtml(section.id)}">
                   ${isAssigned ? "Remove" : "Add"}
                 </button>
               </summary>
