@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=action-sizing-1">
+  <link rel="stylesheet" href="styles.css?v=calculator-mode-dropdown-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -145,6 +145,18 @@
               <span>Text Converter</span>
               <small>AI-assisted format changes</small>
             </button>
+            <button
+              class="useful-things-tab"
+              type="button"
+              role="tab"
+              id="useful-tab-calculators"
+              aria-selected="false"
+              aria-controls="useful-panel-calculators"
+              data-useful-tab="calculators"
+            >
+              <span>Calculators</span>
+              <small>Independent standard calculators</small>
+            </button>
           </nav>
 
           <section
@@ -175,18 +187,10 @@
 
                 <div class="text-converter-rich-wrap" data-rich-input-wrap>
                   <div class="text-converter-rich-toolbar" role="toolbar" aria-label="WYSIWYG formatting controls">
-                    <button type="button" data-rich-command="undo" title="Undo" aria-label="Undo">
-                      <ph-arrow-counter-clockwise weight="bold" aria-hidden="true"></ph-arrow-counter-clockwise>
+                    <button type="button" data-rich-command="removeFormat" title="Clear formatting" aria-label="Clear formatting">
+                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
                     </button>
-                    <button type="button" data-rich-command="redo" title="Redo" aria-label="Redo">
-                      <ph-arrow-clockwise weight="bold" aria-hidden="true"></ph-arrow-clockwise>
-                    </button>
-                    <select data-rich-heading aria-label="Heading style" title="Heading style">
-                      <option value="P">Paragraph</option>
-                      <option value="H1">Heading 1</option>
-                      <option value="H2">Heading 2</option>
-                      <option value="H3">Heading 3</option>
-                    </select>
+                    <span class="text-converter-toolbar-separator" aria-hidden="true"></span>
                     <button type="button" data-rich-command="bold" title="Bold" aria-label="Bold">
                       <ph-text-b weight="bold" aria-hidden="true"></ph-text-b>
                     </button>
@@ -199,24 +203,21 @@
                     <button type="button" data-rich-command="strikeThrough" title="Strikethrough" aria-label="Strikethrough">
                       <ph-text-strikethrough weight="bold" aria-hidden="true"></ph-text-strikethrough>
                     </button>
-                    <button type="button" data-rich-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">
+                    <span class="text-converter-toolbar-separator" aria-hidden="true"></span>
+                    <button type="button" data-rich-command="undo" title="Undo" aria-label="Undo">
+                      <ph-arrow-counter-clockwise weight="bold" aria-hidden="true"></ph-arrow-counter-clockwise>
+                    </button>
+                    <button type="button" data-rich-command="redo" title="Redo" aria-label="Redo">
+                      <ph-arrow-clockwise weight="bold" aria-hidden="true"></ph-arrow-clockwise>
+                    </button>
+                    <span class="text-converter-toolbar-separator" aria-hidden="true"></span>
+                    <button type="button" data-rich-command="insertUnorderedList" title="Bullet list" aria-label="Bullet list">
                       <ph-list-bullets weight="bold" aria-hidden="true"></ph-list-bullets>
                     </button>
                     <button type="button" data-rich-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">
                       <ph-list-numbers weight="bold" aria-hidden="true"></ph-list-numbers>
                     </button>
-                    <button type="button" data-rich-block="blockquote" title="Quote" aria-label="Quote">
-                      <ph-quotes weight="bold" aria-hidden="true"></ph-quotes>
-                    </button>
-                    <button type="button" data-rich-link title="Insert link" aria-label="Insert link">
-                      <ph-link weight="bold" aria-hidden="true"></ph-link>
-                    </button>
-                    <button type="button" data-rich-inline-code title="Inline code" aria-label="Inline code">
-                      <ph-code weight="bold" aria-hidden="true"></ph-code>
-                    </button>
-                    <button type="button" data-rich-block="pre" title="Code block" aria-label="Code block">
-                      <ph-brackets-curly weight="bold" aria-hidden="true"></ph-brackets-curly>
-                    </button>
+                    <span class="text-converter-toolbar-separator" aria-hidden="true"></span>
                     <button type="button" data-rich-command="justifyLeft" title="Align left" aria-label="Align left">
                       <ph-text-align-left weight="bold" aria-hidden="true"></ph-text-align-left>
                     </button>
@@ -226,11 +227,29 @@
                     <button type="button" data-rich-command="justifyRight" title="Align right" aria-label="Align right">
                       <ph-text-align-right weight="bold" aria-hidden="true"></ph-text-align-right>
                     </button>
-                    <button type="button" data-rich-command="insertHorizontalRule" title="Horizontal rule" aria-label="Horizontal rule">
-                      <ph-minus weight="bold" aria-hidden="true"></ph-minus>
+                    <span class="text-converter-toolbar-break" aria-hidden="true"></span>
+                    <select data-rich-heading aria-label="Paragraph style" title="Paragraph style">
+                      <option value="P">Paragraph</option>
+                      <option value="H1">Heading 1</option>
+                      <option value="H2">Heading 2</option>
+                      <option value="H3">Heading 3</option>
+                    </select>
+                    <span class="text-converter-toolbar-separator" aria-hidden="true"></span>
+                    <button type="button" data-rich-block="blockquote" title="Quote" aria-label="Quote">
+                      <ph-quotes weight="bold" aria-hidden="true"></ph-quotes>
                     </button>
-                    <button type="button" data-rich-command="removeFormat" title="Clear formatting" aria-label="Clear formatting">
-                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                    <button type="button" data-rich-inline-code title="Inline code" aria-label="Inline code">
+                      <ph-code weight="bold" aria-hidden="true"></ph-code>
+                    </button>
+                    <button type="button" data-rich-block="pre" title="Code block" aria-label="Code block">
+                      <ph-brackets-curly weight="bold" aria-hidden="true"></ph-brackets-curly>
+                    </button>
+                    <span class="text-converter-toolbar-separator" aria-hidden="true"></span>
+                    <button type="button" data-rich-link title="Insert link" aria-label="Insert link">
+                      <ph-link weight="bold" aria-hidden="true"></ph-link>
+                    </button>
+                    <button type="button" data-rich-command="insertHorizontalRule" title="Insert horizontal line" aria-label="Insert horizontal line">
+                      <ph-minus weight="bold" aria-hidden="true"></ph-minus>
                     </button>
                   </div>
                   <div
@@ -253,6 +272,7 @@
               </section>
 
               <section class="text-converter-actions" aria-label="Conversion targets">
+                <p class="text-converter-actions-title">Convert To...</p>
                 <div class="text-converter-action-group" aria-label="Available conversions">
                   <button class="primary-action" type="button" data-convert-target="markdown">Markdown</button>
                   <button class="primary-action" type="button" data-convert-target="html">HTML</button>
@@ -261,7 +281,6 @@
                   <button class="primary-action" type="button" data-convert-target="yaml">YAML</button>
                   <button class="primary-action" type="button" data-convert-target="xml">XML</button>
                   <button class="primary-action" type="button" data-convert-target="csv">CSV</button>
-                  <button class="primary-action" type="button" data-convert-target="tsv">TSV</button>
                   <button class="primary-action" type="button" data-convert-target="markdown-table">Markdown Table</button>
                   <button class="primary-action" type="button" data-convert-target="json-lines">JSON Lines</button>
                   <button class="primary-action" type="button" data-convert-target="sql-inserts">SQL Inserts</button>
@@ -286,6 +305,49 @@
               </section>
             </div>
           </section>
+
+          <section
+            class="useful-things-tab-panel calculators-panel"
+            role="tabpanel"
+            id="useful-panel-calculators"
+            aria-labelledby="useful-tab-calculators"
+            data-useful-panel="calculators"
+            hidden
+          >
+            <div class="calculators-header">
+              <h2>Calculators</h2>
+              <div class="calculator-add-menu" data-calculator-add-menu>
+                <button
+                  class="primary-action calculator-add-trigger"
+                  type="button"
+                  data-calculator-menu-trigger
+                  aria-expanded="false"
+                  aria-haspopup="menu"
+                  aria-controls="calculator-add-menu"
+                >
+                  <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+                  <span>Add Calculator</span>
+                  <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+                </button>
+                <div class="calculator-add-dropdown" id="calculator-add-menu" data-calculator-menu-panel role="menu" hidden>
+                  <div class="calculator-add-group">
+                    <p>Core</p>
+                    <button type="button" role="menuitem" data-add-calculator-type="standard">Standard / Scientific</button>
+                  </div>
+                  <div class="calculator-add-group">
+                    <p>Date &amp; Time</p>
+                    <button type="button" role="menuitem" data-add-calculator-type="date-time">Date &amp; Time</button>
+                  </div>
+                  <div class="calculator-add-group">
+                    <p>Health</p>
+                    <button type="button" role="menuitem" data-add-calculator-type="bmi">BMI</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="calculator-grid" data-calculator-grid aria-label="Calculators workspace"></div>
+          </section>
         </div>
       </section>
     </main>
@@ -294,6 +356,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=centralis-header-1"></script>
-  <script src="useful-things.js?v=useful-things-tight-1"></script>
+  <script src="useful-things.js?v=calculator-mode-dropdown-1"></script>
 </body>
 </html>

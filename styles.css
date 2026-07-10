@@ -173,7 +173,7 @@ body.dark-mode {
 
 .landing-create-account {
   min-height: 38px;
-  padding: 0 22px;
+  padding: 0 20px;
   color: var(--primary-button-text);
   background: var(--primary-button-bg);
   border: 1px solid var(--primary-button-border);
@@ -253,7 +253,7 @@ body.dark-mode {
   gap: 14px;
   min-width: 212px;
   min-height: 56px;
-  padding: 0 30px;
+  padding: 0 28px;
   color: var(--primary-button-text);
   background: var(--primary-button-bg);
   border: 1px solid var(--primary-button-border);
@@ -373,7 +373,7 @@ button {
   flex-direction: row;
   width: auto;
   min-height: 38px;
-  padding: 0 12px;
+  padding: 0 10px;
   gap: 0;
 }
 
@@ -1003,7 +1003,7 @@ body.dark-mode .home-panel {
 
 .chronicle-tabs button {
   min-height: 34px;
-  padding: 0 14px;
+  padding: 0 12px;
   color: var(--muted);
   background: transparent;
   border-radius: 6px;
@@ -1157,7 +1157,7 @@ body.dark-mode .home-panel {
   align-items: center;
   justify-content: center;
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   text-decoration: none;
 }
@@ -1194,7 +1194,7 @@ body.dark-mode .home-panel {
   justify-content: center;
   gap: 8px;
   min-height: 2.35rem;
-  padding: 0 1rem;
+  padding: 0 0.875rem;
   color: #ffffff;
   background: rgb(0 0 0 / 42%);
   border: 1px solid rgb(255 255 255 / 26%);
@@ -2367,7 +2367,7 @@ body.dark-mode .home-panel {
 }
 
 .calendar-button {
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 .calendar-icon-action {
@@ -2387,7 +2387,7 @@ body.dark-mode .home-panel {
 
 .calendar-view-tabs button {
   min-width: 64px;
-  padding: 0 12px;
+  padding: 0 10px;
   color: color-mix(in srgb, var(--accent) 54%, var(--muted));
   border: 0;
   border-radius: 0;
@@ -2778,7 +2778,7 @@ body.dark-mode .home-panel {
   min-height: 36px;
   border: 0;
   border-radius: 5px;
-  padding: 0 10px;
+  padding: 0 8px;
   background: transparent;
   color: #f5f7fb;
   font-weight: 700;
@@ -3268,7 +3268,7 @@ body:not(.dark-mode) .movie-dialog-header h2 {
 
 .reminder-presets button {
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--ink);
   background: transparent;
   border: 1px solid var(--line);
@@ -6426,7 +6426,7 @@ body.dark-mode .react-flow__controls-button svg {
 
 .node-context-menu button {
   min-height: 34px;
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--ink);
   text-align: left;
   background: transparent;
@@ -6644,7 +6644,7 @@ body.dark-mode .react-flow__controls-button svg {
   align-items: center;
   justify-content: center;
   min-height: 42px;
-  padding: 0 16px;
+  padding: 0 14px;
   color: var(--primary-button-text);
   background: var(--primary-button-bg);
   border: 1px solid var(--primary-button-border);
@@ -6978,7 +6978,7 @@ body.dark-mode .react-flow__controls-button svg {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 5px;
   color: #fff;
   background: rgba(148, 163, 184, 0.12);
@@ -7568,7 +7568,7 @@ body.dark-mode .react-flow__controls-button svg {
 .stellar-generate-redesign-cancel,
 .stellar-generate-redesign-submit {
   min-height: 66px;
-  padding: 18px 32px;
+  padding: 16px 30px;
   border-radius: 12px;
   font-size: 1.35rem;
   font-weight: 780;
@@ -7944,10 +7944,23 @@ body.chat-modal-open {
 }
 
 .useful-things-page {
+  position: fixed;
+  top: var(--header-height);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
-  min-height: calc(100vh - var(--header-height));
-  margin: var(--header-height) 0 0;
-  padding: 12px 20px 48px;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 20px 20px;
+  overflow: hidden;
+}
+
+body[data-page="useful-things"] {
+  overflow: hidden;
 }
 
 .useful-things-header {
@@ -7964,21 +7977,29 @@ body.chat-modal-open {
 
 .useful-things-workspace {
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .useful-things-tabs-shell {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .useful-things-tab-list {
-  position: sticky;
-  top: calc(var(--header-height) + 18px);
+  position: static;
+  top: auto;
   display: grid;
   gap: 8px;
+  align-self: start;
+  max-height: 100%;
+  overflow: auto;
   padding: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -8021,6 +8042,9 @@ body.chat-modal-open {
 
 .useful-things-tab-panel {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   padding: 10px 14px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -8032,7 +8056,13 @@ body.chat-modal-open {
   display: none;
 }
 
+.useful-things-tab-panel.is-active[data-useful-panel="text-converter"] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .text-converter-header {
+  grid-row: 1;
   margin-bottom: 8px;
 }
 
@@ -8067,6 +8097,7 @@ body.chat-modal-open {
 }
 
 .text-converter-status {
+  grid-row: 2;
   min-height: 0;
   margin: 0 0 8px;
   color: var(--muted);
@@ -8087,17 +8118,22 @@ body.chat-modal-open {
 }
 
 .text-converter-body {
+  grid-row: 3;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 178px minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .text-converter-pane {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
-  min-height: min(620px, calc(100vh - var(--header-height) - 142px));
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: color-mix(in srgb, var(--surface) 74%, #000000);
   border: 1px solid var(--line);
@@ -8126,13 +8162,16 @@ body.chat-modal-open {
 .text-converter-rich-wrap {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .text-converter-rich-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  column-gap: 5px;
+  row-gap: 7px;
   align-items: center;
   padding: 8px 10px;
   background: color-mix(in srgb, var(--surface) 88%, #000000);
@@ -8183,6 +8222,21 @@ body.chat-modal-open {
   padding: 0 8px;
 }
 
+.text-converter-toolbar-separator {
+  display: inline-block;
+  flex: 0 0 1px;
+  width: 1px;
+  height: 24px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--line) 88%, transparent);
+}
+
+.text-converter-toolbar-break {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 0;
+}
+
 .text-converter-rich-toolbar button:hover,
 .text-converter-rich-toolbar button:focus-visible,
 .text-converter-rich-toolbar select:focus-visible {
@@ -8196,6 +8250,7 @@ body.chat-modal-open {
 .text-converter-raw-input,
 .text-converter-output {
   width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 16px;
@@ -8210,6 +8265,11 @@ body.chat-modal-open {
 .text-converter-rich-editor {
   overflow: auto;
   outline: none;
+}
+
+.text-converter-raw-input,
+.text-converter-output {
+  overflow: auto;
 }
 
 .text-converter-rich-editor:empty::before {
@@ -8251,19 +8311,27 @@ body.chat-modal-open {
 .text-converter-actions {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.text-converter-actions-title {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .text-converter-action-group {
   display: grid;
-  gap: 8px;
-}
-
-.text-converter-action-group .primary-action,
-.text-converter-action-group .secondary-action {
-  width: 100%;
-  justify-content: center;
-  white-space: normal;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+  padding-top: 26px;
 }
 
 .text-converter-action-group.is-busy button {
@@ -8272,6 +8340,622 @@ body.chat-modal-open {
 
 .text-converter-output {
   cursor: text;
+}
+
+.calculators-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.calculators-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.calculators-header h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  letter-spacing: -0.03em;
+}
+
+.calculators-header .primary-action {
+  gap: 8px;
+}
+
+.calculators-header .primary-action ph-plus,
+.calculators-header .primary-action ph-caret-down {
+  width: 16px;
+  height: 16px;
+}
+
+.calculator-add-menu {
+  position: relative;
+  z-index: 2;
+}
+
+.calculator-add-trigger {
+  min-width: 184px;
+}
+
+.calculator-add-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, #000000);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 38px rgb(0 0 0 / 30%);
+}
+
+.calculator-add-dropdown[hidden] {
+  display: none;
+}
+
+.calculator-add-group {
+  display: grid;
+  gap: 6px;
+}
+
+.calculator-add-group + .calculator-add-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.calculator-add-group p {
+  margin: 0;
+  padding: 0 4px 4px;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.calculator-add-group button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--field) 88%, #000000);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  font: 750 0.92rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: left;
+}
+
+.calculator-add-group button:hover,
+.calculator-add-group button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, var(--field));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  outline: none;
+}
+
+.calculator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 320px));
+  grid-auto-rows: 640px;
+  gap: 16px;
+  align-items: start;
+  align-content: start;
+  justify-content: start;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 4px 4px 0;
+}
+
+.calculator-window {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  width: 100%;
+  height: 640px;
+  min-height: 0;
+  color: #f7f7f7;
+  background: #202020;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, #000000);
+  border-radius: 12px;
+  box-shadow: 0 20px 42px rgb(0 0 0 / 26%);
+  overflow: hidden;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.calculator-window.is-active {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 34%, transparent),
+    0 24px 48px rgb(0 0 0 / 34%);
+}
+
+.calculator-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 10px 0 14px;
+}
+
+.calculator-titlebar strong {
+  font-size: 0.95rem;
+  font-weight: 780;
+}
+
+.calculator-title-select-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.calculator-title-select {
+  min-width: 132px;
+  min-height: 32px;
+  padding: 0 28px 0 10px;
+  color: #ffffff;
+  background: color-mix(in srgb, #2d2d2d 92%, #000000);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  cursor: pointer;
+  font: 780 0.95rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.calculator-title-select:hover,
+.calculator-title-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 54%, rgb(255 255 255 / 12%));
+  outline: none;
+}
+
+.calculator-titlebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calculator-copy,
+.calculator-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #f5f5f5;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  font: 750 0.78rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.calculator-copy {
+  width: auto;
+  padding: 0 8px;
+}
+
+.calculator-close {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.calculator-copy:hover,
+.calculator-copy:focus-visible {
+  color: #071010;
+  background: var(--primary-button-bg);
+  outline: none;
+}
+
+.calculator-close:hover,
+.calculator-close:focus-visible {
+  color: #ffffff;
+  background: color-mix(in srgb, #ef4444 72%, #000000);
+  outline: none;
+}
+
+.calculator-display {
+  display: grid;
+  gap: 6px;
+  padding: 8px 14px 10px;
+}
+
+.calculator-equation {
+  width: 100%;
+  min-height: 32px;
+  color: color-mix(in srgb, #ffffff 70%, transparent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: 600 0.92rem/1.35 Consolas, "Liberation Mono", Menlo, monospace;
+  text-align: right;
+}
+
+.calculator-equation:hover,
+.calculator-equation:focus {
+  color: #ffffff;
+  background: rgb(255 255 255 / 4%);
+  border-color: rgb(255 255 255 / 12%);
+  outline: none;
+}
+
+.calculator-result {
+  min-height: 68px;
+  overflow: hidden;
+  color: #ffffff;
+  font: 700 clamp(2.4rem, 5vw, 3.8rem)/1.08 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calculator-status {
+  min-height: 18px;
+  margin: 0;
+  color: #ffb4b4;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.calculator-status.is-info {
+  color: var(--accent);
+}
+
+.calculator-status[hidden] {
+  display: none;
+}
+
+.calculator-memory-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
+  padding: 0 5px 5px;
+}
+
+.calculator-memory-row button,
+.calculator-key {
+  color: #ffffff;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: 500 0.95rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.calculator-memory-row button {
+  min-height: 30px;
+  color: color-mix(in srgb, #ffffff 82%, transparent);
+  font-size: 0.78rem;
+}
+
+.calculator-memory-row button:hover:not(:disabled),
+.calculator-memory-row button:focus-visible:not(:disabled) {
+  background: rgb(255 255 255 / 9%);
+  outline: none;
+}
+
+.calculator-memory-row button:disabled {
+  color: rgb(255 255 255 / 28%);
+  cursor: default;
+}
+
+.calculator-keypad {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 3px;
+  min-height: 0;
+  padding: 0 5px 5px;
+}
+
+.calculator-keypad[hidden] {
+  display: none;
+}
+
+.calculator-key {
+  min-height: 0;
+  background: #333333;
+  font-size: 1.1rem;
+}
+
+.calculator-key:hover,
+.calculator-key:focus-visible {
+  background: #424242;
+  outline: none;
+}
+
+.calculator-key:active {
+  transform: translateY(1px);
+}
+
+.calculator-key.is-command {
+  background: #2d2d2d;
+}
+
+.calculator-key.is-command:hover,
+.calculator-key.is-command:focus-visible {
+  background: #3a3a3a;
+}
+
+.calculator-key.is-equals {
+  color: #071010;
+  background: var(--primary-button-bg);
+  font-weight: 650;
+}
+
+.calculator-key.is-equals:hover,
+.calculator-key.is-equals:focus-visible {
+  background: var(--primary-button-hover-bg);
+}
+
+.calculator-key.is-zero {
+  grid-column: span 2;
+}
+
+.scientific-calculator .calculator-result {
+  min-height: 58px;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.scientific-keypad {
+  grid-auto-rows: minmax(36px, 1fr);
+}
+
+.scientific-keypad .calculator-key {
+  font-size: 0.92rem;
+}
+
+.date-time-calculator {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.date-time-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px;
+}
+
+.date-time-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.date-time-mode-tabs button {
+  min-height: 38px;
+  color: color-mix(in srgb, #ffffff 82%, transparent);
+  background: #2d2d2d;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 9px;
+  cursor: pointer;
+  font: 750 0.78rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.date-time-mode-tabs button:hover,
+.date-time-mode-tabs button:focus-visible {
+  color: #ffffff;
+  background: #3a3a3a;
+  outline: none;
+}
+
+.date-time-mode-tabs button.is-active {
+  color: #071010;
+  background: var(--primary-button-bg);
+  border-color: var(--primary-button-border);
+}
+
+.date-time-mode-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.date-time-mode-panel[hidden] {
+  display: none;
+}
+
+.date-time-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.date-time-field {
+  display: grid;
+  gap: 6px;
+}
+
+.date-time-field label {
+  color: color-mix(in srgb, #ffffff 70%, transparent);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.date-time-field input,
+.date-time-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: #141414;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  font: 700 0.92rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.date-time-field input:focus,
+.date-time-field select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.date-time-result {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+}
+
+.date-time-result strong {
+  color: #ffffff;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.date-time-result span {
+  color: color-mix(in srgb, #ffffff 76%, transparent);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.date-time-note {
+  min-height: 18px;
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.date-time-note.is-error {
+  color: #ffb4b4;
+}
+
+.bmi-calculator {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.bmi-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px;
+}
+
+.bmi-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.bmi-mode-tabs button {
+  min-height: 38px;
+  color: color-mix(in srgb, #ffffff 82%, transparent);
+  background: #2d2d2d;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 9px;
+  cursor: pointer;
+  font: 750 0.78rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.bmi-mode-tabs button:hover,
+.bmi-mode-tabs button:focus-visible {
+  color: #ffffff;
+  background: #3a3a3a;
+  outline: none;
+}
+
+.bmi-mode-tabs button.is-active {
+  color: #071010;
+  background: var(--primary-button-bg);
+  border-color: var(--primary-button-border);
+}
+
+.bmi-panel {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+}
+
+.bmi-panel[hidden] {
+  display: none;
+}
+
+.bmi-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.bmi-fields-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bmi-field {
+  display: grid;
+  gap: 6px;
+}
+
+.bmi-field-span {
+  grid-column: 1 / -1;
+}
+
+.bmi-field label {
+  color: color-mix(in srgb, #ffffff 70%, transparent);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bmi-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: #141414;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  font: 700 0.92rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.bmi-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.bmi-result {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+}
+
+.bmi-result strong {
+  color: #ffffff;
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.bmi-result span {
+  color: color-mix(in srgb, #ffffff 76%, transparent);
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.bmi-note {
+  min-height: 18px;
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.bmi-note.is-error {
+  color: #ffb4b4;
 }
 
 .chat-repository-page {
@@ -8392,7 +9076,7 @@ body.chat-modal-open {
   align-items: center;
   gap: 7px;
   min-height: 38px;
-  padding: 0 12px;
+  padding: 0 10px;
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
@@ -8965,7 +9649,7 @@ body.chat-modal-open {
   align-items: center;
   justify-content: center;
   min-height: 2.35rem;
-  padding: 0 1rem;
+  padding: 0 0.875rem;
   color: #ffffff;
   background: rgb(0 0 0 / 42%);
   border: 1px solid rgb(255 255 255 / 26%);
@@ -9159,8 +9843,21 @@ body.chat-modal-open {
     grid-template-columns: 1fr;
   }
 
+  .text-converter-actions {
+    padding-top: 0;
+  }
+
+  .text-converter-action-group {
+    padding-top: 0;
+  }
+
+  .text-converter-actions-title {
+    flex: 0 0 100%;
+    text-align: left;
+  }
+
   .text-converter-pane {
-    min-height: 420px;
+    min-height: 0;
   }
 
   .text-converter-actions,
@@ -9169,12 +9866,34 @@ body.chat-modal-open {
     flex-wrap: wrap;
   }
 
-  .text-converter-action-group .primary-action,
-  .text-converter-action-group .secondary-action {
-    width: auto;
-    min-width: 128px;
-    flex: 1 1 auto;
+  .calculators-header {
+    align-items: stretch;
+    flex-direction: column;
   }
+
+  .calculators-header .primary-action {
+    width: 100%;
+  }
+
+  .calculator-add-menu,
+  .calculator-add-trigger {
+    width: 100%;
+  }
+
+  .calculator-add-dropdown {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .calculator-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calculator-window {
+    max-width: 360px;
+  }
+
   .chat-repository-page {
     width: min(100% - 28px, 720px);
     padding-top: 28px;
@@ -9475,7 +10194,7 @@ body.chat-modal-open {
   gap: 14px;
   min-height: 46px;
   margin: 0;
-  padding: 0 16px;
+  padding: 0 14px;
   color: #fff;
   background: rgb(15 23 42 / 45%);
   border: 1px solid rgb(51 65 85 / 80%);
@@ -9521,7 +10240,7 @@ body.chat-modal-open {
 .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-cancel,
 .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-submit {
   min-height: 44px;
-  padding: 0 22px;
+  padding: 0 20px;
   border-radius: 10px;
   font-size: 0.95rem;
 }
@@ -9647,7 +10366,7 @@ body.chat-modal-open {
   justify-content: space-between;
   width: 100%;
   min-height: 38px;
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--ink);
   background: var(--field);
   border: 1px solid var(--line);
@@ -9766,7 +10485,7 @@ body.chat-modal-open {
   align-items: center;
   justify-content: center;
   min-height: 42px;
-  padding: 0 16px;
+  padding: 0 14px;
   color: var(--ink);
   background: transparent;
   border: 1px solid var(--line);
@@ -9786,7 +10505,7 @@ body.chat-modal-open {
 
 .danger-action {
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 12px;
   color: #ffffff;
   background: #dc2626;
   border-radius: 8px;
@@ -9816,7 +10535,7 @@ body.chat-modal-open {
 
 .google-action {
   min-height: 42px;
-  padding: 0 14px;
+  padding: 0 12px;
   color: var(--ink);
   background: var(--field);
   border: 1px solid var(--line);
