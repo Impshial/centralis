@@ -7985,7 +7985,7 @@ body[data-page="useful-things"] {
 .useful-things-tabs-shell {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
-  gap: 12px;
+  gap: 0;
   align-items: stretch;
   width: 100%;
   height: 100%;
@@ -7995,28 +7995,37 @@ body[data-page="useful-things"] {
 .useful-things-tab-list {
   position: static;
   top: auto;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   align-self: start;
   max-height: 100%;
   overflow: auto;
-  padding: 10px;
+  padding: 6px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
 }
 
 .useful-things-tab {
+  position: relative;
   display: grid;
-  gap: 4px;
+  align-content: start;
   width: 100%;
-  padding: 12px;
+  min-height: 42px;
+  padding: 9px 12px;
   color: var(--ink);
   text-align: left;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 9px;
   cursor: pointer;
+}
+
+.useful-things-tab + .useful-things-tab {
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 
 .useful-things-tab span {
@@ -8024,19 +8033,17 @@ body[data-page="useful-things"] {
   font-weight: 850;
 }
 
-.useful-things-tab small {
-  color: var(--muted);
-  font-size: 0.76rem;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
 .useful-things-tab:hover,
-.useful-things-tab:focus-visible,
-.useful-things-tab.is-active {
+.useful-things-tab:focus-visible {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 11%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  outline: none;
+}
+
+.useful-things-tab.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-left-color: var(--accent);
   outline: none;
 }
 
@@ -8048,7 +8055,7 @@ body[data-page="useful-things"] {
   padding: 10px 14px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 0 16px 16px 16px;
   box-shadow: 0 18px 44px rgb(0 0 0 / 10%);
 }
 
@@ -8058,7 +8065,7 @@ body[data-page="useful-things"] {
 
 .useful-things-tab-panel.is-active[data-useful-panel="text-converter"] {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .text-converter-header {
@@ -8096,29 +8103,8 @@ body[data-page="useful-things"] {
   letter-spacing: 0;
 }
 
-.text-converter-status {
-  grid-row: 2;
-  min-height: 0;
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.text-converter-status:empty {
-  display: none;
-}
-
-.text-converter-status.is-error {
-  color: #ff8a8a;
-}
-
-.text-converter-status.is-success {
-  color: var(--accent);
-}
-
 .text-converter-body {
-  grid-row: 3;
+  grid-row: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 178px minmax(0, 1fr);
   gap: 12px;
@@ -8157,6 +8143,39 @@ body[data-page="useful-things"] {
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.text-converter-output-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.text-converter-output-copy:hover,
+.text-converter-output-copy:focus-visible {
+  color: #071010;
+  background: var(--primary-button-bg);
+  outline: none;
+}
+
+.text-converter-output-copy.is-copied {
+  color: var(--accent);
+  background: transparent;
+}
+
+.text-converter-output-copy.is-copy-error {
+  color: #ffb4b4;
+  background: transparent;
 }
 
 .text-converter-rich-wrap {
@@ -8267,6 +8286,32 @@ body[data-page="useful-things"] {
   outline: none;
 }
 
+.text-converter-output-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.text-converter-output-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.text-converter-output-busy[hidden] {
+  display: none;
+}
+
 .text-converter-raw-input,
 .text-converter-output {
   overflow: auto;
@@ -8342,7 +8387,8 @@ body[data-page="useful-things"] {
   cursor: text;
 }
 
-.calculators-panel {
+.calculators-panel,
+.generators-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
@@ -8438,6 +8484,31 @@ body[data-page="useful-things"] {
   outline: none;
 }
 
+.generator-add-list {
+  display: grid;
+  gap: 6px;
+}
+
+.generator-add-list button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--field) 88%, #000000);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  font: 750 0.92rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: left;
+}
+
+.generator-add-list button:hover,
+.generator-add-list button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, var(--field));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  outline: none;
+}
+
 .calculator-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 320px));
@@ -8496,10 +8567,11 @@ body[data-page="useful-things"] {
 .calculator-title-select {
   min-width: 132px;
   min-height: 32px;
-  padding: 0 28px 0 10px;
+  padding: 0 24px 0 0;
+  color-scheme: dark;
   color: #ffffff;
-  background: color-mix(in srgb, #2d2d2d 92%, #000000);
-  border: 1px solid rgb(255 255 255 / 12%);
+  background: transparent;
+  border: 0;
   border-radius: 8px;
   cursor: pointer;
   font: 780 0.95rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -8507,8 +8579,20 @@ body[data-page="useful-things"] {
 
 .calculator-title-select:hover,
 .calculator-title-select:focus {
-  border-color: color-mix(in srgb, var(--accent) 54%, rgb(255 255 255 / 12%));
+  color: var(--accent);
+  background: transparent;
   outline: none;
+}
+
+.calculator-title-select option {
+  color: #ffffff;
+  background: #202020;
+}
+
+.calculator-title-select option:checked,
+.calculator-title-select option:hover {
+  color: #071010;
+  background: var(--accent);
 }
 
 .calculator-titlebar-actions {
@@ -8534,6 +8618,7 @@ body[data-page="useful-things"] {
 
 .calculator-copy {
   width: auto;
+  min-width: 58px;
   padding: 0 8px;
 }
 
@@ -8547,6 +8632,16 @@ body[data-page="useful-things"] {
   color: #071010;
   background: var(--primary-button-bg);
   outline: none;
+}
+
+.calculator-copy.is-copied {
+  color: var(--accent);
+  background: transparent;
+}
+
+.calculator-copy.is-copy-error {
+  color: #ffb4b4;
+  background: transparent;
 }
 
 .calculator-close:hover,
@@ -8582,12 +8677,17 @@ body[data-page="useful-things"] {
 }
 
 .calculator-result {
+  --calculator-result-max-font-size: clamp(2.4rem, 5vw, 3.8rem);
+  --calculator-result-min-font-size: 18px;
   min-height: 68px;
+  min-width: 0;
   overflow: hidden;
   color: #ffffff;
-  font: 700 clamp(2.4rem, 5vw, 3.8rem)/1.08 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--calculator-result-font-size, var(--calculator-result-max-font-size));
+  font-weight: 700;
+  line-height: 1.08;
   text-align: right;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -8697,7 +8797,8 @@ body[data-page="useful-things"] {
 
 .scientific-calculator .calculator-result {
   min-height: 58px;
-  font-size: clamp(2rem, 4vw, 3rem);
+  --calculator-result-max-font-size: clamp(2rem, 4vw, 3rem);
+  font-size: var(--calculator-result-font-size, var(--calculator-result-max-font-size));
 }
 
 .scientific-keypad {
@@ -8708,13 +8809,172 @@ body[data-page="useful-things"] {
   font-size: 0.92rem;
 }
 
+.generator-card {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.generator-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px;
+}
+
+.generator-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.generator-fields-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.generator-field {
+  display: grid;
+  gap: 6px;
+}
+
+.generator-field label,
+.generator-options-title {
+  color: color-mix(in srgb, #ffffff 70%, transparent);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.generator-field input,
+.generator-field select,
+.generator-field textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: #141414;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  font: 700 0.92rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.generator-field textarea {
+  min-height: 120px;
+  padding: 10px;
+  line-height: 1.4;
+  resize: none;
+}
+
+.generator-field input:focus,
+.generator-field select:focus,
+.generator-field textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.generator-field input:disabled,
+.generator-field select:disabled,
+.generator-field textarea:disabled {
+  color: rgb(255 255 255 / 36%);
+  background: rgb(255 255 255 / 4%);
+  border-color: rgb(255 255 255 / 7%);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.generator-options {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  background: rgb(255 255 255 / 4%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+}
+
+.generator-options-title {
+  margin: 0;
+}
+
+.generator-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.generator-checks label,
+.generator-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: color-mix(in srgb, #ffffff 84%, transparent);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.generator-output {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  color: #ffffff;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  font: 750 0.92rem/1.4 Consolas, "Liberation Mono", Menlo, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.generator-output.is-large {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+
+.generator-output-uuid {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+.generator-palette {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.generator-swatch {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px;
+  color: #ffffff;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  font: 800 0.9rem/1 Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.generator-swatch-color {
+  width: 54px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 22%);
+}
+
+.generator-actions {
+  display: grid;
+  gap: 8px;
+}
+
 .date-time-calculator {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
 .date-time-body {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 14px;
   min-height: 0;
   padding: 14px;
@@ -8837,7 +9097,7 @@ body[data-page="useful-things"] {
 
 .bmi-body {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 14px;
   min-height: 0;
   padding: 14px;
@@ -8955,6 +9215,115 @@ body[data-page="useful-things"] {
 }
 
 .bmi-note.is-error {
+  color: #ffb4b4;
+}
+
+.measurements-calculator {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.measurements-body {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+  padding: 8px 14px 14px;
+}
+
+.measurements-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.measurements-field {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+}
+
+.measurements-field label {
+  color: color-mix(in srgb, #ffffff 70%, transparent);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.measurements-field input,
+.measurements-field select {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: #141414;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  font: 700 0.92rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.measurements-field input:focus,
+.measurements-field select:focus,
+.measurements-swap:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.measurements-swap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 30px;
+  color: #ffffff;
+  background: #2d2d2d;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 850;
+}
+
+.measurements-swap:hover {
+  color: #071010;
+  background: var(--primary-button-bg);
+}
+
+.measurements-result {
+  display: grid;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 10px 12px;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+}
+
+.measurements-result strong {
+  color: #ffffff;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.measurements-result span {
+  color: color-mix(in srgb, #ffffff 76%, transparent);
+  font-size: 0.92rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.measurements-note {
+  min-height: 18px;
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.measurements-note.is-error {
   color: #ffb4b4;
 }
 
@@ -9817,10 +10186,27 @@ body[data-page="useful-things"] {
     position: static;
     display: flex;
     overflow-x: auto;
+    padding: 10px 10px 0;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
   }
 
   .useful-things-tab {
     min-width: 180px;
+    border-right: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 11px 11px 0 0;
+  }
+
+  .useful-things-tab.is-active {
+    border-color: var(--line);
+    border-bottom-color: var(--surface);
+    box-shadow: 0 -8px 18px rgb(0 0 0 / 10%);
+  }
+
+  .useful-things-tab-panel {
+    border-radius: 0 0 16px 16px;
   }
 
   .text-converter-mode-field {

@@ -9,6 +9,8 @@
     richEditor: document.querySelector("[data-text-rich-editor]"),
     rawInput: document.querySelector("[data-text-raw-input]"),
     output: document.querySelector("[data-text-output]"),
+    outputBusy: document.querySelector("[data-text-output-busy]"),
+    outputCopyButton: document.querySelector("[data-text-output-copy]"),
     status: document.querySelector("[data-text-converter-status]"),
     conversionButtons: Array.from(document.querySelectorAll("[data-convert-target]")),
     richCommandButtons: Array.from(document.querySelectorAll("[data-rich-command]")),
@@ -21,6 +23,11 @@
     calculatorMenuTrigger: document.querySelector("[data-calculator-menu-trigger]"),
     calculatorMenuPanel: document.querySelector("[data-calculator-menu-panel]"),
     calculatorTypeButtons: Array.from(document.querySelectorAll("[data-add-calculator-type]")),
+    generatorGrid: document.querySelector("[data-generator-grid]"),
+    generatorAddMenu: document.querySelector("[data-generator-add-menu]"),
+    generatorMenuTrigger: document.querySelector("[data-generator-menu-trigger]"),
+    generatorMenuPanel: document.querySelector("[data-generator-menu-panel]"),
+    generatorTypeButtons: Array.from(document.querySelectorAll("[data-add-generator-type]")),
   };
 
   if (!els.modeSelect || !els.richEditor || !els.rawInput || !els.output) {
@@ -28,9 +35,13 @@
   }
 
   let isConverting = false;
+  let outputCopyResetTimer = null;
   let nextCalculatorId = 1;
   let activeCalculatorId = null;
   const calculators = new Map();
+  let nextGeneratorId = 1;
+  let activeGeneratorId = null;
+  const generators = new Map();
 
   const calculatorMemoryButtons = [
     { label: "MC", action: "memory-clear", title: "Clear memory" },
@@ -82,6 +93,72 @@
     ...calculatorKeys,
   ];
 
+  const measurementCategories = {
+    length: {
+      label: "Length",
+      baseUnit: "m",
+      units: [
+        { key: "m", label: "Meters", factor: 1 },
+        { key: "km", label: "Kilometers", factor: 1000 },
+        { key: "cm", label: "Centimeters", factor: 0.01 },
+        { key: "mm", label: "Millimeters", factor: 0.001 },
+        { key: "in", label: "Inches", factor: 0.0254 },
+        { key: "ft", label: "Feet", factor: 0.3048 },
+        { key: "yd", label: "Yards", factor: 0.9144 },
+        { key: "mi", label: "Miles", factor: 1609.344 },
+      ],
+    },
+    weight: {
+      label: "Weight / Mass",
+      baseUnit: "kg",
+      units: [
+        { key: "kg", label: "Kilograms", factor: 1 },
+        { key: "g", label: "Grams", factor: 0.001 },
+        { key: "mg", label: "Milligrams", factor: 0.000001 },
+        { key: "oz", label: "Ounces", factor: 0.028349523125 },
+        { key: "lb", label: "Pounds", factor: 0.45359237 },
+        { key: "st", label: "Stone", factor: 6.35029318 },
+        { key: "ton-us", label: "US Tons", factor: 907.18474 },
+      ],
+    },
+    volume: {
+      label: "Volume",
+      baseUnit: "l",
+      units: [
+        { key: "l", label: "Liters", factor: 1 },
+        { key: "ml", label: "Milliliters", factor: 0.001 },
+        { key: "m3", label: "Cubic Meters", factor: 1000 },
+        { key: "gal-us", label: "US Gallons", factor: 3.785411784 },
+        { key: "qt-us", label: "US Quarts", factor: 0.946352946 },
+        { key: "pt-us", label: "US Pints", factor: 0.473176473 },
+        { key: "cup-us", label: "US Cups", factor: 0.2365882365 },
+        { key: "floz-us", label: "US Fluid Ounces", factor: 0.0295735295625 },
+      ],
+    },
+    area: {
+      label: "Area",
+      baseUnit: "m2",
+      units: [
+        { key: "m2", label: "Square Meters", factor: 1 },
+        { key: "km2", label: "Square Kilometers", factor: 1000000 },
+        { key: "cm2", label: "Square Centimeters", factor: 0.0001 },
+        { key: "ft2", label: "Square Feet", factor: 0.09290304 },
+        { key: "yd2", label: "Square Yards", factor: 0.83612736 },
+        { key: "acre", label: "Acres", factor: 4046.8564224 },
+        { key: "mi2", label: "Square Miles", factor: 2589988.110336 },
+      ],
+    },
+    temperature: {
+      label: "Temperature",
+      baseUnit: "c",
+      units: [
+        { key: "c", label: "Celsius" },
+        { key: "f", label: "Fahrenheit" },
+        { key: "k", label: "Kelvin" },
+      ],
+    },
+  };
+
   const calculatorRegistry = {
     standard: {
       category: "Core",
@@ -101,7 +178,83 @@
       render: renderBmiCalculator,
       initialize: initializeBmiCalculator,
     },
+    measurements: {
+      category: "Conversions",
+      label: "Measurements",
+      render: renderMeasurementsCalculator,
+      initialize: initializeMeasurementsCalculator,
+    },
   };
+
+  const generatorRegistry = {
+    uuid: {
+      label: "UUID Generator",
+      render: renderUuidGenerator,
+      initialize: initializeUuidGenerator,
+    },
+    password: {
+      label: "Password Generator",
+      render: renderPasswordGenerator,
+      initialize: initializePasswordGenerator,
+    },
+    "random-number": {
+      label: "Random Numbers",
+      render: renderRandomNumberGenerator,
+      initialize: initializeRandomNumberGenerator,
+    },
+    dice: {
+      label: "Dice Roller",
+      render: renderDiceGenerator,
+      initialize: initializeDiceGenerator,
+    },
+    lorem: {
+      label: "Lorem Ipsum",
+      render: renderLoremGenerator,
+      initialize: initializeLoremGenerator,
+    },
+    palette: {
+      label: "Color Palette",
+      render: renderPaletteGenerator,
+      initialize: initializePaletteGenerator,
+    },
+  };
+
+  const loremWords = [
+    "lorem",
+    "ipsum",
+    "dolor",
+    "sit",
+    "amet",
+    "consectetur",
+    "adipiscing",
+    "elit",
+    "sed",
+    "do",
+    "eiusmod",
+    "tempor",
+    "incididunt",
+    "ut",
+    "labore",
+    "et",
+    "dolore",
+    "magna",
+    "aliqua",
+    "enim",
+    "ad",
+    "minim",
+    "veniam",
+    "quis",
+    "nostrud",
+    "exercitation",
+    "ullamco",
+    "laboris",
+    "nisi",
+    "aliquip",
+    "ex",
+    "ea",
+    "commodo",
+    "consequat",
+  ];
 
   function setStatus(message, type = "") {
     if (!els.status) return;
@@ -115,6 +268,51 @@
     els.conversionButtons.forEach((button) => {
       button.disabled = nextValue;
     });
+    if (els.outputBusy) {
+      els.outputBusy.hidden = !nextValue;
+    }
+  }
+
+  function setOutputCopyButtonState(message, type = "info") {
+    if (!els.outputCopyButton) return;
+
+    window.clearTimeout(outputCopyResetTimer);
+    els.outputCopyButton.textContent = message || "Copy";
+    els.outputCopyButton.classList.toggle("is-copied", type !== "error");
+    els.outputCopyButton.classList.toggle("is-copy-error", type === "error");
+
+    outputCopyResetTimer = window.setTimeout(() => {
+      els.outputCopyButton.textContent = "Copy";
+      els.outputCopyButton.classList.remove("is-copied", "is-copy-error");
+      outputCopyResetTimer = null;
+    }, 2000);
+  }
+
+  async function copyOutputText() {
+    const copyText = els.output.value || "";
+    if (!copyText.trim()) {
+      setOutputCopyButtonState("Empty", "error");
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(copyText);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = copyText;
+        textArea.setAttribute("readonly", "");
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.append(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+      }
+      setOutputCopyButtonState("Copied");
+    } catch (error) {
+      setOutputCopyButtonState("Error", "error");
+    }
   }
 
   function escapeHtml(value) {
@@ -133,11 +331,70 @@
 
     const normalized = Object.is(value, -0) ? 0 : value;
     const absolute = Math.abs(normalized);
-    if (absolute !== 0 && (absolute >= 1e12 || absolute < 1e-9)) {
+    if (absolute !== 0 && (absolute >= 1e16 || absolute < 1e-12)) {
       return normalized.toExponential(8).replace(/\.?0+e/, "e");
     }
 
-    return String(Number.parseFloat(normalized.toPrecision(12)));
+    return String(Number.parseFloat(normalized.toPrecision(16)));
+  }
+
+  function formatCompactCalculatorNumber(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return String(value || "");
+    const normalized = Object.is(numericValue, -0) ? 0 : numericValue;
+    return normalized.toExponential(8).replace(/\.?0+e/, "e");
+  }
+
+  function fitCalculatorResultDisplay(calculator) {
+    const display = calculator?.resultDisplay;
+    if (!display) return;
+
+    display.style.removeProperty("--calculator-result-font-size");
+
+    if (!display.clientWidth || !display.textContent) return;
+
+    const styles = window.getComputedStyle(display);
+    const maxSize = Number.parseFloat(styles.fontSize) || 48;
+    const minSize = Number.parseFloat(styles.getPropertyValue("--calculator-result-min-font-size")) || 18;
+    let nextSize = maxSize;
+
+    while (display.scrollWidth > display.clientWidth && nextSize > minSize) {
+      nextSize = Math.max(minSize, nextSize - 1);
+      display.style.setProperty("--calculator-result-font-size", `${nextSize}px`);
+    }
+
+    if (display.scrollWidth > display.clientWidth) {
+      const compactValue = formatCompactCalculatorNumber(display.textContent);
+      if (compactValue && compactValue !== display.textContent) {
+        display.textContent = compactValue;
+        display.style.removeProperty("--calculator-result-font-size");
+
+        nextSize = Number.parseFloat(window.getComputedStyle(display).fontSize) || maxSize;
+        while (display.scrollWidth > display.clientWidth && nextSize > minSize) {
+          nextSize = Math.max(minSize, nextSize - 1);
+          display.style.setProperty("--calculator-result-font-size", `${nextSize}px`);
+        }
+      }
+    }
+  }
+
+  let calculatorResultFitFrame = null;
+
+  function fitAllCalculatorResults() {
+    calculators.forEach((calculator) => {
+      fitCalculatorResultDisplay(calculator);
+    });
+  }
+
+  function scheduleCalculatorResultsFit() {
+    if (calculatorResultFitFrame) {
+      window.cancelAnimationFrame(calculatorResultFitFrame);
+    }
+
+    calculatorResultFitFrame = window.requestAnimationFrame(() => {
+      calculatorResultFitFrame = null;
+      fitAllCalculatorResults();
+    });
   }
 
   function stripCalculatorEquals(value) {
@@ -460,17 +717,19 @@
   function renderBmiCalculator(definition, id) {
     return `
       <div class="calculator-titlebar">
-        <strong>${escapeHtml(definition.label)}</strong>
+        <label class="calculator-title-select-label">
+          <span class="sr-only">BMI calculator mode</span>
+          <select class="calculator-title-select" data-bmi-mode-select aria-label="BMI calculator mode">
+            <option value="us" selected>${escapeHtml(definition.label)} — US</option>
+            <option value="metric">${escapeHtml(definition.label)} — Metric</option>
+          </select>
+        </label>
         <div class="calculator-titlebar-actions">
           <button class="calculator-copy" type="button" data-calculator-copy>Copy</button>
           <button class="calculator-close" type="button" data-calculator-close aria-label="Close calculator">×</button>
         </div>
       </div>
       <div class="bmi-body">
-        <div class="bmi-mode-tabs" role="tablist" aria-label="BMI unit modes">
-          <button class="is-active" type="button" data-bmi-mode-button="us" aria-pressed="true">US</button>
-          <button type="button" data-bmi-mode-button="metric" aria-pressed="false">Metric</button>
-        </div>
         <section class="bmi-panel" data-bmi-panel="us" aria-label="US BMI calculator">
           <div class="bmi-fields bmi-fields-two">
             <div class="bmi-field">
@@ -508,21 +767,70 @@
     `;
   }
 
+  function renderMeasurementUnitOptions(categoryKey) {
+    return (measurementCategories[categoryKey]?.units || [])
+      .map((unit) => `<option value="${escapeHtml(unit.key)}">${escapeHtml(unit.label)}</option>`)
+      .join("");
+  }
+
+  function renderMeasurementsCalculator(definition, id) {
+    return `
+      <div class="calculator-titlebar">
+        <label class="calculator-title-select-label">
+          <span class="sr-only">Measurement category</span>
+          <select class="calculator-title-select" data-measurement-category-select aria-label="Measurement category">
+            ${Object.entries(measurementCategories).map(([key, category]) => (
+              `<option value="${escapeHtml(key)}"${key === "length" ? " selected" : ""}>${escapeHtml(category.label)}</option>`
+            )).join("")}
+          </select>
+        </label>
+        <div class="calculator-titlebar-actions">
+          <button class="calculator-copy" type="button" data-calculator-copy>Copy</button>
+          <button class="calculator-close" type="button" data-calculator-close aria-label="Close calculator">×</button>
+        </div>
+      </div>
+      <div class="measurements-body">
+        <div class="measurements-field">
+          <label for="measurement-value-${id}">Number of Units</label>
+          <input id="measurement-value-${id}" type="number" step="any" inputmode="decimal" data-measurement-field="value" placeholder="0">
+        </div>
+        <div class="measurements-row">
+          <div class="measurements-field">
+            <label for="measurement-from-${id}">From</label>
+            <select id="measurement-from-${id}" data-measurement-field="from">${renderMeasurementUnitOptions("length")}</select>
+          </div>
+          <button class="measurements-swap" type="button" data-measurement-swap aria-label="Swap measurement units">⇄</button>
+          <div class="measurements-field">
+            <label for="measurement-to-${id}">To</label>
+            <select id="measurement-to-${id}" data-measurement-field="to">${renderMeasurementUnitOptions("length")}</select>
+          </div>
+        </div>
+        <div class="measurements-result" data-measurement-result>
+          <strong>Enter value</strong>
+          <span>Choose units to convert.</span>
+        </div>
+        <p class="measurements-note" data-measurement-note role="status" aria-live="polite"></p>
+      </div>
+    `;
+  }
+
   function renderDateTimeCalculator(definition, id) {
     return `
       <div class="calculator-titlebar">
-        <strong>${escapeHtml(definition.label)}</strong>
+        <label class="calculator-title-select-label">
+          <span class="sr-only">Date and time calculator mode</span>
+          <select class="calculator-title-select" data-date-time-mode-select aria-label="Date and time calculator mode">
+            <option value="difference" selected>Date Difference</option>
+            <option value="duration">Time Duration</option>
+            <option value="timezone">Time Zone</option>
+          </select>
+        </label>
         <div class="calculator-titlebar-actions">
           <button class="calculator-copy" type="button" data-calculator-copy>Copy</button>
           <button class="calculator-close" type="button" data-calculator-close aria-label="Close calculator">×</button>
         </div>
       </div>
       <div class="date-time-body">
-        <div class="date-time-mode-tabs" role="tablist" aria-label="Date and time calculator modes">
-          <button class="is-active" type="button" data-date-time-mode-button="difference" aria-pressed="true">Date Difference</button>
-          <button type="button" data-date-time-mode-button="duration" aria-pressed="false">Time Duration</button>
-          <button type="button" data-date-time-mode-button="timezone" aria-pressed="false">Time Zone</button>
-        </div>
         <section class="date-time-mode-panel" data-date-time-panel="difference" aria-label="Date difference calculator">
           <div class="date-time-fields">
             <div class="date-time-field">
@@ -594,6 +902,365 @@
         <p class="date-time-note" data-date-time-note role="status" aria-live="polite"></p>
       </div>
     `;
+  }
+
+  function renderGeneratorTitlebar(definition) {
+    return `
+      <div class="calculator-titlebar">
+        <label class="calculator-title-select-label">
+          <span class="sr-only">Generator type</span>
+          <select class="calculator-title-select" data-generator-title-select aria-label="Generator type">
+            <option selected>${escapeHtml(definition.label)}</option>
+          </select>
+        </label>
+        <div class="calculator-titlebar-actions">
+          <button class="calculator-copy" type="button" data-generator-copy>Copy</button>
+          <button class="calculator-close" type="button" data-generator-close aria-label="Close generator">&times;</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderUuidGenerator(definition, id) {
+    return `
+      ${renderGeneratorTitlebar(definition)}
+      <div class="generator-body">
+        <div class="generator-fields">
+          <div class="generator-field">
+            <label for="uuid-count-${id}">Count</label>
+            <input id="uuid-count-${id}" type="number" min="1" max="100" step="1" value="1" data-uuid-field="count">
+          </div>
+        </div>
+        <div class="generator-output generator-output-uuid" data-generator-output aria-live="polite"></div>
+        <div class="generator-actions">
+          <button class="primary-action" type="button" data-generator-action="generate">Generate UUID</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderPasswordGenerator(definition, id) {
+    return `
+      ${renderGeneratorTitlebar(definition)}
+      <div class="generator-body">
+        <div class="generator-fields">
+          <div class="generator-field">
+            <label for="password-length-${id}">Length</label>
+            <input id="password-length-${id}" type="number" min="4" max="128" step="1" value="16" data-password-field="length">
+          </div>
+          <div class="generator-options">
+            <p class="generator-options-title">Include</p>
+            <div class="generator-checks">
+              <label><input type="checkbox" data-password-field="lowercase" checked> Lowercase</label>
+              <label><input type="checkbox" data-password-field="uppercase" checked> Uppercase</label>
+              <label><input type="checkbox" data-password-field="numbers" checked> Numbers</label>
+              <label><input type="checkbox" data-password-field="symbols" checked> Symbols</label>
+            </div>
+          </div>
+        </div>
+        <div class="generator-output" data-generator-output aria-live="polite"></div>
+        <div class="generator-actions">
+          <button class="primary-action" type="button" data-generator-action="generate">Generate Password</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderRandomNumberGenerator(definition, id) {
+    return `
+      ${renderGeneratorTitlebar(definition)}
+      <div class="generator-body">
+        <div class="generator-fields generator-fields-two">
+          <div class="generator-field">
+            <label for="random-min-${id}">Min</label>
+            <input id="random-min-${id}" type="number" step="any" value="1" data-random-number-field="min">
+          </div>
+          <div class="generator-field">
+            <label for="random-max-${id}">Max</label>
+            <input id="random-max-${id}" type="number" step="any" value="100" data-random-number-field="max">
+          </div>
+          <div class="generator-field">
+            <label for="random-count-${id}">Count</label>
+            <input id="random-count-${id}" type="number" min="1" max="100" step="1" value="5" data-random-number-field="count">
+          </div>
+          <label class="generator-checkbox">
+            <input type="checkbox" data-random-number-field="integer" checked>
+            Integers
+          </label>
+        </div>
+        <div class="generator-output" data-generator-output aria-live="polite"></div>
+        <div class="generator-actions">
+          <button class="primary-action" type="button" data-generator-action="generate">Generate Numbers</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderDiceGenerator(definition, id) {
+    return `
+      ${renderGeneratorTitlebar(definition)}
+      <div class="generator-body">
+        <div class="generator-fields generator-fields-two">
+          <div class="generator-field">
+            <label for="dice-count-${id}">Dice</label>
+            <input id="dice-count-${id}" type="number" min="1" max="100" step="1" value="2" data-dice-field="count">
+          </div>
+          <div class="generator-field">
+            <label for="dice-sides-${id}">Sides</label>
+            <input id="dice-sides-${id}" type="number" min="2" max="1000" step="1" value="6" data-dice-field="sides">
+          </div>
+          <div class="generator-field">
+            <label for="dice-modifier-${id}">Modifier</label>
+            <input id="dice-modifier-${id}" type="number" step="1" value="0" data-dice-field="modifier">
+          </div>
+          <label class="generator-checkbox">
+            <input type="checkbox" data-dice-field="percentile">
+            Percentile
+          </label>
+        </div>
+        <div class="generator-output is-large" data-generator-output aria-live="polite"></div>
+        <div class="generator-actions">
+          <button class="primary-action" type="button" data-generator-action="generate">Roll Dice</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLoremGenerator(definition, id) {
+    return `
+      ${renderGeneratorTitlebar(definition)}
+      <div class="generator-body">
+        <div class="generator-fields">
+          <div class="generator-field">
+            <label for="lorem-paragraphs-${id}">Paragraphs</label>
+            <input id="lorem-paragraphs-${id}" type="number" min="1" max="12" step="1" value="3" data-lorem-field="paragraphs">
+          </div>
+        </div>
+        <div class="generator-output" data-generator-output aria-live="polite"></div>
+        <div class="generator-actions">
+          <button class="primary-action" type="button" data-generator-action="generate">Generate Lorem Ipsum</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderPaletteGenerator(definition, id) {
+    return `
+      ${renderGeneratorTitlebar(definition)}
+      <div class="generator-body">
+        <div class="generator-fields">
+          <div class="generator-field">
+            <label for="palette-count-${id}">Colors</label>
+            <input id="palette-count-${id}" type="number" min="2" max="12" step="1" value="5" data-palette-field="count">
+          </div>
+        </div>
+        <div class="generator-palette" data-generator-palette aria-live="polite"></div>
+        <div class="generator-actions">
+          <button class="primary-action" type="button" data-generator-action="generate">Generate Palette</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function randomFraction() {
+    if (window.crypto?.getRandomValues) {
+      const values = new Uint32Array(1);
+      window.crypto.getRandomValues(values);
+      return values[0] / 4294967296;
+    }
+    return Math.random();
+  }
+
+  function randomInteger(min, max) {
+    return Math.floor(randomFraction() * (max - min + 1)) + min;
+  }
+
+  function clampInteger(value, min, max, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+  }
+
+  function setGeneratorNote(generator, message, type = "") {
+    if (!generator.note) return;
+    generator.note.textContent = message || "";
+    generator.note.classList.toggle("is-error", type === "error");
+  }
+
+  function setGeneratorError(generator, message) {
+    setGeneratorOutput(generator, message || "Could not generate value.", "");
+  }
+
+  function setGeneratorOutput(generator, output, copyText = output) {
+    if (generator.output) {
+      generator.output.textContent = output || "";
+    }
+    generator.copyText = copyText || output || "";
+  }
+
+  function createUuid() {
+    if (window.crypto?.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (character) => (
+      (Number(character) ^ randomInteger(0, 255) & 15 >> Number(character) / 4).toString(16)
+    ));
+  }
+
+  function generateUuid(generator) {
+    const count = clampInteger(generator.fields?.count?.value, 1, 100, 1);
+    if (generator.fields?.count) {
+      generator.fields.count.value = String(count);
+    }
+
+    const uuids = Array.from({ length: count }, createUuid);
+    setGeneratorOutput(generator, uuids.join("\n"));
+    setGeneratorNote(generator, `${count} version 4 UUID${count === 1 ? "" : "s"}.`);
+  }
+
+  function generatePassword(generator) {
+    const length = clampInteger(generator.fields.length.value, 4, 128, 16);
+    generator.fields.length.value = String(length);
+
+    const sets = [
+      { enabled: generator.fields.lowercase.checked, chars: "abcdefghijklmnopqrstuvwxyz" },
+      { enabled: generator.fields.uppercase.checked, chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
+      { enabled: generator.fields.numbers.checked, chars: "0123456789" },
+      { enabled: generator.fields.symbols.checked, chars: "!@#$%^&*()-_=+[]{};:,.<>?" },
+    ].filter((set) => set.enabled);
+
+    if (!sets.length) {
+      setGeneratorError(generator, "Choose at least one character set.");
+      setGeneratorNote(generator, "Choose at least one character set.", "error");
+      return;
+    }
+
+    const required = sets.map((set) => set.chars[randomInteger(0, set.chars.length - 1)]);
+    const allChars = sets.map((set) => set.chars).join("");
+    const characters = [...required];
+    while (characters.length < length) {
+      characters.push(allChars[randomInteger(0, allChars.length - 1)]);
+    }
+
+    for (let index = characters.length - 1; index > 0; index -= 1) {
+      const swapIndex = randomInteger(0, index);
+      [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+    }
+
+    setGeneratorOutput(generator, characters.join(""));
+    setGeneratorNote(generator, `${length} characters.`);
+  }
+
+  function generateRandomNumbers(generator) {
+    const min = Number(generator.fields.min.value);
+    const max = Number(generator.fields.max.value);
+    const count = clampInteger(generator.fields.count.value, 1, 100, 5);
+    generator.fields.count.value = String(count);
+
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
+      setGeneratorError(generator, "Enter a valid min/max range.");
+      setGeneratorNote(generator, "Enter a valid min/max range.", "error");
+      return;
+    }
+
+    if (generator.fields.integer.checked && Math.ceil(min) > Math.floor(max)) {
+      setGeneratorError(generator, "Integer mode needs at least one whole number in range.");
+      setGeneratorNote(generator, "Integer mode needs at least one whole number in range.", "error");
+      return;
+    }
+
+    const values = Array.from({ length: count }, () => {
+      if (generator.fields.integer.checked) {
+        return String(randomInteger(Math.ceil(min), Math.floor(max)));
+      }
+      return String(Number.parseFloat((min + randomFraction() * (max - min)).toFixed(4)));
+    });
+
+    setGeneratorOutput(generator, values.join("\n"));
+    setGeneratorNote(generator, `${count} value${count === 1 ? "" : "s"} generated.`);
+  }
+
+  function generateDice(generator) {
+    const isPercentile = Boolean(generator.fields.percentile?.checked);
+    const count = isPercentile ? 1 : clampInteger(generator.fields.count.value, 1, 100, 2);
+    const sides = isPercentile ? 100 : clampInteger(generator.fields.sides.value, 2, 1000, 6);
+    const modifier = clampInteger(generator.fields.modifier.value, -9999, 9999, 0);
+    generator.fields.count.value = String(count);
+    generator.fields.sides.value = String(sides);
+    generator.fields.modifier.value = String(modifier);
+
+    const modifierText = modifier === 0 ? "" : ` ${modifier > 0 ? "+" : "-"} ${Math.abs(modifier)}`;
+
+    if (isPercentile) {
+      const tens = randomInteger(0, 9) * 10;
+      const ones = randomInteger(0, 9);
+      const percentileValue = tens === 0 && ones === 0 ? 100 : tens + ones;
+      const total = percentileValue + modifier;
+      const tensLabel = String(tens).padStart(2, "0");
+      const output = `${total}\nPercentile${modifierText} = ${tensLabel} + ${ones}${modifierText}`;
+
+      setGeneratorOutput(generator, output);
+      setGeneratorNote(generator, `Rolled percentile dice: ${tensLabel} and ${ones}.`);
+      return;
+    }
+
+    const rolls = Array.from({ length: count }, () => randomInteger(1, sides));
+    const subtotal = rolls.reduce((sum, value) => sum + value, 0);
+    const total = subtotal + modifier;
+    const output = `${total}\n${count}d${sides}${modifierText} = ${rolls.join(" + ")}${modifierText}`;
+
+    setGeneratorOutput(generator, output);
+    setGeneratorNote(generator, `Rolled ${count}d${sides}.`);
+  }
+
+  function syncDicePercentileFields(generator) {
+    const isPercentile = Boolean(generator.fields.percentile?.checked);
+    generator.fields.count.disabled = isPercentile;
+    generator.fields.sides.disabled = isPercentile;
+  }
+
+  function buildLoremSentence(wordCount) {
+    const words = Array.from({ length: wordCount }, () => loremWords[randomInteger(0, loremWords.length - 1)]);
+    const sentence = words.join(" ");
+    return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+  }
+
+  function generateLorem(generator) {
+    const paragraphCount = clampInteger(generator.fields.paragraphs.value, 1, 12, 3);
+    generator.fields.paragraphs.value = String(paragraphCount);
+
+    const paragraphs = Array.from({ length: paragraphCount }, () => {
+      const sentenceCount = randomInteger(4, 7);
+      return Array.from({ length: sentenceCount }, () => buildLoremSentence(randomInteger(8, 16))).join(" ");
+    });
+
+    setGeneratorOutput(generator, paragraphs.join("\n\n"));
+    setGeneratorNote(generator, `${paragraphCount} paragraph${paragraphCount === 1 ? "" : "s"}.`);
+  }
+
+  function generateHexColor() {
+    const value = randomInteger(0, 0xffffff);
+    return `#${value.toString(16).padStart(6, "0").toUpperCase()}`;
+  }
+
+  function generatePalette(generator) {
+    const count = clampInteger(generator.fields.count.value, 2, 12, 5);
+    generator.fields.count.value = String(count);
+    const colors = Array.from({ length: count }, generateHexColor);
+    generator.colors = colors;
+    generator.copyText = colors.join("\n");
+
+    if (generator.palette) {
+      generator.palette.innerHTML = colors.map((color) => `
+        <div class="generator-swatch">
+          <span class="generator-swatch-color" style="background: ${escapeHtml(color)}"></span>
+          <span>${escapeHtml(color)}</span>
+        </div>
+      `).join("");
+    }
+
+    setGeneratorNote(generator, `${count} colors generated.`);
   }
 
   function daysInMonth(year, month) {
@@ -895,11 +1562,9 @@
 
   function setDateTimeMode(calculator, mode) {
     calculator.dateTimeMode = ["duration", "timezone"].includes(mode) ? mode : "difference";
-    calculator.dateTimeModeButtons.forEach((button) => {
-      const isActive = button.dataset.dateTimeModeButton === calculator.dateTimeMode;
-      button.classList.toggle("is-active", isActive);
-      button.setAttribute("aria-pressed", String(isActive));
-    });
+    if (calculator.dateTimeModeSelect && calculator.dateTimeModeSelect.value !== calculator.dateTimeMode) {
+      calculator.dateTimeModeSelect.value = calculator.dateTimeMode;
+    }
     calculator.dateTimePanels.forEach((panel) => {
       panel.hidden = panel.dataset.dateTimePanel !== calculator.dateTimeMode;
     });
@@ -917,6 +1582,7 @@
     calculator.keypads?.forEach((keypad) => {
       keypad.hidden = keypad.dataset.calculatorKeypadMode !== calculator.calculatorMode;
     });
+    fitCalculatorResultDisplay(calculator);
   }
 
   function initializeStandardCalculator(calculator) {
@@ -975,7 +1641,7 @@
   function initializeDateTimeCalculator(calculator) {
     const element = calculator.element;
     calculator.dateTimeMode = "difference";
-    calculator.dateTimeModeButtons = Array.from(element.querySelectorAll("[data-date-time-mode-button]"));
+    calculator.dateTimeModeSelect = element.querySelector("[data-date-time-mode-select]");
     calculator.dateTimePanels = Array.from(element.querySelectorAll("[data-date-time-panel]"));
     calculator.dateTimeNote = element.querySelector("[data-date-time-note]");
     calculator.dateDifferenceResult = element.querySelector("[data-date-difference-result]");
@@ -998,10 +1664,8 @@
     calculator.dateFields.timezoneDate.value = toDateInputValue(now);
     calculator.dateFields.timezoneTime.value = toTimeInputValue(now);
 
-    calculator.dateTimeModeButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        setDateTimeMode(calculator, button.dataset.dateTimeModeButton);
-      });
+    calculator.dateTimeModeSelect?.addEventListener("change", () => {
+      setDateTimeMode(calculator, calculator.dateTimeModeSelect.value);
     });
 
     Object.values(calculator.dateFields).forEach((field) => {
@@ -1059,11 +1723,9 @@
 
   function setBmiMode(calculator, mode) {
     calculator.bmiMode = mode === "metric" ? "metric" : "us";
-    calculator.bmiModeButtons.forEach((button) => {
-      const isActive = button.dataset.bmiModeButton === calculator.bmiMode;
-      button.classList.toggle("is-active", isActive);
-      button.setAttribute("aria-pressed", String(isActive));
-    });
+    if (calculator.bmiModeSelect && calculator.bmiModeSelect.value !== calculator.bmiMode) {
+      calculator.bmiModeSelect.value = calculator.bmiMode;
+    }
     calculator.bmiPanels.forEach((panel) => {
       panel.hidden = panel.dataset.bmiPanel !== calculator.bmiMode;
     });
@@ -1073,7 +1735,7 @@
   function initializeBmiCalculator(calculator) {
     const element = calculator.element;
     calculator.bmiMode = "us";
-    calculator.bmiModeButtons = Array.from(element.querySelectorAll("[data-bmi-mode-button]"));
+    calculator.bmiModeSelect = element.querySelector("[data-bmi-mode-select]");
     calculator.bmiPanels = Array.from(element.querySelectorAll("[data-bmi-panel]"));
     calculator.bmiResult = element.querySelector("[data-bmi-result]");
     calculator.bmiNote = element.querySelector("[data-bmi-note]");
@@ -1085,8 +1747,8 @@
       kilograms: element.querySelector("[data-bmi-field=\"kilograms\"]"),
     };
 
-    calculator.bmiModeButtons.forEach((button) => {
-      button.addEventListener("click", () => setBmiMode(calculator, button.dataset.bmiModeButton));
+    calculator.bmiModeSelect?.addEventListener("change", () => {
+      setBmiMode(calculator, calculator.bmiModeSelect.value);
     });
 
     Object.values(calculator.bmiFields).forEach((field) => {
@@ -1095,7 +1757,303 @@
       field.addEventListener("change", () => updateBmiCalculator(calculator));
     });
 
-    updateBmiCalculator(calculator);
+    setBmiMode(calculator, "us");
+  }
+
+  function setMeasurementResult(calculator, heading, detail) {
+    if (!calculator.measurementResult) return;
+    const headingElement = calculator.measurementResult.querySelector("strong");
+    const detailElement = calculator.measurementResult.querySelector("span");
+    if (headingElement) headingElement.textContent = heading;
+    if (detailElement) detailElement.textContent = detail;
+  }
+
+  function setMeasurementNote(calculator, message, type = "") {
+    if (!calculator.measurementNote) return;
+    calculator.measurementNote.textContent = message || "";
+    calculator.measurementNote.classList.toggle("is-error", type === "error");
+  }
+
+  function getMeasurementUnit(categoryKey, unitKey) {
+    return measurementCategories[categoryKey]?.units.find((unit) => unit.key === unitKey) || null;
+  }
+
+  function convertTemperature(value, fromUnit, toUnit) {
+    let celsius;
+    if (fromUnit === "f") celsius = (value - 32) * (5 / 9);
+    else if (fromUnit === "k") {
+      if (value < 0) throw new Error("Kelvin cannot be below zero.");
+      celsius = value - 273.15;
+    } else {
+      celsius = value;
+    }
+
+    if (toUnit === "f") return (celsius * 9 / 5) + 32;
+    if (toUnit === "k") {
+      const kelvin = celsius + 273.15;
+      if (kelvin < 0) throw new Error("Result is below absolute zero.");
+      return kelvin;
+    }
+    return celsius;
+  }
+
+  function convertMeasurementValue(categoryKey, value, fromUnitKey, toUnitKey) {
+    if (categoryKey === "temperature") {
+      return convertTemperature(value, fromUnitKey, toUnitKey);
+    }
+
+    const fromUnit = getMeasurementUnit(categoryKey, fromUnitKey);
+    const toUnit = getMeasurementUnit(categoryKey, toUnitKey);
+    if (!fromUnit || !toUnit) {
+      throw new Error("Choose valid measurement units.");
+    }
+    return (value * fromUnit.factor) / toUnit.factor;
+  }
+
+  function getDefaultMeasurementUnits(categoryKey) {
+    const defaults = {
+      length: ["m", "ft"],
+      weight: ["kg", "lb"],
+      volume: ["l", "gal-us"],
+      area: ["m2", "ft2"],
+      temperature: ["c", "f"],
+    };
+    return defaults[categoryKey] || [
+      measurementCategories[categoryKey]?.units[0]?.key,
+      measurementCategories[categoryKey]?.units[1]?.key,
+    ];
+  }
+
+  function formatMeasurementNumber(value) {
+    if (!Number.isFinite(value)) {
+      throw new Error("Result is out of range.");
+    }
+    const normalized = Object.is(value, -0) ? 0 : value;
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 4,
+      minimumFractionDigits: 0,
+    }).format(normalized);
+  }
+
+  function setMeasurementCategory(calculator, categoryKey) {
+    calculator.measurementCategory = measurementCategories[categoryKey] ? categoryKey : "length";
+
+    if (calculator.measurementCategorySelect && calculator.measurementCategorySelect.value !== calculator.measurementCategory) {
+      calculator.measurementCategorySelect.value = calculator.measurementCategory;
+    }
+
+    const [defaultFrom, defaultTo] = getDefaultMeasurementUnits(calculator.measurementCategory);
+    const options = renderMeasurementUnitOptions(calculator.measurementCategory);
+    calculator.measurementFields.from.innerHTML = options;
+    calculator.measurementFields.to.innerHTML = options;
+    calculator.measurementFields.from.value = defaultFrom;
+    calculator.measurementFields.to.value = defaultTo || defaultFrom;
+    updateMeasurementsCalculator(calculator);
+  }
+
+  function updateMeasurementsCalculator(calculator) {
+    const valueText = calculator.measurementFields.value.value.trim();
+    const value = Number(valueText);
+    const fromUnitKey = calculator.measurementFields.from.value;
+    const toUnitKey = calculator.measurementFields.to.value;
+    const fromUnit = getMeasurementUnit(calculator.measurementCategory, fromUnitKey);
+    const toUnit = getMeasurementUnit(calculator.measurementCategory, toUnitKey);
+
+    if (!valueText || !Number.isFinite(value)) {
+      setMeasurementResult(calculator, "Enter value", "Choose units to convert.");
+      setMeasurementNote(calculator, "");
+      return;
+    }
+
+    try {
+      const convertedValue = convertMeasurementValue(calculator.measurementCategory, value, fromUnitKey, toUnitKey);
+      const formattedInput = formatMeasurementNumber(value);
+      const formattedOutput = formatMeasurementNumber(convertedValue);
+      setMeasurementResult(
+        calculator,
+        formattedOutput,
+        `${formattedInput} ${fromUnit?.label || ""} = ${formattedOutput} ${toUnit?.label || ""}`,
+      );
+      setMeasurementNote(calculator, "");
+    } catch (error) {
+      setMeasurementResult(calculator, "Invalid conversion", error instanceof Error ? error.message : "Could not convert measurement.");
+      setMeasurementNote(calculator, error instanceof Error ? error.message : "Could not convert measurement.", "error");
+    }
+  }
+
+  function initializeMeasurementsCalculator(calculator) {
+    const element = calculator.element;
+    calculator.measurementCategory = "length";
+    calculator.measurementCategorySelect = element.querySelector("[data-measurement-category-select]");
+    calculator.measurementResult = element.querySelector("[data-measurement-result]");
+    calculator.measurementNote = element.querySelector("[data-measurement-note]");
+    calculator.measurementFields = {
+      value: element.querySelector("[data-measurement-field=\"value\"]"),
+      from: element.querySelector("[data-measurement-field=\"from\"]"),
+      to: element.querySelector("[data-measurement-field=\"to\"]"),
+    };
+
+    calculator.measurementCategorySelect?.addEventListener("change", () => {
+      setMeasurementCategory(calculator, calculator.measurementCategorySelect.value);
+    });
+
+    Object.values(calculator.measurementFields).forEach((field) => {
+      if (!field) return;
+      field.addEventListener("input", () => updateMeasurementsCalculator(calculator));
+      field.addEventListener("change", () => updateMeasurementsCalculator(calculator));
+    });
+
+    element.querySelector("[data-measurement-swap]")?.addEventListener("click", () => {
+      const fromValue = calculator.measurementFields.from.value;
+      calculator.measurementFields.from.value = calculator.measurementFields.to.value;
+      calculator.measurementFields.to.value = fromValue;
+      updateMeasurementsCalculator(calculator);
+    });
+
+    setMeasurementCategory(calculator, "length");
+  }
+
+  function initializeUuidGenerator(generator) {
+    generator.output = generator.element.querySelector("[data-generator-output]");
+    generator.note = generator.element.querySelector("[data-generator-note]");
+    generator.fields = {
+      count: generator.element.querySelector("[data-uuid-field=\"count\"]"),
+    };
+    generator.element.querySelector("[data-generator-action=\"generate\"]")?.addEventListener("click", () => generateUuid(generator));
+    generateUuid(generator);
+  }
+
+  function initializePasswordGenerator(generator) {
+    generator.output = generator.element.querySelector("[data-generator-output]");
+    generator.note = generator.element.querySelector("[data-generator-note]");
+    generator.fields = {
+      length: generator.element.querySelector("[data-password-field=\"length\"]"),
+      lowercase: generator.element.querySelector("[data-password-field=\"lowercase\"]"),
+      uppercase: generator.element.querySelector("[data-password-field=\"uppercase\"]"),
+      numbers: generator.element.querySelector("[data-password-field=\"numbers\"]"),
+      symbols: generator.element.querySelector("[data-password-field=\"symbols\"]"),
+    };
+    generator.element.querySelector("[data-generator-action=\"generate\"]")?.addEventListener("click", () => generatePassword(generator));
+    generatePassword(generator);
+  }
+
+  function initializeRandomNumberGenerator(generator) {
+    generator.output = generator.element.querySelector("[data-generator-output]");
+    generator.note = generator.element.querySelector("[data-generator-note]");
+    generator.fields = {
+      min: generator.element.querySelector("[data-random-number-field=\"min\"]"),
+      max: generator.element.querySelector("[data-random-number-field=\"max\"]"),
+      count: generator.element.querySelector("[data-random-number-field=\"count\"]"),
+      integer: generator.element.querySelector("[data-random-number-field=\"integer\"]"),
+    };
+    generator.element.querySelector("[data-generator-action=\"generate\"]")?.addEventListener("click", () => generateRandomNumbers(generator));
+    generateRandomNumbers(generator);
+  }
+
+  function initializeDiceGenerator(generator) {
+    generator.output = generator.element.querySelector("[data-generator-output]");
+    generator.note = generator.element.querySelector("[data-generator-note]");
+    generator.fields = {
+      count: generator.element.querySelector("[data-dice-field=\"count\"]"),
+      sides: generator.element.querySelector("[data-dice-field=\"sides\"]"),
+      modifier: generator.element.querySelector("[data-dice-field=\"modifier\"]"),
+      percentile: generator.element.querySelector("[data-dice-field=\"percentile\"]"),
+    };
+    generator.element.querySelector("[data-generator-action=\"generate\"]")?.addEventListener("click", () => generateDice(generator));
+    generator.fields.percentile?.addEventListener("change", () => {
+      syncDicePercentileFields(generator);
+    });
+    syncDicePercentileFields(generator);
+    generateDice(generator);
+  }
+
+  function initializeLoremGenerator(generator) {
+    generator.output = generator.element.querySelector("[data-generator-output]");
+    generator.note = generator.element.querySelector("[data-generator-note]");
+    generator.fields = {
+      paragraphs: generator.element.querySelector("[data-lorem-field=\"paragraphs\"]"),
+    };
+    generator.element.querySelector("[data-generator-action=\"generate\"]")?.addEventListener("click", () => generateLorem(generator));
+    generateLorem(generator);
+  }
+
+  function initializePaletteGenerator(generator) {
+    generator.palette = generator.element.querySelector("[data-generator-palette]");
+    generator.note = generator.element.querySelector("[data-generator-note]");
+    generator.fields = {
+      count: generator.element.querySelector("[data-palette-field=\"count\"]"),
+    };
+    generator.element.querySelector("[data-generator-action=\"generate\"]")?.addEventListener("click", () => generatePalette(generator));
+    generatePalette(generator);
+  }
+
+  function getGeneratorCopyText(generator) {
+    if (generator.type === "palette") {
+      return generator.copyText || generator.colors?.join("\n") || "";
+    }
+    return generator.copyText || generator.output?.textContent?.trim() || "";
+  }
+
+  function setGeneratorCopyMessage(generator, message, type = "info") {
+    const button = generator.copyButton || generator.element?.querySelector("[data-generator-copy]");
+    if (!button) return;
+
+    window.clearTimeout(generator.copyResetTimer);
+    button.textContent = message || "Copy";
+    button.classList.toggle("is-copied", type !== "error");
+    button.classList.toggle("is-copy-error", type === "error");
+
+    generator.copyResetTimer = window.setTimeout(() => {
+      button.textContent = "Copy";
+      button.classList.remove("is-copied", "is-copy-error");
+      generator.copyResetTimer = null;
+    }, 2000);
+  }
+
+  async function copyGeneratorResult(generator) {
+    const copyText = getGeneratorCopyText(generator);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(copyText);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = copyText;
+        textArea.setAttribute("readonly", "");
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.append(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+      }
+      setGeneratorCopyMessage(generator, "Copied");
+    } catch (error) {
+      setGeneratorCopyMessage(generator, "Error", "error");
+    }
+  }
+
+  function setActiveGenerator(id) {
+    activeGeneratorId = id;
+    generators.forEach((generator) => {
+      generator.element.classList.toggle("is-active", generator.id === id);
+    });
+  }
+
+  function closeGenerator(id) {
+    const generator = generators.get(id);
+    if (!generator) return;
+
+    window.clearTimeout(generator.copyResetTimer);
+    generator.element.remove();
+    generators.delete(id);
+
+    if (activeGeneratorId === id) {
+      const remainingIds = Array.from(generators.keys());
+      activeGeneratorId = null;
+      if (remainingIds.length) {
+        setActiveGenerator(remainingIds[remainingIds.length - 1]);
+      }
+    }
   }
 
   function getCalculatorCopyText(calculator) {
@@ -1125,22 +2083,33 @@
       return ["BMI", heading, detail, note].filter(Boolean).join("\n");
     }
 
+    if (calculator.type === "measurements") {
+      const category = measurementCategories[calculator.measurementCategory]?.label || "Measurements";
+      const heading = calculator.measurementResult?.querySelector("strong")?.textContent?.trim() || "";
+      const detail = calculator.measurementResult?.querySelector("span")?.textContent?.trim() || "";
+      const note = calculator.measurementNote?.textContent?.trim() || "";
+      return [category, heading, detail, note].filter(Boolean).join("\n");
+    }
+
     const equation = calculator.equationInput?.value?.trim() || "";
     const result = calculator.resultDisplay?.textContent?.trim() || calculator.result || "0";
     return equation ? `${equation} ${result}`.trim() : result;
   }
 
   function setCalculatorCopyMessage(calculator, message, type = "info") {
-    if (calculator.type === "date-time") {
-      setDateTimeNote(calculator, message, type === "error" ? "error" : "");
-      return;
-    }
+    const button = calculator.copyButton || calculator.element?.querySelector("[data-calculator-copy]");
+    if (!button) return;
 
-    if (calculator.type === "bmi") {
-      setBmiNote(calculator, message, type === "error" ? "error" : "");
-      return;
-    }
-    setCalculatorMessage(calculator, message, type);
+    window.clearTimeout(calculator.copyResetTimer);
+    button.textContent = message || "Copy";
+    button.classList.toggle("is-copied", type !== "error");
+    button.classList.toggle("is-copy-error", type === "error");
+
+    calculator.copyResetTimer = window.setTimeout(() => {
+      button.textContent = "Copy";
+      button.classList.remove("is-copied", "is-copy-error");
+      calculator.copyResetTimer = null;
+    }, 2000);
   }
 
   async function copyCalculatorResult(calculator) {
@@ -1159,9 +2128,9 @@
         document.execCommand("copy");
         textArea.remove();
       }
-      setCalculatorCopyMessage(calculator, "Copied.");
+      setCalculatorCopyMessage(calculator, "Copied");
     } catch (error) {
-      setCalculatorCopyMessage(calculator, "Could not copy.", "error");
+      setCalculatorCopyMessage(calculator, "Error", "error");
     }
   }
 
@@ -1191,6 +2160,7 @@
   function syncCalculator(calculator, { focus = false, cursor = null } = {}) {
     calculator.equationInput.value = calculator.expression;
     calculator.resultDisplay.textContent = calculator.result || "0";
+    fitCalculatorResultDisplay(calculator);
     updateCalculatorMemoryButtons(calculator);
 
     if (focus) {
@@ -1411,6 +2381,20 @@
     setCalculatorMenuOpen(!isCalculatorMenuOpen());
   }
 
+  function setGeneratorMenuOpen(isOpen) {
+    if (!els.generatorMenuTrigger || !els.generatorMenuPanel) return;
+    els.generatorMenuTrigger.setAttribute("aria-expanded", String(isOpen));
+    els.generatorMenuPanel.hidden = !isOpen;
+  }
+
+  function isGeneratorMenuOpen() {
+    return Boolean(els.generatorMenuPanel && !els.generatorMenuPanel.hidden);
+  }
+
+  function toggleGeneratorMenu() {
+    setGeneratorMenuOpen(!isGeneratorMenuOpen());
+  }
+
   function createCalculator(type = "standard") {
     if (!els.calculatorGrid) return null;
 
@@ -1515,6 +2499,7 @@
     const typeClassMap = {
       "date-time": "date-time-calculator",
       bmi: "bmi-calculator",
+      measurements: "measurements-calculator",
     };
     element.className = `calculator-window${typeClassMap[calculatorType] ? ` ${typeClassMap[calculatorType]}` : ""}`;
     element.tabIndex = 0;
@@ -1527,6 +2512,8 @@
       id,
       type: calculatorType,
       element,
+      copyButton: element.querySelector("[data-calculator-copy]"),
+      copyResetTimer: null,
     };
 
     calculators.set(id, calculator);
@@ -1540,7 +2527,7 @@
       closeCalculator(id);
     });
 
-    element.querySelector("[data-calculator-copy]")?.addEventListener("click", (event) => {
+    calculator.copyButton?.addEventListener("click", (event) => {
       event.stopPropagation();
       copyCalculatorResult(calculator);
     });
@@ -1548,6 +2535,52 @@
     definition.initialize(calculator);
     setActiveCalculator(id);
     return calculator;
+  }
+
+  function createGeneratorCard(type = "uuid") {
+    if (!els.generatorGrid) return null;
+
+    const definition = generatorRegistry[type] || generatorRegistry.uuid;
+    const generatorType = generatorRegistry[type] ? type : "uuid";
+    const id = nextGeneratorId;
+    nextGeneratorId += 1;
+
+    const element = document.createElement("section");
+    element.className = "calculator-window generator-card";
+    element.tabIndex = 0;
+    element.dataset.generatorId = String(id);
+    element.dataset.generatorType = generatorType;
+    element.setAttribute("aria-label", `${definition.label} ${id}`);
+    element.innerHTML = definition.render(definition, id);
+
+    const generator = {
+      id,
+      type: generatorType,
+      element,
+      copyButton: element.querySelector("[data-generator-copy]"),
+      copyResetTimer: null,
+      copyText: "",
+    };
+
+    generators.set(id, generator);
+    els.generatorGrid.append(element);
+
+    element.addEventListener("pointerdown", () => setActiveGenerator(id));
+    element.addEventListener("focusin", () => setActiveGenerator(id));
+
+    element.querySelector("[data-generator-close]")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeGenerator(id);
+    });
+
+    generator.copyButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      copyGeneratorResult(generator);
+    });
+
+    definition.initialize(generator);
+    setActiveGenerator(id);
+    return generator;
   }
 
   function sanitizeRichHtml(html) {
@@ -1770,6 +2803,9 @@
         panel.classList.toggle("is-active", isActive);
         panel.hidden = !isActive;
       });
+      if (tabName === "calculators") {
+        scheduleCalculatorResultsFit();
+      }
     });
   });
 
@@ -1800,6 +2836,38 @@
         if (event.key === "Escape" && isCalculatorMenuOpen()) {
           setCalculatorMenuOpen(false);
           els.calculatorMenuTrigger.focus({ preventScroll: true });
+        }
+      });
+    }
+  }
+
+  if (els.generatorGrid) {
+    createGeneratorCard("dice");
+
+    if (els.generatorMenuTrigger && els.generatorMenuPanel) {
+      els.generatorMenuTrigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleGeneratorMenu();
+      });
+
+      els.generatorTypeButtons.forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          createGeneratorCard(button.dataset.addGeneratorType || "uuid");
+          setGeneratorMenuOpen(false);
+        });
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!isGeneratorMenuOpen()) return;
+        if (els.generatorAddMenu && els.generatorAddMenu.contains(event.target)) return;
+        setGeneratorMenuOpen(false);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && isGeneratorMenuOpen()) {
+          setGeneratorMenuOpen(false);
+          els.generatorMenuTrigger.focus({ preventScroll: true });
         }
       });
     }
@@ -1841,6 +2909,10 @@
       convertText(button.dataset.convertTarget);
     });
   });
+
+  els.outputCopyButton?.addEventListener("click", copyOutputText);
+
+  window.addEventListener("resize", scheduleCalculatorResultsFit);
 
   switchInputMode("wysiwyg");
 })();

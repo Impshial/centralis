@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=calculator-mode-dropdown-1">
+  <link rel="stylesheet" href="styles.css?v=dice-default-generator-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -143,7 +143,6 @@
               data-useful-tab="text-converter"
             >
               <span>Text Converter</span>
-              <small>AI-assisted format changes</small>
             </button>
             <button
               class="useful-things-tab"
@@ -155,7 +154,28 @@
               data-useful-tab="calculators"
             >
               <span>Calculators</span>
-              <small>Independent standard calculators</small>
+            </button>
+            <button
+              class="useful-things-tab"
+              type="button"
+              role="tab"
+              id="useful-tab-generators"
+              aria-selected="false"
+              aria-controls="useful-panel-generators"
+              data-useful-tab="generators"
+            >
+              <span>Generators</span>
+            </button>
+            <button
+              class="useful-things-tab"
+              type="button"
+              role="tab"
+              id="useful-tab-color-tools"
+              aria-selected="false"
+              aria-controls="useful-panel-color-tools"
+              data-useful-tab="color-tools"
+            >
+              <span>Color Tools</span>
             </button>
           </nav>
 
@@ -169,8 +189,6 @@
             <div class="text-converter-header">
               <h2>Convert text into useful formats</h2>
             </div>
-
-            <p class="text-converter-status" data-text-converter-status role="status" aria-live="polite"></p>
 
             <div class="text-converter-body">
               <section class="text-converter-pane" aria-labelledby="text-converter-input-title">
@@ -294,14 +312,20 @@
               <section class="text-converter-pane" aria-labelledby="text-converter-output-title">
                 <div class="text-converter-pane-header">
                   <h3 id="text-converter-output-title">Output</h3>
+                  <button class="text-converter-output-copy" type="button" data-text-output-copy>Copy</button>
                 </div>
-                <textarea
-                  class="text-converter-output"
-                  rows="20"
-                  data-text-output
-                  aria-label="Converted output"
-                  readonly
-                ></textarea>
+                <div class="text-converter-output-wrap">
+                  <textarea
+                    class="text-converter-output"
+                    rows="20"
+                    data-text-output
+                    aria-label="Converted output"
+                    readonly
+                  ></textarea>
+                  <div class="text-converter-output-busy" data-text-output-busy role="status" aria-live="polite" hidden>
+                    Converting...
+                  </div>
+                </div>
               </section>
             </div>
           </section>
@@ -339,6 +363,10 @@
                     <button type="button" role="menuitem" data-add-calculator-type="date-time">Date &amp; Time</button>
                   </div>
                   <div class="calculator-add-group">
+                    <p>Conversions</p>
+                    <button type="button" role="menuitem" data-add-calculator-type="measurements">Measurements</button>
+                  </div>
+                  <div class="calculator-add-group">
                     <p>Health</p>
                     <button type="button" role="menuitem" data-add-calculator-type="bmi">BMI</button>
                   </div>
@@ -348,6 +376,56 @@
 
             <div class="calculator-grid" data-calculator-grid aria-label="Calculators workspace"></div>
           </section>
+
+          <section
+            class="useful-things-tab-panel generators-panel"
+            role="tabpanel"
+            id="useful-panel-generators"
+            aria-labelledby="useful-tab-generators"
+            data-useful-panel="generators"
+            hidden
+          >
+            <div class="calculators-header generators-header">
+              <h2>Generators</h2>
+              <div class="calculator-add-menu" data-generator-add-menu>
+                <button
+                  class="primary-action calculator-add-trigger"
+                  type="button"
+                  data-generator-menu-trigger
+                  aria-expanded="false"
+                  aria-haspopup="menu"
+                  aria-controls="generator-add-menu"
+                >
+                  <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+                  <span>Add Generator</span>
+                  <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+                </button>
+                <div class="calculator-add-dropdown generator-add-dropdown" id="generator-add-menu" data-generator-menu-panel role="menu" hidden>
+                  <div class="generator-add-list">
+                    <button type="button" role="menuitem" data-add-generator-type="dice">Dice Roller</button>
+                    <button type="button" role="menuitem" data-add-generator-type="uuid">UUID Generator</button>
+                    <button type="button" role="menuitem" data-add-generator-type="password">Password Generator</button>
+                    <button type="button" role="menuitem" data-add-generator-type="random-number">Random Numbers</button>
+                    <button type="button" role="menuitem" data-add-generator-type="lorem">Lorem Ipsum</button>
+                    <button type="button" role="menuitem" data-add-generator-type="palette">Color Palette</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="calculator-grid generator-grid" data-generator-grid aria-label="Generators workspace"></div>
+          </section>
+
+          <section
+            class="useful-things-tab-panel"
+            role="tabpanel"
+            id="useful-panel-color-tools"
+            aria-labelledby="useful-tab-color-tools"
+            data-useful-panel="color-tools"
+            hidden
+          >
+            <h2>Color Tools</h2>
+          </section>
         </div>
       </section>
     </main>
@@ -356,6 +434,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=centralis-header-1"></script>
-  <script src="useful-things.js?v=calculator-mode-dropdown-1"></script>
+  <script src="useful-things.js?v=dice-default-generator-1"></script>
 </body>
 </html>
