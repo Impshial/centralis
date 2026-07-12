@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=dice-default-generator-1">
+  <link rel="stylesheet" href="styles.css?v=output-copy-menu-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -312,7 +312,30 @@
               <section class="text-converter-pane" aria-labelledby="text-converter-output-title">
                 <div class="text-converter-pane-header">
                   <h3 id="text-converter-output-title">Output</h3>
-                  <button class="text-converter-output-copy" type="button" data-text-output-copy>Copy</button>
+                  <div class="text-converter-output-copy-menu" data-text-output-copy-menu>
+                    <button class="text-converter-output-copy" type="button" data-text-output-copy>Copy</button>
+                    <button
+                      class="text-converter-output-copy-toggle"
+                      type="button"
+                      data-text-output-copy-menu-trigger
+                      aria-label="Copy options"
+                      aria-expanded="false"
+                      aria-haspopup="menu"
+                      aria-controls="text-output-copy-menu"
+                    >
+                      <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+                    </button>
+                    <div
+                      class="text-converter-output-copy-dropdown"
+                      id="text-output-copy-menu"
+                      data-text-output-copy-menu-panel
+                      role="menu"
+                      hidden
+                    >
+                      <button type="button" role="menuitem" data-text-copy-option="output">Copy</button>
+                      <button type="button" role="menuitem" data-text-copy-option="prompt">Copy Prompt</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="text-converter-output-wrap">
                   <textarea
@@ -431,9 +454,41 @@
     </main>
   </div>
 
+  <div class="modal-backdrop" data-text-converter-instructions-modal hidden>
+    <section
+      class="modal-dialog text-converter-instructions-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="text-converter-instructions-title"
+    >
+      <div class="modal-header">
+        <div>
+          <h2 id="text-converter-instructions-title">AI Conversion Instructions</h2>
+          <p class="modal-subtitle" data-text-converter-instructions-subtitle>
+            Review the instructions before converting.
+          </p>
+        </div>
+      </div>
+
+      <label class="text-converter-instructions-field">
+        <span>Instructions sent to AI</span>
+        <textarea
+          rows="14"
+          data-text-converter-instructions-textarea
+          aria-label="AI conversion instructions"
+        ></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-text-converter-instructions-cancel>Cancel</button>
+        <button class="primary-action" type="button" data-text-converter-instructions-confirm>Convert</button>
+      </div>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=centralis-header-1"></script>
-  <script src="useful-things.js?v=dice-default-generator-1"></script>
+  <script src="useful-things.js?v=dice-percentile-preserve-roll-1"></script>
 </body>
 </html>

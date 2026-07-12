@@ -6,7 +6,7 @@
   <title>Universe Canvas | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
-  <link rel="stylesheet" href="styles.css?v=button-padding-2">
+  <link rel="stylesheet" href="styles.css?v=generate-elements-refinements-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -444,6 +444,112 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="generate-elements-modal" data-strict-modal hidden>
+    <section class="modal-dialog generate-elements-dialog" role="dialog" aria-modal="true" aria-labelledby="generate-elements-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="generate-elements-title">Generate Elements</h2>
+          <p class="modal-subtitle">Create worldbuilding elements from this universe using the element types in your database.</p>
+        </div>
+      </div>
+
+      <form class="element-form generate-elements-form" data-generate-elements-form>
+        <div class="generate-elements-grid">
+          <label class="form-field">
+            <span>Up To</span>
+            <input type="number" name="total-elements" min="1" max="50" value="12" inputmode="numeric">
+          </label>
+
+          <label class="form-field">
+            <span>Relationship Density</span>
+            <select name="relationship-density">
+              <option value="sparse">Sparse</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="dense">Dense</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="form-field">
+          <span>Generation Instructions</span>
+          <textarea name="generation-instructions" placeholder="Describe the kinds of characters, places, artifacts, factions, conflicts, or mysteries you want added..."></textarea>
+        </label>
+
+        <section class="generate-elements-type-picker">
+          <button class="generate-elements-type-toggle" type="button" data-generate-elements-types-toggle aria-expanded="false" aria-controls="generate-elements-types-list">
+            <span>Element Types</span>
+            <span data-generate-elements-types-count>Loading...</span>
+            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+          </button>
+          <div class="generate-elements-type-list" id="generate-elements-types-list" data-generate-elements-types hidden></div>
+        </section>
+        <p class="form-status" data-generate-elements-status role="status"></p>
+
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-generate-elements-preview>Show Information to Send</button>
+          <button class="secondary-action" type="button" data-generate-elements-cancel>Cancel</button>
+          <button class="primary-action" type="submit">
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            Generate
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="generate-elements-info-modal" data-strict-modal hidden>
+    <section class="modal-dialog generate-elements-info-dialog" role="dialog" aria-modal="true" aria-labelledby="generate-elements-info-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="generate-elements-info-title">Information to Send</h2>
+          <p class="modal-subtitle">This is the exact server-generated prompt and request context for AI element generation.</p>
+        </div>
+      </div>
+      <textarea class="generate-elements-info-text" data-generate-elements-info-text readonly></textarea>
+      <p class="form-status" data-generate-elements-info-status role="status"></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-generate-elements-info-close>Close</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="generated-elements-review-modal" data-strict-modal hidden>
+    <section class="modal-dialog generated-elements-review-dialog" role="dialog" aria-modal="true" aria-labelledby="generated-elements-review-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="generated-elements-review-title">Review Generated Elements</h2>
+          <p class="modal-subtitle">Edit generated elements and relationships before adding them to the universe.</p>
+        </div>
+      </div>
+
+      <div class="generated-elements-review-body">
+        <section class="generated-elements-review-section">
+          <div class="generated-elements-section-header">
+            <h3>Elements</h3>
+            <span data-generated-elements-count>0 generated</span>
+          </div>
+          <div class="generated-elements-list" data-generated-elements-list></div>
+        </section>
+
+        <section class="generated-elements-review-section">
+          <div class="generated-elements-section-header">
+            <h3>Links</h3>
+            <span data-generated-links-count>0 links</span>
+          </div>
+          <div class="generated-links-list" data-generated-links-list></div>
+        </section>
+      </div>
+
+      <p class="form-status" data-generated-elements-review-status role="status"></p>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-generated-elements-review-cancel>Cancel</button>
+        <button class="secondary-action" type="button" data-generated-elements-regenerate>Generate Again</button>
+        <button class="primary-action" type="button" data-generated-elements-finalize>Finalize</button>
+      </div>
+    </section>
+  </div>
+
   <div class="modal-backdrop" id="delete-element-modal" hidden>
     <section class="modal-dialog confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-element-title">
       <div class="modal-header">
@@ -775,6 +881,6 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
-  <script src="flow-canvas.js?v=fit-view-dom-bounds-1"></script>
+  <script src="flow-canvas.js?v=generate-elements-refinements-1"></script>
 </body>
 </html>

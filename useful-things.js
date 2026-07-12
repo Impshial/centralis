@@ -11,8 +11,17 @@
     output: document.querySelector("[data-text-output]"),
     outputBusy: document.querySelector("[data-text-output-busy]"),
     outputCopyButton: document.querySelector("[data-text-output-copy]"),
+    outputCopyMenu: document.querySelector("[data-text-output-copy-menu]"),
+    outputCopyMenuTrigger: document.querySelector("[data-text-output-copy-menu-trigger]"),
+    outputCopyMenuPanel: document.querySelector("[data-text-output-copy-menu-panel]"),
+    outputCopyOptionButtons: Array.from(document.querySelectorAll("[data-text-copy-option]")),
     status: document.querySelector("[data-text-converter-status]"),
     conversionButtons: Array.from(document.querySelectorAll("[data-convert-target]")),
+    instructionModal: document.querySelector("[data-text-converter-instructions-modal]"),
+    instructionTextarea: document.querySelector("[data-text-converter-instructions-textarea]"),
+    instructionSubtitle: document.querySelector("[data-text-converter-instructions-subtitle]"),
+    instructionCancelButton: document.querySelector("[data-text-converter-instructions-cancel]"),
+    instructionConfirmButton: document.querySelector("[data-text-converter-instructions-confirm]"),
     richCommandButtons: Array.from(document.querySelectorAll("[data-rich-command]")),
     richBlockButtons: Array.from(document.querySelectorAll("[data-rich-block]")),
     richHeading: document.querySelector("[data-rich-heading]"),
@@ -35,6 +44,9 @@
   }
 
   let isConverting = false;
+  let activeInputMode = "wysiwyg";
+  let pendingConversion = null;
+  let lastConverterPrompt = "";
   let outputCopyResetTimer = null;
   let nextCalculatorId = 1;
   let activeCalculatorId = null;
@@ -42,6 +54,24 @@
   let nextGeneratorId = 1;
   let activeGeneratorId = null;
   const generators = new Map();
+
+  const converterTargetLabels = {
+    markdown: "Markdown",
+    html: "HTML",
+    "plain-text": "Plain Text",
+    json: "JSON",
+    yaml: "YAML",
+    xml: "XML",
+    csv: "CSV",
+    tsv: "TSV",
+    "markdown-table": "Markdown Table",
+    "json-lines": "JSON Lines",
+    "sql-inserts": "SQL Inserts",
+    outline: "Outline",
+    "bullet-list": "Bullet List",
+    "numbered-list": "Numbered List",
+    summary: "Summary",
+  };
 
   const calculatorMemoryButtons = [
     { label: "MC", action: "memory-clear", title: "Clear memory" },
@@ -288,31 +318,59 @@
     }, 2000);
   }
 
-  async function copyOutputText() {
-    const copyText = els.output.value || "";
-    if (!copyText.trim()) {
-      setOutputCopyButtonState("Empty", "error");
+  async function writeClipboardText(copyText) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(copyText);
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = copyText;
+    textArea.setAttribute("readonly", "");
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.append(textArea);
+    textArea.select();
+    document.execCommand("copy");
+    textArea.remove();
+  }
+
+  async function copyTextWithFeedback(copyText, emptyMessage = "Empty") {
+    if (!String(copyText || "").trim()) {
+      setOutputCopyButtonState(emptyMessage, "error");
       return;
     }
 
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(copyText);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = copyText;
-        textArea.setAttribute("readonly", "");
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.append(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        textArea.remove();
-      }
+      await writeClipboardText(copyText);
       setOutputCopyButtonState("Copied");
     } catch (error) {
       setOutputCopyButtonState("Error", "error");
     }
+  }
+
+  function copyOutputText() {
+    setOutputCopyMenuOpen(false);
+    copyTextWithFeedback(els.output.value || "");
+  }
+
+  function copyConverterPrompt() {
+    setOutputCopyMenuOpen(false);
+    copyTextWithFeedback(lastConverterPrompt, "No Prompt");
+  }
+
+  function isOutputCopyMenuOpen() {
+    return Boolean(els.outputCopyMenuPanel && !els.outputCopyMenuPanel.hidden);
+  }
+
+  function setOutputCopyMenuOpen(open) {
+    if (!els.outputCopyMenuPanel || !els.outputCopyMenuTrigger) return;
+    els.outputCopyMenuPanel.hidden = !open;
+    els.outputCopyMenuTrigger.setAttribute("aria-expanded", String(open));
+  }
+
+  function toggleOutputCopyMenu() {
+    setOutputCopyMenuOpen(!isOutputCopyMenuOpen());
   }
 
   function escapeHtml(value) {
@@ -1183,11 +1241,7 @@
 
   function generateDice(generator) {
     const isPercentile = Boolean(generator.fields.percentile?.checked);
-    const count = isPercentile ? 1 : clampInteger(generator.fields.count.value, 1, 100, 2);
-    const sides = isPercentile ? 100 : clampInteger(generator.fields.sides.value, 2, 1000, 6);
     const modifier = clampInteger(generator.fields.modifier.value, -9999, 9999, 0);
-    generator.fields.count.value = String(count);
-    generator.fields.sides.value = String(sides);
     generator.fields.modifier.value = String(modifier);
 
     const modifierText = modifier === 0 ? "" : ` ${modifier > 0 ? "+" : "-"} ${Math.abs(modifier)}`;
@@ -1204,6 +1258,11 @@
       setGeneratorNote(generator, `Rolled percentile dice: ${tensLabel} and ${ones}.`);
       return;
     }
+
+    const count = clampInteger(generator.fields.count.value, 1, 100, 2);
+    const sides = clampInteger(generator.fields.sides.value, 2, 1000, 6);
+    generator.fields.count.value = String(count);
+    generator.fields.sides.value = String(sides);
 
     const rolls = Array.from({ length: count }, () => randomInteger(1, sides));
     const subtotal = rolls.reduce((sum, value) => sum + value, 0);
@@ -2643,7 +2702,59 @@
   }
 
   function getCurrentMode() {
-    return els.modeSelect.value === "raw" ? "raw" : "wysiwyg";
+    return activeInputMode;
+  }
+
+  function getConverterTargetInstructions(targetFormat) {
+    switch (targetFormat) {
+      case "markdown":
+        return "Return valid Markdown that preserves headings, paragraphs, emphasis, links, quotes, lists, code, and tables when present.";
+      case "html":
+        return "Return an HTML fragment only. Do not include a full document, script tags, style tags, event handlers, markdown fences, or commentary.";
+      case "plain-text":
+        return "Return clean plain text with readable paragraph breaks and no markup.";
+      case "json":
+        return "Return valid JSON only. Infer a practical object or array shape from the source. Do not include markdown fences.";
+      case "yaml":
+        return "Return valid YAML only. Infer a practical structure from the source. Do not include markdown fences.";
+      case "xml":
+        return "Return well-formed XML only, using a sensible root element. Do not include markdown fences.";
+      case "csv":
+        return "Return CSV only. Include a header row when tabular fields can be inferred. Quote fields when needed.";
+      case "tsv":
+        return "Return tab-separated values only. Include a header row when tabular fields can be inferred.";
+      case "markdown-table":
+        return "Return only a Markdown table. If the source is not naturally tabular, infer useful columns from repeated items.";
+      case "json-lines":
+        return "Return JSON Lines only: one valid JSON object per line, no wrapping array and no commentary.";
+      case "sql-inserts":
+        return "Return SQL INSERT statements only. Use the table name converted_items. Infer sensible snake_case columns. Quote strings safely and use NULL when needed.";
+      case "outline":
+        return "Return a concise hierarchical outline using indented levels.";
+      case "bullet-list":
+        return "Return a concise bullet list only.";
+      case "numbered-list":
+        return "Return a concise numbered list only.";
+      case "summary":
+        return "Return a concise plain-text summary only.";
+      default:
+        return "Return only the converted output.";
+    }
+  }
+
+  function buildConverterInstructions(inputMode, targetFormat) {
+    const targetLabel = converterTargetLabels[targetFormat] || targetFormat;
+    const sourceDescription = inputMode === "wysiwyg"
+      ? "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts."
+      : "The source is raw text. Preserve the meaning and useful structure.";
+
+    return [
+      `Convert the provided source into ${targetLabel}.`,
+      sourceDescription,
+      getConverterTargetInstructions(targetFormat),
+      "Return only the converted output. Do not explain the conversion. Do not add markdown fences unless the requested output format itself is Markdown.",
+      "If the source is ambiguous, make the smallest reasonable inference needed to produce the requested format.",
+    ].join("\n\n");
   }
 
   function getRichEditorText() {
@@ -2659,15 +2770,24 @@
     return getRichEditorText() ? sanitizedHtml : "";
   }
 
+  function setRichEditorPlainText(value) {
+    els.richEditor.innerHTML = escapeHtml(value).replace(/\r?\n/g, "<br>");
+  }
+
   function switchInputMode(mode) {
     const nextMode = mode === "raw" ? "raw" : "wysiwyg";
-    if (nextMode === "raw" && !els.rawInput.value.trim() && getRichEditorText()) {
-      els.rawInput.value = els.richEditor.innerText.trim();
+
+    if (nextMode !== activeInputMode) {
+      if (activeInputMode === "wysiwyg" && nextMode === "raw") {
+        els.rawInput.value = els.richEditor.innerText.trim();
+      }
+
+      if (activeInputMode === "raw" && nextMode === "wysiwyg") {
+        setRichEditorPlainText(els.rawInput.value);
+      }
     }
 
-    if (nextMode === "wysiwyg" && !getRichEditorText() && els.rawInput.value.trim()) {
-      els.richEditor.textContent = els.rawInput.value;
-    }
+    activeInputMode = nextMode;
 
     els.modeSelect.value = nextMode;
     els.richWrap.hidden = nextMode === "raw";
@@ -2753,7 +2873,7 @@
     }
   }
 
-  async function convertText(targetFormat) {
+  function openConverterInstructionsDialog(targetFormat) {
     if (isConverting) return;
 
     const input = getConverterInput();
@@ -2762,17 +2882,73 @@
       return;
     }
 
+    if (!els.instructionModal || !els.instructionTextarea) {
+      convertText(targetFormat, {
+        input,
+        inputMode: getCurrentMode(),
+        instructions: buildConverterInstructions(getCurrentMode(), targetFormat),
+      });
+      return;
+    }
+
+    const inputMode = getCurrentMode();
+    const targetLabel = converterTargetLabels[targetFormat] || targetFormat.replaceAll("-", " ");
+    pendingConversion = { input, inputMode, targetFormat };
+    els.instructionTextarea.value = buildConverterInstructions(inputMode, targetFormat);
+    if (els.instructionSubtitle) {
+      els.instructionSubtitle.textContent = `Review instructions for ${targetLabel}. The source text is not shown here.`;
+    }
+    els.instructionModal.hidden = false;
+    requestAnimationFrame(() => els.instructionTextarea.focus({ preventScroll: true }));
+  }
+
+  function closeConverterInstructionsDialog() {
+    pendingConversion = null;
+    if (els.instructionModal) {
+      els.instructionModal.hidden = true;
+    }
+  }
+
+  function confirmConverterInstructionsDialog() {
+    const conversion = pendingConversion;
+    const instructions = els.instructionTextarea?.value ?? "";
+    closeConverterInstructionsDialog();
+    if (!conversion) return;
+    convertText(conversion.targetFormat, {
+      input: conversion.input,
+      inputMode: conversion.inputMode,
+      instructions,
+    });
+  }
+
+  async function convertText(targetFormat, options = {}) {
+    if (isConverting) return;
+
+    const input = options.input ?? getConverterInput();
+    if (!input) {
+      setStatus("Add text on the left before converting.", "error");
+      return;
+    }
+
+    const inputMode = options.inputMode ?? getCurrentMode();
+    const requestBody = {
+      inputMode,
+      targetFormat,
+      input,
+    };
+    if (Object.prototype.hasOwnProperty.call(options, "instructions")) {
+      const promptInstructions = String(options.instructions ?? "");
+      requestBody.instructions = promptInstructions;
+      lastConverterPrompt = promptInstructions;
+    }
+
     setConverting(true);
     setStatus(`Converting to ${targetFormat.replaceAll("-", " ")}...`);
 
     try {
       const response = await getFunctionResponse("convert-text-format", {
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inputMode: getCurrentMode(),
-          targetFormat,
-          input,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -2906,8 +3082,48 @@
 
   els.conversionButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      convertText(button.dataset.convertTarget);
+      openConverterInstructionsDialog(button.dataset.convertTarget);
     });
+  });
+
+  els.instructionCancelButton?.addEventListener("click", closeConverterInstructionsDialog);
+  els.instructionConfirmButton?.addEventListener("click", confirmConverterInstructionsDialog);
+  els.instructionModal?.addEventListener("click", (event) => {
+    if (event.target === els.instructionModal) {
+      closeConverterInstructionsDialog();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && els.instructionModal && !els.instructionModal.hidden) {
+      closeConverterInstructionsDialog();
+    }
+    if (event.key === "Escape" && isOutputCopyMenuOpen()) {
+      setOutputCopyMenuOpen(false);
+      els.outputCopyMenuTrigger?.focus({ preventScroll: true });
+    }
+  });
+
+  els.outputCopyMenuTrigger?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleOutputCopyMenu();
+  });
+
+  els.outputCopyOptionButtons.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (button.dataset.textCopyOption === "prompt") {
+        copyConverterPrompt();
+        return;
+      }
+      copyOutputText();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!isOutputCopyMenuOpen()) return;
+    if (els.outputCopyMenu && els.outputCopyMenu.contains(event.target)) return;
+    setOutputCopyMenuOpen(false);
   });
 
   els.outputCopyButton?.addEventListener("click", copyOutputText);

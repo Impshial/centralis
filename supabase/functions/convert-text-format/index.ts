@@ -34,6 +34,11 @@ function cleanInput(value: unknown) {
   return String(value || "").trim();
 }
 
+function normalizeInstructions(value: unknown) {
+  if (typeof value === "undefined") return undefined;
+  return String(value ?? "");
+}
+
 function stripCodeFences(value: string) {
   const text = value.trim();
   const match = text.match(/^```[a-z0-9_-]*\s*([\s\S]*?)\s*```$/i);
@@ -77,11 +82,10 @@ function targetInstructions(targetFormat: string) {
   }
 }
 
-function buildPrompt(input: {
+function buildDefaultInstructions(input: {
   inputMode: string;
   targetFormat: string;
   targetLabel: string;
-  source: string;
 }) {
   const sourceDescription = input.inputMode === "wysiwyg"
     ? "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts."
@@ -93,6 +97,26 @@ function buildPrompt(input: {
     targetInstructions(input.targetFormat),
     "Return only the converted output. Do not explain the conversion. Do not add markdown fences unless the requested output format itself is Markdown.",
     "If the source is ambiguous, make the smallest reasonable inference needed to produce the requested format.",
+  ].join("\n\n");
+}
+
+function buildPrompt(input: {
+  inputMode: string;
+  targetFormat: string;
+  targetLabel: string;
+  source: string;
+  instructions?: string;
+}) {
+  const instructions = typeof input.instructions === "string"
+    ? input.instructions
+    : buildDefaultInstructions({
+      inputMode: input.inputMode,
+      targetFormat: input.targetFormat,
+      targetLabel: input.targetLabel,
+    });
+
+  return [
+    instructions,
     `Source:\n${input.source}`,
   ].join("\n\n");
 }
@@ -113,6 +137,7 @@ Deno.serve(async (req) => {
     const targetFormat = String(body.targetFormat || "").trim();
     const targetLabel = TARGET_FORMATS[targetFormat];
     const input = cleanInput(body.input);
+    const instructions = normalizeInstructions(body.instructions);
 
     if (!targetLabel) {
       return jsonResponse({ error: "Unsupported conversion target." }, 400);
@@ -141,6 +166,7 @@ Deno.serve(async (req) => {
             targetFormat,
             targetLabel,
             source: input,
+            instructions,
           }),
         },
       ],

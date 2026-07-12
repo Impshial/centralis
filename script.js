@@ -139,6 +139,21 @@ const homeChatLogCount = document.querySelector("[data-home-chat-log-count]");
 const googleAuthButton = document.querySelector("[data-auth-google]");
 const signOutButtons = document.querySelectorAll("[data-sign-out]");
 const createUniverseButtons = document.querySelectorAll("[data-create-universe]");
+const universeNameLabel = document.querySelector("[data-universe-name-label]");
+const universeNameInput = document.querySelector("[data-universe-name-input]");
+const universeDescriptionLabel = document.querySelector("[data-universe-description-label]");
+const universeDescriptionInput = document.querySelector("[data-universe-description-input]");
+const universeAiToggle = document.querySelector("[data-universe-ai-toggle]");
+const universeAiGenreField = document.querySelector("[data-universe-ai-genre-field]");
+const universeAiGenreSelect = document.querySelector("[data-universe-ai-genre]");
+const universeGenerationOverlay = document.querySelector("[data-universe-generation-overlay]");
+const universeAiReviewModal = document.getElementById("universe-ai-review-modal");
+const universeAiReviewText = document.querySelector("[data-universe-ai-review-text]");
+const universeAiReviewStatus = document.querySelector("[data-universe-ai-review-status]");
+const universeAiReviewCancelButtons = document.querySelectorAll("[data-universe-ai-review-cancel]");
+const universeAiGenerateAgainButton = document.querySelector("[data-universe-ai-generate-again]");
+const universeAiFinalizeButton = document.querySelector("[data-universe-ai-finalize]");
+let universeAiReviewDraft = null;
 const UNIVERSE_TABLE = "universes";
 const DEFAULT_ELEMENT_TYPES_TABLE = "default_element_types";
 const DEFAULT_ELEMENT_TYPE_TEMPLATES_TABLE = "default_element_type_templates";
@@ -151,6 +166,7 @@ const ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "element_type_template_fields";
 const ELEMENTS_TABLE = "elements";
 const ELEMENT_LINKS_TABLE = "element_links";
 const SUPABASE_TIMEOUT_MS = 15000;
+const EDGE_FUNCTION_TIMEOUT_MS = 60000;
 const HOMEPAGE_ICON_READY_TIMEOUT_MS = 1200;
 const HOME_SECTION_CACHE_PREFIX = "centralis-home-section-v2";
 const DEFAULT_UNIVERSE_POSITION = { x: 120, y: 120 };
@@ -164,6 +180,67 @@ const DEFAULT_UNIVERSE_FORMAT = {
   fmt_node_image_placement: "side",
   fmt_node_layout_gap: 12
 };
+const UNIVERSE_AI_GENRES = [
+  "Random",
+  "Action/Adventure",
+  "Alternate History",
+  "Apocalyptic",
+  "Comedy",
+  "Contemporary",
+  "Cosmic Horror",
+  "Crime",
+  "Cyberpunk",
+  "Dark Fantasy",
+  "Detective",
+  "Drama",
+  "Dystopian",
+  "Epic Fantasy",
+  "Espionage",
+  "Fairy Tale",
+  "Fantasy",
+  "Folklore",
+  "Gaslamp Fantasy",
+  "Gothic Horror",
+  "Gothic Romance",
+  "Hard Science Fiction",
+  "Heroic Fantasy",
+  "Historical",
+  "Historical Fantasy",
+  "Historical Fiction",
+  "Historical Romance",
+  "Horror",
+  "Literary Fiction",
+  "Low Fantasy",
+  "Magical Realism",
+  "Martial Arts",
+  "Military Science Fiction",
+  "Mystery",
+  "Mythic Fantasy",
+  "Paranormal",
+  "Political Intrigue",
+  "Post-Apocalyptic",
+  "Psychological Horror",
+  "Psychological Thriller",
+  "Romance",
+  "Satire",
+  "Science Fantasy",
+  "Science Fiction",
+  "Science Fiction Horror",
+  "Slice of Life",
+  "Space Opera",
+  "Steampunk",
+  "Superhero",
+  "Survival",
+  "Sword and Sorcery",
+  "Techno-Thriller",
+  "Thriller",
+  "Time Travel",
+  "Tragedy",
+  "Urban Fantasy",
+  "Weird Fiction",
+  "Western",
+  "Young Adult"
+];
 let activeModal = null;
 let supabaseClient = null;
 let currentAppUser = null;
@@ -412,17 +489,58 @@ function getReadableError(error) {
   return error?.message || error?.details || error?.hint || "Unknown error";
 }
 
+async function parseFunctionError(response, fallback) {
+  try {
+    const payload = await response.json();
+    return payload?.error || payload?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function callCentralisFunction(name, body, label) {
+  if (!supabaseClient) {
+    throw new Error("Supabase is not available yet. Refresh the page and try again.");
+  }
+
+  const { data, error } = await withTimeout(supabaseClient.auth.getSession(), "Loading auth session");
+  if (error || !data.session?.access_token) {
+    throw error || new Error("You need to be logged in before using AI generation.");
+  }
+
+  const config = window.CENTRALIS_SUPABASE_CONFIG;
+  if (!config?.url || !config?.publishableKey) {
+    throw new Error("Supabase configuration is missing.");
+  }
+
+  const response = await withTimeout(fetch(`${config.url}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${data.session.access_token}`,
+      apikey: config.publishableKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body || {})
+  }), label, EDGE_FUNCTION_TIMEOUT_MS);
+
+  if (!response.ok) {
+    throw new Error(await parseFunctionError(response, `${label} failed.`));
+  }
+
+  return response.json();
+}
+
 function isSchemaColumnError(error) {
   const message = String(error?.message || error || "").toLowerCase();
   return error?.code === "PGRST204" || message.includes("schema cache") || message.includes("could not find");
 }
 
-function withTimeout(promise, label) {
+function withTimeout(promise, label, timeoutMs = SUPABASE_TIMEOUT_MS) {
   let timeoutId;
   const timeout = new Promise((_, reject) => {
     timeoutId = window.setTimeout(() => {
-      reject(new Error(`${label} timed out after ${SUPABASE_TIMEOUT_MS / 1000} seconds.`));
-    }, SUPABASE_TIMEOUT_MS);
+      reject(new Error(`${label} timed out after ${timeoutMs / 1000} seconds.`));
+    }, timeoutMs);
   });
 
   return Promise.race([promise, timeout]).finally(() => {
@@ -1741,16 +1859,22 @@ function openModal(modal) {
 
   activeModal = modal;
   modal.hidden = false;
+  document.body.classList.add("centralis-modal-open");
   closeMenus();
 
   const focusTarget = modal.querySelector("input, textarea, button");
   if (focusTarget) {
-    focusTarget.focus();
+    focusTarget.focus({ preventScroll: true });
   }
 }
 
 function closeModal() {
   if (!activeModal) {
+    return;
+  }
+
+  if (activeModal.id === "universe-ai-review-modal") {
+    closeUniverseAiReviewDialog();
     return;
   }
 
@@ -1761,6 +1885,7 @@ function closeModal() {
 
   activeModal.hidden = true;
   activeModal = null;
+  document.body.classList.remove("centralis-modal-open");
 }
 
 modalOpeners.forEach((opener) => {
@@ -1779,11 +1904,227 @@ document.querySelectorAll("[data-home-section-toggle]").forEach((button) => {
 
 document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
   backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop && backdrop.classList.contains("universe-modal-backdrop")) {
+      return;
+    }
+
     if (event.target === backdrop) {
       closeModal();
     }
   });
 });
+
+function setUniverseAiReviewStatus(message, type = "") {
+  if (!universeAiReviewStatus) return;
+  universeAiReviewStatus.textContent = message || "";
+  universeAiReviewStatus.classList.toggle("is-error", type === "error");
+  universeAiReviewStatus.classList.toggle("is-success", type === "success");
+}
+
+function setUniverseGenerationBusy(isBusy) {
+  if (universeGenerationOverlay) {
+    universeGenerationOverlay.hidden = !isBusy;
+  }
+}
+
+function populateUniverseAiGenreSelect() {
+  if (!universeAiGenreSelect || universeAiGenreSelect.options.length) return;
+  universeAiGenreSelect.innerHTML = UNIVERSE_AI_GENRES
+    .map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`)
+    .join("");
+  universeAiGenreSelect.value = "Random";
+}
+
+function syncUniverseAiFields() {
+  const isEnabled = Boolean(universeAiToggle?.checked);
+  if (universeAiGenreField) {
+    universeAiGenreField.hidden = !isEnabled;
+  }
+  if (universeNameLabel) {
+    universeNameLabel.innerHTML = isEnabled ? "Name <em>(optional AI seed)</em>" : "Name";
+  }
+  if (universeNameInput) {
+    universeNameInput.placeholder = isEnabled
+      ? "Optional — leave blank and AI will create one"
+      : "e.g. The Andromeda Expanse";
+    universeNameInput.required = false;
+  }
+  if (universeDescriptionLabel) {
+    universeDescriptionLabel.innerHTML = isEnabled
+      ? "Description <em>(optional AI seed)</em>"
+      : "Description <em>(optional)</em>";
+  }
+  if (universeDescriptionInput) {
+    universeDescriptionInput.placeholder = isEnabled
+      ? "Optional — add premise, mood, characters, factions, or worldbuilding notes to steer AI..."
+      : "A brief description of this universe...";
+    universeDescriptionInput.required = false;
+  }
+  if (isEnabled) {
+    populateUniverseAiGenreSelect();
+  }
+}
+
+function getUniverseFormValues(form) {
+  const formData = new FormData(form);
+  return {
+    useAi: Boolean(formData.get("universe-ai-enabled")),
+    genre: String(formData.get("universe-genre") || "Random").trim() || "Random",
+    name: String(formData.get("universe-name") || "").trim(),
+    description: String(formData.get("universe-description") || "").trim()
+  };
+}
+
+function formatUniverseAiReviewText(generatedUniverse) {
+  const name = String(generatedUniverse?.name || "").trim();
+  const description = String(generatedUniverse?.description || "").trim();
+  return [
+    `Name: ${name}`,
+    "",
+    "Description:",
+    description
+  ].join("\n");
+}
+
+function parseUniverseAiReviewText(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^Name:\s*(.*?)\s*\n+\s*Description:\s*([\s\S]*)$/i);
+  if (!match) {
+    return {
+      name: "",
+      description: text
+    };
+  }
+  return {
+    name: String(match[1] || "").trim(),
+    description: String(match[2] || "").trim()
+  };
+}
+
+function setUniverseAiReviewText(generatedUniverse) {
+  if (!universeAiReviewText) return;
+  universeAiReviewDraft = {
+    name: String(generatedUniverse?.name || "").trim(),
+    description: String(generatedUniverse?.description || "").trim()
+  };
+  universeAiReviewText.value = formatUniverseAiReviewText(generatedUniverse);
+}
+
+function openUniverseAiReviewDialog(generatedUniverse) {
+  const newUniverseModal = document.getElementById("new-universe-modal");
+  if (!universeAiReviewModal || !universeAiReviewText) return;
+
+  setUniverseAiReviewText(generatedUniverse);
+  setUniverseAiReviewStatus("");
+  document.body.classList.add("centralis-modal-open");
+
+  if (newUniverseModal) {
+    newUniverseModal.hidden = true;
+  }
+  activeModal = universeAiReviewModal;
+  universeAiReviewModal.hidden = false;
+  requestAnimationFrame(() => universeAiReviewText.focus({ preventScroll: true }));
+}
+
+function closeUniverseAiReviewDialog() {
+  const newUniverseModal = document.getElementById("new-universe-modal");
+  if (universeAiReviewModal) {
+    universeAiReviewModal.hidden = true;
+  }
+  universeAiReviewDraft = null;
+  setUniverseAiReviewStatus("");
+  if (newUniverseModal) {
+    newUniverseModal.hidden = false;
+    activeModal = newUniverseModal;
+    document.body.classList.add("centralis-modal-open");
+    requestAnimationFrame(() => {
+      newUniverseModal.querySelector("[name=\"universe-name\"]")?.focus({ preventScroll: true });
+    });
+    return;
+  }
+  activeModal = null;
+  document.body.classList.remove("centralis-modal-open");
+}
+
+async function createUniverseRecord({ name, description }, statusSetter) {
+  if (!supabaseClient) {
+    statusSetter("Supabase is not available yet. Refresh the page and try again.", "error");
+    return null;
+  }
+
+  let appUser = null;
+  try {
+    appUser = await getCurrentAppUser();
+  } catch (profileError) {
+    statusSetter(`Could not load your user profile: ${getReadableError(profileError)}`, "error");
+    return null;
+  }
+
+  if (!appUser) {
+    statusSetter("You need to be logged in before creating a universe.", "error");
+    return null;
+  }
+
+  const universeId = createId();
+  const { error } = await withTimeout(supabaseClient
+    .from(UNIVERSE_TABLE)
+    .insert({
+      id: universeId,
+      user_id: appUser.id,
+      name,
+      description: description || null,
+      canvas_position_x: DEFAULT_UNIVERSE_POSITION.x,
+      canvas_position_y: DEFAULT_UNIVERSE_POSITION.y,
+      ...DEFAULT_UNIVERSE_FORMAT
+    })
+    , "Creating universe");
+
+  if (error) {
+    statusSetter(`Could not create universe: ${getReadableError(error)}`, "error");
+    return null;
+  }
+
+  return universeId;
+}
+
+async function generateUniverseDraft(values) {
+  return callCentralisFunction("generate-universe-metadata", {
+    genre: values.genre,
+    name: values.name,
+    description: values.description
+  }, "Generating universe");
+}
+
+async function regenerateUniverseDraft() {
+  const form = document.querySelector(".universe-form");
+  if (!form) return;
+
+  const button = universeAiGenerateAgainButton;
+  if (button) {
+    button.disabled = true;
+  }
+  if (universeAiFinalizeButton) {
+    universeAiFinalizeButton.disabled = true;
+  }
+
+  try {
+    setUniverseAiReviewStatus("");
+    setUniverseGenerationBusy(true);
+    const generatedUniverse = await generateUniverseDraft(getUniverseFormValues(form));
+    setUniverseAiReviewText(generatedUniverse);
+    requestAnimationFrame(() => universeAiReviewText?.focus({ preventScroll: true }));
+  } catch (error) {
+    setUniverseAiReviewStatus(getReadableError(error), "error");
+  } finally {
+    setUniverseGenerationBusy(false);
+    if (button) {
+      button.disabled = false;
+    }
+    if (universeAiFinalizeButton) {
+      universeAiFinalizeButton.disabled = false;
+    }
+  }
+}
 
 async function createUniverseFromForm(form, submitButton) {
   if (!form) {
@@ -1794,64 +2135,87 @@ async function createUniverseFromForm(form, submitButton) {
     submitButton.disabled = true;
   }
 
-  setUniverseStatus("Creating universe...");
+  const values = getUniverseFormValues(form);
 
   try {
-    if (!supabaseClient) {
-      setUniverseStatus("Supabase is not available yet. Refresh the page and try again.", "error");
+    if (values.useAi) {
+      setUniverseStatus("Generating universe...");
+      setUniverseGenerationBusy(true);
+      const generatedUniverse = await generateUniverseDraft(values);
+      setUniverseStatus("");
+      openUniverseAiReviewDialog(generatedUniverse);
       return;
     }
 
-    let appUser = null;
-    try {
-      appUser = await getCurrentAppUser();
-    } catch (profileError) {
-      setUniverseStatus(`Could not load your user profile: ${getReadableError(profileError)}`, "error");
-      return;
-    }
+    setUniverseStatus("Creating universe...");
 
-    if (!appUser) {
-      setUniverseStatus("You need to be logged in before creating a universe.", "error");
-      return;
-    }
-
-    const formData = new FormData(form);
-    const name = String(formData.get("universe-name") || "").trim();
-    const description = String(formData.get("universe-description") || "").trim();
-
-    if (!name) {
+    if (!values.name) {
       setUniverseStatus("Name is required.", "error");
       form.querySelector('[name="universe-name"]')?.focus();
       return;
     }
 
-    const universeId = createId();
-    const { error } = await withTimeout(supabaseClient
-      .from(UNIVERSE_TABLE)
-      .insert({
-        id: universeId,
-        user_id: appUser.id,
-        name,
-        description: description || null,
-        canvas_position_x: DEFAULT_UNIVERSE_POSITION.x,
-        canvas_position_y: DEFAULT_UNIVERSE_POSITION.y,
-        ...DEFAULT_UNIVERSE_FORMAT
-      })
-      , "Creating universe");
+    const universeId = await createUniverseRecord({
+      name: values.name,
+      description: values.description
+    }, setUniverseStatus);
 
-    if (error) {
-      setUniverseStatus(`Could not create universe: ${getReadableError(error)}`, "error");
-      return;
-    }
+    if (!universeId) return;
 
     setUniverseStatus("Universe created.", "success");
     window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
+  } catch (error) {
+    setUniverseStatus(getReadableError(error), "error");
   } finally {
+    setUniverseGenerationBusy(false);
     if (submitButton) {
       submitButton.disabled = false;
     }
   }
 }
+
+async function finalizeGeneratedUniverse() {
+  if (!universeAiReviewText) return;
+  const button = universeAiFinalizeButton;
+  if (button) {
+    button.disabled = true;
+  }
+
+  try {
+    const parsed = parseUniverseAiReviewText(universeAiReviewText.value);
+    const name = String(parsed?.name || "").trim();
+    const description = String(parsed?.description || "").trim();
+    if (!name) {
+      setUniverseAiReviewStatus("Generated universe text must include a non-empty Name.", "error");
+      return;
+    }
+    universeAiReviewDraft = {
+      ...universeAiReviewDraft,
+      name,
+      description
+    };
+
+    setUniverseAiReviewStatus("Creating universe...");
+    const universeId = await createUniverseRecord(universeAiReviewDraft, setUniverseAiReviewStatus);
+    if (!universeId) return;
+
+    setUniverseAiReviewStatus("Universe created.", "success");
+    window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+populateUniverseAiGenreSelect();
+syncUniverseAiFields();
+universeAiToggle?.addEventListener("change", syncUniverseAiFields);
+universeAiReviewCancelButtons.forEach((button) => {
+  button.addEventListener("click", closeUniverseAiReviewDialog);
+});
+universeAiGenerateAgainButton?.addEventListener("click", regenerateUniverseDraft);
+universeAiFinalizeButton?.addEventListener("click", finalizeGeneratedUniverse);
 
 document.querySelectorAll(".universe-form").forEach((form) => {
   form.addEventListener("submit", async (event) => {

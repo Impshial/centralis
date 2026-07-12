@@ -9,6 +9,9 @@ verify_jwt = true
 [functions.generate-chat-log-metadata]
 verify_jwt = true
 
+[functions.generate-universe-elements]
+verify_jwt = true
+
 [functions.convert-text-format]
 verify_jwt = true
 

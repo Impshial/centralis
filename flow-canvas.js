@@ -799,6 +799,20 @@
               }
             },
             "View Details"
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: (event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+                window.dispatchEvent(new CustomEvent("centralis:generate-elements", {
+                  detail: { nodeId: props.id, universeId: data.recordId }
+                }));
+              }
+            },
+            "Generate Elements"
           )
         )
       ),
@@ -8468,6 +8482,276 @@
       return true;
     }
 
+    function getGenerateElementsTypeOptions(selectedTypeId = "") {
+      return elementTypes
+        .map((type) => `<option value="${escapeHtml(type.id)}"${type.id === selectedTypeId ? " selected" : ""}>${escapeHtml(type.name || "Untitled Type")}</option>`)
+        .join("");
+    }
+
+    function getExistingElementContext(limit = 120) {
+      const typeById = new Map(elementTypes.map((type) => [type.id, type]));
+      return nodesRef.current
+        .filter((node) => node.data?.kind === "element")
+        .slice(0, limit)
+        .map((node) => ({
+          id: node.data.recordId,
+          name: String(node.data.name || "Untitled Element").slice(0, 160),
+          element_type_name: String(node.data.elementType?.name || typeById.get(node.data.elementType?.id)?.name || "").slice(0, 120),
+          description: String(node.data.description || "").replace(/\s+/g, " ").trim().slice(0, 600)
+        }));
+    }
+
+    function getGenerateElementsUniverseContext() {
+      return {
+        id: universe.id,
+        name: universe.name || "Untitled Universe",
+        description: String(universe.description || "").replace(/\s+/g, " ").trim().slice(0, 4000)
+      };
+    }
+
+    function getEndpointKey(kind, id) {
+      if (!kind || !id) return "";
+      return `${kind}:${id}`;
+    }
+
+    function getEndpointLabel(endpoint, generatedElements = []) {
+      if (!endpoint) return "Unknown";
+      if (endpoint.kind === "universe") return `Universe: ${universe.name || "Untitled Universe"}`;
+      if (endpoint.kind === "existing") {
+        const node = nodesRef.current.find((item) => item.data?.kind === "element" && item.data.recordId === endpoint.id);
+        return `Existing: ${node?.data?.name || endpoint.name || "Untitled Element"}`;
+      }
+      if (endpoint.kind === "generated") {
+        const generated = generatedElements.find((item) => item.tempId === endpoint.id);
+        return `Generated: ${generated?.name || endpoint.name || "Untitled Element"}`;
+      }
+      return endpoint.name || "Unknown";
+    }
+
+    function getGenerateElementsEndpointOptions(generatedElements = [], selectedValue = "") {
+      const universeOptionValue = getEndpointKey("universe", universe.id);
+      const existingOptions = nodesRef.current
+        .filter((node) => node.data?.kind === "element")
+        .map((node) => {
+          const value = getEndpointKey("existing", node.data.recordId);
+          return `<option value="${escapeHtml(value)}"${value === selectedValue ? " selected" : ""}>${escapeHtml(`Existing: ${node.data.name || "Untitled Element"}`)}</option>`;
+        })
+        .join("");
+      const generatedOptions = generatedElements
+        .map((element) => {
+          const value = getEndpointKey("generated", element.tempId);
+          return `<option value="${escapeHtml(value)}"${value === selectedValue ? " selected" : ""}>${escapeHtml(`Generated: ${element.name || "Untitled Element"}`)}</option>`;
+        })
+        .join("");
+
+      return [
+        `<option value="${escapeHtml(universeOptionValue)}"${universeOptionValue === selectedValue ? " selected" : ""}>${escapeHtml(`Universe: ${universe.name || "Untitled Universe"}`)}</option>`,
+        existingOptions,
+        generatedOptions
+      ].filter(Boolean).join("");
+    }
+
+    function parseGenerateElementsEndpoint(value) {
+      const [kind, ...rest] = String(value || "").split(":");
+      const id = rest.join(":");
+      if (!kind || !id) return null;
+      if (!["universe", "existing", "generated"].includes(kind)) return null;
+      return { kind, id };
+    }
+
+    function normalizeGeneratedElement(rawElement, index, typeByName) {
+      const tempId = String(rawElement?.temp_id || rawElement?.tempId || rawElement?.id || `generated-${index + 1}`).trim();
+      const name = String(rawElement?.name || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      const description = String(rawElement?.description || "").replace(/\s+/g, " ").trim().slice(0, 4000);
+      const typeName = String(rawElement?.element_type_name || rawElement?.elementTypeName || rawElement?.type || "").replace(/\s+/g, " ").trim();
+      const type = typeByName.get(normalizeLookupKey(typeName)) || null;
+      return {
+        tempId: tempId || `generated-${index + 1}`,
+        name,
+        description,
+        elementTypeName: typeName,
+        elementTypeId: type?.id || "",
+        unknownTypeName: type ? "" : typeName
+      };
+    }
+
+    function normalizeGeneratedEndpoint(value, generatedElements) {
+      const text = String(value || "").trim();
+      if (!text) return null;
+      const lower = normalizeLookupKey(text);
+      if (lower === "universe" || text === universe.id || lower === normalizeLookupKey(universe.name)) {
+        return { kind: "universe", id: universe.id, name: universe.name };
+      }
+
+      const generated = generatedElements.find((element) => (
+        text === element.tempId
+        || lower === normalizeLookupKey(element.tempId)
+        || lower === normalizeLookupKey(element.name)
+      ));
+      if (generated) {
+        return { kind: "generated", id: generated.tempId, name: generated.name };
+      }
+
+      const existingNode = nodesRef.current.find((node) => node.data?.kind === "element" && (
+        text === node.data.recordId
+        || lower === normalizeLookupKey(node.data.recordId)
+        || lower === normalizeLookupKey(node.data.name)
+      ));
+      if (existingNode) {
+        return { kind: "existing", id: existingNode.data.recordId, name: existingNode.data.name };
+      }
+
+      return null;
+    }
+
+    function normalizeGeneratedLink(rawLink, index, generatedElements) {
+      const sourceValue = rawLink?.source || rawLink?.source_id || rawLink?.source_temp_id || rawLink?.source_existing_id || rawLink?.source_name;
+      const targetValue = rawLink?.target || rawLink?.target_id || rawLink?.target_temp_id || rawLink?.target_existing_id || rawLink?.target_name;
+      const source = normalizeGeneratedEndpoint(sourceValue, generatedElements);
+      const target = normalizeGeneratedEndpoint(targetValue, generatedElements);
+      return {
+        id: String(rawLink?.id || `link-${index + 1}`),
+        source,
+        target,
+        label: String(rawLink?.label || rawLink?.relationship || "").replace(/\s+/g, " ").trim().slice(0, 120)
+      };
+    }
+
+    function normalizeGeneratedElementsPayload(payload) {
+      const typeByName = new Map(elementTypes.map((type) => [normalizeLookupKey(type.name), type]));
+      const elementsPayload = Array.isArray(payload?.elements) ? payload.elements : [];
+      const elementsList = elementsPayload
+        .map((element, index) => normalizeGeneratedElement(element, index, typeByName))
+        .filter((element) => element.name);
+      const tempIds = new Set();
+      elementsList.forEach((element, index) => {
+        let nextId = element.tempId || `generated-${index + 1}`;
+        let suffix = 2;
+        while (tempIds.has(nextId)) {
+          nextId = `${element.tempId || `generated-${index + 1}`}-${suffix}`;
+          suffix += 1;
+        }
+        element.tempId = nextId;
+        tempIds.add(nextId);
+      });
+
+      const linksList = (Array.isArray(payload?.links) ? payload.links : [])
+        .map((link, index) => normalizeGeneratedLink(link, index, elementsList))
+        .filter((link) => link.source && link.target && getEndpointKey(link.source.kind, link.source.id) !== getEndpointKey(link.target.kind, link.target.id));
+
+      return { elements: elementsList, links: linksList };
+    }
+
+    function getGeneratedElementsReviewState() {
+      const elementsHost = document.querySelector("[data-generated-elements-list]");
+      const linksHost = document.querySelector("[data-generated-links-list]");
+      const elementsList = [...(elementsHost?.querySelectorAll("[data-generated-element-row]") || [])].map((row, index) => ({
+        tempId: row.dataset.tempId || `generated-${index + 1}`,
+        name: String(row.querySelector("[data-generated-element-name]")?.value || "").trim(),
+        description: String(row.querySelector("[data-generated-element-description]")?.value || "").trim(),
+        elementTypeId: String(row.querySelector("[data-generated-element-type]")?.value || "").trim()
+      }));
+      const linksList = [...(linksHost?.querySelectorAll("[data-generated-link-row]") || [])].map((row, index) => ({
+        id: row.dataset.linkId || `link-${index + 1}`,
+        source: parseGenerateElementsEndpoint(row.querySelector("[data-generated-link-source]")?.value),
+        target: parseGenerateElementsEndpoint(row.querySelector("[data-generated-link-target]")?.value),
+        label: String(row.querySelector("[data-generated-link-label]")?.value || "").trim()
+      }));
+
+      return { elements: elementsList, links: linksList };
+    }
+
+    function renderGeneratedElementsReview(draft) {
+      const elementsHost = document.querySelector("[data-generated-elements-list]");
+      const linksHost = document.querySelector("[data-generated-links-list]");
+      const elementsCount = document.querySelector("[data-generated-elements-count]");
+      const linksCount = document.querySelector("[data-generated-links-count]");
+      if (!elementsHost || !linksHost) return;
+
+      elementsHost.innerHTML = draft.elements.map((element, index) => `
+        <article class="generated-element-row${element.unknownTypeName ? " has-warning" : ""}" data-generated-element-row data-temp-id="${escapeHtml(element.tempId)}">
+          <div class="generated-element-index">${index + 1}</div>
+          <div class="generated-element-fields">
+            <label class="form-field compact-field">
+              <span>Name</span>
+              <input type="text" data-generated-element-name value="${escapeHtml(element.name)}">
+            </label>
+            <label class="form-field compact-field">
+              <span>Type${element.unknownTypeName ? ` <em>Unknown: ${escapeHtml(element.unknownTypeName)}</em>` : ""}</span>
+              <select data-generated-element-type>
+                <option value="">Choose type</option>
+                ${getGenerateElementsTypeOptions(element.elementTypeId)}
+              </select>
+            </label>
+            <label class="form-field compact-field generated-element-description-field">
+              <span>Description</span>
+              <textarea data-generated-element-description>${escapeHtml(element.description)}</textarea>
+            </label>
+          </div>
+        </article>
+      `).join("");
+
+      linksHost.innerHTML = draft.links.length ? draft.links.map((link, index) => {
+        const sourceValue = getEndpointKey(link.source?.kind, link.source?.id);
+        const targetValue = getEndpointKey(link.target?.kind, link.target?.id);
+        return `
+          <article class="generated-link-row" data-generated-link-row data-link-id="${escapeHtml(link.id || `link-${index + 1}`)}">
+            <button class="icon-button generated-link-remove" type="button" aria-label="Remove link" data-remove-generated-link>
+              <ph-x weight="bold" aria-hidden="true"></ph-x>
+            </button>
+            <label class="form-field compact-field">
+              <span>Source</span>
+              <select data-generated-link-source>${getGenerateElementsEndpointOptions(draft.elements, sourceValue)}</select>
+            </label>
+            <label class="form-field compact-field">
+              <span>Target</span>
+              <select data-generated-link-target>${getGenerateElementsEndpointOptions(draft.elements, targetValue)}</select>
+            </label>
+            <label class="form-field compact-field generated-link-label-field">
+              <span>Label</span>
+              <input type="text" data-generated-link-label value="${escapeHtml(link.label || "")}" placeholder="Relationship label">
+            </label>
+          </article>
+        `;
+      }).join("") : '<p class="empty-state">No links were generated.</p>';
+
+      if (elementsCount) {
+        elementsCount.textContent = `${draft.elements.length} ${draft.elements.length === 1 ? "element" : "elements"}`;
+      }
+      if (linksCount) {
+        linksCount.textContent = `${draft.links.length} ${draft.links.length === 1 ? "link" : "links"}`;
+      }
+
+      linksHost.querySelectorAll("[data-remove-generated-link]").forEach((button) => {
+        button.addEventListener("click", () => {
+          button.closest("[data-generated-link-row]")?.remove();
+          const nextCount = linksHost.querySelectorAll("[data-generated-link-row]").length;
+          if (linksCount) {
+            linksCount.textContent = `${nextCount} ${nextCount === 1 ? "link" : "links"}`;
+          }
+          if (!nextCount) {
+            linksHost.innerHTML = '<p class="empty-state">No links remain.</p>';
+          }
+        });
+      });
+    }
+
+    function setGenerateElementsStatus(message, tone = "") {
+      const status = document.querySelector("[data-generate-elements-status]");
+      if (!status) return;
+      status.textContent = message || "";
+      status.classList.toggle("is-error", tone === "error");
+      status.classList.toggle("is-success", tone === "success");
+    }
+
+    function setGeneratedElementsReviewStatus(message, tone = "") {
+      const status = document.querySelector("[data-generated-elements-review-status]");
+      if (!status) return;
+      status.textContent = message || "";
+      status.classList.toggle("is-error", tone === "error");
+      status.classList.toggle("is-success", tone === "success");
+    }
+
     function setLayerStatus(message, tone = "") {
       const status = document.querySelector("[data-layer-status]");
       if (!status) return;
@@ -9327,6 +9611,504 @@
         setTransferStatus(`Could not import elements: ${getReadableError(error)}`, "error");
       }
     }
+
+    React.useEffect(() => {
+      const modal = document.getElementById("generate-elements-modal");
+      const reviewModal = document.getElementById("generated-elements-review-modal");
+      const infoModal = document.getElementById("generate-elements-info-modal");
+      const form = document.querySelector("[data-generate-elements-form]");
+      const typeList = document.querySelector("[data-generate-elements-types]");
+      const typeToggle = document.querySelector("[data-generate-elements-types-toggle]");
+      const typeCount = document.querySelector("[data-generate-elements-types-count]");
+      const previewButton = document.querySelector("[data-generate-elements-preview]");
+      const infoText = document.querySelector("[data-generate-elements-info-text]");
+      const infoStatus = document.querySelector("[data-generate-elements-info-status]");
+      const infoCloseButtons = document.querySelectorAll("[data-generate-elements-info-close]");
+      const cancelButtons = document.querySelectorAll("[data-generate-elements-cancel]");
+      const reviewCancelButtons = document.querySelectorAll("[data-generated-elements-review-cancel]");
+      const regenerateButton = document.querySelector("[data-generated-elements-regenerate]");
+      const finalizeButton = document.querySelector("[data-generated-elements-finalize]");
+      if (!modal || !reviewModal || !form) {
+        return undefined;
+      }
+
+      let activeUniverseNodeId = `universe:${universe.id}`;
+      let lastGenerateOptions = null;
+      let lastGeneratedDraft = { elements: [], links: [] };
+
+      function updateTypeCount() {
+        if (!typeCount || !typeList) return;
+        const checkedCount = typeList.querySelectorAll('[data-generate-elements-type]:checked').length;
+        typeCount.textContent = elementTypes.length
+          ? `${checkedCount} of ${elementTypes.length} selected`
+          : "No types";
+      }
+
+      function renderTypeChecklist(resetSelection = false) {
+        if (!typeList) return;
+        if (!elementTypes.length) {
+          typeList.innerHTML = '<p class="generate-elements-type-empty">No element types are available yet. Add element types before generating elements.</p>';
+          typeList.classList.add("is-error");
+          updateTypeCount();
+          return;
+        }
+        typeList.classList.remove("is-error");
+        const checkedIds = resetSelection
+          ? new Set(elementTypes.map((type) => type.id))
+          : new Set([...typeList.querySelectorAll('[data-generate-elements-type]:checked')].map((input) => input.value));
+        const effectiveCheckedIds = checkedIds.size ? checkedIds : new Set(elementTypes.map((type) => type.id));
+        typeList.innerHTML = elementTypes
+          .map((type) => {
+            const typeName = type.name || "Untitled Type";
+            const checked = effectiveCheckedIds.has(type.id) ? " checked" : "";
+            return `
+              <label class="generate-elements-type-option">
+                <input type="checkbox" value="${escapeHtml(type.id)}" data-generate-elements-type${checked}>
+                <span title="${escapeHtml(typeName)}">${escapeHtml(typeName)}</span>
+              </label>
+            `;
+          })
+          .join("");
+        updateTypeCount();
+      }
+
+      function openGenerateElementsModal(nodeId) {
+        activeUniverseNodeId = nodeId || `universe:${universe.id}`;
+        renderTypeChecklist(true);
+        if (typeList) typeList.hidden = true;
+        if (typeToggle) typeToggle.setAttribute("aria-expanded", "false");
+        setGenerateElementsStatus("");
+        modal.hidden = false;
+        window.setTimeout(() => {
+          form.querySelector('[name="total-elements"]')?.focus({ preventScroll: true });
+        }, 0);
+      }
+
+      function closeGenerateElementsModal() {
+        modal.hidden = true;
+        setGenerateElementsStatus("");
+      }
+
+      function openReviewModal() {
+        closeGenerateElementsModal();
+        setGeneratedElementsReviewStatus("");
+        reviewModal.hidden = false;
+      }
+
+      function closeReviewModal(returnToOptions = false) {
+        reviewModal.hidden = true;
+        setGeneratedElementsReviewStatus("");
+        if (returnToOptions) {
+          modal.hidden = false;
+        }
+      }
+
+      function openInfoModal() {
+        if (!infoModal) return;
+        if (infoText) infoText.value = "";
+        if (infoStatus) {
+          infoStatus.textContent = "";
+          infoStatus.classList.remove("is-error", "is-success");
+        }
+        infoModal.hidden = false;
+      }
+
+      function closeInfoModal() {
+        if (!infoModal) return;
+        infoModal.hidden = true;
+        if (infoStatus) {
+          infoStatus.textContent = "";
+          infoStatus.classList.remove("is-error", "is-success");
+        }
+      }
+
+      function setInfoStatus(message, tone = "") {
+        if (!infoStatus) return;
+        infoStatus.textContent = message || "";
+        infoStatus.classList.toggle("is-error", tone === "error");
+        infoStatus.classList.toggle("is-success", tone === "success");
+      }
+
+      function getSelectedAllowedElementTypes() {
+        if (!typeList) return [];
+        const selectedIds = new Set([...typeList.querySelectorAll('[data-generate-elements-type]:checked')].map((input) => input.value));
+        return elementTypes
+          .filter((type) => selectedIds.has(type.id))
+          .map((type) => ({ id: type.id, name: type.name || "Untitled Type" }));
+      }
+
+      function readGenerateOptions() {
+        const data = new FormData(form);
+        const count = Math.min(50, Math.max(1, Math.round(Number(data.get("total-elements") || 12))));
+        const density = String(data.get("relationship-density") || "balanced");
+        const instructions = String(data.get("generation-instructions") || "").trim();
+        const allowedElementTypes = getSelectedAllowedElementTypes();
+        return {
+          count,
+          density: ["sparse", "balanced", "dense"].includes(density) ? density : "balanced",
+          instructions,
+          allowedElementTypes
+        };
+      }
+
+      function buildGenerateElementsRequest(options, previewOnly = false) {
+        return {
+          universe: getGenerateElementsUniverseContext(),
+          allowedElementTypes: options.allowedElementTypes,
+          existingElements: getExistingElementContext(),
+          count: options.count,
+          relationshipDensity: options.density,
+          instructions: options.instructions,
+          previewOnly
+        };
+      }
+
+      async function generateElements(options) {
+        if (!elementTypes.length) {
+          throw new Error("No element types are available. Add element types before generating elements.");
+        }
+        if (!options.allowedElementTypes.length) {
+          throw new Error("Choose at least one element type before generating elements.");
+        }
+        lastGenerateOptions = options;
+        const payload = await callEdgeFunction("generate-universe-elements", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildGenerateElementsRequest(options))
+        });
+        const draft = normalizeGeneratedElementsPayload(payload);
+        if (!draft.elements.length) {
+          throw new Error("The generator did not return any usable elements.");
+        }
+        lastGeneratedDraft = draft;
+        renderGeneratedElementsReview(draft);
+        openReviewModal();
+      }
+
+      async function handleGenerateSubmit(event) {
+        event.preventDefault();
+        const submitButton = form.querySelector('[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+        try {
+          setGenerateElementsStatus("Generating elements...");
+          await generateElements(readGenerateOptions());
+          setGenerateElementsStatus("");
+        } catch (error) {
+          setGenerateElementsStatus(getReadableError(error), "error");
+        } finally {
+          if (submitButton) submitButton.disabled = false;
+        }
+      }
+
+      async function handlePreviewInformation() {
+        let options;
+        try {
+          options = readGenerateOptions();
+          if (!options.allowedElementTypes.length) {
+            throw new Error("Choose at least one element type before previewing the prompt.");
+          }
+        } catch (error) {
+          setGenerateElementsStatus(getReadableError(error), "error");
+          return;
+        }
+        openInfoModal();
+        if (infoText) infoText.value = "Building prompt preview...";
+        if (previewButton) previewButton.disabled = true;
+        try {
+          const payload = await callEdgeFunction("generate-universe-elements", {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildGenerateElementsRequest(options, true))
+          });
+          if (infoText) {
+            infoText.value = [
+              "REQUEST CONTEXT",
+              JSON.stringify(payload.request || buildGenerateElementsRequest(options), null, 2),
+              "",
+              "PROMPT",
+              payload.prompt || ""
+            ].join("\n");
+          }
+          setInfoStatus("");
+        } catch (error) {
+          if (infoText) infoText.value = "";
+          setInfoStatus(getReadableError(error), "error");
+        } finally {
+          if (previewButton) previewButton.disabled = false;
+        }
+      }
+
+      async function handleRegenerate() {
+        if (!lastGenerateOptions) return;
+        if (!lastGenerateOptions.allowedElementTypes?.length) {
+          setGeneratedElementsReviewStatus("Choose at least one element type before generating again.", "error");
+          return;
+        }
+        if (regenerateButton) regenerateButton.disabled = true;
+        if (finalizeButton) finalizeButton.disabled = true;
+        try {
+          setGeneratedElementsReviewStatus("Generating again...");
+          const payload = await callEdgeFunction("generate-universe-elements", {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildGenerateElementsRequest(lastGenerateOptions))
+          });
+          const draft = normalizeGeneratedElementsPayload(payload);
+          if (!draft.elements.length) {
+            throw new Error("The generator did not return any usable elements.");
+          }
+          lastGeneratedDraft = draft;
+          renderGeneratedElementsReview(draft);
+          setGeneratedElementsReviewStatus("");
+        } catch (error) {
+          setGeneratedElementsReviewStatus(getReadableError(error), "error");
+        } finally {
+          if (regenerateButton) regenerateButton.disabled = false;
+          if (finalizeButton) finalizeButton.disabled = false;
+        }
+      }
+
+      function validateGeneratedReview(state) {
+        if (!state.elements.length) {
+          throw new Error("There are no generated elements to finalize.");
+        }
+        const tempIds = new Set();
+        state.elements.forEach((element, index) => {
+          if (!element.name) {
+            throw new Error(`Element ${index + 1} needs a name.`);
+          }
+          if (!element.elementTypeId) {
+            throw new Error(`Element "${element.name}" needs a valid database element type.`);
+          }
+          tempIds.add(element.tempId);
+        });
+        state.links.forEach((link, index) => {
+          if (!link.source || !link.target) {
+            throw new Error(`Link ${index + 1} needs a source and target.`);
+          }
+          if (getEndpointKey(link.source.kind, link.source.id) === getEndpointKey(link.target.kind, link.target.id)) {
+            throw new Error(`Link ${index + 1} cannot connect an element to itself.`);
+          }
+          if (link.source.kind === "generated" && !tempIds.has(link.source.id)) {
+            throw new Error(`Link ${index + 1} references a generated source that no longer exists.`);
+          }
+          if (link.target.kind === "generated" && !tempIds.has(link.target.id)) {
+            throw new Error(`Link ${index + 1} references a generated target that no longer exists.`);
+          }
+        });
+      }
+
+      function getGeneratedElementPositions(count) {
+        const universeNode = nodesRef.current.find((node) => node.id === activeUniverseNodeId)
+          || nodesRef.current.find((node) => node.data?.kind === "universe");
+        const originX = Number(universeNode?.position?.x ?? universe.canvas_position_x ?? 120);
+        const originY = Number(universeNode?.position?.y ?? universe.canvas_position_y ?? 120);
+        const universeWidth = Number(universeNode?.measured?.width || universeNode?.width || 260);
+        const minimumRightX = originX + universeWidth + 160;
+        const positions = [];
+        let placed = 0;
+        let ring = 1;
+        while (placed < count) {
+          const ringSize = Math.min(count - placed, Math.max(3, ring * 4));
+          const xBase = minimumRightX + (ring - 1) * 300;
+          const verticalSpacing = 175;
+          const arcOffset = (ringSize - 1) / 2;
+          for (let index = 0; index < ringSize && placed < count; index += 1) {
+            const normalized = ringSize === 1 ? 0 : (index - arcOffset) / Math.max(1, arcOffset);
+            const outwardCurve = Math.abs(normalized) * 120 * ring;
+            positions.push({
+              x: Math.round(Math.max(minimumRightX, xBase + outwardCurve)),
+              y: Math.round(originY + (index - arcOffset) * verticalSpacing)
+            });
+            placed += 1;
+          }
+          ring += 1;
+        }
+        return positions;
+      }
+
+      function endpointToRecordId(endpoint, generatedIdMap) {
+        if (!endpoint) return "";
+        if (endpoint.kind === "universe") return universe.id;
+        if (endpoint.kind === "existing") return endpoint.id;
+        if (endpoint.kind === "generated") return generatedIdMap.get(endpoint.id) || "";
+        return "";
+      }
+
+      function endpointToNodeId(endpoint, generatedIdMap) {
+        const recordId = endpointToRecordId(endpoint, generatedIdMap);
+        if (!recordId) return "";
+        return endpoint.kind === "universe" ? `universe:${recordId}` : `element:${recordId}`;
+      }
+
+      async function finalizeGeneratedElements() {
+        const state = getGeneratedElementsReviewState();
+        try {
+          validateGeneratedReview(state);
+        } catch (error) {
+          setGeneratedElementsReviewStatus(getReadableError(error), "error");
+          return;
+        }
+
+        const ownerId = getElementOwnerId();
+        if (!ownerId) {
+          setGeneratedElementsReviewStatus("Could not determine the signed-in user for these elements.", "error");
+          return;
+        }
+
+        if (finalizeButton) finalizeButton.disabled = true;
+        if (regenerateButton) regenerateButton.disabled = true;
+        setGeneratedElementsReviewStatus("Adding generated elements...");
+        pushCanvasHistory();
+
+        const positions = getGeneratedElementPositions(state.elements.length);
+        const elementRows = state.elements.map((element, index) => ({
+          id: createId(),
+          user_id: ownerId,
+          universe_id: universe.id,
+          element_type_id: element.elementTypeId,
+          rich_template_id: null,
+          name: element.name,
+          description: element.description || null,
+          position_x: positions[index].x,
+          position_y: positions[index].y
+        }));
+
+        const tempIdToInsertedId = new Map(state.elements.map((element, index) => [element.tempId, elementRows[index].id]));
+
+        try {
+          const { data: insertedElements, error: elementError } = await window.centralisSupabase
+            .from("elements")
+            .insert(elementRows)
+            .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y");
+          if (elementError) throw elementError;
+
+          const linkRows = state.links
+            .map((link) => {
+              const sourceRecordId = endpointToRecordId(link.source, tempIdToInsertedId);
+              const targetRecordId = endpointToRecordId(link.target, tempIdToInsertedId);
+              if (!sourceRecordId || !targetRecordId || sourceRecordId === targetRecordId) return null;
+              return {
+                id: createId(),
+                universe_id: universe.id,
+                source_element_id: sourceRecordId,
+                target_element_id: targetRecordId,
+                label: link.label || null,
+                stroke_color: universeFormatRef.current.strokeColor,
+                stroke_width: universeFormatRef.current.strokeWidth,
+                stroke_style: universeFormatRef.current.strokeStyle,
+                path_type: universeFormatRef.current.pathType,
+                sourceNodeId: endpointToNodeId(link.source, tempIdToInsertedId),
+                targetNodeId: endpointToNodeId(link.target, tempIdToInsertedId)
+              };
+            })
+            .filter(Boolean);
+
+          if (linkRows.length) {
+            const { error: linkError } = await window.centralisSupabase
+              .from("element_links")
+              .insert(linkRows.map(({ sourceNodeId: _sourceNodeId, targetNodeId: _targetNodeId, ...row }) => row));
+            if (linkError) {
+              await window.centralisSupabase.from("elements").delete().in("id", elementRows.map((row) => row.id));
+              throw linkError;
+            }
+          }
+
+          const insertedNodes = (insertedElements || []).map((row) => {
+            const node = toElementNode(row);
+            node.data.format = universeFormatRef.current;
+            node.selected = true;
+            return applyLayerOverlayToNode(node, activeLayerIdRef.current, layerEntriesRef.current, layerAssignmentsRef.current);
+          });
+          const insertedNodeIds = new Set(insertedNodes.map((node) => node.id));
+          const linkEdges = linkRows.map((row) => ({
+            id: row.id,
+            source: row.sourceNodeId,
+            target: row.targetNodeId,
+            sourceHandle: "right",
+            targetHandle: "left",
+            label: row.label || undefined,
+            type: "deletable",
+            zIndex: LINK_EDGE_Z_INDEX,
+            data: { recordId: row.id, format: universeFormatRef.current },
+            style: {
+              stroke: universeFormatRef.current.strokeColor,
+              strokeWidth: universeFormatRef.current.strokeWidth,
+              strokeDasharray: getStrokeDasharray(universeFormatRef.current.strokeStyle)
+            }
+          }));
+
+          const nextNodes = [
+            ...nodesRef.current.map((node) => ({ ...node, selected: false })),
+            ...insertedNodes
+          ].map((node) => ({
+            ...node,
+            selected: insertedNodeIds.has(node.id)
+          }));
+          const nextEdges = [...edgesRef.current, ...linkEdges];
+          setNodes(nextNodes);
+          setEdges(nextEdges);
+          nodesRef.current = nextNodes;
+          edgesRef.current = nextEdges;
+          closeReviewModal(false);
+          setTransferStatus(`Added ${insertedNodes.length} generated ${insertedNodes.length === 1 ? "element" : "elements"} and ${linkEdges.length} ${linkEdges.length === 1 ? "link" : "links"}.`, "success");
+        } catch (error) {
+          setGeneratedElementsReviewStatus(`Could not add generated elements: ${getReadableError(error)}`, "error");
+        } finally {
+          if (finalizeButton) finalizeButton.disabled = false;
+          if (regenerateButton) regenerateButton.disabled = false;
+        }
+      }
+
+      function handleGenerateElementsEvent(event) {
+        openGenerateElementsModal(event.detail?.nodeId);
+      }
+
+      function handleReviewCancel() {
+        closeReviewModal(true);
+      }
+
+      function handleEscape(event) {
+        if (event.key !== "Escape") return;
+        if (infoModal && !infoModal.hidden) {
+          closeInfoModal();
+        } else if (!reviewModal.hidden) {
+          closeReviewModal(true);
+        } else if (!modal.hidden) {
+          closeGenerateElementsModal();
+        }
+      }
+
+      function handleTypeToggle() {
+        if (!typeList || !typeToggle) return;
+        const expanded = typeList.hidden;
+        typeList.hidden = !expanded;
+        typeToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      }
+
+      window.addEventListener("centralis:generate-elements", handleGenerateElementsEvent);
+      form.addEventListener("submit", handleGenerateSubmit);
+      typeToggle?.addEventListener("click", handleTypeToggle);
+      typeList?.addEventListener("change", updateTypeCount);
+      previewButton?.addEventListener("click", handlePreviewInformation);
+      infoCloseButtons.forEach((button) => button.addEventListener("click", closeInfoModal));
+      cancelButtons.forEach((button) => button.addEventListener("click", closeGenerateElementsModal));
+      reviewCancelButtons.forEach((button) => button.addEventListener("click", handleReviewCancel));
+      regenerateButton?.addEventListener("click", handleRegenerate);
+      finalizeButton?.addEventListener("click", finalizeGeneratedElements);
+      document.addEventListener("keydown", handleEscape);
+
+      return () => {
+        window.removeEventListener("centralis:generate-elements", handleGenerateElementsEvent);
+        form.removeEventListener("submit", handleGenerateSubmit);
+        typeToggle?.removeEventListener("click", handleTypeToggle);
+        typeList?.removeEventListener("change", updateTypeCount);
+        previewButton?.removeEventListener("click", handlePreviewInformation);
+        infoCloseButtons.forEach((button) => button.removeEventListener("click", closeInfoModal));
+        cancelButtons.forEach((button) => button.removeEventListener("click", closeGenerateElementsModal));
+        reviewCancelButtons.forEach((button) => button.removeEventListener("click", handleReviewCancel));
+        regenerateButton?.removeEventListener("click", handleRegenerate);
+        finalizeButton?.removeEventListener("click", finalizeGeneratedElements);
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [elementTypeVersion]);
 
     React.useEffect(() => {
       const importButton = document.querySelector("[data-import-elements]");
@@ -10214,6 +10996,20 @@
             }
           },
           "View Details"
+        ),
+        contextMenuNode?.data?.kind === "universe" && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              window.dispatchEvent(new CustomEvent("centralis:generate-elements", {
+                detail: { nodeId: contextMenuNode.id, universeId: contextMenuNode.data?.recordId }
+              }));
+            }
+          },
+          "Generate Elements"
         ),
         contextMenuNode?.data?.kind === "element" && contextIsSingleElement && React.createElement(
           "button",
