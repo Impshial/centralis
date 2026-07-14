@@ -1727,9 +1727,11 @@
   }
 
   function clearDetailsPaneAiState(controls = getDetailsControls()) {
+    controls?.pane?.classList.remove("is-ai-chat-pane");
     controls?.content?.classList.remove("is-ai-chat");
     const statusLine = controls?.titleBlock?.querySelector("[data-ai-header-status]");
     statusLine?.remove();
+    controls?.pane?.querySelector("[data-ai-popout]")?.remove();
     controls?.actionBar?.querySelector("[data-ai-popout]")?.remove();
   }
 
@@ -1754,22 +1756,24 @@
   }
 
   function setDetailsPaneAiPopoutButton(controls, onPopOut) {
-    if (!controls?.actionBar) {
+    if (!controls?.closeButton) {
       return;
     }
 
-    controls.actionBar.querySelector("[data-ai-popout]")?.remove();
+    controls.pane?.querySelector("[data-ai-popout]")?.remove();
     if (!onPopOut) {
       return;
     }
 
     const button = document.createElement("button");
-    button.className = "secondary-action compact-action universe-ai-popout-button";
+    button.className = "modal-close universe-ai-popout-button";
     button.type = "button";
     button.dataset.aiPopout = "";
-    button.innerHTML = '<ph-arrows-out-simple weight="bold" aria-hidden="true"></ph-arrows-out-simple><span>Pop out</span>';
+    button.title = "Pop out AI Expert chat";
+    button.setAttribute("aria-label", "Pop out AI Expert chat");
+    button.innerHTML = '<ph-arrows-out-simple weight="bold" aria-hidden="true"></ph-arrows-out-simple>';
     button.addEventListener("click", onPopOut);
-    controls.actionBar.prepend(button);
+    controls.closeButton.insertAdjacentElement("beforebegin", button);
   }
 
   function getLinkedNodes(nodeId, currentNodes, currentEdges) {
@@ -1891,6 +1895,51 @@
     return `<p>${escapeHtml(content).replace(/\n/g, "<br>")}</p>`;
   }
 
+  function getUniverseAiProposalSummary(proposal) {
+    const elements = Array.isArray(proposal?.payload?.elements) ? proposal.payload.elements : [];
+    const links = Array.isArray(proposal?.payload?.links) ? proposal.payload.links : [];
+    const elementCount = elements.length;
+    const linkCount = links.length;
+    const elementLabel = `${elementCount} ${elementCount === 1 ? "element" : "elements"}`;
+    const linkLabel = `${linkCount} ${linkCount === 1 ? "link" : "links"}`;
+    return `${elementLabel}${linkCount ? `, ${linkLabel}` : ""}`;
+  }
+
+  function getUniverseAiProposalStatusText(status) {
+    if (status === "finalized") return "Finalized";
+    if (status === "dismissed") return "Dismissed";
+    return "Pending review";
+  }
+
+  function renderUniverseAiProposalCard(proposal) {
+    if (!proposal || proposal.type !== "create_elements") {
+      return "";
+    }
+
+    const status = String(proposal.status || "pending");
+    const isPending = status === "pending";
+    return `
+      <aside class="universe-ai-proposal-card is-${escapeHtml(status)}" data-ai-proposal-card data-proposal-id="${escapeHtml(proposal.id || "")}">
+        <div class="universe-ai-proposal-main">
+          <span class="universe-ai-proposal-icon" aria-hidden="true">
+            <ph-sparkle weight="duotone"></ph-sparkle>
+          </span>
+          <div>
+            <strong>Proposed Elements</strong>
+            <span>${escapeHtml(getUniverseAiProposalSummary(proposal))}</span>
+          </div>
+        </div>
+        <div class="universe-ai-proposal-actions">
+          <span class="universe-ai-proposal-status">${escapeHtml(getUniverseAiProposalStatusText(status))}</span>
+          ${isPending ? `
+            <button class="secondary-action compact-action" type="button" data-ai-review-proposal="${escapeHtml(proposal.id || "")}">Review</button>
+            <button class="subtle-icon-action" type="button" data-ai-dismiss-proposal="${escapeHtml(proposal.id || "")}">Dismiss</button>
+          ` : ""}
+        </div>
+      </aside>
+    `;
+  }
+
   function renderUniverseAiStatusCard(status, state, isBusy) {
     return `
       <div class="universe-ai-status-card is-${escapeHtml(status.key)}">
@@ -1933,6 +1982,7 @@
               <div class="universe-ai-message-body">
                 ${renderAiMessageContent(message)}
               </div>
+              ${message.role === "assistant" && Array.isArray(message.proposals) ? message.proposals.map(renderUniverseAiProposalCard).join("") : ""}
               ${message.role === "assistant" ? `
                 <div class="universe-ai-response-actions">
                   <button class="subtle-icon-action" type="button" data-ai-copy-response title="Copy response">
@@ -1950,7 +2000,7 @@
           ` : ""}
         </div>
         <form class="universe-ai-composer" data-ai-chat-form>
-          <p class="form-status${state.error ? " is-error" : ""}" data-ai-chat-status role="status">${escapeHtml(state.error || state.statusMessage || "")}</p>
+          ${state.error ? `<p class="form-status is-error" data-ai-chat-status role="status">${escapeHtml(state.error)}</p>` : ""}
           <div class="universe-ai-composer-row">
             <textarea name="message" rows="1" placeholder="${isReady ? "Ask about this universe..." : "Sync the universe knowledge before chatting."}"${!isReady || isBusy ? " disabled" : ""}></textarea>
             <button class="primary-action compact-action universe-ai-send" type="submit"${!isReady || isBusy ? " disabled" : ""}>
@@ -1994,6 +2044,28 @@
       });
     });
 
+    const proposalById = new Map(messages.flatMap((message) => Array.isArray(message.proposals) ? message.proposals : [])
+      .filter((proposal) => proposal?.id)
+      .map((proposal) => [String(proposal.id), proposal]));
+
+    host.querySelectorAll("[data-ai-review-proposal]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const proposal = proposalById.get(String(button.dataset.aiReviewProposal || ""));
+        if (proposal) {
+          actions.onReviewProposal?.(proposal);
+        }
+      });
+    });
+
+    host.querySelectorAll("[data-ai-dismiss-proposal]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const proposal = proposalById.get(String(button.dataset.aiDismissProposal || ""));
+        if (proposal) {
+          actions.onDismissProposal?.(proposal);
+        }
+      });
+    });
+
     const textarea = host.querySelector('.universe-ai-composer textarea[name="message"]');
     const resizeComposer = () => {
       if (!textarea) return;
@@ -2033,6 +2105,7 @@
 
     const status = getUniverseAiStatusMeta(state);
     controls.pane.hidden = false;
+    controls.pane.classList.add("is-ai-chat-pane");
     document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", `${controls.pane.getBoundingClientRect().width}px`);
     controls.content.classList.add("is-ai-chat");
     setDetailsPaneAiStatusLine(controls, getUniverseAiReadyStatusLine(status));
@@ -4614,6 +4687,59 @@
       }
     }, []);
 
+    const updateAiProposalStatusInState = React.useCallback((proposalId, status) => {
+      const cleanProposalId = String(proposalId || "");
+      if (!cleanProposalId) return;
+      setAiChatState((current) => ({
+        ...current,
+        messages: (current.messages || []).map((message) => ({
+          ...message,
+          proposals: Array.isArray(message.proposals)
+            ? message.proposals.map((proposal) => (
+              String(proposal.id || "") === cleanProposalId
+                ? {
+                  ...proposal,
+                  status,
+                  updated_at: new Date().toISOString(),
+                  finalized_at: status === "finalized" ? new Date().toISOString() : proposal.finalized_at
+                }
+                : proposal
+            ))
+            : message.proposals
+        }))
+      }));
+    }, []);
+
+    const reviewUniverseAiProposal = React.useCallback((proposal) => {
+      if (!proposal?.id) return;
+      window.dispatchEvent(new CustomEvent("centralis:review-ai-element-proposal", {
+        detail: { proposal }
+      }));
+    }, []);
+
+    const dismissUniverseAiProposal = React.useCallback(async (proposal) => {
+      const proposalId = String(proposal?.id || "");
+      if (!proposalId || proposal?.status !== "pending") return;
+      updateAiProposalStatusInState(proposalId, "dismissed");
+      try {
+        const { error } = await window.centralisSupabase
+          .from("universe_ai_proposals")
+          .update({
+            status: "dismissed",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", proposalId)
+          .eq("universe_id", universe.id);
+        if (error) throw error;
+      } catch (error) {
+        updateAiProposalStatusInState(proposalId, "pending");
+        setAiChatState((current) => ({
+          ...current,
+          error: `Could not dismiss proposal: ${getReadableError(error)}`
+        }));
+      }
+    }, [updateAiProposalStatusInState]);
+
     const openUniverseAiPopout = React.useCallback(() => {
       const universeNodeId = nodesRef.current.find((currentNode) => currentNode.data?.kind === "universe")?.id || `universe:${universe.id}`;
       setAiChatPopoutOpen(true);
@@ -6364,6 +6490,17 @@
     }, [aiChatOpen, aiChatPopoutOpen, loadUniverseAiChat]);
 
     React.useEffect(() => {
+      function handleAiProposalStatusChanged(event) {
+        updateAiProposalStatusInState(event.detail?.proposalId, event.detail?.status);
+      }
+
+      window.addEventListener("centralis:ai-proposal-status-changed", handleAiProposalStatusChanged);
+      return () => {
+        window.removeEventListener("centralis:ai-proposal-status-changed", handleAiProposalStatusChanged);
+      };
+    }, [updateAiProposalStatusInState]);
+
+    React.useEffect(() => {
       if (!aiChatOpen) {
         return;
       }
@@ -6371,9 +6508,11 @@
       renderUniverseAiChatPane(aiChatState, {
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
+        onReviewProposal: reviewUniverseAiProposal,
+        onDismissProposal: dismissUniverseAiProposal,
         onPopOut: openUniverseAiPopout
       });
-    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, openUniverseAiPopout]);
+    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout]);
 
     React.useEffect(() => {
       if (!aiChatPopoutOpen) {
@@ -6382,9 +6521,11 @@
 
       renderUniverseAiChatContent(document.querySelector("[data-ai-popout-content]"), aiChatState, {
         onSync: syncUniverseAiSource,
-        onSend: sendUniverseAiMessage
+        onSend: sendUniverseAiMessage,
+        onReviewProposal: reviewUniverseAiProposal,
+        onDismissProposal: dismissUniverseAiProposal
       });
-    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage]);
+    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal]);
 
     React.useEffect(() => {
       function handleViewDetails(event) {
@@ -9418,6 +9559,33 @@
       status.classList.toggle("is-success", tone === "success");
     }
 
+    async function updateAiElementProposalStatus(proposal, status) {
+      const proposalId = String(proposal?.id || "");
+      if (!proposalId) return;
+      const now = new Date().toISOString();
+      const update = {
+        status,
+        updated_at: now
+      };
+      if (status === "finalized") {
+        update.finalized_at = now;
+      }
+      const { error } = await window.centralisSupabase
+        .from("universe_ai_proposals")
+        .update(update)
+        .eq("id", proposalId)
+        .eq("universe_id", universe.id);
+      if (error) {
+        throw error;
+      }
+      window.dispatchEvent(new CustomEvent("centralis:ai-proposal-status-changed", {
+        detail: {
+          proposalId,
+          status
+        }
+      }));
+    }
+
     function setLayerStatus(message, tone = "") {
       const status = document.querySelector("[data-layer-status]");
       if (!status) return;
@@ -10305,6 +10473,8 @@
       let activeSourceElement = null;
       let lastGenerateOptions = null;
       let lastGeneratedDraft = { elements: [], links: [] };
+      let activeReviewMode = "generate";
+      let activeAiProposal = null;
 
       function setGenerateElementsOverlay(visible) {
         if (!generationOverlay) return;
@@ -10379,16 +10549,27 @@
         setGenerateElementsStatus("");
       }
 
-      function openReviewModal() {
+      function openReviewModal(options = {}) {
+        activeReviewMode = options.mode || "generate";
+        activeAiProposal = options.proposal || null;
         closeGenerateElementsModal();
         setGeneratedElementsReviewStatus("");
+        if (regenerateButton) {
+          regenerateButton.hidden = activeReviewMode === "ai-proposal";
+        }
         reviewModal.hidden = false;
       }
 
       function closeReviewModal(returnToOptions = false) {
         reviewModal.hidden = true;
         setGeneratedElementsReviewStatus("");
-        if (returnToOptions) {
+        if (regenerateButton) {
+          regenerateButton.hidden = false;
+        }
+        const shouldReturnToOptions = returnToOptions && activeReviewMode === "generate";
+        activeReviewMode = "generate";
+        activeAiProposal = null;
+        if (shouldReturnToOptions) {
           modal.hidden = false;
         }
       }
@@ -10815,6 +10996,7 @@
           const nextEdges = [...edgesRef.current, ...linkEdges];
           let finalNodes = nextNodes;
           let layoutWarning = "";
+          const finalizedAiProposal = activeAiProposal;
           try {
             setGeneratedElementsReviewStatus("Adding generated elements and laying out canvas...");
             finalNodes = await createAutoLayout(nextNodes, nextEdges, universeFormatRef.current);
@@ -10832,6 +11014,14 @@
           setEdges(nextEdges);
           nodesRef.current = finalNodes;
           edgesRef.current = nextEdges;
+          if (finalizedAiProposal?.id) {
+            try {
+              await updateAiElementProposalStatus(finalizedAiProposal, "finalized");
+            } catch (proposalStatusError) {
+              console.error("Could not mark AI proposal finalized:", proposalStatusError);
+              layoutWarning = `${layoutWarning} Proposal status could not be updated.`;
+            }
+          }
           closeReviewModal(false);
           window.setTimeout(() => {
             fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 });
@@ -10848,6 +11038,30 @@
 
       function handleGenerateElementsEvent(event) {
         openGenerateElementsModal(event.detail?.nodeId);
+      }
+
+      function handleReviewAiProposalEvent(event) {
+        const proposal = event.detail?.proposal;
+        if (!proposal || proposal.type !== "create_elements" || proposal.status !== "pending") {
+          return;
+        }
+        activeUniverseNodeId = `universe:${universe.id}`;
+        activeSourceElement = null;
+        lastGenerateOptions = {
+          sourceElement: null,
+          allowedElementTypes: elementTypes.map((type) => ({ id: type.id, name: type.name || "Untitled Type" })),
+          density: "balanced",
+          count: Array.isArray(proposal.payload?.elements) ? proposal.payload.elements.length : 0,
+          instructions: ""
+        };
+        const draft = normalizeGeneratedElementsPayload(proposal.payload || {}, null);
+        if (!draft.elements.length) {
+          setTransferStatus("This AI proposal does not contain any usable elements.", "error");
+          return;
+        }
+        lastGeneratedDraft = draft;
+        renderGeneratedElementsReview(draft);
+        openReviewModal({ mode: "ai-proposal", proposal });
       }
 
       function handleReviewCancel() {
@@ -10873,6 +11087,7 @@
       }
 
       window.addEventListener("centralis:generate-elements", handleGenerateElementsEvent);
+      window.addEventListener("centralis:review-ai-element-proposal", handleReviewAiProposalEvent);
       form.addEventListener("submit", handleGenerateSubmit);
       typeToggle?.addEventListener("click", handleTypeToggle);
       typeList?.addEventListener("change", handleTypeListChange);
@@ -10887,11 +11102,12 @@
 
       return () => {
         window.removeEventListener("centralis:generate-elements", handleGenerateElementsEvent);
-      form.removeEventListener("submit", handleGenerateSubmit);
-      typeToggle?.removeEventListener("click", handleTypeToggle);
-      typeList?.removeEventListener("change", handleTypeListChange);
-      typeSelectAll?.removeEventListener("change", handleTypeSelectAllChange);
-      previewButton?.removeEventListener("click", handlePreviewInformation);
+        window.removeEventListener("centralis:review-ai-element-proposal", handleReviewAiProposalEvent);
+        form.removeEventListener("submit", handleGenerateSubmit);
+        typeToggle?.removeEventListener("click", handleTypeToggle);
+        typeList?.removeEventListener("change", handleTypeListChange);
+        typeSelectAll?.removeEventListener("change", handleTypeSelectAllChange);
+        previewButton?.removeEventListener("click", handlePreviewInformation);
         infoCloseButtons.forEach((button) => button.removeEventListener("click", closeInfoModal));
         cancelButtons.forEach((button) => button.removeEventListener("click", closeGenerateElementsModal));
         reviewCancelButtons.forEach((button) => button.removeEventListener("click", handleReviewCancel));

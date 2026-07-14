@@ -12,12 +12,15 @@ import {
   getOrCreateAiChat,
   getOrCreateAiSource,
   loadAiMessages,
+  loadAiProposals,
   loadRecentAiMessagesForPrompt,
   loadUniverseContext,
+  sendUniverseElementProposalRequest,
   sendUniverseExpertRequest,
   serializeChat,
   serializeMessages,
   serializeSource,
+  shouldConsiderElementProposal,
 } from "../_shared/universe-ai.ts";
 
 Deno.serve(async (req) => {
@@ -54,17 +57,19 @@ Deno.serve(async (req) => {
     const chat = await getOrCreateAiChat(supabase, universeId, appUser.id);
     const chatId = String(chat.id);
 
-    const { error: userInsertError } = await supabase
+    const { data: userMessage, error: userInsertError } = await supabase
       .from("universe_ai_messages")
       .insert({
         chat_id: chatId,
         user_id: appUser.id,
         role: "user",
         content: message,
-      });
+      })
+      .select("id")
+      .single();
 
-    if (userInsertError) {
-      throw userInsertError;
+    if (userInsertError || !userMessage) {
+      throw userInsertError || new Error("Could not store the user message.");
     }
 
     const promptMessages = await loadRecentAiMessagesForPrompt(supabase, chatId, appUser.id);
@@ -74,7 +79,7 @@ Deno.serve(async (req) => {
       messages: promptMessages,
     });
 
-    const { error: assistantInsertError } = await supabase
+    const { data: assistantMessage, error: assistantInsertError } = await supabase
       .from("universe_ai_messages")
       .insert({
         chat_id: chatId,
@@ -83,10 +88,44 @@ Deno.serve(async (req) => {
         content: aiResult.text,
         openai_response_id: String(aiResult.response.id || ""),
         citations: aiResult.citations,
-      });
+      })
+      .select("id")
+      .single();
 
-    if (assistantInsertError) {
-      throw assistantInsertError;
+    if (assistantInsertError || !assistantMessage) {
+      throw assistantInsertError || new Error("Could not store the assistant message.");
+    }
+
+    if (shouldConsiderElementProposal(message)) {
+      try {
+        const proposalPayload = await sendUniverseElementProposalRequest({
+          context,
+          vectorStoreId,
+          latestUserMessage: message,
+          assistantReply: aiResult.text,
+        });
+
+        if (proposalPayload?.elements?.length) {
+          const { error: proposalInsertError } = await supabase
+            .from("universe_ai_proposals")
+            .insert({
+              universe_id: universeId,
+              chat_id: chatId,
+              user_id: appUser.id,
+              source_user_message_id: userMessage.id,
+              assistant_message_id: assistantMessage.id,
+              proposal_type: "create_elements",
+              payload: proposalPayload,
+              status: "pending",
+            });
+
+          if (proposalInsertError) {
+            throw proposalInsertError;
+          }
+        }
+      } catch (proposalError) {
+        console.error("Could not create AI element proposal:", proposalError);
+      }
     }
 
     const { data: updatedChat, error: chatUpdateError } = await supabase
@@ -105,11 +144,12 @@ Deno.serve(async (req) => {
     }
 
     const messages = await loadAiMessages(supabase, chatId, appUser.id);
+    const proposals = await loadAiProposals(supabase, chatId, appUser.id);
 
     return jsonResponse({
       source: serializeSource(source),
       chat: serializeChat(updatedChat),
-      messages: serializeMessages(messages),
+      messages: serializeMessages(messages, proposals),
     });
   } catch (error) {
     console.error(error);

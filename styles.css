@@ -4623,8 +4623,11 @@ body.is-resizing-details {
 
 .details-pane-body.is-ai-chat,
 .universe-ai-popout-body {
+  display: block;
+  box-sizing: border-box;
   align-content: stretch;
   gap: 0;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -4641,23 +4644,38 @@ body.is-resizing-details {
 }
 
 .universe-ai-popout-button {
-  gap: 6px;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  margin-right: 34px;
+  color: var(--muted);
+}
+
+.universe-ai-popout-button:hover,
+.universe-ai-popout-button:focus-visible {
+  color: var(--accent);
 }
 
 .universe-ai-popout-button ph-arrows-out-simple {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 .universe-ai-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "status"
+    "messages"
+    "composer";
   gap: 14px;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .universe-ai-status-card {
+  grid-area: status;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4710,11 +4728,12 @@ body.is-resizing-details {
 }
 
 .universe-ai-messages {
+  grid-area: messages;
   display: flex;
   flex-direction: column;
   gap: 24px;
   min-height: 0;
-  padding: 6px 4px 10px;
+  padding: 6px 4px 18px;
   overflow-y: auto;
 }
 
@@ -4789,6 +4808,78 @@ body.is-resizing-details {
   margin-top: 6px;
 }
 
+.universe-ai-proposal-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--accent) 8%);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 10px;
+}
+
+.universe-ai-proposal-card.is-finalized {
+  background: color-mix(in srgb, var(--surface-2) 82%, #4ade80 7%);
+  border-color: color-mix(in srgb, #4ade80 38%, var(--line));
+}
+
+.universe-ai-proposal-card.is-dismissed {
+  opacity: 0.68;
+}
+
+.universe-ai-proposal-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.universe-ai-proposal-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 8px;
+}
+
+.universe-ai-proposal-main strong,
+.universe-ai-proposal-main span {
+  display: block;
+  min-width: 0;
+}
+
+.universe-ai-proposal-main strong {
+  font-size: 0.92rem;
+}
+
+.universe-ai-proposal-main span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.universe-ai-proposal-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.universe-ai-proposal-status {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .subtle-icon-action {
   display: inline-flex;
   align-items: center;
@@ -4819,10 +4910,12 @@ body.is-resizing-details {
 }
 
 .universe-ai-composer {
+  grid-area: composer;
   align-self: end;
   display: grid;
   gap: 7px;
   padding-top: 4px;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
 }
 
 .universe-ai-composer .form-status {
@@ -4840,8 +4933,35 @@ body.is-resizing-details {
 .universe-ai-composer textarea {
   min-height: 38px;
   max-height: 172px;
+  width: 100%;
+  padding: 9px 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--field) 86%, var(--surface) 14%);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  outline: none;
   resize: none;
   overflow-y: hidden;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.universe-ai-composer textarea:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+}
+
+.universe-ai-composer textarea:focus {
+  background: var(--field);
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.universe-ai-composer textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .universe-ai-send {

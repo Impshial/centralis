@@ -11,6 +11,7 @@ import {
   getOrCreateAiChat,
   getOrCreateAiSource,
   loadAiMessages,
+  loadAiProposals,
   loadUniverseContext,
   serializeChat,
   serializeMessages,
@@ -40,6 +41,7 @@ Deno.serve(async (req) => {
     const source = await getOrCreateAiSource(supabase, universeId, appUser.id);
     const chat = await getOrCreateAiChat(supabase, universeId, appUser.id);
     const messages = await loadAiMessages(supabase, String(chat.id), appUser.id);
+    const proposals = await loadAiProposals(supabase, String(chat.id), appUser.id);
 
     return jsonResponse({
       universe: {
@@ -48,7 +50,7 @@ Deno.serve(async (req) => {
       },
       source: serializeSource(source),
       chat: serializeChat(chat),
-      messages: serializeMessages(messages),
+      messages: serializeMessages(messages, proposals),
     });
   } catch (error) {
     console.error(error);

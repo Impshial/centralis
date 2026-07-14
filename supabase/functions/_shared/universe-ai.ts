@@ -1,5 +1,6 @@
 import { createAdminClient, getEnv } from "./image-storage.ts";
 import { TEXT_MODEL } from "./openai-config.ts";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "./fictional-naming-rules.ts";
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const MAX_MESSAGE_LENGTH = 12000;
@@ -85,12 +86,44 @@ export function serializeChat(chat: Record<string, unknown> | null) {
   };
 }
 
-export function serializeMessages(messages: Array<Record<string, unknown>> = []) {
+export function serializeProposal(proposal: Record<string, unknown> | null) {
+  if (!proposal) {
+    return null;
+  }
+
+  return {
+    id: proposal.id,
+    type: proposal.proposal_type,
+    payload: proposal.payload || {},
+    status: proposal.status || "pending",
+    created_at: proposal.created_at || null,
+    updated_at: proposal.updated_at || null,
+    finalized_at: proposal.finalized_at || null,
+  };
+}
+
+export function serializeMessages(
+  messages: Array<Record<string, unknown>> = [],
+  proposals: Array<Record<string, unknown>> = [],
+) {
+  const proposalsByMessage = new Map<string, Array<Record<string, unknown>>>();
+  proposals.forEach((proposal) => {
+    const assistantMessageId = String(proposal.assistant_message_id || "");
+    if (!assistantMessageId) return;
+    if (!proposalsByMessage.has(assistantMessageId)) {
+      proposalsByMessage.set(assistantMessageId, []);
+    }
+    proposalsByMessage.get(assistantMessageId)?.push(proposal);
+  });
+
   return messages.map((message) => ({
     id: message.id,
     role: message.role,
     content: message.content,
     citations: message.citations || [],
+    proposals: (proposalsByMessage.get(String(message.id || "")) || [])
+      .map((proposal) => serializeProposal(proposal))
+      .filter(Boolean),
     created_at: message.created_at,
   }));
 }
@@ -449,6 +482,25 @@ export async function loadAiMessages(
   return data || [];
 }
 
+export async function loadAiProposals(
+  supabase: ReturnType<typeof createAdminClient>,
+  chatId: string,
+  appUserId: number,
+) {
+  const { data, error } = await supabase
+    .from("universe_ai_proposals")
+    .select("id,universe_id,chat_id,user_id,source_user_message_id,assistant_message_id,proposal_type,payload,status,created_at,updated_at,finalized_at")
+    .eq("chat_id", chatId)
+    .eq("user_id", appUserId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
 export async function loadRecentAiMessagesForPrompt(
   supabase: ReturnType<typeof createAdminClient>,
   chatId: string,
@@ -484,7 +536,9 @@ export function buildUniverseExpertInstructions(universeName: string) {
     "If information is absent from the synced canon, say that it has not been defined yet.",
     "Current synced canon supersedes older chat messages.",
     "Help the user brainstorm while preserving continuity.",
-    "This v1 chat is read-only: do not claim that you changed, created, deleted, or saved Centralis records.",
+    "You may propose new Centralis element drafts when the user explicitly asks to create, add, make, generate, or save elements, but those drafts are only reviewable proposals.",
+    "Never claim that you changed, created, deleted, finalized, or saved Centralis records. The user must review and finalize proposals in the app.",
+    "Do not include machine-readable JSON in the visible chat reply; answer naturally and mention that drafts can be reviewed when appropriate.",
   ].join("\n");
 }
 
@@ -523,6 +577,226 @@ export function extractOpenAiCitations(response: Record<string, unknown>) {
         queries: record.queries || [],
       };
     });
+}
+
+function parseJsonObject(textValue: string) {
+  try {
+    return JSON.parse(textValue);
+  } catch (_error) {
+    const start = textValue.indexOf("{");
+    const end = textValue.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(textValue.slice(start, end + 1));
+    }
+    throw new Error("OpenAI did not return valid proposal JSON.");
+  }
+}
+
+function cleanProposalString(value: unknown, maxLength: number) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function truncateProposalText(value: unknown, maxLength: number) {
+  const text = cleanProposalString(value, maxLength + 40);
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 16)).trimEnd()}... [truncated]`;
+}
+
+function cleanProposalTempId(value: unknown, fallback: string) {
+  return String(value || fallback)
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || fallback;
+}
+
+function isTruthyProposalFlag(value: unknown) {
+  if (typeof value === "boolean") return value;
+  const text = String(value || "").trim().toLowerCase();
+  return ["true", "yes", "1", "propose", "create"].includes(text);
+}
+
+export function shouldConsiderElementProposal(message: string) {
+  const text = String(message || "").toLowerCase();
+  if (!text.trim()) return false;
+
+  const creationIntent = /\b(create|generate|make|add|draft|build|propose|prepare|save)\b/.test(text);
+  const elementIntent = /\b(element|elements|node|nodes|character|characters|person|people|place|places|city|cities|location|locations|region|regions|faction|factions|organization|organizations|creature|creatures|species|artifact|artifacts|object|objects|event|events|conflict|conflicts|family|families|structure|structures|magic system|technology|technologies|law|laws|culture|cultures)\b/.test(text);
+  const appIntent = /\b(centralis|canvas|universe builder|review|finalize)\b/.test(text);
+  return creationIntent && (elementIntent || appIntent);
+}
+
+function getAllowedElementTypeNames(context: UniverseContext) {
+  return [...context.elementTypesById.values()]
+    .map((type) => cleanProposalString(type.name, 120))
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function buildProposalExistingElements(context: UniverseContext, limit = 120) {
+  return context.elements.slice(0, limit).map((element) => ({
+    id: String(element.id || ""),
+    name: cleanProposalString(element.name, 180) || "Untitled Element",
+    element_type_name: getElementTypeName(element, context),
+    description: truncateProposalText(element.description, 650),
+  }));
+}
+
+function isUsefulProposalLinkLabel(value: string) {
+  const label = value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  if (!label) return false;
+  const weakLabels = new Set([
+    "associated with",
+    "branches to",
+    "connected to",
+    "connects to",
+    "has connection to",
+    "influences",
+    "is associated with",
+    "is connected to",
+    "is linked to",
+    "leads to",
+    "linked to",
+    "relates to",
+    "related to",
+    "ties to",
+  ]);
+  return !weakLabels.has(label);
+}
+
+function cleanElementProposalPayload(payload: unknown, context: UniverseContext, latestUserMessage: string, assistantReply: string) {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const shouldPropose = isTruthyProposalFlag(record.should_propose ?? record.shouldPropose);
+  if (!shouldPropose) {
+    return null;
+  }
+
+  const allowedTypes = getAllowedElementTypeNames(context);
+  const fallbackType = allowedTypes[0] || "";
+  const rawElements = Array.isArray(record.elements) ? record.elements : [];
+  const elements = rawElements
+    .map((item, index) => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      return {
+        temp_id: cleanProposalTempId(row.temp_id || row.tempId || row.id, `generated-${index + 1}`),
+        name: cleanProposalString(row.name, 200),
+        description: cleanProposalString(row.description, 4000),
+        element_type_name: cleanProposalString(row.element_type_name || row.elementTypeName || row.type || fallbackType, 120),
+      };
+    })
+    .filter((element) => element.name && element.description)
+    .slice(0, 12);
+
+  if (!elements.length) {
+    return null;
+  }
+
+  const links = (Array.isArray(record.links) ? record.links : [])
+    .map((item, index) => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const source = cleanProposalString(row.source || row.source_id || row.source_temp_id || row.source_existing_id || row.source_name, 200);
+      const target = cleanProposalString(row.target || row.target_id || row.target_temp_id || row.target_existing_id || row.target_name, 200);
+      return {
+        id: cleanProposalTempId(row.id, `link-${index + 1}`),
+        source,
+        target,
+        label: cleanProposalString(row.label || row.relationship, 120),
+      };
+    })
+    .filter((link) => link.source && link.target && link.source !== link.target && isUsefulProposalLinkLabel(link.label))
+    .slice(0, Math.max(1, Math.ceil(elements.length * 0.75)));
+
+  return {
+    elements,
+    links,
+    meta: {
+      source: "ai_expert",
+      user_message: truncateProposalText(latestUserMessage, 1000),
+      assistant_reply: truncateProposalText(assistantReply, 1000),
+    },
+  };
+}
+
+function buildElementProposalPrompt(options: {
+  context: UniverseContext;
+  latestUserMessage: string;
+  assistantReply: string;
+}) {
+  const allowedTypes = getAllowedElementTypeNames(options.context);
+  const existingElements = buildProposalExistingElements(options.context);
+  return [
+    "Decide whether the user's latest message should create reviewable Centralis Universe Builder element drafts.",
+    "Return exactly one JSON object with this shape:",
+    `{"should_propose":true|false,"elements":[{"temp_id":"generated-1","name":"Name","description":"Description","element_type_name":"Allowed Type Name"}],"links":[{"source":"universe or existing element id or generated temp_id","target":"generated temp_id or existing element id","label":"specific relationship"}]}`,
+    "If the user is only asking a question, brainstorming without asking to create app records, discussing options, or asking for advice, return {\"should_propose\":false,\"elements\":[],\"links\":[]}.",
+    "If the user asks to create, add, generate, make, draft, build, or save elements/nodes/items in Centralis, return should_propose true with draft elements.",
+    "These are proposals only. Do not imply they are already saved.",
+    "Use only the allowed element type names. Choose the closest allowed type when the user asks for a specific kind of thing.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
+    "Descriptions should be substantial and usable: 3 to 5 detailed sentences, roughly 80 to 140 words when appropriate.",
+    "Each description should include concrete setting details, role/purpose, conflicts or tensions, notable traits, and at least one story or worldbuilding hook.",
+    "Links are optional but useful. Link direction is parent/source/upstream cause -> child/target/downstream result. The target is the child node and receives the connection on its left side in the canvas.",
+    "Only create links when the relationship is concrete, direct, and legible from the two node descriptions plus the link label.",
+    "Use specific labels such as 'funds', 'guards', 'records evidence for', 'shelters fugitives from', 'manufactures', 'commands', 'rivals', 'enforces', 'supplies', 'was founded by', or 'contests jurisdiction with'.",
+    "Do not use vague labels such as 'related to', 'connected to', 'linked to', 'associated with', 'influences', 'branches to', or 'leads to'.",
+    "Use source or target value \"universe\" for the universe root. Use existing element IDs for existing elements. Use generated temp_id values for generated elements.",
+    "Prefer 1 to 6 draft elements unless the user clearly asks for more. Never return more than 12.",
+    `Universe name: ${options.context.universe.name || "Untitled Universe"}`,
+    options.context.universe.description ? `Universe description: ${options.context.universe.description}` : "No universe description is available.",
+    `Allowed element types:\n${allowedTypes.map((name) => `- ${name}`).join("\n") || "- No element types available"}`,
+    existingElements.length
+      ? `Existing elements for context and optional linking:\n${existingElements.map((element) => `- ID: ${element.id}; Type: ${element.element_type_name || "Unknown"}; Name: ${element.name}; Description: ${element.description || "None"}`).join("\n")}`
+      : "No existing elements are available yet.",
+    `Latest user message:\n${options.latestUserMessage}`,
+    `Visible assistant reply already shown to the user:\n${options.assistantReply}`,
+  ].join("\n\n");
+}
+
+export async function sendUniverseElementProposalRequest(options: {
+  context: UniverseContext;
+  vectorStoreId: string;
+  latestUserMessage: string;
+  assistantReply: string;
+}) {
+  const response = await openAiRequest("/responses", {
+    method: "POST",
+    body: JSON.stringify({
+      model: getUniverseAiModel(),
+      instructions: "You produce strict JSON for reviewable Centralis element proposals. Return only JSON with no markdown or commentary.",
+      input: [{
+        role: "user",
+        content: buildElementProposalPrompt({
+          context: options.context,
+          latestUserMessage: options.latestUserMessage,
+          assistantReply: options.assistantReply,
+        }),
+      }],
+      tools: [{
+        type: "file_search",
+        vector_store_ids: [options.vectorStoreId],
+        max_num_results: 10,
+      }],
+      text: {
+        format: { type: "json_object" },
+      },
+      max_output_tokens: 5000,
+    }),
+  });
+
+  const text = extractOpenAiResponseText(response);
+  if (!text) {
+    return null;
+  }
+
+  return cleanElementProposalPayload(
+    parseJsonObject(text),
+    options.context,
+    options.latestUserMessage,
+    options.assistantReply,
+  );
 }
 
 export async function sendUniverseExpertRequest(options: {
