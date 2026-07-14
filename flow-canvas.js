@@ -530,6 +530,15 @@
 
     if (universeResponse.data) {
       universe = universeResponse.data;
+      window.centralisSupabase
+        .from("universes")
+        .update({ opened_at: new Date().toISOString() })
+        .eq("id", universe.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn("Could not mark universe as opened:", error);
+          }
+        });
     }
 
     const typeOwnerId = universe.user_id || currentAppUser?.id;
@@ -913,6 +922,20 @@
               }
             },
             "View Details"
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: (event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+                window.dispatchEvent(new CustomEvent("centralis:generate-elements", {
+                  detail: { nodeId: props.id, elementId: data.recordId }
+                }));
+              }
+            },
+            "Generate Elements"
           ),
           React.createElement(
             "button",
@@ -1682,8 +1705,10 @@
       pane,
       kind: pane.querySelector("[data-details-kind]"),
       title: pane.querySelector("[data-details-title]"),
+      titleBlock: pane.querySelector(".details-pane-title-block"),
       content: pane.querySelector("[data-details-content]"),
       closeButton: pane.querySelector("[data-details-close]"),
+      actionBar: pane.querySelector(".details-pane-actions"),
       richButton: pane.querySelector("[data-details-rich]"),
       editButton: pane.querySelector("[data-details-edit]"),
       saveButton: pane.querySelector("[data-details-save]"),
@@ -1696,8 +1721,55 @@
     const controls = getDetailsControls();
     if (controls?.pane) {
       controls.pane.hidden = true;
+      clearDetailsPaneAiState(controls);
     }
     document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", "0px");
+  }
+
+  function clearDetailsPaneAiState(controls = getDetailsControls()) {
+    controls?.content?.classList.remove("is-ai-chat");
+    const statusLine = controls?.titleBlock?.querySelector("[data-ai-header-status]");
+    statusLine?.remove();
+    controls?.actionBar?.querySelector("[data-ai-popout]")?.remove();
+  }
+
+  function setDetailsPaneAiStatusLine(controls, text) {
+    if (!controls?.titleBlock) {
+      return;
+    }
+
+    let statusLine = controls.titleBlock.querySelector("[data-ai-header-status]");
+    if (!text) {
+      statusLine?.remove();
+      return;
+    }
+
+    if (!statusLine) {
+      statusLine = document.createElement("p");
+      statusLine.className = "universe-ai-header-status";
+      statusLine.dataset.aiHeaderStatus = "";
+      controls.titleBlock.appendChild(statusLine);
+    }
+    statusLine.textContent = text;
+  }
+
+  function setDetailsPaneAiPopoutButton(controls, onPopOut) {
+    if (!controls?.actionBar) {
+      return;
+    }
+
+    controls.actionBar.querySelector("[data-ai-popout]")?.remove();
+    if (!onPopOut) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.className = "secondary-action compact-action universe-ai-popout-button";
+    button.type = "button";
+    button.dataset.aiPopout = "";
+    button.innerHTML = '<ph-arrows-out-simple weight="bold" aria-hidden="true"></ph-arrows-out-simple><span>Pop out</span>';
+    button.addEventListener("click", onPopOut);
+    controls.actionBar.prepend(button);
   }
 
   function getLinkedNodes(nodeId, currentNodes, currentEdges) {
@@ -1744,14 +1816,11 @@
     }).join("");
   }
 
-  function renderCollapsibleDetailsSection(id, title, content) {
+  function renderDetailsSection(id, title, content) {
     const bodyId = `details-section-${sanitizeIconName(id)}`;
     return `
-      <section class="details-section collapsible-details-section">
-        <button class="details-section-toggle" type="button" aria-expanded="true" aria-controls="${escapeHtml(bodyId)}" data-details-section-toggle>
-          <span>${escapeHtml(title)}</span>
-          <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
-        </button>
+      <section class="details-section details-view-section">
+        <h3 class="details-section-heading">${escapeHtml(title)}</h3>
         <div class="details-section-body" id="${escapeHtml(bodyId)}" data-details-section-body>
           ${content}
         </div>
@@ -1759,19 +1828,222 @@
     `;
   }
 
-  function setupCollapsibleDetailsSections(container) {
-    container.querySelectorAll("[data-details-section-toggle]").forEach((button) => {
-      const body = button.closest(".collapsible-details-section")?.querySelector("[data-details-section-body]");
-      if (!body) {
-        return;
-      }
+  function getUniverseAiStatusMeta(state = {}) {
+    if (state.loading) {
+      return {
+        key: "loading",
+        label: "Loading",
+        description: "Loading the persistent AI Expert discussion..."
+      };
+    }
+    if (state.syncing) {
+      return {
+        key: "syncing",
+        label: "Syncing",
+        description: "Building and syncing this universe's canon knowledge source."
+      };
+    }
+    if (state.error || state.source?.sync_status === "error") {
+      return {
+        key: "error",
+        label: "Error",
+        description: state.error || state.source?.sync_error || "The AI knowledge source could not be prepared."
+      };
+    }
+    if (state.source?.sync_status === "ready") {
+      return {
+        key: "ready",
+        label: "Ready",
+        description: state.source?.last_synced_at
+          ? `Knowledge synced ${formatDetailsDate(state.source.last_synced_at)}.`
+          : "Knowledge is synced and ready."
+      };
+    }
+    return {
+      key: "dirty",
+      label: "Needs update",
+      description: "The AI needs to sync this universe's current canon before answering."
+    };
+  }
 
-      button.addEventListener("click", () => {
-        const isExpanded = button.getAttribute("aria-expanded") === "true";
-        button.setAttribute("aria-expanded", isExpanded ? "false" : "true");
-        body.hidden = isExpanded;
+  function formatDetailsDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "recently";
+    }
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
+  function renderAiMessageContent(message) {
+    const content = String(message?.content || "");
+    if (message?.role === "assistant") {
+      return renderMarkdownDescription(content).replace(
+        /class="details-description-text details-description-markdown([^"]*)"/,
+        'class="universe-ai-response-text details-description-markdown$1"'
+      );
+    }
+    return `<p>${escapeHtml(content).replace(/\n/g, "<br>")}</p>`;
+  }
+
+  function renderUniverseAiStatusCard(status, state, isBusy) {
+    return `
+      <div class="universe-ai-status-card is-${escapeHtml(status.key)}">
+        <div>
+          <span>Knowledge Status</span>
+          <strong>${escapeHtml(status.label)}</strong>
+          <p>${escapeHtml(status.description)}</p>
+        </div>
+        ${status.key !== "ready" ? `
+          <button class="secondary-action compact-action" type="button" data-ai-sync${isBusy ? " disabled" : ""}>
+            ${state.syncing ? "Syncing..." : "Sync Now"}
+          </button>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  function getUniverseAiReadyStatusLine(status) {
+    return status.key === "ready" ? `${status.label} - ${status.description}` : "";
+  }
+
+  function renderUniverseAiChatContent(host, state = {}, actions = {}, options = {}) {
+    if (!host) {
+      return;
+    }
+    const status = getUniverseAiStatusMeta(state);
+    const isReady = status.key === "ready";
+    const isBusy = Boolean(state.loading || state.syncing || state.sending);
+    const messages = Array.isArray(state.messages) ? state.messages : [];
+    const showStatusCard = status.key !== "ready" || options.forceStatusCard;
+
+    host.innerHTML = `
+      <section class="universe-ai-panel">
+        ${showStatusCard ? renderUniverseAiStatusCard(status, state, isBusy) : ""}
+        <div class="universe-ai-messages" data-ai-messages>
+          ${state.loading ? '<p class="details-empty">Loading AI Expert...</p>' : ""}
+          ${!state.loading && !messages.length ? '<p class="details-empty">Ask this universe expert about canon, continuity, missing details, or new ideas.</p>' : ""}
+          ${messages.map((message) => `
+            <article class="universe-ai-message is-${escapeHtml(message.role || "assistant")}">
+              <div class="universe-ai-message-body">
+                ${renderAiMessageContent(message)}
+              </div>
+              ${message.role === "assistant" ? `
+                <div class="universe-ai-response-actions">
+                  <button class="subtle-icon-action" type="button" data-ai-copy-response title="Copy response">
+                    <ph-copy weight="bold" aria-hidden="true"></ph-copy>
+                    <span>Copy</span>
+                  </button>
+                </div>
+              ` : ""}
+            </article>
+          `).join("")}
+          ${state.sending ? `
+            <article class="universe-ai-message is-assistant is-pending">
+              <div class="universe-ai-message-body"><p>Thinking...</p></div>
+            </article>
+          ` : ""}
+        </div>
+        <form class="universe-ai-composer" data-ai-chat-form>
+          <p class="form-status${state.error ? " is-error" : ""}" data-ai-chat-status role="status">${escapeHtml(state.error || state.statusMessage || "")}</p>
+          <div class="universe-ai-composer-row">
+            <textarea name="message" rows="1" placeholder="${isReady ? "Ask about this universe..." : "Sync the universe knowledge before chatting."}"${!isReady || isBusy ? " disabled" : ""}></textarea>
+            <button class="primary-action compact-action universe-ai-send" type="submit"${!isReady || isBusy ? " disabled" : ""}>
+              ${state.sending ? "Sending..." : "Send"}
+            </button>
+          </div>
+        </form>
+      </section>
+    `;
+
+    const messagesHost = host.querySelector("[data-ai-messages]");
+    if (messagesHost) {
+      messagesHost.scrollTop = messagesHost.scrollHeight;
+    }
+
+    host.querySelector("[data-ai-sync]")?.addEventListener("click", () => {
+      actions.onSync?.();
+    });
+
+    host.querySelectorAll("[data-ai-copy-response]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const message = button.closest(".universe-ai-message");
+        const text = message?.querySelector(".universe-ai-message-body")?.innerText?.trim() || "";
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          const label = button.querySelector("span");
+          if (label) label.textContent = "Copied";
+          button.classList.add("is-copied");
+          window.setTimeout(() => {
+            if (label) label.textContent = "Copy";
+            button.classList.remove("is-copied");
+          }, 1600);
+        } catch (_error) {
+          const label = button.querySelector("span");
+          if (label) label.textContent = "Copy failed";
+          window.setTimeout(() => {
+            if (label) label.textContent = "Copy";
+          }, 1600);
+        }
       });
     });
+
+    const textarea = host.querySelector('.universe-ai-composer textarea[name="message"]');
+    const resizeComposer = () => {
+      if (!textarea) return;
+      const computed = window.getComputedStyle(textarea);
+      const lineHeight = Number.parseFloat(computed.lineHeight) || 20;
+      const paddingTop = Number.parseFloat(computed.paddingTop) || 0;
+      const paddingBottom = Number.parseFloat(computed.paddingBottom) || 0;
+      const maxHeight = (lineHeight * 8) + paddingTop + paddingBottom;
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    };
+    resizeComposer();
+    textarea?.addEventListener("input", resizeComposer);
+    textarea?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        event.currentTarget.form?.requestSubmit();
+      }
+    });
+
+    host.querySelector("[data-ai-chat-form]")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const message = String(new FormData(form).get("message") || "").trim();
+      if (message) {
+        actions.onSend?.(message);
+      }
+    });
+  }
+
+  function renderUniverseAiChatPane(state = {}, actions = {}) {
+    const controls = getDetailsControls();
+    if (!controls?.pane || !controls.content) {
+      return;
+    }
+
+    const status = getUniverseAiStatusMeta(state);
+    controls.pane.hidden = false;
+    document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", `${controls.pane.getBoundingClientRect().width}px`);
+    controls.content.classList.add("is-ai-chat");
+    setDetailsPaneAiStatusLine(controls, getUniverseAiReadyStatusLine(status));
+    setDetailsPaneAiPopoutButton(controls, actions.onPopOut);
+    if (controls.kind) controls.kind.textContent = "AI Expert";
+    if (controls.title) controls.title.textContent = universe.name || "Universe Expert";
+    [controls.richButton, controls.editButton, controls.cancelButton, controls.saveButton].forEach((button) => {
+      if (button) button.hidden = true;
+    });
+
+    renderUniverseAiChatContent(controls.content, state, actions);
   }
 
   function renderImageGallery(images, nodeId) {
@@ -2316,6 +2588,7 @@
     if (!controls?.pane || !controls.content) {
       return;
     }
+    clearDetailsPaneAiState(controls);
 
     const node = currentNodes.find((currentNode) => currentNode.id === nodeId);
     if (!node) {
@@ -2411,18 +2684,13 @@
     }
 
     controls.content.innerHTML = `
-      <section class="details-section">
+      <section class="details-section details-view-section">
+        <h3 class="details-section-heading">Basics</h3>
         <dl class="details-fields">
           <div>
             <dt>Name</dt>
             <dd>${escapeHtml(name)}</dd>
           </div>
-        </dl>
-      </section>
-      ${renderCollapsibleDetailsSection("images", "Images", renderImageGallery(images, nodeId))}
-      ${renderCollapsibleDetailsSection("description", "Description", renderMarkdownDescription(description))}
-      <section class="details-section">
-        <dl class="details-fields">
           <div>
             <dt>Element Type</dt>
             <dd>
@@ -2436,7 +2704,9 @@
           </div>
         </dl>
       </section>
-      ${renderCollapsibleDetailsSection("linked-nodes", "Linked Elements", `
+      ${renderDetailsSection("images", "Images", renderImageGallery(images, nodeId))}
+      ${renderDetailsSection("description", "Description", renderMarkdownDescription(description))}
+      ${renderDetailsSection("linked-nodes", "Linked Elements", `
         <div class="linked-node-list">
           ${renderLinkedNodeCards(linkedNodes)}
         </div>
@@ -2446,7 +2716,6 @@
     controls.content.querySelectorAll("[data-linked-node-id]").forEach((button) => {
       button.addEventListener("click", () => openNodeDetails(button.dataset.linkedNodeId));
     });
-    setupCollapsibleDetailsSections(controls.content);
     setupImageGallery(controls.content);
   }
 
@@ -3612,6 +3881,18 @@
     const [canRedo, setCanRedo] = React.useState(false);
     const [detailsNodeId, setDetailsNodeId] = React.useState(null);
     const [detailsMode, setDetailsMode] = React.useState("view");
+    const [aiChatOpen, setAiChatOpen] = React.useState(false);
+    const [aiChatPopoutOpen, setAiChatPopoutOpen] = React.useState(false);
+    const [aiChatState, setAiChatState] = React.useState({
+      loading: false,
+      syncing: false,
+      sending: false,
+      source: null,
+      chat: null,
+      messages: [],
+      error: "",
+      statusMessage: ""
+    });
     const [pendingImageGeneration, setPendingImageGeneration] = React.useState(null);
     const [richDetailsNodeId, setRichDetailsNodeId] = React.useState(null);
     const [richDetailsData, setRichDetailsData] = React.useState(null);
@@ -4218,6 +4499,131 @@
       }));
     }, []);
 
+    const fetchUniverseAiChat = React.useCallback(() => callEdgeFunction("get-universe-ai-chat", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ universeId })
+    }), []);
+
+    const syncUniverseAiSource = React.useCallback(async () => {
+      setAiChatState((current) => ({
+        ...current,
+        loading: false,
+        syncing: true,
+        error: "",
+        statusMessage: "Syncing universe knowledge..."
+      }));
+
+      try {
+        await callEdgeFunction("sync-universe-ai-source", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ universeId })
+        });
+        const payload = await fetchUniverseAiChat();
+        setAiChatState((current) => ({
+          ...current,
+          loading: false,
+          syncing: false,
+          source: payload.source || current.source,
+          chat: payload.chat || current.chat,
+          messages: payload.messages || current.messages,
+          error: "",
+          statusMessage: "Knowledge synced."
+        }));
+      } catch (error) {
+        setAiChatState((current) => ({
+          ...current,
+          loading: false,
+          syncing: false,
+          error: getReadableError(error),
+          statusMessage: ""
+        }));
+      }
+    }, [fetchUniverseAiChat]);
+
+    const loadUniverseAiChat = React.useCallback(async (options = {}) => {
+      setAiChatState((current) => ({
+        ...current,
+        loading: true,
+        error: "",
+        statusMessage: ""
+      }));
+
+      try {
+        const payload = await fetchUniverseAiChat();
+        setAiChatState((current) => ({
+          ...current,
+          loading: false,
+          source: payload.source || null,
+          chat: payload.chat || null,
+          messages: payload.messages || [],
+          error: "",
+          statusMessage: ""
+        }));
+
+        if (options.syncIfNeeded !== false && payload.source?.sync_status !== "ready") {
+          await syncUniverseAiSource();
+        }
+      } catch (error) {
+        setAiChatState((current) => ({
+          ...current,
+          loading: false,
+          syncing: false,
+          error: getReadableError(error),
+          statusMessage: ""
+        }));
+      }
+    }, [fetchUniverseAiChat, syncUniverseAiSource]);
+
+    const sendUniverseAiMessage = React.useCallback(async (message) => {
+      const cleanMessage = String(message || "").trim();
+      if (!cleanMessage) {
+        return;
+      }
+
+      setAiChatState((current) => ({
+        ...current,
+        sending: true,
+        error: "",
+        statusMessage: ""
+      }));
+
+      try {
+        const payload = await callEdgeFunction("send-universe-ai-message", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            universeId,
+            message: cleanMessage
+          })
+        });
+        setAiChatState((current) => ({
+          ...current,
+          sending: false,
+          source: payload.source || current.source,
+          chat: payload.chat || current.chat,
+          messages: payload.messages || current.messages,
+          error: "",
+          statusMessage: ""
+        }));
+      } catch (error) {
+        setAiChatState((current) => ({
+          ...current,
+          sending: false,
+          error: getReadableError(error),
+          statusMessage: ""
+        }));
+      }
+    }, []);
+
+    const openUniverseAiPopout = React.useCallback(() => {
+      const universeNodeId = nodesRef.current.find((currentNode) => currentNode.data?.kind === "universe")?.id || `universe:${universe.id}`;
+      setAiChatPopoutOpen(true);
+      setAiChatOpen(false);
+      setRichDetailsNodeId(null);
+      setRichDetailsData(null);
+      setDetailsNodeId(universeNodeId);
+      setDetailsMode("view");
+    }, []);
+
     const openChroniclePreview = React.useCallback(async (nodeId) => {
       const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
       if (!node || node.data?.kind !== "element") {
@@ -4225,6 +4631,7 @@
       }
 
       hideDetailsPane();
+      setAiChatOpen(false);
       setDetailsNodeId(null);
       setDetailsMode("view");
       setRichDetailsMode("view");
@@ -5907,6 +6314,7 @@
       const resizeCleanup = setupDetailsPaneResize();
 
       function handleCloseDetails() {
+        setAiChatOpen(false);
         setDetailsNodeId(null);
         setDetailsMode("view");
       }
@@ -5927,6 +6335,58 @@
     }, []);
 
     React.useEffect(() => {
+      const button = document.querySelector("[data-open-ai-expert]");
+      if (!button) {
+        return undefined;
+      }
+
+      function handleOpenAiExpert() {
+        setRichDetailsNodeId(null);
+        setRichDetailsData(null);
+        setDetailsNodeId(null);
+        setDetailsMode("view");
+        setAiChatPopoutOpen(false);
+        setAiChatOpen(true);
+      }
+
+      button.addEventListener("click", handleOpenAiExpert);
+      return () => {
+        button.removeEventListener("click", handleOpenAiExpert);
+      };
+    }, []);
+
+    React.useEffect(() => {
+      if (!aiChatOpen && !aiChatPopoutOpen) {
+        return;
+      }
+
+      loadUniverseAiChat({ syncIfNeeded: true });
+    }, [aiChatOpen, aiChatPopoutOpen, loadUniverseAiChat]);
+
+    React.useEffect(() => {
+      if (!aiChatOpen) {
+        return;
+      }
+
+      renderUniverseAiChatPane(aiChatState, {
+        onSync: syncUniverseAiSource,
+        onSend: sendUniverseAiMessage,
+        onPopOut: openUniverseAiPopout
+      });
+    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, openUniverseAiPopout]);
+
+    React.useEffect(() => {
+      if (!aiChatPopoutOpen) {
+        return;
+      }
+
+      renderUniverseAiChatContent(document.querySelector("[data-ai-popout-content]"), aiChatState, {
+        onSync: syncUniverseAiSource,
+        onSend: sendUniverseAiMessage
+      });
+    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage]);
+
+    React.useEffect(() => {
       function handleViewDetails(event) {
         const nodeId = event.detail?.nodeId;
         const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
@@ -5942,6 +6402,7 @@
 
           setRichDetailsNodeId(null);
           setRichDetailsData(null);
+          setAiChatOpen(false);
           setDetailsNodeId(nodeId);
           setDetailsMode("view");
         }
@@ -6913,47 +7374,103 @@
     }, [detailsNodeId, nodes]);
 
     React.useEffect(() => {
+      if (aiChatOpen) {
+        return;
+      }
+
       if (!detailsNodeId) {
         hideDetailsPane();
         return;
       }
 
       renderDetailsPane(detailsNodeId, nodes, edges, openLinkedNodeDetails, detailsMode);
-    }, [detailsNodeId, detailsMode, nodes, edges, openLinkedNodeDetails]);
+    }, [aiChatOpen, detailsNodeId, detailsMode, nodes, edges, openLinkedNodeDetails]);
 
     React.useEffect(() => {
       const form = document.querySelector("[data-element-form]");
       const status = document.querySelector("[data-element-status]");
+      const aiCheckbox = document.querySelector("[data-generate-element-ai]");
+      const submitButton = document.querySelector("[data-element-submit]");
+      const addElementModal = document.getElementById("add-element-modal");
+      const reviewModal = document.getElementById("review-element-modal");
+      const generationOverlay = document.getElementById("generate-element-overlay");
+      const reviewForm = document.querySelector("[data-review-element-form]");
+      const reviewType = document.querySelector("[data-review-element-type]");
+      const reviewName = document.querySelector("[data-review-element-name]");
+      const reviewDescription = document.querySelector("[data-review-element-description]");
+      const reviewStatus = document.querySelector("[data-review-element-status]");
+      const reviewCancelButton = document.querySelector("[data-review-element-cancel]");
+      const reviewRegenerateButton = document.querySelector("[data-review-element-regenerate]");
       if (!form) {
         return undefined;
       }
 
-      async function handleSubmit(event) {
-        event.preventDefault();
+      let reviewSeed = null;
 
-        const submitButton = form.querySelector('[type="submit"]');
+      function setElementStatus(message, tone = "") {
+        if (!status) return;
+        status.textContent = message || "";
+        status.classList.toggle("is-error", tone === "error");
+        status.classList.toggle("is-success", tone === "success");
+      }
+
+      function setReviewStatus(message, tone = "") {
+        if (!reviewStatus) return;
+        reviewStatus.textContent = message || "";
+        reviewStatus.classList.toggle("is-error", tone === "error");
+        reviewStatus.classList.toggle("is-success", tone === "success");
+      }
+
+      function setElementGenerationOverlay(visible) {
+        if (!generationOverlay) return;
+        generationOverlay.hidden = !visible;
+      }
+
+      function readElementForm() {
         const formData = new FormData(form);
-        const name = String(formData.get("element-name") || "").trim();
-        const description = String(formData.get("element-description") || "").trim();
-        const elementTypeId = String(formData.get("element-type") || "");
+        return {
+          name: String(formData.get("element-name") || "").trim(),
+          description: String(formData.get("element-description") || "").trim(),
+          elementTypeId: String(formData.get("element-type") || ""),
+          generateWithAi: Boolean(formData.get("generate-element-ai"))
+        };
+      }
 
-        if (!name) {
-          if (status) {
-            status.textContent = "Name is required.";
-            status.classList.add("is-error");
-          }
+      function updateSubmitLabel() {
+        if (!submitButton) return;
+        submitButton.textContent = aiCheckbox?.checked ? "Generate" : "Add Element";
+      }
+
+      function validateElementInput(input) {
+        if (!input.elementTypeId) {
+          setElementStatus("Element Type is required.", "error");
+          getElementTypePicker()?.trigger?.focus();
+          return false;
+        }
+        if (!input.generateWithAi && !input.name) {
+          setElementStatus("Name is required.", "error");
           form.querySelector('[name="element-name"]')?.focus();
-          return;
+          return false;
+        }
+        return true;
+      }
+
+      async function createElementRecord(input) {
+        const name = String(input.name || "").trim();
+        const description = String(input.description || "").trim();
+        const elementTypeId = String(input.elementTypeId || "");
+        if (!name) {
+          throw new Error("Name is required.");
+        }
+        if (!elementTypeId) {
+          throw new Error("Element Type is required.");
         }
 
         if (submitButton) {
           submitButton.disabled = true;
         }
 
-        if (status) {
-          status.textContent = "Adding element...";
-          status.classList.remove("is-error");
-        }
+        setElementStatus("Adding element...");
 
         pushCanvasHistory();
         const id = createId();
@@ -7041,16 +7558,15 @@
         setPendingLink(null);
         form.reset();
         setElementTypePickerValue("");
-        if (status) {
-          status.textContent = "";
-          status.classList.remove("is-error");
-        }
-        document.getElementById("add-element-modal").hidden = true;
+        updateSubmitLabel();
+        setElementStatus("");
+        if (addElementModal) addElementModal.hidden = true;
         } catch (error) {
-          if (status) {
-            status.textContent = `Could not add element: ${getReadableError(error)}`;
-            status.classList.add("is-error");
+          setElementStatus(`Could not add element: ${getReadableError(error)}`, "error");
+          if (submitButton) {
+            submitButton.disabled = false;
           }
+          throw error;
         }
 
         if (submitButton) {
@@ -7058,8 +7574,138 @@
         }
       }
 
+      async function generateElementDraft(seed) {
+        const elementType = getElementTypeById(seed.elementTypeId);
+        if (!elementType) {
+          throw new Error("Choose a valid element type before generating.");
+        }
+        return callEdgeFunction("generate-universe-element", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            universe: getGenerateElementsUniverseContext(),
+            elementType: {
+              id: elementType.id,
+              name: elementType.name || "Untitled Type"
+            },
+            existingElements: getExistingElementContext(80),
+            name: seed.name,
+            description: seed.description
+          })
+        });
+      }
+
+      function openReviewElementDialog(seed, draft) {
+        const elementType = getElementTypeById(seed.elementTypeId);
+        reviewSeed = { ...seed, elementTypeName: elementType?.name || "Untitled Type" };
+        if (reviewType) reviewType.value = reviewSeed.elementTypeName;
+        if (reviewName) reviewName.value = draft.name || "";
+        if (reviewDescription) reviewDescription.value = draft.description || "";
+        setReviewStatus("");
+        if (addElementModal) addElementModal.hidden = true;
+        if (reviewModal) reviewModal.hidden = false;
+        window.setTimeout(() => reviewName?.focus({ preventScroll: true }), 0);
+      }
+
+      async function handleAiGenerate(input) {
+        if (submitButton) submitButton.disabled = true;
+        setElementStatus("Generating element...");
+        setElementGenerationOverlay(true);
+        try {
+          const draft = await generateElementDraft(input);
+          if (!draft?.name || !draft?.description) {
+            throw new Error("The generator did not return a name and description.");
+          }
+          openReviewElementDialog(input, draft);
+          setElementStatus("");
+        } catch (error) {
+          setElementStatus(`Could not generate element: ${getReadableError(error)}`, "error");
+        } finally {
+          setElementGenerationOverlay(false);
+          if (submitButton) submitButton.disabled = false;
+        }
+      }
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const input = readElementForm();
+        if (!validateElementInput(input)) return;
+        if (input.generateWithAi) {
+          await handleAiGenerate(input);
+          return;
+        }
+        try {
+          await createElementRecord(input);
+        } catch (_error) {
+          // createElementRecord already writes the inline Add Element error.
+        }
+      }
+
+      function handleReviewCancel() {
+        if (reviewModal) reviewModal.hidden = true;
+        setReviewStatus("");
+        if (addElementModal) addElementModal.hidden = false;
+      }
+
+      async function handleReviewRegenerate() {
+        if (!reviewSeed) return;
+        if (reviewRegenerateButton) reviewRegenerateButton.disabled = true;
+        const finalizeButton = reviewForm?.querySelector('[type="submit"]');
+        if (finalizeButton) finalizeButton.disabled = true;
+        setReviewStatus("Generating again...");
+        setElementGenerationOverlay(true);
+        try {
+          const draft = await generateElementDraft(reviewSeed);
+          if (reviewName) reviewName.value = draft.name || "";
+          if (reviewDescription) reviewDescription.value = draft.description || "";
+          setReviewStatus("");
+        } catch (error) {
+          setReviewStatus(`Could not generate element: ${getReadableError(error)}`, "error");
+        } finally {
+          setElementGenerationOverlay(false);
+          if (reviewRegenerateButton) reviewRegenerateButton.disabled = false;
+          if (finalizeButton) finalizeButton.disabled = false;
+        }
+      }
+
+      async function handleReviewFinalize(event) {
+        event.preventDefault();
+        if (!reviewSeed) return;
+        const finalizeButton = reviewForm?.querySelector('[type="submit"]');
+        if (finalizeButton) finalizeButton.disabled = true;
+        setReviewStatus("Adding element...");
+        const finalInput = {
+          name: String(reviewName?.value || "").trim(),
+          description: String(reviewDescription?.value || "").trim(),
+          elementTypeId: reviewSeed.elementTypeId
+        };
+        try {
+          if (!finalInput.name) {
+            throw new Error("Name is required.");
+          }
+          await createElementRecord(finalInput);
+          if (reviewModal) reviewModal.hidden = true;
+          reviewSeed = null;
+          setReviewStatus("");
+        } catch (error) {
+          setReviewStatus(`Could not add element: ${getReadableError(error)}`, "error");
+        } finally {
+          if (finalizeButton) finalizeButton.disabled = false;
+        }
+      }
+
+      updateSubmitLabel();
       form.addEventListener("submit", handleSubmit);
-      return () => form.removeEventListener("submit", handleSubmit);
+      aiCheckbox?.addEventListener("change", updateSubmitLabel);
+      reviewCancelButton?.addEventListener("click", handleReviewCancel);
+      reviewRegenerateButton?.addEventListener("click", handleReviewRegenerate);
+      reviewForm?.addEventListener("submit", handleReviewFinalize);
+      return () => {
+        form.removeEventListener("submit", handleSubmit);
+        aiCheckbox?.removeEventListener("change", updateSubmitLabel);
+        reviewCancelButton?.removeEventListener("click", handleReviewCancel);
+        reviewRegenerateButton?.removeEventListener("click", handleReviewRegenerate);
+        reviewForm?.removeEventListener("submit", handleReviewFinalize);
+      };
     }, [nodes.length, pendingLink, universeFormat]);
 
     React.useEffect(() => {
@@ -8509,6 +9155,18 @@
       };
     }
 
+    function getGenerateElementsSourceContext(nodeId) {
+      const node = nodesRef.current.find((item) => item.id === nodeId && item.data?.kind === "element");
+      if (!node) return null;
+      return {
+        nodeId: node.id,
+        id: node.data.recordId,
+        name: String(node.data.name || "Untitled Element").slice(0, 180),
+        element_type_name: String(node.data.elementType?.name || "Unknown").slice(0, 120),
+        description: String(node.data.description || "").replace(/\s+/g, " ").trim().slice(0, 1200)
+      };
+    }
+
     function getEndpointKey(kind, id) {
       if (!kind || !id) return "";
       return `${kind}:${id}`;
@@ -8575,10 +9233,18 @@
       };
     }
 
-    function normalizeGeneratedEndpoint(value, generatedElements) {
+    function normalizeGeneratedEndpoint(value, generatedElements, sourceElement = null) {
       const text = String(value || "").trim();
       if (!text) return null;
       const lower = normalizeLookupKey(text);
+      if (sourceElement && (
+        lower === "source"
+        || text === sourceElement.id
+        || lower === normalizeLookupKey(sourceElement.id)
+        || lower === normalizeLookupKey(sourceElement.name)
+      )) {
+        return { kind: "existing", id: sourceElement.id, name: sourceElement.name };
+      }
       if (lower === "universe" || text === universe.id || lower === normalizeLookupKey(universe.name)) {
         return { kind: "universe", id: universe.id, name: universe.name };
       }
@@ -8604,11 +9270,11 @@
       return null;
     }
 
-    function normalizeGeneratedLink(rawLink, index, generatedElements) {
+    function normalizeGeneratedLink(rawLink, index, generatedElements, sourceElement = null) {
       const sourceValue = rawLink?.source || rawLink?.source_id || rawLink?.source_temp_id || rawLink?.source_existing_id || rawLink?.source_name;
       const targetValue = rawLink?.target || rawLink?.target_id || rawLink?.target_temp_id || rawLink?.target_existing_id || rawLink?.target_name;
-      const source = normalizeGeneratedEndpoint(sourceValue, generatedElements);
-      const target = normalizeGeneratedEndpoint(targetValue, generatedElements);
+      const source = normalizeGeneratedEndpoint(sourceValue, generatedElements, sourceElement);
+      const target = normalizeGeneratedEndpoint(targetValue, generatedElements, sourceElement);
       return {
         id: String(rawLink?.id || `link-${index + 1}`),
         source,
@@ -8617,7 +9283,7 @@
       };
     }
 
-    function normalizeGeneratedElementsPayload(payload) {
+    function normalizeGeneratedElementsPayload(payload, sourceElement = null) {
       const typeByName = new Map(elementTypes.map((type) => [normalizeLookupKey(type.name), type]));
       const elementsPayload = Array.isArray(payload?.elements) ? payload.elements : [];
       const elementsList = elementsPayload
@@ -8636,7 +9302,7 @@
       });
 
       const linksList = (Array.isArray(payload?.links) ? payload.links : [])
-        .map((link, index) => normalizeGeneratedLink(link, index, elementsList))
+        .map((link, index) => normalizeGeneratedLink(link, index, elementsList, sourceElement))
         .filter((link) => link.source && link.target && getEndpointKey(link.source.kind, link.source.id) !== getEndpointKey(link.target.kind, link.target.id));
 
       return { elements: elementsList, links: linksList };
@@ -9617,9 +10283,11 @@
       const reviewModal = document.getElementById("generated-elements-review-modal");
       const infoModal = document.getElementById("generate-elements-info-modal");
       const form = document.querySelector("[data-generate-elements-form]");
+      const modalSubtitle = document.querySelector("[data-generate-elements-subtitle]");
       const typeList = document.querySelector("[data-generate-elements-types]");
       const typeToggle = document.querySelector("[data-generate-elements-types-toggle]");
       const typeCount = document.querySelector("[data-generate-elements-types-count]");
+      const typeSelectAll = document.querySelector("[data-generate-elements-types-select-all]");
       const previewButton = document.querySelector("[data-generate-elements-preview]");
       const infoText = document.querySelector("[data-generate-elements-info-text]");
       const infoStatus = document.querySelector("[data-generate-elements-info-status]");
@@ -9628,13 +10296,20 @@
       const reviewCancelButtons = document.querySelectorAll("[data-generated-elements-review-cancel]");
       const regenerateButton = document.querySelector("[data-generated-elements-regenerate]");
       const finalizeButton = document.querySelector("[data-generated-elements-finalize]");
+      const generationOverlay = document.getElementById("generate-element-overlay");
       if (!modal || !reviewModal || !form) {
         return undefined;
       }
 
       let activeUniverseNodeId = `universe:${universe.id}`;
+      let activeSourceElement = null;
       let lastGenerateOptions = null;
       let lastGeneratedDraft = { elements: [], links: [] };
+
+      function setGenerateElementsOverlay(visible) {
+        if (!generationOverlay) return;
+        generationOverlay.hidden = !visible;
+      }
 
       function updateTypeCount() {
         if (!typeCount || !typeList) return;
@@ -9642,6 +10317,15 @@
         typeCount.textContent = elementTypes.length
           ? `${checkedCount} of ${elementTypes.length} selected`
           : "No types";
+        updateTypeSelectAllState();
+      }
+
+      function updateTypeSelectAllState() {
+        if (!typeList || !typeSelectAll) return;
+        const checkedCount = typeList.querySelectorAll('[data-generate-elements-type]:checked').length;
+        typeSelectAll.checked = elementTypes.length > 0 && checkedCount === elementTypes.length;
+        typeSelectAll.indeterminate = checkedCount > 0 && checkedCount < elementTypes.length;
+        typeSelectAll.disabled = !elementTypes.length;
       }
 
       function renderTypeChecklist(resetSelection = false) {
@@ -9656,7 +10340,7 @@
         const checkedIds = resetSelection
           ? new Set(elementTypes.map((type) => type.id))
           : new Set([...typeList.querySelectorAll('[data-generate-elements-type]:checked')].map((input) => input.value));
-        const effectiveCheckedIds = checkedIds.size ? checkedIds : new Set(elementTypes.map((type) => type.id));
+        const effectiveCheckedIds = checkedIds;
         typeList.innerHTML = elementTypes
           .map((type) => {
             const typeName = type.name || "Untitled Type";
@@ -9674,6 +10358,12 @@
 
       function openGenerateElementsModal(nodeId) {
         activeUniverseNodeId = nodeId || `universe:${universe.id}`;
+        activeSourceElement = getGenerateElementsSourceContext(activeUniverseNodeId);
+        if (modalSubtitle) {
+          modalSubtitle.textContent = activeSourceElement
+            ? `Create worldbuilding elements that branch from "${activeSourceElement.name}".`
+            : "Create worldbuilding elements from this universe using the element types in your database.";
+        }
         renderTypeChecklist(true);
         if (typeList) typeList.hidden = true;
         if (typeToggle) typeToggle.setAttribute("aria-expanded", "false");
@@ -9737,6 +10427,18 @@
           .map((type) => ({ id: type.id, name: type.name || "Untitled Type" }));
       }
 
+      function handleTypeListChange(event) {
+        updateTypeCount();
+      }
+
+      function handleTypeSelectAllChange() {
+        if (!typeList || !typeSelectAll) return;
+        typeList.querySelectorAll("[data-generate-elements-type]").forEach((input) => {
+          input.checked = typeSelectAll.checked;
+        });
+        updateTypeCount();
+      }
+
       function readGenerateOptions() {
         const data = new FormData(form);
         const count = Math.min(50, Math.max(1, Math.round(Number(data.get("total-elements") || 12))));
@@ -9759,6 +10461,7 @@
           count: options.count,
           relationshipDensity: options.density,
           instructions: options.instructions,
+          sourceElement: options.sourceElement || null,
           previewOnly
         };
       }
@@ -9770,12 +10473,15 @@
         if (!options.allowedElementTypes.length) {
           throw new Error("Choose at least one element type before generating elements.");
         }
-        lastGenerateOptions = options;
+        lastGenerateOptions = {
+          ...options,
+          sourceElement: activeSourceElement
+        };
         const payload = await callEdgeFunction("generate-universe-elements", {
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(buildGenerateElementsRequest(options))
+          body: JSON.stringify(buildGenerateElementsRequest(lastGenerateOptions))
         });
-        const draft = normalizeGeneratedElementsPayload(payload);
+        const draft = normalizeGeneratedElementsPayload(payload, activeSourceElement);
         if (!draft.elements.length) {
           throw new Error("The generator did not return any usable elements.");
         }
@@ -9789,12 +10495,15 @@
         const submitButton = form.querySelector('[type="submit"]');
         if (submitButton) submitButton.disabled = true;
         try {
+          const options = readGenerateOptions();
+          setGenerateElementsOverlay(true);
           setGenerateElementsStatus("Generating elements...");
-          await generateElements(readGenerateOptions());
+          await generateElements(options);
           setGenerateElementsStatus("");
         } catch (error) {
           setGenerateElementsStatus(getReadableError(error), "error");
         } finally {
+          setGenerateElementsOverlay(false);
           if (submitButton) submitButton.disabled = false;
         }
       }
@@ -9814,14 +10523,18 @@
         if (infoText) infoText.value = "Building prompt preview...";
         if (previewButton) previewButton.disabled = true;
         try {
+          const previewOptions = {
+            ...options,
+            sourceElement: activeSourceElement
+          };
           const payload = await callEdgeFunction("generate-universe-elements", {
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(buildGenerateElementsRequest(options, true))
+            body: JSON.stringify(buildGenerateElementsRequest(previewOptions, true))
           });
           if (infoText) {
             infoText.value = [
               "REQUEST CONTEXT",
-              JSON.stringify(payload.request || buildGenerateElementsRequest(options), null, 2),
+              JSON.stringify(payload.request || buildGenerateElementsRequest(previewOptions), null, 2),
               "",
               "PROMPT",
               payload.prompt || ""
@@ -9844,13 +10557,15 @@
         }
         if (regenerateButton) regenerateButton.disabled = true;
         if (finalizeButton) finalizeButton.disabled = true;
+        setGenerateElementsOverlay(true);
         try {
           setGeneratedElementsReviewStatus("Generating again...");
           const payload = await callEdgeFunction("generate-universe-elements", {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(buildGenerateElementsRequest(lastGenerateOptions))
           });
-          const draft = normalizeGeneratedElementsPayload(payload);
+          activeSourceElement = lastGenerateOptions.sourceElement || null;
+          const draft = normalizeGeneratedElementsPayload(payload, activeSourceElement);
           if (!draft.elements.length) {
             throw new Error("The generator did not return any usable elements.");
           }
@@ -9860,6 +10575,7 @@
         } catch (error) {
           setGeneratedElementsReviewStatus(getReadableError(error), "error");
         } finally {
+          setGenerateElementsOverlay(false);
           if (regenerateButton) regenerateButton.disabled = false;
           if (finalizeButton) finalizeButton.disabled = false;
         }
@@ -9895,6 +10611,44 @@
         });
       }
 
+      function withRequiredSourceLinks(state) {
+        if (!state.elements.length) return state;
+        const sourceElement = lastGenerateOptions?.sourceElement || null;
+        const anchor = sourceElement?.id
+          ? { kind: "existing", id: sourceElement.id, name: sourceElement.name }
+          : { kind: "universe", id: universe.id, name: universe.name };
+        const anchorKey = getEndpointKey(anchor.kind, anchor.id);
+        const existingLinkKeys = new Set();
+        const incomingGeneratedIds = new Set();
+
+        state.links.forEach((link) => {
+          const sourceKey = getEndpointKey(link.source?.kind, link.source?.id);
+          const targetKey = getEndpointKey(link.target?.kind, link.target?.id);
+          existingLinkKeys.add(`${sourceKey}>${targetKey}`);
+          if (link.target?.kind === "generated") {
+            incomingGeneratedIds.add(link.target.id);
+          }
+        });
+
+        const links = [...state.links];
+        state.elements.forEach((element) => {
+          if (incomingGeneratedIds.has(element.tempId)) return;
+          const target = { kind: "generated", id: element.tempId, name: element.name };
+          const key = `${anchorKey}>${getEndpointKey(target.kind, target.id)}`;
+          if (existingLinkKeys.has(key)) return;
+          existingLinkKeys.add(key);
+          incomingGeneratedIds.add(element.tempId);
+          links.push({
+            id: `anchor-link-${links.length + 1}`,
+            source: anchor,
+            target,
+            label: sourceElement?.id ? "expands into" : "contains"
+          });
+        });
+
+        return { ...state, links };
+      }
+
       function getGeneratedElementPositions(count) {
         const universeNode = nodesRef.current.find((node) => node.id === activeUniverseNodeId)
           || nodesRef.current.find((node) => node.data?.kind === "universe");
@@ -9902,6 +10656,21 @@
         const originY = Number(universeNode?.position?.y ?? universe.canvas_position_y ?? 120);
         const universeWidth = Number(universeNode?.measured?.width || universeNode?.width || 260);
         const minimumRightX = originX + universeWidth + 160;
+        if (lastGenerateOptions?.sourceElement) {
+          const rowsPerColumn = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(Math.max(1, count)))));
+          const horizontalSpacing = 330;
+          const verticalSpacing = 170;
+          return Array.from({ length: count }, (_item, index) => {
+            const column = Math.floor(index / rowsPerColumn);
+            const row = index % rowsPerColumn;
+            const rowsInColumn = Math.min(rowsPerColumn, count - column * rowsPerColumn);
+            const centerOffset = (rowsInColumn - 1) / 2;
+            return {
+              x: Math.round(minimumRightX + column * horizontalSpacing),
+              y: Math.round(originY + (row - centerOffset) * verticalSpacing)
+            };
+          });
+        }
         const positions = [];
         let placed = 0;
         let ring = 1;
@@ -9939,7 +10708,7 @@
       }
 
       async function finalizeGeneratedElements() {
-        const state = getGeneratedElementsReviewState();
+        let state = getGeneratedElementsReviewState();
         try {
           validateGeneratedReview(state);
         } catch (error) {
@@ -9959,6 +10728,7 @@
         pushCanvasHistory();
 
         const positions = getGeneratedElementPositions(state.elements.length);
+        state = withRequiredSourceLinks(state);
         const elementRows = state.elements.map((element, index) => ({
           id: createId(),
           user_id: ownerId,
@@ -10043,12 +10813,31 @@
             selected: insertedNodeIds.has(node.id)
           }));
           const nextEdges = [...edgesRef.current, ...linkEdges];
-          setNodes(nextNodes);
+          let finalNodes = nextNodes;
+          let layoutWarning = "";
+          try {
+            setGeneratedElementsReviewStatus("Adding generated elements and laying out canvas...");
+            finalNodes = await createAutoLayout(nextNodes, nextEdges, universeFormatRef.current);
+            finalNodes = finalNodes.map((node) => ({
+              ...node,
+              selected: insertedNodeIds.has(node.id)
+            }));
+            await saveNodePositions(finalNodes);
+          } catch (layoutError) {
+            console.error("Could not auto-layout generated elements:", layoutError);
+            layoutWarning = " Auto-layout could not be saved.";
+          }
+
+          setNodes(finalNodes);
           setEdges(nextEdges);
-          nodesRef.current = nextNodes;
+          nodesRef.current = finalNodes;
           edgesRef.current = nextEdges;
           closeReviewModal(false);
-          setTransferStatus(`Added ${insertedNodes.length} generated ${insertedNodes.length === 1 ? "element" : "elements"} and ${linkEdges.length} ${linkEdges.length === 1 ? "link" : "links"}.`, "success");
+          window.setTimeout(() => {
+            fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 });
+          }, 50);
+          const resultMessage = `Added ${insertedNodes.length} generated ${insertedNodes.length === 1 ? "element" : "elements"} and ${linkEdges.length} ${linkEdges.length === 1 ? "link" : "links"}.`;
+          setTransferStatus(layoutWarning ? `${resultMessage}${layoutWarning}` : `${resultMessage} Auto-layout applied.`, layoutWarning ? "error" : "success");
         } catch (error) {
           setGeneratedElementsReviewStatus(`Could not add generated elements: ${getReadableError(error)}`, "error");
         } finally {
@@ -10086,7 +10875,8 @@
       window.addEventListener("centralis:generate-elements", handleGenerateElementsEvent);
       form.addEventListener("submit", handleGenerateSubmit);
       typeToggle?.addEventListener("click", handleTypeToggle);
-      typeList?.addEventListener("change", updateTypeCount);
+      typeList?.addEventListener("change", handleTypeListChange);
+      typeSelectAll?.addEventListener("change", handleTypeSelectAllChange);
       previewButton?.addEventListener("click", handlePreviewInformation);
       infoCloseButtons.forEach((button) => button.addEventListener("click", closeInfoModal));
       cancelButtons.forEach((button) => button.addEventListener("click", closeGenerateElementsModal));
@@ -10097,10 +10887,11 @@
 
       return () => {
         window.removeEventListener("centralis:generate-elements", handleGenerateElementsEvent);
-        form.removeEventListener("submit", handleGenerateSubmit);
-        typeToggle?.removeEventListener("click", handleTypeToggle);
-        typeList?.removeEventListener("change", updateTypeCount);
-        previewButton?.removeEventListener("click", handlePreviewInformation);
+      form.removeEventListener("submit", handleGenerateSubmit);
+      typeToggle?.removeEventListener("click", handleTypeToggle);
+      typeList?.removeEventListener("change", handleTypeListChange);
+      typeSelectAll?.removeEventListener("change", handleTypeSelectAllChange);
+      previewButton?.removeEventListener("click", handlePreviewInformation);
         infoCloseButtons.forEach((button) => button.removeEventListener("click", closeInfoModal));
         cancelButtons.forEach((button) => button.removeEventListener("click", closeGenerateElementsModal));
         reviewCancelButtons.forEach((button) => button.removeEventListener("click", handleReviewCancel));
@@ -10903,6 +11694,8 @@
     const contextGroupId = contextMenuNode?.data?.kind === "group"
       ? contextMenuNode.data.recordId
       : contextSelectedElements[0]?.data?.groupId || "";
+    const aiPopoutStatus = getUniverseAiStatusMeta(aiChatState);
+    const aiPopoutStatusLine = getUniverseAiReadyStatusLine(aiPopoutStatus);
 
     return React.createElement(
       "div",
@@ -10974,7 +11767,46 @@
         )
       )
       ),
-        contextMenu && React.createElement(
+      aiChatPopoutOpen && React.createElement(
+        "section",
+        {
+          className: "universe-ai-popout",
+          role: "dialog",
+          "aria-modal": "false",
+          "aria-labelledby": "universe-ai-popout-title"
+        },
+        React.createElement(
+          "header",
+          { className: "universe-ai-popout-header" },
+          React.createElement(
+            "div",
+            { className: "universe-ai-popout-title-block" },
+            React.createElement("p", { className: "details-pane-kicker" }, "AI Expert"),
+            React.createElement("h2", { id: "universe-ai-popout-title" }, universe.name || "Universe Expert"),
+            aiPopoutStatusLine && React.createElement("p", { className: "universe-ai-header-status" }, aiPopoutStatusLine)
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "modal-close",
+              type: "button",
+              "aria-label": "Close AI Expert chat",
+              onClick: () => setAiChatPopoutOpen(false)
+            },
+            React.createElement(
+              "svg",
+              { viewBox: "0 0 24 24", "aria-hidden": "true" },
+              React.createElement("path", { d: "M18 6 6 18" }),
+              React.createElement("path", { d: "m6 6 12 12" })
+            )
+          )
+        ),
+        React.createElement("div", {
+          className: "universe-ai-popout-body",
+          "data-ai-popout-content": true
+        })
+      ),
+      contextMenu && React.createElement(
         "div",
         {
           className: "node-context-menu",
@@ -11022,6 +11854,20 @@
             }
           },
           "View Details"
+        ),
+        contextMenuNode?.data?.kind === "element" && contextIsSingleElement && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              window.dispatchEvent(new CustomEvent("centralis:generate-elements", {
+                detail: { nodeId: contextMenuNode.id, elementId: contextMenuNode.data?.recordId }
+              }));
+            }
+          },
+          "Generate Elements"
         ),
         contextMenuNode?.data?.kind === "element" && contextSelectedElements.length > 0 && React.createElement(
           "button",

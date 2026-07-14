@@ -5,11 +5,13 @@
     tabs: Array.from(document.querySelectorAll("[data-useful-tab]")),
     panels: Array.from(document.querySelectorAll("[data-useful-panel]")),
     modeSelect: document.querySelector("[data-text-converter-mode]"),
+    clearInputButton: document.querySelector("[data-text-clear-input]"),
     richWrap: document.querySelector("[data-rich-input-wrap]"),
     richEditor: document.querySelector("[data-text-rich-editor]"),
     rawInput: document.querySelector("[data-text-raw-input]"),
     output: document.querySelector("[data-text-output]"),
     outputBusy: document.querySelector("[data-text-output-busy]"),
+    outputFormat: document.querySelector("[data-text-output-format]"),
     outputCopyButton: document.querySelector("[data-text-output-copy]"),
     outputCopyMenu: document.querySelector("[data-text-output-copy-menu]"),
     outputCopyMenuTrigger: document.querySelector("[data-text-output-copy-menu-trigger]"),
@@ -64,9 +66,9 @@
     xml: "XML",
     csv: "CSV",
     tsv: "TSV",
-    "markdown-table": "Markdown Table",
     "json-lines": "JSON Lines",
     "sql-inserts": "SQL Inserts",
+    "sql-schema": "SQL Schema",
     outline: "Outline",
     "bullet-list": "Bullet List",
     "numbered-list": "Numbered List",
@@ -293,12 +295,25 @@
     els.status.classList.toggle("is-success", type === "success");
   }
 
-  function setConverting(nextValue) {
+  function getConverterTargetLabel(targetFormat) {
+    return converterTargetLabels[targetFormat] || String(targetFormat || "").replaceAll("-", " ");
+  }
+
+  function setOutputFormat(targetFormat) {
+    if (!els.outputFormat) return;
+    const targetLabel = getConverterTargetLabel(targetFormat);
+    els.outputFormat.textContent = targetLabel || "";
+    els.outputFormat.hidden = !targetLabel;
+  }
+
+  function setConverting(nextValue, targetFormat = "") {
     isConverting = nextValue;
     els.conversionButtons.forEach((button) => {
       button.disabled = nextValue;
     });
     if (els.outputBusy) {
+      const targetLabel = getConverterTargetLabel(targetFormat);
+      els.outputBusy.textContent = nextValue && targetLabel ? `Converting to ${targetLabel}...` : "Converting...";
       els.outputBusy.hidden = !nextValue;
     }
   }
@@ -2723,12 +2738,12 @@
         return "Return CSV only. Include a header row when tabular fields can be inferred. Quote fields when needed.";
       case "tsv":
         return "Return tab-separated values only. Include a header row when tabular fields can be inferred.";
-      case "markdown-table":
-        return "Return only a Markdown table. If the source is not naturally tabular, infer useful columns from repeated items.";
       case "json-lines":
         return "Return JSON Lines only: one valid JSON object per line, no wrapping array and no commentary.";
       case "sql-inserts":
         return "Return SQL INSERT statements only. Use the table name converted_items. Infer sensible snake_case columns. Quote strings safely and use NULL when needed.";
+      case "sql-schema":
+        return "Return SQL DDL only. Infer sensible snake_case table and column names, practical SQL data types, and CREATE TABLE statements from the source. Include a primary key only when clearly appropriate. Do not include INSERT statements, markdown fences, or commentary.";
       case "outline":
         return "Return a concise hierarchical outline using indented levels.";
       case "bullet-list":
@@ -2772,6 +2787,19 @@
 
   function setRichEditorPlainText(value) {
     els.richEditor.innerHTML = escapeHtml(value).replace(/\r?\n/g, "<br>");
+  }
+
+  function clearConverterInput() {
+    els.rawInput.value = "";
+    els.richEditor.innerHTML = "";
+    setStatus("");
+
+    if (getCurrentMode() === "raw") {
+      els.rawInput.focus({ preventScroll: true });
+      return;
+    }
+
+    els.richEditor.focus({ preventScroll: true });
   }
 
   function switchInputMode(mode) {
@@ -2892,7 +2920,7 @@
     }
 
     const inputMode = getCurrentMode();
-    const targetLabel = converterTargetLabels[targetFormat] || targetFormat.replaceAll("-", " ");
+    const targetLabel = getConverterTargetLabel(targetFormat);
     pendingConversion = { input, inputMode, targetFormat };
     els.instructionTextarea.value = buildConverterInstructions(inputMode, targetFormat);
     if (els.instructionSubtitle) {
@@ -2942,8 +2970,9 @@
       lastConverterPrompt = promptInstructions;
     }
 
-    setConverting(true);
-    setStatus(`Converting to ${targetFormat.replaceAll("-", " ")}...`);
+    setOutputFormat(targetFormat);
+    setConverting(true, targetFormat);
+    setStatus(`Converting to ${getConverterTargetLabel(targetFormat)}...`);
 
     try {
       const response = await getFunctionResponse("convert-text-format", {
@@ -3127,6 +3156,7 @@
   });
 
   els.outputCopyButton?.addEventListener("click", copyOutputText);
+  els.clearInputButton?.addEventListener("click", clearConverterInput);
 
   window.addEventListener("resize", scheduleCalculatorResultsFit);
 

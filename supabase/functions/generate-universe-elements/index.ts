@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   describeError,
@@ -18,6 +19,10 @@ type ExistingElement = {
   name?: unknown;
   element_type_name?: unknown;
   description?: unknown;
+};
+
+type SourceElement = ExistingElement & {
+  nodeId?: unknown;
 };
 
 function truncate(value: unknown, maxLength: number) {
@@ -89,13 +94,47 @@ function cleanExistingElements(value: unknown) {
     .slice(0, 120);
 }
 
+function cleanSourceElement(value: unknown) {
+  const row = value && typeof value === "object" ? value as SourceElement : null;
+  if (!row) return null;
+  const source = {
+    id: cleanString(row.id, 120),
+    name: cleanString(row.name, 180),
+    element_type_name: cleanString(row.element_type_name, 120),
+    description: truncate(row.description, 1200),
+  };
+  return source.id && source.name ? source : null;
+}
+
 function getLinkLimit(count: number, density: string) {
   const ratio = {
-    sparse: 0.5,
-    balanced: 1,
-    dense: 1.5,
-  }[density] || 1;
-  return Math.max(1, Math.ceil(count * ratio));
+    sparse: 0.25,
+    balanced: 0.5,
+    dense: 1,
+  }[density] || 0.5;
+  return Math.max(0, Math.ceil(count * ratio));
+}
+
+function isUsefulLinkLabel(value: string) {
+  const label = value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  if (!label) return false;
+  const weakLabels = new Set([
+    "associated with",
+    "branches to",
+    "connected to",
+    "connects to",
+    "has connection to",
+    "influences",
+    "is associated with",
+    "is connected to",
+    "is linked to",
+    "leads to",
+    "linked to",
+    "relates to",
+    "related to",
+    "ties to",
+  ]);
+  return !weakLabels.has(label);
 }
 
 function cleanGeneratedPayload(payload: unknown, count: number, density: string) {
@@ -123,7 +162,7 @@ function cleanGeneratedPayload(payload: unknown, count: number, density: string)
         label: cleanString(row.label || row.relationship, 120),
       };
     })
-    .filter((item) => item.source && item.target && item.source !== item.target)
+    .filter((item) => item.source && item.target && item.source !== item.target && isUsefulLinkLabel(item.label))
     .slice(0, getLinkLimit(elements.length || count, density));
 
   return { elements, links };
@@ -131,6 +170,7 @@ function cleanGeneratedPayload(payload: unknown, count: number, density: string)
 
 function buildPrompt(input: {
   universe: { name: string; description: string };
+  sourceElement: { id: string; name: string; element_type_name: string; description: string } | null;
   allowedTypes: Array<{ id: string; name: string }>;
   existingElements: Array<{ id: string; name: string; element_type_name: string; description: string }>;
   count: number;
@@ -138,9 +178,9 @@ function buildPrompt(input: {
   instructions: string;
 }) {
   const densityGuidance = {
-    sparse: "Create roughly 0.4 to 0.5 relationships per generated element. Only the most important connections should exist.",
-    balanced: "Create roughly 0.75 to 1 relationship per generated element. Prefer selective, meaningful connections.",
-    dense: "Create roughly 1.25 to 1.5 relationships per generated element. Dense still means curated, not everything connected to everything.",
+    sparse: "Create roughly 0.2 to 0.3 relationships per generated element. Only the most obvious concrete connections should exist.",
+    balanced: "Create roughly 0.4 to 0.6 relationships per generated element. Prefer fewer, stronger connections over a busy graph.",
+    dense: "Create roughly 0.8 to 1 relationship per generated element. Dense still means curated and concrete, not everything connected to everything.",
   }[input.density] || "Create a balanced set of meaningful relationships.";
 
   return [
@@ -148,15 +188,37 @@ function buildPrompt(input: {
     "Return exactly one JSON object with keys: elements and links.",
     "Use only the allowed element type names provided below. If the requested idea needs a type, choose the closest allowed type.",
     "Each generated element must have: temp_id, name, description, element_type_name.",
-    "Descriptions should be useful for worldbuilding: one concise paragraph with hooks, conflicts, purpose, or role in the setting.",
-    "Links are required. Each link must have: source, target, label.",
-    "For link source/target, use generated temp_id values, existing element IDs, or the literal value \"universe\".",
+    FICTIONAL_NAMING_PROMPT_SECTION,
+    "Descriptions should be substantial and useful for worldbuilding: aim for 3 to 5 detailed sentences per element, roughly 80 to 140 words when appropriate.",
+    "Each description should include concrete setting details, role/purpose, conflicts or tensions, notable traits, and at least one story or worldbuilding hook. Avoid vague summaries and avoid filler.",
+    "Links are optional. Each included link must have: source, target, label.",
+    "Link direction is parent/source/upstream cause -> child/target/downstream result. The target is the child node and will receive the connection on its left side in the canvas.",
+    "Every generated element should have one incoming parent link. The parent may be the literal value \"universe\", the literal value \"source\", an existing element ID, or another generated temp_id. Do not make a generated node point back to its parent just to phrase the label naturally.",
+    "Only create a link when the relationship is concrete, direct, and legible from the two node descriptions plus the link label. Do not create links for broad theme, tone, category, mood, vague influence, or hidden backstory.",
+    "The link label must explain the relationship by itself as a specific verb phrase or short predicate, such as 'funds', 'guards', 'records evidence for', 'shelters fugitives from', 'manufactures', 'commands', 'rivals', 'enforces', 'supplies', 'was founded by', or 'contests jurisdiction with'.",
+    "Do not use vague labels such as 'related to', 'connected to', 'linked to', 'associated with', 'influences', 'branches to', or 'leads to'.",
+    "If explaining why two nodes are linked would require an extra paragraph, do not link them directly. Instead, either omit the link or create an intermediary element that makes the relationship visible.",
+    input.sourceElement
+      ? "Include at least one clear source-to-generated anchor link from the literal value \"source\" to the most central generated element when any elements are generated. Additional source links are allowed only when concrete and visible."
+      : "Include at least one clear universe-to-generated anchor link from the literal value \"universe\" to the most central generated element when any elements are generated. Additional universe links are allowed only when concrete and visible.",
+    "Generated components should not float without any path back to the generation source. If a subgroup has no concrete relationship to the source, create an intermediary element that explains the connection or omit that subgroup. Do not return orphan generated nodes.",
+    input.sourceElement
+      ? "For link source/target, use generated temp_id values, existing element IDs, the literal value \"source\" for the source element, or the literal value \"universe\"."
+      : "For link source/target, use generated temp_id values, existing element IDs, or the literal value \"universe\".",
     "Do not include markdown, comments, extra prose, or keys outside the JSON object.",
     `Generate up to ${input.count} elements. Prefer fewer high-quality elements over filler if fewer make better sense.`,
-    "Design the generated element set as a logical expanding cloud outward from the Universe node: related ideas should be near each other conceptually, but not every element needs a direct connection.",
+    input.sourceElement
+      ? "Design the generated element set as a logical branching cloud outward from the source element. Generated elements should expand, support, oppose, inhabit, explain, descend from, belong to, or otherwise meaningfully relate to the source element. Use the longer descriptions to make each branch feel specific and usable immediately."
+      : "Design the generated element set as a logical expanding cloud outward from the Universe node: related ideas should be near each other conceptually, but not every element needs a direct connection. Use the longer descriptions to make each element feel specific and usable immediately.",
+    input.sourceElement
+      ? "Do not connect every generated element directly to the source. Use a few source-to-generated links only when the source description and generated node description make that relationship visible. Use generated-to-generated links only for concrete chains, clusters, and outward branches."
+      : "Links should be selective and meaningful rather than exhaustive.",
     `Relationship density: ${input.density}. ${densityGuidance}`,
     `Universe name: ${input.universe.name}`,
     input.universe.description ? `Universe description: ${input.universe.description}` : "No universe description is available.",
+    input.sourceElement
+      ? `Source element to expand:\n- ID: ${input.sourceElement.id}; Type: ${input.sourceElement.element_type_name || "Unknown"}; Name: ${input.sourceElement.name}; Description: ${input.sourceElement.description || "None"}`
+      : "No source element is selected; generate from the universe as a whole.",
     `Allowed element types:\n${input.allowedTypes.map((type) => `- ${type.name}`).join("\n")}`,
     input.existingElements.length
       ? `Existing elements for context and optional linking:\n${input.existingElements.map((element) => `- ID: ${element.id}; Type: ${element.element_type_name || "Unknown"}; Name: ${element.name}; Description: ${element.description || "None"}`).join("\n")}`
@@ -180,6 +242,7 @@ Deno.serve(async (req) => {
       name: cleanString(body.universe?.name, 200) || "Untitled Universe",
       description: truncate(body.universe?.description, 4000),
     };
+    const sourceElement = cleanSourceElement(body.sourceElement);
     const allowedTypes = cleanAllowedTypes(body.allowedElementTypes);
     if (!allowedTypes.length) {
       return jsonResponse({ error: "At least one allowed element type is required." }, 400);
@@ -191,6 +254,7 @@ Deno.serve(async (req) => {
     const instructions = truncate(body.instructions, 4000);
     const prompt = buildPrompt({
       universe,
+      sourceElement,
       allowedTypes,
       existingElements,
       count,
@@ -203,6 +267,7 @@ Deno.serve(async (req) => {
         prompt,
         request: {
           universe,
+          sourceElement,
           allowedElementTypes: allowedTypes,
           existingElements,
           count,
@@ -217,7 +282,7 @@ Deno.serve(async (req) => {
     const generatedText = await generateJsonText(openai, {
       system: "You generate structured fictional worldbuilding elements for a private universe-building app. Respond only with valid JSON.",
       prompt,
-      maxOutputTokens: Math.min(6000, 900 + count * 180),
+      maxOutputTokens: Math.min(7500, 1200 + count * 260),
     });
 
     const generated = cleanGeneratedPayload(parseJson(generatedText || "{}"), count, density);

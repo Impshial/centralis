@@ -131,6 +131,9 @@ const authStatus = document.querySelector("[data-auth-status]");
 const universeStatus = document.querySelector("[data-universe-status]");
 const deleteUniverseStatus = document.querySelector("[data-delete-universe-status]");
 const universeList = document.querySelector("[data-universe-list]");
+const universeBuilderCount = document.querySelector("[data-universe-count]");
+const universeBuilderSearch = document.querySelector("[data-universe-search]");
+const universeBuilderStatus = document.querySelector("[data-universe-builder-status]");
 const homeChronicleList = document.querySelector("[data-home-chronicle-list]");
 const homeChatLogList = document.querySelector("[data-home-chat-log-list]");
 const homeUniverseCount = document.querySelector("[data-home-universe-count]");
@@ -146,14 +149,27 @@ const universeDescriptionInput = document.querySelector("[data-universe-descript
 const universeAiToggle = document.querySelector("[data-universe-ai-toggle]");
 const universeAiGenreField = document.querySelector("[data-universe-ai-genre-field]");
 const universeAiGenreSelect = document.querySelector("[data-universe-ai-genre]");
+const universeAiMultiToggle = document.querySelector("[data-universe-ai-multi-toggle]");
+const universeAiCountInput = document.querySelector("[data-universe-ai-count]");
 const universeGenerationOverlay = document.querySelector("[data-universe-generation-overlay]");
+const universeGenerationOverlayLabel = document.querySelector("[data-universe-generation-overlay-label]");
 const universeAiReviewModal = document.getElementById("universe-ai-review-modal");
 const universeAiReviewText = document.querySelector("[data-universe-ai-review-text]");
 const universeAiReviewStatus = document.querySelector("[data-universe-ai-review-status]");
 const universeAiReviewCancelButtons = document.querySelectorAll("[data-universe-ai-review-cancel]");
 const universeAiGenerateAgainButton = document.querySelector("[data-universe-ai-generate-again]");
 const universeAiFinalizeButton = document.querySelector("[data-universe-ai-finalize]");
+const universeAiMultiReviewModal = document.getElementById("universe-ai-multi-review-modal");
+const universeAiIdeasList = document.querySelector("[data-universe-ai-ideas-list]");
+const universeAiSelectAll = document.querySelector("[data-universe-ai-select-all]");
+const universeAiMultiReviewStatus = document.querySelector("[data-universe-ai-multi-review-status]");
+const universeAiMultiReviewCancelButtons = document.querySelectorAll("[data-universe-ai-multi-review-cancel]");
+const universeAiMultiCreateButton = document.querySelector("[data-universe-ai-multi-create]");
+const universeViewModeButtons = document.querySelectorAll("[data-universe-view-mode]");
 let universeAiReviewDraft = null;
+let universeAiMultiReviewDrafts = [];
+let universeBuilderUniverses = [];
+let universeBuilderPrimaryImages = new Map();
 const UNIVERSE_TABLE = "universes";
 const DEFAULT_ELEMENT_TYPES_TABLE = "default_element_types";
 const DEFAULT_ELEMENT_TYPE_TEMPLATES_TABLE = "default_element_type_templates";
@@ -169,6 +185,7 @@ const SUPABASE_TIMEOUT_MS = 15000;
 const EDGE_FUNCTION_TIMEOUT_MS = 60000;
 const HOMEPAGE_ICON_READY_TIMEOUT_MS = 1200;
 const HOME_SECTION_CACHE_PREFIX = "centralis-home-section-v2";
+const UNIVERSE_BUILDER_VIEW_MODE_KEY = "centralis-universe-builder-view-mode";
 const DEFAULT_UNIVERSE_POSITION = { x: 120, y: 120 };
 const DEFAULT_UNIVERSE_FORMAT = {
   fmt_stroke_color: "#3b82f6",
@@ -299,13 +316,14 @@ function createId() {
   return `universe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function createBlurb(description) {
+function createBlurb(description, maxLength = 120) {
   if (!description) {
     return "No description yet.";
   }
 
   const trimmed = description.trim();
-  return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+  const safeMaxLength = Math.max(24, Number(maxLength) || 120);
+  return trimmed.length > safeMaxLength ? `${trimmed.slice(0, safeMaxLength - 3)}...` : trimmed;
 }
 
 function formatShortDate(value) {
@@ -327,6 +345,58 @@ function formatFileSize(bytes) {
 function setHomeCount(element, count, noun) {
   if (!element) return;
   element.textContent = count === 1 ? `1 ${noun}` : `${count} ${noun}s`;
+}
+
+function setUniverseBuilderCount(visibleCount, totalCount = visibleCount) {
+  if (!universeBuilderCount) return;
+  const noun = totalCount === 1 ? "universe" : "universes";
+  if (visibleCount === totalCount) {
+    universeBuilderCount.textContent = totalCount === 1 ? "1 universe" : `${totalCount} universes`;
+    return;
+  }
+  universeBuilderCount.textContent = `${visibleCount} of ${totalCount} ${noun}`;
+}
+
+function setUniverseBuilderStatus(message, type = "") {
+  if (!universeBuilderStatus) return;
+  universeBuilderStatus.textContent = message || "";
+  universeBuilderStatus.classList.toggle("is-error", type === "error");
+  universeBuilderStatus.classList.toggle("is-success", type === "success");
+}
+
+function getUniverseBuilderSearchTerm() {
+  return String(universeBuilderSearch?.value || "").trim().toLowerCase();
+}
+
+function universeMatchesSearch(universe, searchTerm) {
+  if (!searchTerm) return true;
+  return [
+    universe.name,
+    universe.description,
+  ].some((value) => String(value || "").toLowerCase().includes(searchTerm));
+}
+
+function getUniverseBuilderViewMode() {
+  if (document.body.dataset.page !== "universe-builder") {
+    return "card";
+  }
+  return localStorage.getItem(UNIVERSE_BUILDER_VIEW_MODE_KEY) === "list" ? "list" : "card";
+}
+
+function applyUniverseBuilderViewMode(mode = getUniverseBuilderViewMode()) {
+  const safeMode = mode === "list" ? "list" : "card";
+  if (document.body.dataset.page === "universe-builder") {
+    localStorage.setItem(UNIVERSE_BUILDER_VIEW_MODE_KEY, safeMode);
+  }
+  universeViewModeButtons.forEach((button) => {
+    const isActive = button.dataset.universeViewMode === safeMode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  if (universeList) {
+    universeList.classList.toggle("is-list-view", safeMode === "list");
+    universeList.classList.toggle("is-card-view", safeMode !== "list");
+  }
 }
 
 function getHomeSectionCacheKey(section) {
@@ -1018,62 +1088,102 @@ function startElementTypeLibrarySeed(userId) {
   return elementTypeSeedPromise;
 }
 
-async function loadUniverseCards() {
-  if (!universeList || !supabaseClient || !currentAppUser) {
+function renderUniverseCards(data, primaryImagesByObjectId, { isBuilderPage = false } = {}) {
+  if (!universeList) return;
+
+  const allUniverses = Array.isArray(data) ? data : [];
+  const searchTerm = isBuilderPage ? getUniverseBuilderSearchTerm() : "";
+  const visibleUniverses = searchTerm
+    ? allUniverses.filter((universe) => universeMatchesSearch(universe, searchTerm))
+    : allUniverses;
+
+  universeList.classList.toggle("is-list-view", isBuilderPage && getUniverseBuilderViewMode() === "list");
+  universeList.classList.toggle("is-card-view", !isBuilderPage || getUniverseBuilderViewMode() !== "list");
+  setUniverseBuilderCount(visibleUniverses.length, allUniverses.length);
+
+  if (!visibleUniverses.length) {
+    universeList.innerHTML = searchTerm
+      ? '<p class="empty-state">No matching universes.</p>'
+      : '<p class="empty-state">No universes yet.</p>';
     return;
   }
 
-  const restoredFromCache = restoreHomeSectionCache("universes", universeList, homeUniverseCount, bindUniverseCardMenus);
-  if (!restoredFromCache) {
-    universeList.innerHTML = '<p class="empty-state">Loading universes...</p>';
-    if (homeUniverseCount) homeUniverseCount.textContent = "Loading...";
-  }
-
-  try {
-  const { data, error } = await withTimeout(supabaseClient
-    .from(UNIVERSE_TABLE)
-    .select("id,name,description,updated_at")
-    .eq("user_id", currentAppUser.id)
-    .order("updated_at", { ascending: false })
-    .limit(8), "Loading universes");
-
-  if (error) {
-    universeList.innerHTML = `<p class="empty-state is-error">Could not load universes: ${getReadableError(error)}</p>`;
-    if (homeUniverseCount) homeUniverseCount.textContent = "Error";
-    return;
-  }
-
-  if (!data?.length) {
-    universeList.innerHTML = '<p class="empty-state">No universes yet.</p>';
-    setHomeCount(homeUniverseCount, 0, "universe");
-    writeHomeSectionCache("universes", universeList, homeUniverseCount);
-    return;
-  }
-
-  setHomeCount(homeUniverseCount, data.length, "universe");
-
-  const primaryImagesByObjectId = await fetchPrimaryImagesByObjectId(data.map((universe) => universe.id));
-
-  universeList.innerHTML = data.map((universe) => {
+  universeList.innerHTML = visibleUniverses.map((universe) => {
     const image = primaryImagesByObjectId.get(universe.id);
+    const isNew = isBuilderPage && !universe.opened_at;
     return `
     <article class="universe-card-wrap">
       <a class="universe-card${getHomeCardImageClass(image)}" href="universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}"${getHomeCardImageStyle(image)}>
+        ${isNew ? '<span class="universe-new-badge">New</span>' : ""}
         <span class="card-icon" aria-hidden="true">
           <ph-planet weight="duotone"></ph-planet>
         </span>
-        <strong>${escapeHtml(universe.name || "Untitled Universe")}</strong>
-        <span>${escapeHtml(createBlurb(universe.description))}</span>
+        <span class="universe-card-copy">
+          <strong>${escapeHtml(universe.name || "Untitled Universe")}</strong>
+          <span class="universe-card-description-short">${escapeHtml(createBlurb(universe.description))}</span>
+          <span class="universe-card-description-long">${escapeHtml(createBlurb(universe.description, 420))}</span>
+        </span>
       </a>
       ${createUniverseDeleteMenu(universe)}
     </article>
   `;
   }).join("");
   bindUniverseCardMenus();
-  writeHomeSectionCache("universes", universeList, homeUniverseCount);
+}
+
+async function loadUniverseCards() {
+  if (!universeList || !supabaseClient || !currentAppUser) {
+    return;
+  }
+
+  const isBuilderPage = document.body.dataset.page === "universe-builder";
+  const restoredFromCache = !isBuilderPage && restoreHomeSectionCache("universes", universeList, homeUniverseCount, bindUniverseCardMenus);
+  if (!restoredFromCache) {
+    universeList.innerHTML = '<p class="empty-state">Loading universes...</p>';
+    if (homeUniverseCount) homeUniverseCount.textContent = "Loading...";
+  }
+
+  try {
+    let query = supabaseClient
+      .from(UNIVERSE_TABLE)
+      .select("id,name,description,updated_at,opened_at")
+      .eq("user_id", currentAppUser.id)
+      .order("updated_at", { ascending: false });
+    if (!isBuilderPage) {
+      query = query.limit(8);
+    }
+    const { data, error } = await withTimeout(query, "Loading universes");
+
+    if (error) {
+      universeList.innerHTML = `<p class="empty-state is-error">Could not load universes: ${getReadableError(error)}</p>`;
+      if (homeUniverseCount) homeUniverseCount.textContent = "Error";
+      if (universeBuilderCount) universeBuilderCount.textContent = "Error";
+      setUniverseBuilderStatus(`Could not load universes: ${getReadableError(error)}`, "error");
+      return;
+    }
+
+    const universes = data || [];
+    setHomeCount(homeUniverseCount, universes.length, "universe");
+    setUniverseBuilderStatus("");
+
+    const primaryImagesByObjectId = universes.length
+      ? await fetchPrimaryImagesByObjectId(universes.map((universe) => universe.id))
+      : new Map();
+
+    if (isBuilderPage) {
+      universeBuilderUniverses = universes;
+      universeBuilderPrimaryImages = primaryImagesByObjectId;
+    }
+
+    renderUniverseCards(universes, primaryImagesByObjectId, { isBuilderPage });
+    if (!isBuilderPage) {
+      writeHomeSectionCache("universes", universeList, homeUniverseCount);
+    }
   } catch (error) {
     universeList.innerHTML = `<p class="empty-state is-error">Could not load universes: ${getReadableError(error)}</p>`;
     if (homeUniverseCount) homeUniverseCount.textContent = "Error";
+    if (universeBuilderCount) universeBuilderCount.textContent = "Error";
+    setUniverseBuilderStatus(`Could not load universes: ${getReadableError(error)}`, "error");
   }
 }
 
@@ -1878,6 +1988,11 @@ function closeModal() {
     return;
   }
 
+  if (activeModal.id === "universe-ai-multi-review-modal") {
+    closeUniverseAiMultiReviewDialog();
+    return;
+  }
+
   if (activeModal.id === "delete-universe-modal") {
     pendingUniverseDelete = null;
     setDeleteUniverseStatus("");
@@ -1921,9 +2036,19 @@ function setUniverseAiReviewStatus(message, type = "") {
   universeAiReviewStatus.classList.toggle("is-success", type === "success");
 }
 
-function setUniverseGenerationBusy(isBusy) {
+function setUniverseAiMultiReviewStatus(message, type = "") {
+  if (!universeAiMultiReviewStatus) return;
+  universeAiMultiReviewStatus.textContent = message || "";
+  universeAiMultiReviewStatus.classList.toggle("is-error", type === "error");
+  universeAiMultiReviewStatus.classList.toggle("is-success", type === "success");
+}
+
+function setUniverseGenerationBusy(isBusy, label = "Generating Universe") {
   if (universeGenerationOverlay) {
     universeGenerationOverlay.hidden = !isBusy;
+  }
+  if (universeGenerationOverlayLabel) {
+    universeGenerationOverlayLabel.textContent = label;
   }
 }
 
@@ -1939,6 +2064,15 @@ function syncUniverseAiFields() {
   const isEnabled = Boolean(universeAiToggle?.checked);
   if (universeAiGenreField) {
     universeAiGenreField.hidden = !isEnabled;
+  }
+  if (universeAiMultiToggle) {
+    universeAiMultiToggle.disabled = !isEnabled;
+    if (!isEnabled) {
+      universeAiMultiToggle.checked = false;
+    }
+  }
+  if (universeAiCountInput) {
+    universeAiCountInput.disabled = !isEnabled || !universeAiMultiToggle?.checked;
   }
   if (universeNameLabel) {
     universeNameLabel.innerHTML = isEnabled ? "Name <em>(optional AI seed)</em>" : "Name";
@@ -1967,12 +2101,31 @@ function syncUniverseAiFields() {
 
 function getUniverseFormValues(form) {
   const formData = new FormData(form);
+  const requestedCount = Math.max(2, Math.min(10, Number.parseInt(String(formData.get("universe-ai-count") || "3"), 10) || 3));
   return {
     useAi: Boolean(formData.get("universe-ai-enabled")),
+    multiMode: Boolean(formData.get("universe-ai-enabled")) && Boolean(formData.get("universe-ai-multi")),
+    count: requestedCount,
     genre: String(formData.get("universe-genre") || "Random").trim() || "Random",
     name: String(formData.get("universe-name") || "").trim(),
     description: String(formData.get("universe-description") || "").trim()
   };
+}
+
+function normalizeGeneratedUniverseIdea(idea) {
+  return {
+    name: String(idea?.name || "").replace(/\s+/g, " ").trim(),
+    genre: String(idea?.genre || idea?.category || "").replace(/\s+/g, " ").trim(),
+    description: String(idea?.description || "").replace(/\s+/g, " ").trim()
+  };
+}
+
+function normalizeGeneratedUniverseIdeas(payload) {
+  if (Array.isArray(payload?.ideas)) {
+    return payload.ideas.map(normalizeGeneratedUniverseIdea).filter((idea) => idea.name && idea.description);
+  }
+  const singleIdea = normalizeGeneratedUniverseIdea(payload);
+  return singleIdea.name && singleIdea.description ? [singleIdea] : [];
 }
 
 function formatUniverseAiReviewText(generatedUniverse) {
@@ -2046,6 +2199,71 @@ function closeUniverseAiReviewDialog() {
   document.body.classList.remove("centralis-modal-open");
 }
 
+function renderUniverseAiMultiReview(ideas) {
+  if (!universeAiIdeasList) return;
+  universeAiIdeasList.innerHTML = ideas.map((idea, index) => `
+    <label class="universe-ai-idea-card">
+      <input type="checkbox" data-universe-ai-idea-select value="${index}" checked>
+      <span class="universe-ai-idea-body">
+        <span class="universe-ai-idea-title-row">
+          <strong>${escapeHtml(idea.name || "Untitled Universe")}</strong>
+          <span class="universe-ai-idea-genre">${escapeHtml(idea.genre || "AI-selected genre")}</span>
+        </span>
+        <span>${escapeHtml(idea.description || "No description generated.")}</span>
+      </span>
+    </label>
+  `).join("");
+  syncUniverseAiSelectAllState();
+}
+
+function syncUniverseAiSelectAllState() {
+  if (!universeAiSelectAll || !universeAiIdeasList) return;
+  const checkboxes = [...universeAiIdeasList.querySelectorAll("[data-universe-ai-idea-select]")];
+  const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  universeAiSelectAll.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+  universeAiSelectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+}
+
+function openUniverseAiMultiReviewDialog(generatedPayload) {
+  const newUniverseModal = document.getElementById("new-universe-modal");
+  if (!universeAiMultiReviewModal || !universeAiIdeasList) return;
+
+  const ideas = normalizeGeneratedUniverseIdeas(generatedPayload);
+  universeAiMultiReviewDrafts = ideas;
+  renderUniverseAiMultiReview(ideas);
+  setUniverseAiMultiReviewStatus("");
+  document.body.classList.add("centralis-modal-open");
+
+  if (newUniverseModal) {
+    newUniverseModal.hidden = true;
+  }
+  activeModal = universeAiMultiReviewModal;
+  universeAiMultiReviewModal.hidden = false;
+  requestAnimationFrame(() => {
+    universeAiIdeasList.querySelector("[data-universe-ai-idea-select]")?.focus({ preventScroll: true });
+  });
+}
+
+function closeUniverseAiMultiReviewDialog() {
+  const newUniverseModal = document.getElementById("new-universe-modal");
+  if (universeAiMultiReviewModal) {
+    universeAiMultiReviewModal.hidden = true;
+  }
+  universeAiMultiReviewDrafts = [];
+  setUniverseAiMultiReviewStatus("");
+  if (newUniverseModal) {
+    newUniverseModal.hidden = false;
+    activeModal = newUniverseModal;
+    document.body.classList.add("centralis-modal-open");
+    requestAnimationFrame(() => {
+      newUniverseModal.querySelector("[name=\"universe-name\"]")?.focus({ preventScroll: true });
+    });
+    return;
+  }
+  activeModal = null;
+  document.body.classList.remove("centralis-modal-open");
+}
+
 async function createUniverseRecord({ name, description }, statusSetter) {
   if (!supabaseClient) {
     statusSetter("Supabase is not available yet. Refresh the page and try again.", "error");
@@ -2088,11 +2306,49 @@ async function createUniverseRecord({ name, description }, statusSetter) {
 }
 
 async function generateUniverseDraft(values) {
-  return callCentralisFunction("generate-universe-metadata", {
+  const payload = {
     genre: values.genre,
     name: values.name,
     description: values.description
-  }, "Generating universe");
+  };
+  if (values.multiMode) {
+    payload.count = values.count;
+  }
+  return callCentralisFunction("generate-universe-metadata", payload, "Generating universe");
+}
+
+async function generateUniverseIdeas(values) {
+  const targetCount = Math.max(2, Math.min(10, Number.parseInt(String(values.count || "3"), 10) || 3));
+  const fallbackGenre = values.genre && values.genre !== "Random" ? values.genre : "AI-selected genre";
+  const initialPayload = await generateUniverseDraft({
+    ...values,
+    multiMode: true,
+    count: targetCount
+  });
+  const ideas = normalizeGeneratedUniverseIdeas(initialPayload)
+    .map((idea) => ({ ...idea, genre: idea.genre || fallbackGenre }))
+    .slice(0, targetCount);
+
+  while (ideas.length < targetCount) {
+    const priorNames = ideas.map((idea) => idea.name).filter(Boolean).join(", ") || "none yet";
+    const nextPayload = await generateUniverseDraft({
+      ...values,
+      multiMode: false,
+      count: 1,
+      description: [
+        values.description,
+        `Generate a distinct additional universe idea for option ${ideas.length + 1} of ${targetCount}.`,
+        `Do not repeat or closely resemble these already-generated names: ${priorNames}.`
+      ].filter(Boolean).join("\n")
+    });
+    const nextIdeas = normalizeGeneratedUniverseIdeas(nextPayload);
+    if (!nextIdeas.length) {
+      break;
+    }
+    ideas.push({ ...nextIdeas[0], genre: nextIdeas[0].genre || fallbackGenre });
+  }
+
+  return { ideas: ideas.slice(0, targetCount) };
 }
 
 async function regenerateUniverseDraft() {
@@ -2109,8 +2365,12 @@ async function regenerateUniverseDraft() {
 
   try {
     setUniverseAiReviewStatus("");
-    setUniverseGenerationBusy(true);
-    const generatedUniverse = await generateUniverseDraft(getUniverseFormValues(form));
+    setUniverseGenerationBusy(true, "Generating Universe");
+    const generatedUniverse = await generateUniverseDraft({
+      ...getUniverseFormValues(form),
+      multiMode: false,
+      count: 1
+    });
     setUniverseAiReviewText(generatedUniverse);
     requestAnimationFrame(() => universeAiReviewText?.focus({ preventScroll: true }));
   } catch (error) {
@@ -2140,9 +2400,19 @@ async function createUniverseFromForm(form, submitButton) {
   try {
     if (values.useAi) {
       setUniverseStatus("Generating universe...");
-      setUniverseGenerationBusy(true);
-      const generatedUniverse = await generateUniverseDraft(values);
+      setUniverseGenerationBusy(true, values.multiMode ? "Generating Universes" : "Generating Universe");
+      const generatedUniverse = values.multiMode
+        ? await generateUniverseIdeas(values)
+        : await generateUniverseDraft(values);
       setUniverseStatus("");
+      if (values.multiMode) {
+        const ideas = normalizeGeneratedUniverseIdeas(generatedUniverse);
+        if (!ideas.length) {
+          throw new Error("AI did not return any usable universe ideas.");
+        }
+        openUniverseAiMultiReviewDialog({ ideas });
+        return;
+      }
       openUniverseAiReviewDialog(generatedUniverse);
       return;
     }
@@ -2208,14 +2478,77 @@ async function finalizeGeneratedUniverse() {
   }
 }
 
+async function createSelectedGeneratedUniverses() {
+  if (!universeAiIdeasList) return;
+  const button = universeAiMultiCreateButton;
+  if (button) {
+    button.disabled = true;
+  }
+
+  try {
+    const selectedIndexes = [...universeAiIdeasList.querySelectorAll("[data-universe-ai-idea-select]:checked")]
+      .map((input) => Number.parseInt(input.value, 10))
+      .filter((index) => Number.isInteger(index));
+    const selectedIdeas = selectedIndexes
+      .map((index) => universeAiMultiReviewDrafts[index])
+      .filter((idea) => idea?.name);
+
+    if (!selectedIdeas.length) {
+      setUniverseAiMultiReviewStatus("Select at least one universe idea to create.", "error");
+      return;
+    }
+
+    setUniverseAiMultiReviewStatus("Creating selected universes...");
+    for (const idea of selectedIdeas) {
+      const createdId = await createUniverseRecord(idea, setUniverseAiMultiReviewStatus);
+      if (!createdId) return;
+    }
+
+    setUniverseAiMultiReviewStatus("Universes created.", "success");
+    window.location.href = "universe-builder.html";
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
 populateUniverseAiGenreSelect();
 syncUniverseAiFields();
 universeAiToggle?.addEventListener("change", syncUniverseAiFields);
+universeAiMultiToggle?.addEventListener("change", syncUniverseAiFields);
+universeAiCountInput?.addEventListener("input", () => {
+  const value = Math.max(2, Math.min(10, Number.parseInt(universeAiCountInput.value || "3", 10) || 3));
+  universeAiCountInput.value = String(value);
+});
 universeAiReviewCancelButtons.forEach((button) => {
   button.addEventListener("click", closeUniverseAiReviewDialog);
 });
+universeAiMultiReviewCancelButtons.forEach((button) => {
+  button.addEventListener("click", closeUniverseAiMultiReviewDialog);
+});
+universeAiSelectAll?.addEventListener("change", () => {
+  if (!universeAiIdeasList) return;
+  universeAiSelectAll.indeterminate = false;
+  universeAiIdeasList.querySelectorAll("[data-universe-ai-idea-select]").forEach((checkbox) => {
+    checkbox.checked = universeAiSelectAll.checked;
+  });
+});
+universeAiIdeasList?.addEventListener("change", (event) => {
+  if (event.target?.matches?.("[data-universe-ai-idea-select]")) {
+    syncUniverseAiSelectAllState();
+  }
+});
 universeAiGenerateAgainButton?.addEventListener("click", regenerateUniverseDraft);
 universeAiFinalizeButton?.addEventListener("click", finalizeGeneratedUniverse);
+universeAiMultiCreateButton?.addEventListener("click", createSelectedGeneratedUniverses);
+applyUniverseBuilderViewMode();
+universeViewModeButtons.forEach((button) => {
+  button.addEventListener("click", () => applyUniverseBuilderViewMode(button.dataset.universeViewMode));
+});
+universeBuilderSearch?.addEventListener("input", () => {
+  renderUniverseCards(universeBuilderUniverses, universeBuilderPrimaryImages, { isBuilderPage: true });
+});
 
 document.querySelectorAll(".universe-form").forEach((form) => {
   form.addEventListener("submit", async (event) => {
@@ -2391,7 +2724,12 @@ signOutButtons.forEach((button) => {
 });
 
 if (supabaseClient) {
-  supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    const sameLoadedUser = session?.user?.id && currentAppUser?.clerk_user_id === session.user.id;
+    if (sameLoadedUser && ["INITIAL_SESSION", "SIGNED_IN", "TOKEN_REFRESHED"].includes(event)) {
+      return;
+    }
+
     if (session) {
       await showSignedInApp();
       window.setTimeout(() => {

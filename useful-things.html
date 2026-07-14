@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=output-copy-menu-1">
+  <link rel="stylesheet" href="styles.css?v=text-clear-input-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -194,13 +194,19 @@
               <section class="text-converter-pane" aria-labelledby="text-converter-input-title">
                 <div class="text-converter-pane-header">
                   <h3 id="text-converter-input-title">Input</h3>
-                  <label class="text-converter-mode-field" for="text-converter-mode">
-                    <span>Input mode</span>
-                    <select id="text-converter-mode" data-text-converter-mode>
-                      <option value="wysiwyg">WYSIWYG</option>
-                      <option value="raw">Raw Text</option>
-                    </select>
-                  </label>
+                  <div class="text-converter-input-controls">
+                    <button class="text-converter-clear-input" type="button" data-text-clear-input>
+                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                      Clear Text
+                    </button>
+                    <label class="text-converter-mode-field" for="text-converter-mode">
+                      <span>Input mode</span>
+                      <select id="text-converter-mode" data-text-converter-mode>
+                        <option value="wysiwyg">WYSIWYG</option>
+                        <option value="raw">Raw Text</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
 
                 <div class="text-converter-rich-wrap" data-rich-input-wrap>
@@ -299,9 +305,9 @@
                   <button class="primary-action" type="button" data-convert-target="yaml">YAML</button>
                   <button class="primary-action" type="button" data-convert-target="xml">XML</button>
                   <button class="primary-action" type="button" data-convert-target="csv">CSV</button>
-                  <button class="primary-action" type="button" data-convert-target="markdown-table">Markdown Table</button>
                   <button class="primary-action" type="button" data-convert-target="json-lines">JSON Lines</button>
                   <button class="primary-action" type="button" data-convert-target="sql-inserts">SQL Inserts</button>
+                  <button class="primary-action" type="button" data-convert-target="sql-schema">SQL Schema</button>
                   <button class="primary-action" type="button" data-convert-target="outline">Outline</button>
                   <button class="primary-action" type="button" data-convert-target="bullet-list">Bullet List</button>
                   <button class="primary-action" type="button" data-convert-target="numbered-list">Numbered List</button>
@@ -311,7 +317,10 @@
 
               <section class="text-converter-pane" aria-labelledby="text-converter-output-title">
                 <div class="text-converter-pane-header">
-                  <h3 id="text-converter-output-title">Output</h3>
+                  <h3 id="text-converter-output-title">
+                    Output
+                    <span class="text-converter-output-format" data-text-output-format hidden></span>
+                  </h3>
                   <div class="text-converter-output-copy-menu" data-text-output-copy-menu>
                     <button class="text-converter-output-copy" type="button" data-text-output-copy>Copy</button>
                     <button
@@ -489,6 +498,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=centralis-header-1"></script>
-  <script src="useful-things.js?v=dice-percentile-preserve-roll-1"></script>
+  <script src="useful-things.js?v=text-clear-input-1"></script>
 </body>
 </html>

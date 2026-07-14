@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Universe Builder | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=universe-ai-create-1">
+  <link rel="stylesheet" href="styles.css?v=universe-fixed-list-cards-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
-<body data-auth-required="true">
+<body data-auth-required="true" data-page="universe-builder">
   <div class="app-shell">
   <header class="site-header" aria-label="Centralis main header">
     <a class="brand" href="index.html" aria-label="Centralis home">
@@ -125,12 +125,41 @@
     </div>
   </header>
 
-  <main class="landing-page" aria-label="Universe Builder">
-    <div class="landing-toolbar">
-      <h1>Universe Builder</h1>
-      <button class="primary-action" type="button" data-open-modal="new-universe-modal">Create Universe</button>
-    </div>
-    <div class="universe-grid" data-universe-list aria-label="Your universes">
+  <main class="universe-builder-page" aria-labelledby="universe-builder-title">
+    <section class="universe-builder-toolbar">
+      <div>
+        <p class="universe-builder-eyebrow">Worldbuilding</p>
+        <h1 id="universe-builder-title">Universe Builder</h1>
+        <p>Create, organize, and explore your fictional universes in Centralis.</p>
+      </div>
+      <div class="universe-builder-toolbar-actions">
+        <button class="primary-action" type="button" data-open-modal="new-universe-modal">Create Universe</button>
+      </div>
+    </section>
+
+    <section class="universe-builder-controls" aria-label="Universe display options">
+      <p class="universe-builder-count" data-universe-count>Loading universes...</p>
+      <div class="universe-builder-control-actions">
+        <label class="universe-builder-search">
+          <span class="sr-only">Search universes</span>
+          <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+          <input type="search" placeholder="Search universes..." autocomplete="off" data-universe-search>
+        </label>
+        <div class="chat-view-switcher" role="group" aria-label="Universe view mode">
+          <button type="button" data-universe-view-mode="card" aria-pressed="true" title="Card view">
+            <ph-squares-four weight="bold" aria-hidden="true"></ph-squares-four>
+            <span>Card</span>
+          </button>
+          <button type="button" data-universe-view-mode="list" aria-pressed="false" title="List view">
+            <ph-list weight="bold" aria-hidden="true"></ph-list>
+            <span>List</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <p class="universe-builder-status" data-universe-builder-status role="status"></p>
+    <div class="universe-grid is-card-view" data-universe-list aria-label="Your universes">
       <p class="empty-state">Loading universes...</p>
     </div>
   </main>
@@ -161,6 +190,21 @@
           <input type="checkbox" name="universe-ai-enabled" data-universe-ai-toggle>
           <span>Generate New Universe Using AI</span>
         </label>
+
+        <div class="universe-ai-multi-row">
+          <label class="form-checkbox universe-ai-checkbox universe-ai-multi-checkbox">
+            <input type="checkbox" name="universe-ai-multi" data-universe-ai-multi-toggle disabled>
+            <span>Multi-Idea Mode</span>
+            <span class="universe-ai-info-tip" tabindex="0" aria-label="Generate multiple ideas in one pass">
+              <ph-info weight="bold" aria-hidden="true"></ph-info>
+              <span role="tooltip">Generate multiple ideas in one pass</span>
+            </span>
+          </label>
+          <label class="form-field universe-ai-count-field">
+            <span>Ideas</span>
+            <input type="number" name="universe-ai-count" data-universe-ai-count min="2" max="10" value="3" inputmode="numeric" disabled>
+          </label>
+        </div>
 
         <p class="form-status" data-universe-status role="status"></p>
 
@@ -196,8 +240,35 @@
     </section>
   </div>
 
+  <div class="modal-backdrop universe-modal-backdrop" id="universe-ai-multi-review-modal" hidden>
+    <section class="modal-dialog universe-ai-multi-review-dialog" role="dialog" aria-modal="true" aria-labelledby="universe-ai-multi-review-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="universe-ai-multi-review-title">Multi-Idea Generated Universes</h2>
+          <p class="modal-subtitle">Select one or more generated ideas to create.</p>
+        </div>
+      </div>
+
+      <div class="universe-ai-ideas-toolbar">
+        <label class="universe-ai-select-all">
+          <input type="checkbox" data-universe-ai-select-all checked>
+          <span>Select All/None</span>
+        </label>
+      </div>
+
+      <div class="universe-ai-ideas-list" data-universe-ai-ideas-list></div>
+
+      <p class="form-status" data-universe-ai-multi-review-status role="status"></p>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-universe-ai-multi-review-cancel>Cancel</button>
+        <button class="primary-action" type="button" data-universe-ai-multi-create>Create</button>
+      </div>
+    </section>
+  </div>
+
   <div class="universe-generation-overlay" data-universe-generation-overlay hidden>
-    <div>Generating Universe</div>
+    <div data-universe-generation-overlay-label>Generating Universe</div>
   </div>
 
   <div class="modal-backdrop" id="delete-universe-modal" hidden>
@@ -221,6 +292,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=universe-ai-formatted-review-1"></script>
+  <script src="script.js?v=universe-fixed-list-cards-1"></script>
 </body>
 </html>

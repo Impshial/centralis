@@ -6,7 +6,7 @@
   <title>Universe Canvas | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
-  <link rel="stylesheet" href="styles.css?v=generate-elements-refinements-1">
+  <link rel="stylesheet" href="styles.css?v=details-section-cleanup-3">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -154,6 +154,10 @@
         </div>
         <div class="canvas-tools-right">
           <p class="canvas-transfer-status" data-canvas-transfer-status role="status"></p>
+          <button class="tool-action" type="button" data-open-ai-expert>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            AI Expert
+          </button>
           <button class="tool-action" type="button" data-open-modal="add-element-modal">
             <span aria-hidden="true">+</span>
             Add Element
@@ -417,7 +421,7 @@
         </label>
 
         <label class="form-field">
-          <span>Type <em>(optional)</em></span>
+          <span>Type</span>
           <div class="type-picker" data-element-type-picker>
             <input type="hidden" name="element-type" data-element-type-input value="">
             <button class="type-picker-trigger" type="button" data-element-type-trigger aria-expanded="false" aria-haspopup="listbox">
@@ -434,14 +438,59 @@
           </div>
         </label>
 
+        <label class="form-checkbox">
+          <input type="checkbox" name="generate-element-ai" data-generate-element-ai>
+          <span>Generate Element With AI</span>
+        </label>
+
         <p class="form-status" data-element-status role="status"></p>
 
         <div class="modal-actions">
           <button class="secondary-action" type="button" data-close-modal>Cancel</button>
-          <button class="primary-action" type="submit">Add Element</button>
+          <button class="primary-action" type="submit" data-element-submit>Add Element</button>
         </div>
       </form>
     </section>
+  </div>
+
+  <div class="modal-backdrop" id="review-element-modal" data-strict-modal hidden>
+    <section class="modal-dialog review-element-dialog" role="dialog" aria-modal="true" aria-labelledby="review-element-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="review-element-title">Review Element</h2>
+          <p class="modal-subtitle">Edit the AI-generated name and description before adding the element to the canvas.</p>
+        </div>
+      </div>
+
+      <form class="element-form" data-review-element-form>
+        <label class="form-field">
+          <span>Element Type</span>
+          <input type="text" data-review-element-type readonly>
+        </label>
+
+        <label class="form-field">
+          <span>Name</span>
+          <input type="text" name="review-element-name" data-review-element-name autocomplete="off">
+        </label>
+
+        <label class="form-field">
+          <span>Description</span>
+          <textarea name="review-element-description" data-review-element-description></textarea>
+        </label>
+
+        <p class="form-status" data-review-element-status role="status"></p>
+
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-review-element-cancel>Cancel</button>
+          <button class="secondary-action" type="button" data-review-element-regenerate>Generate Again</button>
+          <button class="primary-action" type="submit">Finalize</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="universe-generation-overlay" id="generate-element-overlay" hidden>
+    <div>Generating...</div>
   </div>
 
   <div class="modal-backdrop" id="generate-elements-modal" data-strict-modal hidden>
@@ -449,7 +498,7 @@
       <div class="modal-header">
         <div>
           <h2 id="generate-elements-title">Generate Elements</h2>
-          <p class="modal-subtitle">Create worldbuilding elements from this universe using the element types in your database.</p>
+          <p class="modal-subtitle" data-generate-elements-subtitle>Create worldbuilding elements from this universe using the element types in your database.</p>
         </div>
       </div>
 
@@ -476,11 +525,17 @@
         </label>
 
         <section class="generate-elements-type-picker">
-          <button class="generate-elements-type-toggle" type="button" data-generate-elements-types-toggle aria-expanded="false" aria-controls="generate-elements-types-list">
-            <span>Element Types</span>
-            <span data-generate-elements-types-count>Loading...</span>
-            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
-          </button>
+          <div class="generate-elements-type-header">
+            <button class="generate-elements-type-toggle" type="button" data-generate-elements-types-toggle aria-expanded="false" aria-controls="generate-elements-types-list">
+              <span>Element Types</span>
+              <span data-generate-elements-types-count>Loading...</span>
+              <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+            </button>
+            <label class="generate-elements-type-select-all-control">
+              <input type="checkbox" data-generate-elements-types-select-all>
+              <span>Select All/None</span>
+            </label>
+          </div>
           <div class="generate-elements-type-list" id="generate-elements-types-list" data-generate-elements-types hidden></div>
         </section>
         <p class="form-status" data-generate-elements-status role="status"></p>
@@ -881,6 +936,6 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
-  <script src="flow-canvas.js?v=generate-elements-refinements-1"></script>
+  <script src="flow-canvas.js?v=details-section-cleanup-3"></script>
 </body>
 </html>

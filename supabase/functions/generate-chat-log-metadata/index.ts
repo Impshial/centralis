@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   describeError,
@@ -52,6 +53,8 @@ function buildPrompt(input: {
     "Create metadata for a Centralis Chat Repository import.",
     "Return exactly one JSON object with keys: title and summary.",
     "The title must be concise, story-like, and 80 characters or fewer when possible.",
+    "If the title introduces or reshapes any fictional proper name, apply the naming rules below.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
     "The summary must be spoiler-light, non-graphic, and focused on setup, character dynamics, stakes, mood, and emotional tone.",
     "If sexual or explicit content appears, do not describe it graphically; summarize only its narrative relevance in neutral terms.",
     "Do not include markdown, HTML, comments, or prose outside JSON.",

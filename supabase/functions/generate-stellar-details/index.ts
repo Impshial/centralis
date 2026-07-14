@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
@@ -76,6 +77,7 @@ function buildMoonsPrompt(planet: Record<string, unknown>, star: Record<string, 
     `Generate exactly ${moonCount} moons.`,
     "Use diverse plausible moon types, such as captured asteroids, rocky moons, icy moons, volcanic moons, and ocean moons when appropriate.",
     "Use catalog designations like '<planet designation>-I', '<planet designation>-II'.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
     "No markdown, no comments, no prose outside JSON.",
     "JSON shape:",
     JSON.stringify({
@@ -114,6 +116,7 @@ function buildLifeformsPrompt(body: Record<string, unknown>) {
     "Create diverse lifeforms adapted to these conditions.",
     "Use full taxonomic style classification from kingdom to species.",
     "Use species as a Latin-style epithet prefixed with D-.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
     "Use biome values from: Ocean, Atmosphere, Underground, Surface, Ice, Volcanic.",
     "Use locomotion values from: Swimming, Flying, Gliding, Crawling, Burrowing, Sessile.",
     "Use diet values from: Photosynthetic, Chemosynthetic, Herbivore, Carnivore, Filter Feeder, Decomposer.",

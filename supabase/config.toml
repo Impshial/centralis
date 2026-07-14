@@ -12,6 +12,18 @@ verify_jwt = true
 [functions.generate-universe-elements]
 verify_jwt = true
 
+[functions.generate-universe-element]
+verify_jwt = true
+
+[functions.sync-universe-ai-source]
+verify_jwt = true
+
+[functions.get-universe-ai-chat]
+verify_jwt = true
+
+[functions.send-universe-ai-message]
+verify_jwt = true
+
 [functions.convert-text-format]
 verify_jwt = true
 
@@ -37,4 +49,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.delete-chat-log]
+verify_jwt = true
+
+[functions.lookup-movie-omdb]
+verify_jwt = true
+
+[functions.lookup-movie-poster-tmdb]
 verify_jwt = true

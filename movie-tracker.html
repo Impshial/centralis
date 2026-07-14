@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Movie Tracker | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=button-padding-2">
+  <link rel="stylesheet" href="styles.css?v=movie-process-list-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -131,9 +131,10 @@
           <div class="movie-list-header">
             <div>
               <h2>Your Movies</h2>
-              <p data-movie-count>Loading movies...</p>
+              <p data-movie-count></p>
             </div>
-            <p class="movie-status" data-movie-status role="status"></p>
+            <p class="movie-status" data-movie-status role="status">Loading movies...</p>
+            <nav class="movie-pagination movie-pagination-top" data-movie-pagination aria-label="Movie list pagination"></nav>
           </div>
           <div class="movie-table-shell">
             <table class="movie-table">
@@ -147,17 +148,12 @@
                   <th>Franchise</th>
                   <th>Collection</th>
                   <th>Status</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody data-movie-rows></tbody>
             </table>
           </div>
-          <footer class="movie-pagination">
-            <button class="secondary-action" type="button" data-page-prev>Previous</button>
-            <span data-page-label>Page 1</span>
-            <button class="secondary-action" type="button" data-page-next>Next</button>
-          </footer>
+          <footer class="movie-pagination" data-movie-pagination aria-label="Movie list pagination"></footer>
         </section>
       </section>
 
@@ -179,8 +175,7 @@
             <button type="button" data-bulk-franchise disabled><ph-clapperboard weight="bold"></ph-clapperboard>Set Franchise (0)</button>
             <button type="button" data-bulk-collection disabled><ph-clapperboard weight="bold"></ph-clapperboard>Set Collection (0)</button>
             <hr>
-            <button type="button" data-open-omdb><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Process with OMDB</button>
-            <button type="button" data-open-tmdb><ph-image weight="bold"></ph-image>Fetch Posters</button>
+            <button type="button" data-open-missing-details><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Get Missing Details</button>
             <button type="button" data-open-franchises><ph-gear weight="bold"></ph-gear>Manage Franchises</button>
             <button type="button" data-open-collections><ph-gear weight="bold"></ph-gear>Manage Collections</button>
             <button type="button" data-export-movies><ph-download-simple weight="bold"></ph-download-simple>Export Movies</button>
@@ -227,11 +222,11 @@
         </section>
         <hr>
         <section class="movie-statistics">
-          <button class="movie-section-toggle" type="button" data-statistics-toggle aria-expanded="true" aria-controls="movie-statistics-content">
+          <button class="movie-section-toggle" type="button" data-statistics-toggle aria-expanded="false" aria-controls="movie-statistics-content">
             <span>Statistics</span>
             <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
           </button>
-          <dl id="movie-statistics-content" data-movie-stats></dl>
+          <dl id="movie-statistics-content" data-movie-stats hidden></dl>
         </section>
       </aside>
     </main>
@@ -260,14 +255,14 @@
     </section>
   </div>
 
-  <div class="modal-backdrop" id="movie-view-modal" hidden>
+  <div class="modal-backdrop" id="movie-view-modal" data-strict-modal hidden>
     <section class="modal-dialog movie-view-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-view-title">
       <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-view-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
       <div data-movie-view-content></div>
     </section>
   </div>
 
-  <div class="modal-backdrop" id="movie-edit-modal" hidden>
+  <div class="modal-backdrop" id="movie-edit-modal" data-strict-modal hidden>
     <section class="modal-dialog movie-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-edit-title">
       <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-edit-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
       <form data-edit-movie-form></form>
@@ -322,7 +317,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=centralis-header-1"></script>
-  <script src="movie-tracker.js?v=movie-tracker-v7"></script>
+  <script src="movie-tracker.js?v=movie-tracker-v26"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {

@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   describeError,
@@ -41,16 +42,58 @@ function cleanDescription(value: unknown) {
     .slice(0, 4000);
 }
 
+function cleanGenre(value: unknown, fallback = "") {
+  const genre = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  return genre || fallback;
+}
+
+function extractIdeas(payload: unknown, fallbackGenre = "") {
+  const record = payload as Record<string, unknown>;
+  const rawIdeas = Array.isArray(payload)
+    ? payload
+    : Array.isArray(record?.ideas)
+      ? record.ideas
+      : Array.isArray(record?.universes)
+        ? record.universes
+        : Array.isArray(record?.concepts)
+          ? record.concepts
+          : record?.name || record?.description
+            ? [record]
+            : [];
+
+  return rawIdeas
+    .map((idea: unknown) => {
+      const ideaRecord = idea as Record<string, unknown>;
+      return {
+        name: cleanName(ideaRecord?.name),
+        genre: cleanGenre(ideaRecord?.genre || ideaRecord?.category, fallbackGenre),
+        description: cleanDescription(ideaRecord?.description),
+      };
+    })
+    .filter((idea: { name: string; genre: string; description: string }) => idea.name && idea.description);
+}
+
 function buildPrompt(input: {
   genre: string;
   name: string;
   description: string;
+  count: number;
 }) {
+  const isMultiMode = input.count > 1;
   return [
     "Create metadata for a new Centralis Universe Builder universe.",
-    "Return exactly one JSON object with keys: name and description.",
+    isMultiMode
+      ? `Return exactly one JSON object with one key, ideas. ideas must be an array containing exactly ${input.count} objects. Each object must have keys: name, genre, and description.`
+      : "Return exactly one JSON object with keys: name and description.",
+    isMultiMode ? `Do not return fewer than ${input.count} ideas.` : "",
     "The name must be evocative, concise, and suitable for a fictional universe or setting.",
-    "The description must be one vivid paragraph that establishes the premise, tone, central tensions, and worldbuilding hooks.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
+    isMultiMode ? "Each genre must be a concise, useful genre label for that idea. If a specific genre helper is provided, use it or a more specific subgenre that fits the idea." : "",
+    "Each description must be one vivid paragraph that establishes the premise, tone, central tensions, and worldbuilding hooks.",
+    isMultiMode ? "Make the ideas meaningfully different from one another in premise, tone, and worldbuilding focus." : "",
     "Do not include markdown, comments, extra keys, or prose outside JSON.",
     input.genre && input.genre !== "Random"
       ? `Genre prompt helper: ${input.genre}. Use this as inspiration, not as a stored field.`
@@ -74,15 +117,32 @@ Deno.serve(async (req) => {
     const genre = truncate(body.genre || "Random", 120) || "Random";
     const name = truncate(body.name, 200);
     const description = truncate(body.description, 4000);
+    const count = Math.max(1, Math.min(10, Number.parseInt(String(body.count || "1"), 10) || 1));
 
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
     const generatedText = await generateJsonText(openai, {
       system: "You create concise, usable fictional universe metadata for a worldbuilding app. Respond only with valid JSON.",
-      prompt: buildPrompt({ genre, name, description }),
-      maxOutputTokens: 900,
+      prompt: buildPrompt({ genre, name, description, count }),
+      maxOutputTokens: Math.min(4500, 900 + count * 520),
     });
 
     const generated = parseJson(generatedText || "{}");
+    if (count > 1) {
+      const fallbackGenre = genre && genre !== "Random" ? genre : "AI-selected genre";
+      const ideas = extractIdeas(generated, fallbackGenre).slice(0, count);
+
+      if (!ideas.length) {
+        return jsonResponse({ error: "OpenAI did not return usable universe ideas." }, 502);
+      }
+
+      return jsonResponse({
+        ideas,
+        warning: ideas.length < count
+          ? `OpenAI returned ${ideas.length} usable universe ${ideas.length === 1 ? "idea" : "ideas"} instead of ${count}.`
+          : undefined,
+      });
+    }
+
     const generatedName = cleanName(generated.name);
     const generatedDescription = cleanDescription(generated.description);
 

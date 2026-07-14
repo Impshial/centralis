@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
@@ -65,6 +66,7 @@ function buildPrompt(planet: Record<string, unknown>, moonCount: number) {
     `Planet orbital distance AU: ${planet.orbital_distance_au || "unknown"}.`,
     `Generate ${moonCount} moons. If zero, return {\"moons\":[]}.`,
     "Use catalog designations like '<planet designation>-I', '<planet designation>-II'.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
     "No markdown, no comments, no prose outside JSON.",
     "JSON shape:",
     JSON.stringify({

@@ -26,6 +26,7 @@ const movieState = {
   importFile: null,
   activeMovie: null,
   activeManager: null,
+  posterDisplayUrls: new Map(),
 };
 
 window.centralisMovieTrackerLoaded = true;
@@ -36,9 +37,7 @@ const els = {
   status: document.querySelector("[data-movie-status]"),
   stats: document.querySelector("[data-movie-stats]"),
   selectAll: document.querySelector("[data-select-all-movies]"),
-  pagePrev: document.querySelector("[data-page-prev]"),
-  pageNext: document.querySelector("[data-page-next]"),
-  pageLabel: document.querySelector("[data-page-label]"),
+  pagination: Array.from(document.querySelectorAll("[data-movie-pagination]")),
   search: document.querySelector("[data-search-movies]"),
   sort: document.querySelector("[data-sort-movies]"),
   statusFilter: document.querySelector("[data-filter-status]"),
@@ -114,6 +113,20 @@ function normalizeId(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function normalizeMovieTitleForSort(title) {
+  const text = String(title || "").trim().replace(/\s+/g, " ");
+  if (!/^the\s+\S/i.test(text) || /,\s*the$/i.test(text)) {
+    return text;
+  }
+  return `${text.replace(/^the\s+/i, "")}, The`;
+}
+
+function normalizeMovieTitleForLookup(title) {
+  const text = String(title || "").trim();
+  const match = text.match(/^(.+),\s*The$/i);
+  return match ? `The ${match[1].trim()}` : text;
+}
+
 function openModal(id) {
   const modal = document.getElementById(id);
   if (modal) modal.hidden = false;
@@ -130,9 +143,22 @@ function statusBadge(movie) {
     : '<span class="movie-status-badge">Not Downloaded</span>';
 }
 
+function movieImageObjectId(movieId) {
+  return `movie-${movieId}`;
+}
+
+function getPosterDisplayUrl(movie) {
+  const cached = movieState.posterDisplayUrls.get(movie.id);
+  if (cached?.storedUrl && cached.storedUrl === movie.poster_url) {
+    return cached.displayUrl;
+  }
+  return movie.poster_url;
+}
+
 function posterMarkup(movie, size = "thumb") {
-  if (movie.poster_url) {
-    return `<img class="movie-poster movie-poster-${size}" src="${escapeHtml(movie.poster_url)}" alt="${escapeHtml(movie.title)} poster" loading="lazy">`;
+  const posterUrl = getPosterDisplayUrl(movie);
+  if (posterUrl) {
+    return `<img class="movie-poster movie-poster-${size}" src="${escapeHtml(posterUrl)}" alt="${escapeHtml(movie.title)} poster" loading="lazy">`;
   }
   return `<div class="movie-poster movie-poster-${size} is-empty"><ph-film-slate weight="bold"></ph-film-slate></div>`;
 }
@@ -212,6 +238,40 @@ async function fetchMovies() {
   if (error) throw error;
   movieState.movies = data || [];
   movieState.total = Number(count || 0);
+  await hydrateMoviePosterDisplayUrls();
+}
+
+async function hydrateMoviePosterDisplayUrls() {
+  const uploadedPosterMovies = movieState.movies.filter((movie) => movie.poster_url);
+  if (!uploadedPosterMovies.length) return;
+
+  const objectIds = uploadedPosterMovies.map((movie) => movieImageObjectId(movie.id));
+  try {
+    const response = await getFunctionResponse("list-object-images", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ objectIds }),
+    });
+    if (!response.ok) {
+      throw new Error(await parseFunctionError(response, "Could not load signed poster URLs."));
+    }
+    const payload = await response.json();
+    const images = Array.isArray(payload.images) ? payload.images : [];
+    for (const movie of uploadedPosterMovies) {
+      const image = images
+        .filter((currentImage) => currentImage.object_id === movieImageObjectId(movie.id))
+        .sort((first, second) => Number(second.is_primary) - Number(first.is_primary))[0];
+      if (image?.stored_image_url && image.stored_image_url === movie.poster_url && image.image_url) {
+        movieState.posterDisplayUrls.set(movie.id, {
+          storedUrl: image.stored_image_url,
+          displayUrl: image.image_url,
+        });
+      } else {
+        movieState.posterDisplayUrls.delete(movie.id);
+      }
+    }
+  } catch (error) {
+    console.warn("Could not hydrate signed movie poster URLs.", error);
+  }
 }
 
 async function fetchMovieStats() {
@@ -223,7 +283,7 @@ async function fetchMovieStats() {
   const [totalResponse, downloadedResponse, missingResponse] = await Promise.all([
     base(),
     base().eq("downloaded", true),
-    base().or("rated.is.null,director.is.null,genre.is.null,runtime.is.null,writers.is.null,actors.is.null,plot.is.null,date_released.is.null"),
+    base().or("director.is.null,actors.is.null,plot.is.null,date_released.is.null"),
   ]);
 
   if (totalResponse.error) throw totalResponse.error;
@@ -262,10 +322,10 @@ function renderLookups() {
 function renderMovies() {
   if (!els.rows) return;
   if (!movieState.movies.length) {
-    els.rows.innerHTML = '<tr><td colspan="9" class="movie-empty-row">No movies found.</td></tr>';
+    els.rows.innerHTML = '<tr><td colspan="8" class="movie-empty-row">No movies found.</td></tr>';
   } else {
     els.rows.innerHTML = movieState.movies.map((movie) => `
-      <tr data-movie-id="${movie.id}">
+      <tr class="movie-clickable-row" data-movie-id="${movie.id}" tabindex="0" aria-label="View ${escapeHtml(movie.title)}">
         <td><input type="checkbox" data-select-movie="${movie.id}" ${movieState.selectedIds.has(movie.id) ? "checked" : ""} aria-label="Select ${escapeHtml(movie.title)}"></td>
         <td>${posterMarkup(movie)}</td>
         <td class="movie-title-cell">${escapeHtml(movie.title)}</td>
@@ -274,7 +334,6 @@ function renderMovies() {
         <td class="movie-muted">${escapeHtml(movie.franchise?.name || "None")}</td>
         <td class="movie-muted">${escapeHtml(movie.collection?.name || "None")}</td>
         <td>${statusBadge(movie)}</td>
-        <td><button class="movie-icon-button" type="button" data-view-movie="${movie.id}" aria-label="View ${escapeHtml(movie.title)}"><ph-eye weight="bold"></ph-eye></button></td>
       </tr>
     `).join("");
   }
@@ -282,15 +341,81 @@ function renderMovies() {
   const start = movieState.total ? (movieState.page - 1) * movieState.pageSize + 1 : 0;
   const end = Math.min(movieState.page * movieState.pageSize, movieState.total);
   if (els.count) els.count.textContent = `${start}-${end} of ${movieState.total} movies`;
-  if (els.pageLabel) els.pageLabel.textContent = `Page ${movieState.page} of ${Math.max(1, Math.ceil(movieState.total / movieState.pageSize))}`;
-  if (els.pagePrev) els.pagePrev.disabled = movieState.page <= 1;
-  if (els.pageNext) els.pageNext.disabled = movieState.page >= Math.ceil(movieState.total / movieState.pageSize);
+  renderMoviePagination();
   if (els.selectAll) {
     els.selectAll.checked = movieState.movies.length > 0 && movieState.movies.every((movie) => movieState.selectedIds.has(movie.id));
     els.selectAll.indeterminate = movieState.movies.some((movie) => movieState.selectedIds.has(movie.id)) && !els.selectAll.checked;
   }
   renderActionsState();
   renderStats();
+}
+
+function getMovieTotalPages() {
+  return Math.max(1, Math.ceil(movieState.total / movieState.pageSize));
+}
+
+function getMoviePageItems(totalPages, currentPage) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set([1, totalPages, currentPage]);
+  for (let offset = -1; offset <= 1; offset += 1) {
+    const page = currentPage + offset;
+    if (page > 1 && page < totalPages) {
+      pages.add(page);
+    }
+  }
+  if (currentPage <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+  if (currentPage >= totalPages - 2) {
+    pages.add(totalPages - 3);
+    pages.add(totalPages - 2);
+    pages.add(totalPages - 1);
+  }
+
+  const sortedPages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((first, second) => first - second);
+  const items = [];
+  sortedPages.forEach((page, index) => {
+    if (index > 0 && page - sortedPages[index - 1] > 1) {
+      items.push("ellipsis");
+    }
+    items.push(page);
+  });
+  return items;
+}
+
+function renderMoviePagination() {
+  const totalPages = getMovieTotalPages();
+  const currentPage = Math.min(movieState.page, totalPages);
+  movieState.page = currentPage;
+  const pageItems = getMoviePageItems(totalPages, currentPage);
+  const atStart = currentPage <= 1;
+  const atEnd = currentPage >= totalPages;
+  const controls = [
+    `<button class="secondary-action movie-pagination-edge" type="button" data-page-action="first" aria-label="First page" title="First page" ${atStart ? "disabled" : ""}><ph-arrow-line-left weight="bold" aria-hidden="true"></ph-arrow-line-left></button>`,
+    `<button class="secondary-action movie-pagination-edge" type="button" data-page-action="previous" aria-label="Previous page" title="Previous page" ${atStart ? "disabled" : ""}><ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left></button>`,
+    `<span class="movie-page-number-group" aria-label="Pages">`,
+    ...pageItems.map((item) => {
+      if (item === "ellipsis") {
+        return `<span class="movie-page-ellipsis" aria-hidden="true">…</span>`;
+      }
+      const isCurrent = item === currentPage;
+      return `<button class="secondary-action movie-page-number ${isCurrent ? "is-current" : ""}" type="button" data-page-number="${item}" ${isCurrent ? 'aria-current="page"' : ""}>${item}</button>`;
+    }),
+    `</span>`,
+    `<button class="secondary-action movie-pagination-edge" type="button" data-page-action="next" aria-label="Next page" title="Next page" ${atEnd ? "disabled" : ""}><ph-arrow-right weight="bold" aria-hidden="true"></ph-arrow-right></button>`,
+    `<button class="secondary-action movie-pagination-edge" type="button" data-page-action="last" aria-label="Last page" title="Last page" ${atEnd ? "disabled" : ""}><ph-arrow-line-right weight="bold" aria-hidden="true"></ph-arrow-line-right></button>`,
+  ].join("");
+
+  els.pagination.forEach((pagination) => {
+    pagination.innerHTML = controls;
+  });
 }
 
 function renderActionsState() {
@@ -376,8 +501,9 @@ function renderMovieEdit(movie) {
         <p>Update movie information</p>
       </header>
       <aside class="movie-dialog-poster-panel">
-        ${posterMarkup(movie, "large")}
-        <button class="secondary-action movie-wide-action" type="button" disabled title="Manual poster upload is coming later."><ph-upload-simple weight="bold"></ph-upload-simple>Upload Poster</button>
+        <div data-edit-poster-preview>${posterMarkup(movie, "large")}</div>
+        <input type="file" accept="image/*" data-movie-poster-input hidden>
+        <button class="secondary-action movie-wide-action" type="button" data-upload-movie-poster><ph-upload-simple weight="bold"></ph-upload-simple>Upload Poster</button>
       </aside>
       <div class="movie-dialog-scroll">
         <input type="hidden" name="id" value="${movie.id}">
@@ -411,7 +537,7 @@ function renderMovieEdit(movie) {
 }
 
 async function createMovie(formData) {
-  const title = String(formData.get("title") || "").trim();
+  const title = normalizeMovieTitleForSort(formData.get("title"));
   const year = Number(formData.get("year_released"));
   if (!title || !Number.isFinite(year)) throw new Error("Title and year are required.");
   const { error } = await movieSupabase.from("movies").insert({
@@ -427,7 +553,7 @@ async function createMovie(formData) {
 async function saveMovie(formData) {
   const id = Number(formData.get("id"));
   const payload = {
-    title: String(formData.get("title") || "").trim(),
+    title: normalizeMovieTitleForSort(formData.get("title")),
     year_released: Number(formData.get("year_released")),
     franchise_id: normalizeId(formData.get("franchise_id")),
     collection_id: normalizeId(formData.get("collection_id")),
@@ -449,6 +575,57 @@ async function saveMovie(formData) {
     .eq("id", id)
     .eq("user_id", movieState.appUser.id);
   if (error) throw error;
+}
+
+async function uploadMoviePoster(file) {
+  if (!movieState.activeMovie) {
+    throw new Error("Choose a movie before uploading a poster.");
+  }
+  if (!(file instanceof File)) {
+    throw new Error("Choose an image file.");
+  }
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Poster must be an image file.");
+  }
+
+  const body = new FormData();
+  body.append("objectId", movieImageObjectId(movieState.activeMovie.id));
+  body.append("file", file);
+
+  const response = await getFunctionResponse("upload-object-image", { body });
+  if (!response.ok) {
+    throw new Error(await parseFunctionError(response, "Could not upload poster."));
+  }
+
+  const payload = await response.json();
+  const posterUrl = payload?.image?.stored_image_url || payload?.image?.image_url;
+  const displayUrl = payload?.image?.image_url || posterUrl;
+  if (!posterUrl) {
+    throw new Error("Poster upload did not return an iDrive URL.");
+  }
+
+  const { error } = await movieSupabase
+    .from("movies")
+    .update({ poster_url: posterUrl, updated_at: new Date().toISOString() })
+    .eq("id", movieState.activeMovie.id)
+    .eq("user_id", movieState.appUser.id);
+  if (error) throw error;
+
+  movieState.activeMovie = { ...movieState.activeMovie, poster_url: posterUrl };
+  movieState.posterDisplayUrls.set(movieState.activeMovie.id, {
+    storedUrl: posterUrl,
+    displayUrl,
+  });
+  movieState.movies = movieState.movies.map((movie) => (
+    movie.id === movieState.activeMovie.id ? { ...movie, poster_url: posterUrl } : movie
+  ));
+
+  const posterInput = els.editForm?.querySelector('[name="poster_url"]');
+  if (posterInput) posterInput.value = posterUrl;
+  const preview = els.editForm?.querySelector("[data-edit-poster-preview]");
+  if (preview) preview.innerHTML = posterMarkup(movieState.activeMovie, "large");
+  renderMovies();
+  return posterUrl;
 }
 
 async function deleteMovie(id) {
@@ -554,6 +731,26 @@ function parseCsv(text) {
   return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
 }
 
+function normalizeImportKey(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getImportValue(item, aliases) {
+  if (!item || typeof item !== "object") return "";
+  const normalizedAliases = new Set(aliases.map(normalizeImportKey));
+  for (const [key, value] of Object.entries(item)) {
+    if (normalizedAliases.has(normalizeImportKey(key))) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function parseImportBoolean(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return ["true", "1", "yes", "y", "downloaded"].includes(normalized);
+}
+
 async function importMovies(file) {
   const text = await file.text();
   const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsv(text);
@@ -561,16 +758,16 @@ async function importMovies(file) {
   if (!Array.isArray(items)) throw new Error("Import file must contain an array of movies.");
   const rows = [];
   for (const item of items) {
-    const title = String(item.title || item.Title || "").trim();
-    const year = Number(item.yearReleased || item["year released"] || item.year_released || item.YearReleased || item.Year || item.year);
+    const title = normalizeMovieTitleForSort(getImportValue(item, ["title", "movie title", "name"]));
+    const year = Number(getImportValue(item, ["yearReleased", "year released", "year_released", "year", "release year"]));
     if (!title || !Number.isFinite(year)) continue;
     rows.push({
       user_id: movieState.appUser.id,
       title,
       year_released: year,
-      downloaded: String(item.downloaded ?? item.Downloaded ?? "false").toLowerCase() === "true",
-      franchise_id: await ensureLookup("franchise", item.franchise || item.Franchise),
-      collection_id: await ensureLookup("collection", item.collection || item.Collection),
+      downloaded: parseImportBoolean(getImportValue(item, ["downloaded", "already downloaded", "is downloaded"])),
+      franchise_id: await ensureLookup("franchise", getImportValue(item, ["franchise", "series"])),
+      collection_id: await ensureLookup("collection", getImportValue(item, ["collection", "set"])),
     });
   }
   if (!rows.length) throw new Error("No valid movies were found.");
@@ -636,60 +833,243 @@ async function exportMovies() {
 }
 
 function missingOmdb(movie) {
-  return !movie.director || !movie.plot || !movie.actors || !movie.genre || !movie.runtime || !movie.rated || !movie.writers || !movie.date_released;
+  return !movie.director || !movie.plot || !movie.actors || !movie.date_released;
+}
+
+function missingMovieDetails(movie) {
+  return missingOmdb(movie) || !movie.poster_url;
 }
 
 async function invokeFunction(name, body) {
   const { data, error } = await movieSupabase.functions.invoke(name, { body });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  if (error) {
+    let message = getReadableError(error);
+    let requestUrl = "";
+    const response = error.context;
+    if (response && typeof response.json === "function") {
+      try {
+        const details = await response.json();
+        if (details?.error) {
+          message = details.error;
+        }
+        if (details?.requestUrl) {
+          requestUrl = details.requestUrl;
+        }
+      } catch {
+        // Keep the Supabase client error if the response body cannot be parsed.
+      }
+    }
+    const functionError = new Error(message);
+    if (requestUrl) functionError.requestUrl = requestUrl;
+    throw functionError;
+  }
+  if (data?.error) {
+    const functionError = new Error(data.error);
+    if (data.requestUrl) functionError.requestUrl = data.requestUrl;
+    throw functionError;
+  }
   return data;
 }
 
-function openProcessDialog(kind) {
-  const isOmdb = kind === "omdb";
-  const candidates = movieState.movies.filter((movie) => isOmdb ? missingOmdb(movie) : !movie.poster_url);
+async function getFunctionResponse(name, options = {}) {
+  const { data: sessionData, error: sessionError } = await movieSupabase.auth.getSession();
+  if (sessionError || !sessionData.session?.access_token) {
+    throw sessionError || new Error("You must be signed in.");
+  }
+
+  const config = window.CENTRALIS_SUPABASE_CONFIG;
+  if (!config?.url || !config?.publishableKey) {
+    throw new Error("Supabase configuration is not available.");
+  }
+
+  return fetch(`${config.url}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+      apikey: config.publishableKey,
+      ...(options.headers || {}),
+    },
+    body: options.body,
+  });
+}
+
+async function parseFunctionError(response, fallback) {
+  try {
+    const payload = await response.json();
+    return payload?.error || payload?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function renderProcessFailures(container, failures) {
+  if (!container) return;
+  if (!failures.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+
+  container.hidden = false;
+  container.innerHTML = `
+    <details class="movie-process-failure-details">
+      <summary>Failure details (${failures.length})</summary>
+      <ul>
+        ${failures.map((failure) => `
+          <li>
+            <strong>${escapeHtml(failure.title)}</strong>
+            <span>${escapeHtml(failure.source)}: ${escapeHtml(failure.message)}</span>
+            ${failure.requestUrl ? `<code>${escapeHtml(failure.requestUrl)}</code>` : ""}
+          </li>
+        `).join("")}
+      </ul>
+    </details>
+  `;
+}
+
+function getProcessMovieReasons(movie) {
+  const reasons = [];
+  if (missingOmdb(movie)) reasons.push("OMDb details");
+  if (!movie.poster_url) reasons.push("poster");
+  return reasons;
+}
+
+function renderProcessMovieList(container, movies) {
+  if (!container) return;
+  const candidates = movies.filter(missingMovieDetails);
+  container.innerHTML = `
+    <details class="movie-process-movie-details">
+      <summary>Movies to process (${candidates.length})</summary>
+      ${candidates.length ? `
+        <ul>
+          ${candidates.map((movie) => `
+            <li>
+              <strong>${escapeHtml(movie.title)}</strong>
+              <span>${escapeHtml(movie.year_released || "")}${movie.year_released ? " · " : ""}${escapeHtml(getProcessMovieReasons(movie).join(" + "))}</span>
+            </li>
+          `).join("")}
+        </ul>
+      ` : '<p>No movies on this page currently need missing details.</p>'}
+    </details>
+  `;
+}
+
+function openProcessDialog() {
+  const candidates = movieState.movies.filter(missingMovieDetails);
   els.processContent.innerHTML = `
-    <h2 id="movie-process-title">${isOmdb ? "Process Movies with OMDB" : "Fetch Posters with TMDB"}</h2>
-    <p class="modal-subtitle">${isOmdb ? "This will fetch missing data for movies that do not have complete information." : "This will fetch missing poster URLs for movies on the current page."}</p>
-    <p><strong>Movies to process: ${candidates.length}</strong></p>
+    <h2 id="movie-process-title">Get Missing Details</h2>
+    <p class="modal-subtitle">This will fetch missing OMDb details and TMDb posters for movies on the current page.</p>
+    <div data-process-movies></div>
     <p class="dialog-status" data-process-status role="status"></p>
-    <div class="dialog-actions">
+    <div data-process-failures hidden></div>
+    <div class="dialog-actions" data-process-actions>
       <button class="secondary-action" type="button" data-close-modal-target="movie-process-modal">Cancel</button>
-      <button class="primary-action" type="button" data-start-process="${kind}" ${candidates.length ? "" : "disabled"}>Start Processing</button>
+      <button class="primary-action" type="button" data-start-process="missing-details" ${candidates.length ? "" : "disabled"}>Start Processing</button>
     </div>
   `;
+  renderProcessMovieList(document.querySelector("[data-process-movies]"), candidates);
   openModal("movie-process-modal");
 }
 
-async function processMovies(kind) {
-  const isOmdb = kind === "omdb";
+function renderProcessCompleteActions() {
+  const actions = document.querySelector("[data-process-actions]");
+  if (!actions) return;
+  actions.innerHTML = `
+    <button class="primary-action" type="button" data-close-modal-target="movie-process-modal">Close</button>
+  `;
+}
+
+function updateProcessMovieList() {
+  renderProcessMovieList(document.querySelector("[data-process-movies]"), movieState.movies);
+}
+
+async function processMissingMovieDetails() {
   const status = document.querySelector("[data-process-status]");
-  const candidates = movieState.movies.filter((movie) => isOmdb ? missingOmdb(movie) : !movie.poster_url);
+  const failuresContainer = document.querySelector("[data-process-failures]");
+  const candidates = movieState.movies.filter(missingMovieDetails);
   let updated = 0;
   let skipped = 0;
   let failed = 0;
+  let omdbFailures = 0;
+  let tmdbFailures = 0;
+  const failures = [];
+
+  renderProcessFailures(failuresContainer, failures);
   for (const movie of candidates) {
     setDialogStatus(status, `Processing ${movie.title}...`);
-    try {
-      const data = await invokeFunction(isOmdb ? "lookup-movie-omdb" : "lookup-movie-poster-tmdb", {
-        title: movie.title,
-        year: movie.year_released,
-      });
-      const payload = isOmdb
-        ? { ...data.movie, updated_at: new Date().toISOString() }
-        : { poster_url: data.poster_url, updated_at: new Date().toISOString() };
-      const { error } = await movieSupabase.from("movies").update(payload).eq("id", movie.id).eq("user_id", movieState.appUser.id);
-      if (error) throw error;
-      updated += 1;
-    } catch (error) {
-      console.warn(`Could not process ${movie.title}`, error);
+    const payload = {};
+    const needsOmdb = missingOmdb(movie);
+    const needsPoster = !movie.poster_url;
+
+    if (!needsOmdb && !needsPoster) {
+      skipped += 1;
+      continue;
+    }
+
+    if (needsOmdb) {
+      try {
+        const data = await invokeFunction("lookup-movie-omdb", {
+          title: normalizeMovieTitleForLookup(movie.title),
+          year: movie.year_released,
+        });
+        Object.assign(payload, data.movie || {});
+      } catch (error) {
+        console.warn(`Could not process OMDb details for ${movie.title}`, error);
+        omdbFailures += 1;
+        failures.push({
+          title: movie.title,
+          source: "OMDb",
+          message: getReadableError(error),
+          requestUrl: error.requestUrl || "",
+        });
+      }
+    }
+
+    if (needsPoster) {
+      try {
+        const data = await invokeFunction("lookup-movie-poster-tmdb", {
+          title: normalizeMovieTitleForLookup(movie.title),
+          year: movie.year_released,
+        });
+        payload.poster_url = data.poster_url;
+      } catch (error) {
+        console.warn(`Could not process TMDb poster for ${movie.title}`, error);
+        tmdbFailures += 1;
+        failures.push({
+          title: movie.title,
+          source: "TMDb",
+          message: getReadableError(error),
+        });
+      }
+    }
+
+    if (Object.keys(payload).length) {
+      try {
+        payload.updated_at = new Date().toISOString();
+        const { error } = await movieSupabase.from("movies").update(payload).eq("id", movie.id).eq("user_id", movieState.appUser.id);
+        if (error) throw error;
+        updated += 1;
+      } catch (error) {
+        console.warn(`Could not save missing details for ${movie.title}`, error);
+        failed += 1;
+        failures.push({
+          title: movie.title,
+          source: "Database",
+          message: getReadableError(error),
+        });
+      }
+    } else {
       failed += 1;
     }
   }
-  skipped = candidates.length - updated - failed;
-  setDialogStatus(status, `Updated ${updated}, skipped ${skipped}, failed ${failed}.`, failed ? "error" : "success");
   await refreshMovieTracker();
+  updateProcessMovieList();
+  renderProcessFailures(failuresContainer, failures);
+  setDialogStatus(
+    status,
+    `Updated ${updated}, skipped ${skipped}, failed ${failed}. OMDb failures ${omdbFailures}, TMDb failures ${tmdbFailures}.`,
+    failures.length ? "error" : "success",
+  );
 }
 
 function openBulkDialog(kind) {
@@ -797,17 +1177,25 @@ els.addForm?.addEventListener("submit", async (event) => {
 
 els.rows?.addEventListener("click", async (event) => {
   const checkbox = event.target.closest("[data-select-movie]");
-  const viewButton = event.target.closest("[data-view-movie]");
   if (checkbox) {
     const id = Number(checkbox.dataset.selectMovie);
     checkbox.checked ? movieState.selectedIds.add(id) : movieState.selectedIds.delete(id);
     renderMovies();
     return;
   }
-  if (viewButton) {
-    const movie = getMovieById(viewButton.dataset.viewMovie);
-    if (movie) renderMovieView(movie);
-  }
+  const row = event.target.closest("[data-movie-id]");
+  const movie = row ? getMovieById(row.dataset.movieId) : null;
+  if (movie) renderMovieView(movie);
+});
+
+els.rows?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  if (event.target.closest("[data-select-movie]")) return;
+  const row = event.target.closest("[data-movie-id]");
+  const movie = row ? getMovieById(row.dataset.movieId) : null;
+  if (!movie) return;
+  event.preventDefault();
+  renderMovieView(movie);
 });
 
 els.selectAll?.addEventListener("change", () => {
@@ -830,22 +1218,32 @@ els.selectAll?.addEventListener("change", () => {
   });
 });
 
-els.pagePrev?.addEventListener("click", () => {
-  movieState.page = Math.max(1, movieState.page - 1);
-  refreshMovieTracker();
-});
+els.pagination.forEach((pagination) => pagination.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-page-action], [data-page-number]");
+  if (!button || button.disabled) return;
+  const totalPages = getMovieTotalPages();
+  const pageNumber = Number(button.dataset.pageNumber);
 
-els.pageNext?.addEventListener("click", () => {
-  movieState.page += 1;
+  if (Number.isInteger(pageNumber) && pageNumber >= 1 && pageNumber <= totalPages) {
+    movieState.page = pageNumber;
+  } else if (button.dataset.pageAction === "first") {
+    movieState.page = 1;
+  } else if (button.dataset.pageAction === "previous") {
+    movieState.page = Math.max(1, movieState.page - 1);
+  } else if (button.dataset.pageAction === "next") {
+    movieState.page = Math.min(totalPages, movieState.page + 1);
+  } else if (button.dataset.pageAction === "last") {
+    movieState.page = totalPages;
+  }
+
   refreshMovieTracker();
-});
+}));
 
 document.querySelector("[data-refresh-movies]")?.addEventListener("click", () => refreshMovieTracker());
 document.querySelector("[data-open-franchises]")?.addEventListener("click", () => openManager("franchise"));
 document.querySelector("[data-open-collections]")?.addEventListener("click", () => openManager("collection"));
 document.querySelector("[data-open-import]")?.addEventListener("click", () => openModal("movie-import-modal"));
-document.querySelector("[data-open-omdb]")?.addEventListener("click", () => openProcessDialog("omdb"));
-document.querySelector("[data-open-tmdb]")?.addEventListener("click", () => openProcessDialog("tmdb"));
+document.querySelector("[data-open-missing-details]")?.addEventListener("click", () => openProcessDialog());
 document.querySelector("[data-export-movies]")?.addEventListener("click", async () => {
   try {
     await exportMovies();
@@ -874,9 +1272,14 @@ els.viewContent?.addEventListener("click", (event) => {
 });
 
 els.editForm?.addEventListener("click", async (event) => {
+  const uploadButton = event.target.closest("[data-upload-movie-poster]");
   const deleteButton = event.target.closest("[data-delete-current-movie]");
   const closeButton = event.target.closest("[data-close-modal-target]");
   if (closeButton) closeModal(closeButton.dataset.closeModalTarget);
+  if (uploadButton) {
+    els.editForm.querySelector("[data-movie-poster-input]")?.click();
+    return;
+  }
   if (!deleteButton || !movieState.activeMovie) return;
   if (!window.confirm(`Delete ${movieState.activeMovie.title}?`)) return;
   try {
@@ -885,6 +1288,27 @@ els.editForm?.addEventListener("click", async (event) => {
     await refreshMovieTracker("Movie deleted.");
   } catch (error) {
     setDialogStatus(document.querySelector("[data-edit-movie-status]"), getReadableError(error), "error");
+  }
+});
+
+els.editForm?.addEventListener("change", async (event) => {
+  const input = event.target.closest("[data-movie-poster-input]");
+  if (!input) return;
+  const file = input.files?.[0] || null;
+  if (!file) return;
+
+  const status = document.querySelector("[data-edit-movie-status]");
+  const uploadButton = els.editForm.querySelector("[data-upload-movie-poster]");
+  try {
+    if (uploadButton) uploadButton.disabled = true;
+    setDialogStatus(status, "Uploading poster...");
+    await uploadMoviePoster(file);
+    setDialogStatus(status, "Poster uploaded.", "success");
+  } catch (error) {
+    setDialogStatus(status, getReadableError(error), "error");
+  } finally {
+    input.value = "";
+    if (uploadButton) uploadButton.disabled = false;
   }
 });
 
@@ -960,8 +1384,15 @@ els.processContent?.addEventListener("click", async (event) => {
   if (close) closeModal(close.dataset.closeModalTarget);
   if (!button) return;
   button.disabled = true;
-  await processMovies(button.dataset.startProcess);
-  button.disabled = false;
+  try {
+    if (button.dataset.startProcess === "missing-details") {
+      await processMissingMovieDetails();
+      renderProcessCompleteActions();
+    }
+  } catch (error) {
+    setDialogStatus(document.querySelector("[data-process-status]"), getReadableError(error), "error");
+    button.disabled = false;
+  }
 });
 
 els.bulkForm?.addEventListener("click", (event) => {

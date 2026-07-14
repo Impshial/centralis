@@ -19,6 +19,12 @@ function normalizeValue(value: unknown) {
   return text && text !== "N/A" ? text : null;
 }
 
+function createRedactedRequestUrl(url: URL) {
+  const redactedUrl = new URL(url.toString());
+  redactedUrl.searchParams.set("apikey", "[redacted]");
+  return redactedUrl.toString();
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) {
@@ -34,22 +40,26 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "title is required." }, 400);
     }
 
-    const url = new URL("http://www.omdbapi.com/");
+    const url = new URL("https://www.omdbapi.com/");
     url.searchParams.set("apikey", getEnv("OMDB_API_KEY"));
     url.searchParams.set("t", title);
     url.searchParams.set("plot", "full");
     if (year) {
       url.searchParams.set("y", year);
     }
+    const requestUrl = createRedactedRequestUrl(url);
 
     const response = await fetch(url);
     if (!response.ok) {
-      return jsonResponse({ error: `OMDB returned ${response.status}.` }, 502);
+      return jsonResponse({ error: `OMDB returned ${response.status}.`, requestUrl }, 502);
     }
 
     const data = await response.json();
     if (data.Response === "False") {
-      return jsonResponse({ error: data.Error || "OMDB did not find this movie." }, 404);
+      return jsonResponse({
+        error: data.Error || "OMDB did not find this movie.",
+        requestUrl,
+      }, 404);
     }
 
     return jsonResponse({

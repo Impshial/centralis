@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
@@ -130,6 +131,7 @@ function buildPrompt(options: { systemCode: string; starType: string; planetCoun
     `Star type preference: ${options.starType || "realistic random main sequence"}.`,
     `Create ${options.planetCount} orbiting bodies. Include asteroid belts as planets with type \"Asteroid Belt\" when plausible.`,
     "Use catalog designations for planet names like '<system code> b', '<system code> c'.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
     "Keep values plausible for the star spectral type and orbital distance.",
     "Determine moon_count now for each planet based on its type, mass, and orbit. Asteroid belts must have moon_count 0.",
     "This moon_count is the exact intended moon total later used by the Generate Details action.",

@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai@^6.1.0";
+import { FICTIONAL_NAMING_PROMPT_SECTION } from "../_shared/fictional-naming-rules.ts";
 import { generateJsonText } from "../_shared/openai-config.ts";
 import {
   createAdminClient,
@@ -84,6 +85,7 @@ function buildLifeformsPrompt(
     "- designation: Alphanumeric catalog code like GQ9-[BodyName]-A001.",
     "- kingdom: Animalia, Plantae, Fungi, Protista, Archaea, or Bacteria.",
     "- species must be a Latin-style epithet prefixed with D-.",
+    FICTIONAL_NAMING_PROMPT_SECTION,
     "- biome: Ocean, Atmosphere, Underground, Surface, Ice, or Volcanic.",
     "- locomotion: Swimming, Flying, Gliding, Crawling, Burrowing, or Sessile.",
     "- diet: Photosynthetic, Chemosynthetic, Herbivore, Carnivore, Filter Feeder, or Decomposer.",

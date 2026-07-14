@@ -17,9 +17,9 @@ const TARGET_FORMATS: Record<string, string> = {
   xml: "XML",
   csv: "CSV",
   tsv: "TSV",
-  "markdown-table": "Markdown Table",
   "json-lines": "JSON Lines",
   "sql-inserts": "SQL Inserts",
+  "sql-schema": "SQL Schema",
   outline: "Outline",
   "bullet-list": "Bullet List",
   "numbered-list": "Numbered List",
@@ -63,12 +63,12 @@ function targetInstructions(targetFormat: string) {
       return "Return CSV only. Include a header row when tabular fields can be inferred. Quote fields when needed.";
     case "tsv":
       return "Return tab-separated values only. Include a header row when tabular fields can be inferred.";
-    case "markdown-table":
-      return "Return only a Markdown table. If the source is not naturally tabular, infer useful columns from repeated items.";
     case "json-lines":
       return "Return JSON Lines only: one valid JSON object per line, no wrapping array and no commentary.";
     case "sql-inserts":
       return "Return SQL INSERT statements only. Use the table name converted_items. Infer sensible snake_case columns. Quote strings safely and use NULL when needed.";
+    case "sql-schema":
+      return "Return SQL DDL only. Infer sensible snake_case table and column names, practical SQL data types, and CREATE TABLE statements from the source. Include a primary key only when clearly appropriate. Do not include INSERT statements, markdown fences, or commentary.";
     case "outline":
       return "Return a concise hierarchical outline using indented levels.";
     case "bullet-list":
