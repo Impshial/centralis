@@ -1708,6 +1708,7 @@
       titleBlock: pane.querySelector(".details-pane-title-block"),
       content: pane.querySelector("[data-details-content]"),
       closeButton: pane.querySelector("[data-details-close]"),
+      headerActions: pane.querySelector("[data-details-header-actions]"),
       actionBar: pane.querySelector(".details-pane-actions"),
       richButton: pane.querySelector("[data-details-rich]"),
       editButton: pane.querySelector("[data-details-edit]"),
@@ -1733,9 +1734,154 @@
     statusLine?.remove();
     controls?.pane?.querySelector("[data-ai-popout]")?.remove();
     controls?.actionBar?.querySelector("[data-ai-popout]")?.remove();
+    controls?.pane?.querySelector("[data-ai-settings]")?.remove();
+    controls?.pane?.querySelector("[data-details-ai-expert]")?.remove();
   }
 
-  function setDetailsPaneAiStatusLine(controls, text) {
+  const UNIVERSE_AI_MODELS = [
+    { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+    { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+    { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+    { value: "gpt-5.5", label: "GPT-5.5" },
+    { value: "gpt-5.4", label: "GPT-5.4" },
+    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
+    { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" }
+  ];
+  const UNIVERSE_AI_EFFORTS = ["low", "medium", "high", "pro"];
+  const UNIVERSE_AI_VERBOSITIES = ["low", "medium", "high"];
+  const DEFAULT_UNIVERSE_AI_SETTINGS = {
+    model: "gpt-5.6-terra",
+    reasoningEffort: "high",
+    verbosity: "medium"
+  };
+
+  function capitalize(value) {
+    const text = String(value || "");
+    return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : "";
+  }
+
+  function getUniverseAiSettingsLabel(settings = DEFAULT_UNIVERSE_AI_SETTINGS) {
+    const model = UNIVERSE_AI_MODELS.find((item) => item.value === settings.model);
+    return `${model?.label || "GPT-5.6 Terra"} · ${capitalize(settings.reasoningEffort || "high")}`;
+  }
+
+  function renderUniverseAiSettingsMenu(settings = DEFAULT_UNIVERSE_AI_SETTINGS, expanded = "", isOpen = false) {
+    const optionRow = (section, value, label) => `
+      <button class="universe-ai-settings-option${settings[section] === value ? " is-selected" : ""}" type="button" data-ai-setting="${escapeHtml(section)}" data-ai-setting-value="${escapeHtml(value)}">
+        <span>${escapeHtml(label)}</span>
+        ${settings[section] === value ? '<ph-check weight="bold" aria-hidden="true"></ph-check>' : ""}
+      </button>
+    `;
+    const sectionRow = (section, label, valueLabel, options) => `
+      <div class="universe-ai-settings-section${expanded === section ? " is-expanded" : ""}">
+        <button class="universe-ai-settings-row" type="button" data-ai-settings-toggle="${escapeHtml(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="universe-ai-settings-value">${escapeHtml(valueLabel)}<ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right></span>
+        </button>
+        <div class="universe-ai-settings-options" data-ai-settings-options="${escapeHtml(section)}"${expanded === section ? "" : " hidden"}>
+          <span class="universe-ai-settings-submenu-title">${escapeHtml(label)}</span>
+          ${options}
+        </div>
+      </div>
+    `;
+    const model = UNIVERSE_AI_MODELS.find((item) => item.value === settings.model);
+    return `
+      <div class="universe-ai-settings" data-ai-settings>
+        <button class="universe-ai-settings-trigger" type="button" data-ai-settings-trigger aria-expanded="${isOpen ? "true" : "false"}" aria-haspopup="true">
+          <span>${escapeHtml(getUniverseAiSettingsLabel(settings))}</span>
+          <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+        </button>
+        <div class="universe-ai-settings-menu" data-ai-settings-menu${isOpen ? "" : " hidden"}>
+          ${sectionRow("model", "Model", model?.label || "GPT-5.6 Terra", UNIVERSE_AI_MODELS.map((item) => optionRow("model", item.value, item.label)).join(""))}
+          ${sectionRow("reasoningEffort", "Effort", capitalize(settings.reasoningEffort || "high"), UNIVERSE_AI_EFFORTS.map((value) => optionRow("reasoningEffort", value, capitalize(value))).join(""))}
+          ${sectionRow("verbosity", "Verbosity", capitalize(settings.verbosity || "medium"), UNIVERSE_AI_VERBOSITIES.map((value) => optionRow("verbosity", value, capitalize(value))).join(""))}
+          <div class="universe-ai-settings-divider"></div>
+          <button class="universe-ai-settings-reset" type="button" data-ai-settings-reset>Reset to default <ph-arrow-counter-clockwise weight="bold" aria-hidden="true"></ph-arrow-counter-clockwise></button>
+        </div>
+      </div>
+    `;
+  }
+
+  function setUniverseAiSettingsControl(container, beforeElement, settings, options = {}) {
+    if (!container || !beforeElement) return;
+    container.__universeAiSettingsAbortController?.abort();
+    container.querySelector("[data-ai-settings]")?.remove();
+    if (!options.onChange) return;
+
+    const host = document.createElement("div");
+    host.innerHTML = renderUniverseAiSettingsMenu(settings, options.expanded, options.open);
+    const widget = host.firstElementChild;
+    if (!widget) return;
+    beforeElement.insertAdjacentElement("beforebegin", widget);
+
+    const trigger = widget.querySelector("[data-ai-settings-trigger]");
+    const menu = widget.querySelector("[data-ai-settings-menu]");
+    const closeMenu = () => {
+      if (menu) menu.hidden = true;
+      trigger?.setAttribute("aria-expanded", "false");
+    };
+    trigger?.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (!menu) return;
+      menu.hidden = !menu.hidden;
+      trigger.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+      options.onOpenChange?.(!menu.hidden);
+    });
+    widget.querySelectorAll("[data-ai-settings-toggle]").forEach((button) => {
+      const openSection = () => {
+        const section = button.dataset.aiSettingsToggle || "";
+        const sectionOptions = widget.querySelector(`[data-ai-settings-options="${section}"]`);
+        widget.querySelectorAll("[data-ai-settings-options]").forEach((optionList) => {
+          optionList.hidden = optionList !== sectionOptions;
+        });
+        if (sectionOptions) {
+          sectionOptions.hidden = false;
+        }
+      };
+      button.addEventListener("pointerenter", openSection);
+      button.addEventListener("focus", openSection);
+      button.addEventListener("click", openSection);
+    });
+    widget.querySelectorAll("[data-ai-setting]").forEach((button) => {
+      const applySetting = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const section = button.dataset.aiSetting;
+        const value = button.dataset.aiSettingValue;
+        if (!section || !value) return;
+        options.onChange((current) => ({ ...current, [section]: value }));
+        options.onOpenChange?.(false);
+        options.onToggle?.("");
+      };
+      button.addEventListener("pointerdown", applySetting);
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          applySetting(event);
+        }
+      });
+    });
+    widget.querySelector("[data-ai-settings-reset]")?.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      options.onChange(() => ({ ...DEFAULT_UNIVERSE_AI_SETTINGS }));
+      options.onOpenChange?.(false);
+      options.onToggle?.("");
+    });
+    const abortController = new AbortController();
+    container.__universeAiSettingsAbortController = abortController;
+    document.addEventListener("pointerdown", (event) => {
+      if (widget.contains(event.target)) return;
+      closeMenu();
+      options.onOpenChange?.(false);
+      options.onToggle?.("");
+    }, { capture: true, signal: abortController.signal });
+  }
+
+  function setDetailsPaneAiSettingsControl(controls, settings, options = {}) {
+    setUniverseAiSettingsControl(controls?.pane, controls?.closeButton, settings, options);
+  }
+
+  function setDetailsPaneAiStatusLine(controls, text, options = {}) {
     if (!controls?.titleBlock) {
       return;
     }
@@ -1752,7 +1898,21 @@
       statusLine.dataset.aiHeaderStatus = "";
       controls.titleBlock.appendChild(statusLine);
     }
-    statusLine.textContent = text;
+
+    statusLine.innerHTML = `
+      <span>${escapeHtml(text)}</span>
+      ${options.onSync ? `
+        <button class="universe-ai-header-sync" type="button" data-ai-header-sync${options.disabled ? " disabled" : ""}>
+          <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+          <span>${options.syncing ? "Syncing" : "Sync"}</span>
+        </button>
+      ` : ""}
+    `;
+
+    statusLine.querySelector("[data-ai-header-sync]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      options.onSync?.();
+    });
   }
 
   function setDetailsPaneAiPopoutButton(controls, onPopOut) {
@@ -1958,10 +2118,10 @@
   }
 
   function getUniverseAiReadyStatusLine(status) {
-    return status.key === "ready" ? `${status.label} - ${status.description}` : "";
+    return `Knowledge Status - ${status.label}`;
   }
 
-  function renderUniverseAiChatContent(host, state = {}, actions = {}, options = {}) {
+  function renderUniverseAiChatContent(host, state = {}, actions = {}) {
     if (!host) {
       return;
     }
@@ -1969,13 +2129,15 @@
     const isReady = status.key === "ready";
     const isBusy = Boolean(state.loading || state.syncing || state.sending);
     const messages = Array.isArray(state.messages) ? state.messages : [];
-    const showStatusCard = status.key !== "ready" || options.forceStatusCard;
+    const previousMessagesHost = host.querySelector("[data-ai-messages]");
+    const previousScrollTop = previousMessagesHost?.scrollTop || 0;
+    const shouldFollowNewest = Boolean(actions.forceScrollToBottom)
+      || !previousMessagesHost
+      || previousScrollTop + previousMessagesHost.clientHeight >= previousMessagesHost.scrollHeight - 20;
 
     host.innerHTML = `
       <section class="universe-ai-panel">
-        ${showStatusCard ? renderUniverseAiStatusCard(status, state, isBusy) : ""}
         <div class="universe-ai-messages" data-ai-messages>
-          ${state.loading ? '<p class="details-empty">Loading AI Expert...</p>' : ""}
           ${!state.loading && !messages.length ? '<p class="details-empty">Ask this universe expert about canon, continuity, missing details, or new ideas.</p>' : ""}
           ${messages.map((message) => `
             <article class="universe-ai-message is-${escapeHtml(message.role || "assistant")}">
@@ -2013,12 +2175,13 @@
 
     const messagesHost = host.querySelector("[data-ai-messages]");
     if (messagesHost) {
-      messagesHost.scrollTop = messagesHost.scrollHeight;
+      messagesHost.scrollTop = shouldFollowNewest
+        ? messagesHost.scrollHeight
+        : Math.min(previousScrollTop, Math.max(0, messagesHost.scrollHeight - messagesHost.clientHeight));
     }
-
-    host.querySelector("[data-ai-sync]")?.addEventListener("click", () => {
-      actions.onSync?.();
-    });
+    if (actions.forceScrollToBottom) {
+      actions.onScrollToBottomHandled?.();
+    }
 
     host.querySelectorAll("[data-ai-copy-response]").forEach((button) => {
       button.addEventListener("click", async () => {
@@ -2105,10 +2268,22 @@
 
     const status = getUniverseAiStatusMeta(state);
     controls.pane.hidden = false;
+    controls.pane.querySelector("[data-details-ai-expert]")?.remove();
     controls.pane.classList.add("is-ai-chat-pane");
     document.querySelector(".flow-page")?.style.setProperty("--details-pane-width", `${controls.pane.getBoundingClientRect().width}px`);
     controls.content.classList.add("is-ai-chat");
-    setDetailsPaneAiStatusLine(controls, getUniverseAiReadyStatusLine(status));
+    setDetailsPaneAiStatusLine(controls, getUniverseAiReadyStatusLine(status), {
+      onSync: actions.onSync,
+      disabled: Boolean(state.loading || state.syncing || state.sending),
+      syncing: Boolean(state.syncing)
+    });
+    setDetailsPaneAiSettingsControl(controls, actions.settings, {
+      open: actions.settingsOpen,
+      expanded: actions.settingsExpanded,
+      onChange: actions.onSettingsChange,
+      onOpenChange: actions.onSettingsOpenChange,
+      onToggle: actions.onSettingsToggle
+    });
     setDetailsPaneAiPopoutButton(controls, actions.onPopOut);
     if (controls.kind) controls.kind.textContent = "AI Expert";
     if (controls.title) controls.title.textContent = universe.name || "Universe Expert";
@@ -2684,6 +2859,29 @@
     }
     if (controls.title) {
       controls.title.textContent = name;
+    }
+    const isElementNode = node.data?.kind === "element";
+    controls.pane.querySelector("[data-details-ai-expert]")?.remove();
+    if (controls.richButton && !isElementNode) {
+      controls.actionBar?.prepend(controls.richButton);
+    }
+    if ((node.data?.kind === "universe" || isElementNode) && controls.closeButton) {
+      if (isElementNode && controls.richButton) {
+        controls.headerActions?.append(controls.richButton);
+      }
+      const aiExpertButton = document.createElement("button");
+      aiExpertButton.className = "secondary-action compact-action details-pane-ai-expert-button";
+      aiExpertButton.type = "button";
+      aiExpertButton.dataset.detailsAiExpert = "";
+      aiExpertButton.innerHTML = '<ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle><span>AI Expert</span>';
+      aiExpertButton.addEventListener("click", () => {
+        window.dispatchEvent(new CustomEvent("centralis:open-ai-expert"));
+      });
+      if (controls.headerActions) {
+        controls.headerActions.append(aiExpertButton);
+      } else {
+        controls.closeButton.insertAdjacentElement("beforebegin", aiExpertButton);
+      }
     }
     if (controls.richButton) {
       controls.richButton.hidden = mode === "edit" || node.data?.kind !== "element";
@@ -3956,6 +4154,10 @@
     const [detailsMode, setDetailsMode] = React.useState("view");
     const [aiChatOpen, setAiChatOpen] = React.useState(false);
     const [aiChatPopoutOpen, setAiChatPopoutOpen] = React.useState(false);
+    const aiChatScrollToBottomRef = React.useRef(false);
+    const [aiExpertSettings, setAiExpertSettings] = React.useState(DEFAULT_UNIVERSE_AI_SETTINGS);
+    const [aiExpertSettingsOpen, setAiExpertSettingsOpen] = React.useState(false);
+    const [aiExpertSettingsExpanded, setAiExpertSettingsExpanded] = React.useState("");
     const [aiChatState, setAiChatState] = React.useState({
       loading: false,
       syncing: false,
@@ -4602,6 +4804,7 @@
           error: "",
           statusMessage: "Knowledge synced."
         }));
+        return true;
       } catch (error) {
         setAiChatState((current) => ({
           ...current,
@@ -4610,6 +4813,7 @@
           error: getReadableError(error),
           statusMessage: ""
         }));
+        return false;
       }
     }, [fetchUniverseAiChat]);
 
@@ -4653,9 +4857,22 @@
         return;
       }
 
+      const optimisticMessage = {
+        id: `optimistic-user-${Date.now()}`,
+        role: "user",
+        content: cleanMessage,
+        created_at: new Date().toISOString(),
+        optimistic: true
+      };
+      aiChatScrollToBottomRef.current = true;
+
       setAiChatState((current) => ({
         ...current,
         sending: true,
+        messages: [
+          ...(Array.isArray(current.messages) ? current.messages : []),
+          optimisticMessage
+        ],
         error: "",
         statusMessage: ""
       }));
@@ -4665,9 +4882,13 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             universeId,
-            message: cleanMessage
+            message: cleanMessage,
+            model: aiExpertSettings.model,
+            reasoningEffort: aiExpertSettings.reasoningEffort,
+            verbosity: aiExpertSettings.verbosity
           })
         });
+        aiChatScrollToBottomRef.current = true;
         setAiChatState((current) => ({
           ...current,
           sending: false,
@@ -4685,6 +4906,10 @@
           statusMessage: ""
         }));
       }
+    }, [aiExpertSettings]);
+
+    const consumeAiChatScrollRequest = React.useCallback(() => {
+      aiChatScrollToBottomRef.current = false;
     }, []);
 
     const updateAiProposalStatusInState = React.useCallback((proposalId, status) => {
@@ -6462,9 +6687,6 @@
 
     React.useEffect(() => {
       const button = document.querySelector("[data-open-ai-expert]");
-      if (!button) {
-        return undefined;
-      }
 
       function handleOpenAiExpert() {
         setRichDetailsNodeId(null);
@@ -6475,9 +6697,11 @@
         setAiChatOpen(true);
       }
 
-      button.addEventListener("click", handleOpenAiExpert);
+      button?.addEventListener("click", handleOpenAiExpert);
+      window.addEventListener("centralis:open-ai-expert", handleOpenAiExpert);
       return () => {
-        button.removeEventListener("click", handleOpenAiExpert);
+        button?.removeEventListener("click", handleOpenAiExpert);
+        window.removeEventListener("centralis:open-ai-expert", handleOpenAiExpert);
       };
     }, []);
 
@@ -6510,9 +6734,17 @@
         onSend: sendUniverseAiMessage,
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
-        onPopOut: openUniverseAiPopout
+        onPopOut: openUniverseAiPopout,
+        settings: aiExpertSettings,
+        settingsOpen: aiExpertSettingsOpen,
+        settingsExpanded: aiExpertSettingsExpanded,
+        onSettingsChange: setAiExpertSettings,
+        onSettingsOpenChange: setAiExpertSettingsOpen,
+        onSettingsToggle: setAiExpertSettingsExpanded,
+        forceScrollToBottom: aiChatScrollToBottomRef.current,
+        onScrollToBottomHandled: consumeAiChatScrollRequest
       });
-    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout]);
+    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded, consumeAiChatScrollRequest]);
 
     React.useEffect(() => {
       if (!aiChatPopoutOpen) {
@@ -6523,9 +6755,26 @@
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
         onReviewProposal: reviewUniverseAiProposal,
-        onDismissProposal: dismissUniverseAiProposal
+        onDismissProposal: dismissUniverseAiProposal,
+        forceScrollToBottom: aiChatScrollToBottomRef.current,
+        onScrollToBottomHandled: consumeAiChatScrollRequest
       });
-    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal]);
+    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, consumeAiChatScrollRequest]);
+
+    React.useEffect(() => {
+      if (!aiChatPopoutOpen) {
+        return;
+      }
+      const popout = document.querySelector(".universe-ai-popout");
+      const closeButton = popout?.querySelector(".universe-ai-popout-header > .modal-close");
+      setUniverseAiSettingsControl(popout, closeButton, aiExpertSettings, {
+        open: aiExpertSettingsOpen,
+        expanded: aiExpertSettingsExpanded,
+        onChange: setAiExpertSettings,
+        onOpenChange: setAiExpertSettingsOpen,
+        onToggle: setAiExpertSettingsExpanded
+      });
+    }, [aiChatPopoutOpen, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded]);
 
     React.useEffect(() => {
       function handleViewDetails(event) {
@@ -11023,6 +11272,19 @@
             }
           }
           closeReviewModal(false);
+          if (finalizedAiProposal?.id) {
+            showCanvasToast("AI knowledge sync started.", "success");
+            void syncUniverseAiSource()
+              .then((knowledgeSynced) => {
+                if (!knowledgeSynced) {
+                  showCanvasToast("Elements were saved, but AI knowledge could not be synced.", "error");
+                }
+              })
+              .catch((syncError) => {
+                console.error("Could not sync AI knowledge after finalizing proposal:", syncError);
+                showCanvasToast("Elements were saved, but AI knowledge could not be synced.", "error");
+              });
+          }
           window.setTimeout(() => {
             fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 });
           }, 50);
@@ -11115,7 +11377,7 @@
         finalizeButton?.removeEventListener("click", finalizeGeneratedElements);
         document.removeEventListener("keydown", handleEscape);
       };
-    }, [elementTypeVersion]);
+    }, [elementTypeVersion, syncUniverseAiSource]);
 
     React.useEffect(() => {
       const importButton = document.querySelector("[data-import-elements]");
@@ -11999,7 +12261,23 @@
             { className: "universe-ai-popout-title-block" },
             React.createElement("p", { className: "details-pane-kicker" }, "AI Expert"),
             React.createElement("h2", { id: "universe-ai-popout-title" }, universe.name || "Universe Expert"),
-            aiPopoutStatusLine && React.createElement("p", { className: "universe-ai-header-status" }, aiPopoutStatusLine)
+            aiPopoutStatusLine && React.createElement(
+              "p",
+              { className: "universe-ai-header-status" },
+              React.createElement("span", null, aiPopoutStatusLine),
+              React.createElement(
+                "button",
+                {
+                  className: "universe-ai-header-sync",
+                  type: "button",
+                  disabled: Boolean(aiChatState.loading || aiChatState.syncing || aiChatState.sending),
+                  onClick: syncUniverseAiSource,
+                  title: "Sync AI knowledge"
+                },
+                React.createElement("ph-arrows-clockwise", { weight: "bold", "aria-hidden": "true" }),
+                React.createElement("span", null, aiChatState.syncing ? "Syncing" : "Sync")
+              )
+            )
           ),
           React.createElement(
             "button",

@@ -151,6 +151,7 @@ const universeAiGenreField = document.querySelector("[data-universe-ai-genre-fie
 const universeAiGenreSelect = document.querySelector("[data-universe-ai-genre]");
 const universeAiMultiToggle = document.querySelector("[data-universe-ai-multi-toggle]");
 const universeAiCountInput = document.querySelector("[data-universe-ai-count]");
+const universeAiCountField = document.querySelector("[data-universe-ai-count-field]");
 const universeGenerationOverlay = document.querySelector("[data-universe-generation-overlay]");
 const universeGenerationOverlayLabel = document.querySelector("[data-universe-generation-overlay-label]");
 const universeAiReviewModal = document.getElementById("universe-ai-review-modal");
@@ -1978,6 +1979,21 @@ function openModal(modal) {
   }
 }
 
+function resetNewUniverseForm() {
+  const form = document.querySelector(".universe-form");
+  if (!form) return;
+
+  form.reset();
+  if (universeAiGenreSelect) {
+    universeAiGenreSelect.value = "Random";
+  }
+  if (universeAiCountInput) {
+    universeAiCountInput.value = "3";
+  }
+  setUniverseStatus("");
+  syncUniverseAiFields();
+}
+
 function closeModal() {
   if (!activeModal) {
     return;
@@ -1996,6 +2012,10 @@ function closeModal() {
   if (activeModal.id === "delete-universe-modal") {
     pendingUniverseDelete = null;
     setDeleteUniverseStatus("");
+  }
+
+  if (activeModal.id === "new-universe-modal") {
+    resetNewUniverseForm();
   }
 
   activeModal.hidden = true;
@@ -2074,8 +2094,11 @@ function syncUniverseAiFields() {
   if (universeAiCountInput) {
     universeAiCountInput.disabled = !isEnabled || !universeAiMultiToggle?.checked;
   }
+  if (universeAiCountField) {
+    universeAiCountField.hidden = !isEnabled || !universeAiMultiToggle?.checked;
+  }
   if (universeNameLabel) {
-    universeNameLabel.innerHTML = isEnabled ? "Name <em>(optional AI seed)</em>" : "Name";
+    universeNameLabel.innerHTML = isEnabled ? "Name <em>(optional)</em>" : "Name";
   }
   if (universeNameInput) {
     universeNameInput.placeholder = isEnabled
@@ -2084,9 +2107,7 @@ function syncUniverseAiFields() {
     universeNameInput.required = false;
   }
   if (universeDescriptionLabel) {
-    universeDescriptionLabel.innerHTML = isEnabled
-      ? "Description <em>(optional AI seed)</em>"
-      : "Description <em>(optional)</em>";
+    universeDescriptionLabel.innerHTML = "Description <em>(optional)</em>";
   }
   if (universeDescriptionInput) {
     universeDescriptionInput.placeholder = isEnabled

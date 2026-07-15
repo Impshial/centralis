@@ -44,8 +44,52 @@ type UniverseContext = {
   links: ElementLinkRecord[];
 };
 
-export function getUniverseAiModel() {
-  return Deno.env.get("UNIVERSE_AI_MODEL") || TEXT_MODEL;
+const UNIVERSE_AI_MODELS = new Set([
+  "gpt-5.6-luna",
+  "gpt-5.6-terra",
+  "gpt-5.6-sol",
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-nano",
+  "gpt-5.4-mini",
+]);
+const UNIVERSE_AI_EFFORTS = new Set(["low", "medium", "high", "pro"]);
+const UNIVERSE_AI_VERBOSITIES = new Set(["low", "medium", "high"]);
+
+export type UniverseAiSettings = {
+  model?: string;
+  reasoningEffort: "low" | "medium" | "high" | "pro";
+  verbosity: "low" | "medium" | "high";
+};
+
+export function cleanUniverseAiSettings(value: Record<string, unknown> = {}): UniverseAiSettings {
+  const model = String(value.model || "").trim();
+  const reasoningEffort = String(value.reasoningEffort || "high").trim().toLowerCase();
+  const verbosity = String(value.verbosity || "medium").trim().toLowerCase();
+
+  if (model && !UNIVERSE_AI_MODELS.has(model)) {
+    throw new Error("That AI model is not available for Universe AI Expert.");
+  }
+  if (!UNIVERSE_AI_EFFORTS.has(reasoningEffort)) {
+    throw new Error("AI effort must be low, medium, high, or pro.");
+  }
+  if (!UNIVERSE_AI_VERBOSITIES.has(verbosity)) {
+    throw new Error("AI verbosity must be low, medium, or high.");
+  }
+
+  return {
+    model: model || undefined,
+    reasoningEffort: reasoningEffort as UniverseAiSettings["reasoningEffort"],
+    verbosity: verbosity as UniverseAiSettings["verbosity"],
+  };
+}
+
+export function getUniverseAiModel(selectedModel?: string) {
+  return selectedModel || Deno.env.get("UNIVERSE_AI_MODEL") || TEXT_MODEL;
+}
+
+function getResponsesReasoningEffort(effort: UniverseAiSettings["reasoningEffort"]) {
+  return effort === "pro" ? "high" : effort;
 }
 
 export function cleanUniverseId(value: unknown) {
@@ -760,11 +804,12 @@ export async function sendUniverseElementProposalRequest(options: {
   vectorStoreId: string;
   latestUserMessage: string;
   assistantReply: string;
+  settings: UniverseAiSettings;
 }) {
   const response = await openAiRequest("/responses", {
     method: "POST",
     body: JSON.stringify({
-      model: getUniverseAiModel(),
+      model: getUniverseAiModel(options.settings.model),
       instructions: "You produce strict JSON for reviewable Centralis element proposals. Return only JSON with no markdown or commentary.",
       input: [{
         role: "user",
@@ -781,6 +826,10 @@ export async function sendUniverseElementProposalRequest(options: {
       }],
       text: {
         format: { type: "json_object" },
+        verbosity: options.settings.verbosity,
+      },
+      reasoning: {
+        effort: getResponsesReasoningEffort(options.settings.reasoningEffort),
       },
       max_output_tokens: 5000,
     }),
@@ -803,6 +852,7 @@ export async function sendUniverseExpertRequest(options: {
   universeName: string;
   vectorStoreId: string;
   messages: Array<{ role: string; content: string }>;
+  settings: UniverseAiSettings;
 }) {
   const input = options.messages
     .filter((message) => ["user", "assistant"].includes(String(message.role)) && String(message.content || "").trim())
@@ -814,7 +864,7 @@ export async function sendUniverseExpertRequest(options: {
   const response = await openAiRequest("/responses", {
     method: "POST",
     body: JSON.stringify({
-      model: getUniverseAiModel(),
+      model: getUniverseAiModel(options.settings.model),
       instructions: buildUniverseExpertInstructions(options.universeName),
       input,
       tools: [{
@@ -823,6 +873,12 @@ export async function sendUniverseExpertRequest(options: {
         max_num_results: 10,
       }],
       include: ["file_search_call.results"],
+      text: {
+        verbosity: options.settings.verbosity,
+      },
+      reasoning: {
+        effort: getResponsesReasoningEffort(options.settings.reasoningEffort),
+      },
     }),
   });
 

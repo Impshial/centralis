@@ -90,6 +90,11 @@ function buildPrompt(input: {
       : "Return exactly one JSON object with keys: name and description.",
     isMultiMode ? `Do not return fewer than ${input.count} ideas.` : "",
     "The name must be evocative, concise, and suitable for a fictional universe or setting.",
+    input.name
+      ? (isMultiMode
+        ? "A user-provided name is a required title basis. Every returned idea must use a distinct modified, expanded, or otherwise recognizable variation of that name; do not replace it with unrelated titles. Retain at least one distinctive word or root from the provided name in each title."
+        : "A user-provided name is a required title basis. Return a modified, expanded, or otherwise recognizable variation of it as the universe title; do not replace it with an unrelated title. Retain at least one distinctive word or root from the provided name.")
+      : "No title basis was provided; create an original title.",
     FICTIONAL_NAMING_PROMPT_SECTION,
     isMultiMode ? "Each genre must be a concise, useful genre label for that idea. If a specific genre helper is provided, use it or a more specific subgenre that fits the idea." : "",
     "Each description must be one vivid paragraph that establishes the premise, tone, central tensions, and worldbuilding hooks.",
@@ -98,8 +103,8 @@ function buildPrompt(input: {
     input.genre && input.genre !== "Random"
       ? `Genre prompt helper: ${input.genre}. Use this as inspiration, not as a stored field.`
       : "Genre prompt helper: Random. Choose a coherent genre direction yourself.",
-    input.name ? `User-provided name seed: ${input.name}` : "No user-provided name seed.",
-    input.description ? `User-provided description seed: ${input.description}` : "No user-provided description seed.",
+    input.name ? `User-provided title basis: ${input.name}` : "No user-provided title basis.",
+    input.description ? `User-provided description guidance: ${input.description}` : "No user-provided description guidance.",
   ].join("\n\n");
 }
 
