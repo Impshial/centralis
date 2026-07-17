@@ -39,6 +39,31 @@
     generatorMenuTrigger: document.querySelector("[data-generator-menu-trigger]"),
     generatorMenuPanel: document.querySelector("[data-generator-menu-panel]"),
     generatorTypeButtons: Array.from(document.querySelectorAll("[data-add-generator-type]")),
+    storageBrowser: document.querySelector("[data-storage-browser]"),
+    storageTree: document.querySelector("[data-storage-tree]"),
+    storageBreadcrumbs: document.querySelector("[data-storage-breadcrumbs]"),
+    storageStatus: document.querySelector("[data-storage-status]"),
+    storageItems: document.querySelector("[data-storage-items]"),
+    storageViewButtons: Array.from(document.querySelectorAll("[data-storage-view]")),
+    storageLoadMore: document.querySelector("[data-storage-load-more]"),
+    storagePreviewEmpty: document.querySelector("[data-storage-preview-empty]"),
+    storagePreviewContent: document.querySelector("[data-storage-preview-content]"),
+    storageImagePreview: document.querySelector("[data-storage-image-preview]"),
+    storagePreviewImage: document.querySelector("[data-storage-preview-image]"),
+    storageFilePreviewIcon: document.querySelector("[data-storage-file-preview-icon]"),
+    storageFileMetadata: document.querySelector("[data-storage-file-metadata]"),
+    storageOpenButton: document.querySelector("[data-storage-open]"),
+    storageDownloadButton: document.querySelector("[data-storage-download]"),
+    storageResizers: Array.from(document.querySelectorAll("[data-storage-resizer]")),
+    storageMigrationOpenButton: document.querySelector("[data-storage-migration-open]"),
+    storageMigrationModal: document.querySelector("[data-storage-migration-modal]"),
+    storageMigrationCloseButton: document.querySelector("[data-storage-migration-close]"),
+    storageMigrationDryRunButton: document.querySelector("[data-storage-migration-dry-run]"),
+    storageMigrationStartButton: document.querySelector("[data-storage-migration-start]"),
+    storageMigrationStatus: document.querySelector("[data-storage-migration-status]"),
+    storageMigrationDetails: document.querySelector("[data-storage-migration-details]"),
+    storageMigrationSummary: document.querySelector("[data-storage-migration-summary]"),
+    storageMigrationResults: document.querySelector("[data-storage-migration-results]"),
   };
 
   if (!els.modeSelect || !els.richEditor || !els.rawInput || !els.output) {
@@ -56,6 +81,26 @@
   let nextGeneratorId = 1;
   let activeGeneratorId = null;
   const generators = new Map();
+  const storageState = {
+    loaded: false,
+    loading: false,
+    buckets: [],
+    bucket: "",
+    prefix: "",
+    foldersByPath: new Map(),
+    objects: [],
+    nextContinuationToken: null,
+    selected: null,
+    view: "grid",
+    imageUrls: new Map(),
+    leftWidth: 250,
+    rightWidth: 300,
+  };
+  const storageMigrationState = {
+    busy: false,
+    dryRunComplete: false,
+    results: [],
+  };
 
   const converterTargetLabels = {
     markdown: "Markdown",
@@ -215,6 +260,12 @@
       label: "Measurements",
       render: renderMeasurementsCalculator,
       initialize: initializeMeasurementsCalculator,
+    },
+    resolution: {
+      category: "Conversions",
+      label: "Resolution",
+      render: renderResolutionCalculator,
+      initialize: initializeResolutionCalculator,
     },
   };
 
@@ -883,6 +934,57 @@
           <span>Choose units to convert.</span>
         </div>
         <p class="measurements-note" data-measurement-note role="status" aria-live="polite"></p>
+      </div>
+    `;
+  }
+
+  function renderResolutionCalculator(definition, id) {
+    return `
+      <div class="calculator-titlebar">
+        <label class="calculator-title-select-label">
+          <span class="sr-only">Calculator type</span>
+          <select class="calculator-title-select" data-resolution-title-select aria-label="Calculator type">
+            <option selected>${escapeHtml(definition.label)} Scale</option>
+          </select>
+        </label>
+        <div class="calculator-titlebar-actions">
+          <button class="calculator-copy" type="button" data-calculator-copy>Copy</button>
+          <button class="calculator-close" type="button" data-calculator-close aria-label="Close calculator">×</button>
+        </div>
+      </div>
+      <div class="resolution-body">
+        <section class="resolution-section">
+          <p class="resolution-section-label">Original Resolution</p>
+          <div class="resolution-fields resolution-fields-two">
+            <div class="resolution-field">
+              <label for="resolution-width-${id}">Width</label>
+              <input id="resolution-width-${id}" type="number" min="1" step="1" inputmode="numeric" value="1920" data-resolution-field="width">
+            </div>
+            <div class="resolution-field">
+              <label for="resolution-height-${id}">Height</label>
+              <input id="resolution-height-${id}" type="number" min="1" step="1" inputmode="numeric" value="1080" data-resolution-field="height">
+            </div>
+          </div>
+          <div class="resolution-field">
+            <label for="resolution-scale-${id}">Scale (%)</label>
+            <input id="resolution-scale-${id}" type="number" min="0.01" step="0.01" inputmode="decimal" value="100" data-resolution-field="scale">
+          </div>
+        </section>
+        <section class="resolution-section resolution-scaled-section">
+          <p class="resolution-section-label">Scaled Resolution</p>
+          <div class="resolution-result" data-resolution-result>
+            <strong>1920 × 1080</strong>
+            <span>2,073,600 pixels · 16:9</span>
+          </div>
+        </section>
+        <section class="resolution-section">
+          <div class="resolution-field">
+            <label for="resolution-ppi-${id}">Pixel Density (PPI, optional)</label>
+            <input id="resolution-ppi-${id}" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 300" data-resolution-field="ppi">
+          </div>
+          <div class="resolution-physical" data-resolution-physical hidden></div>
+        </section>
+        <p class="resolution-note" data-resolution-note role="status" aria-live="polite"></p>
       </div>
     `;
   }
@@ -1842,6 +1944,96 @@
     if (detailElement) detailElement.textContent = detail;
   }
 
+  function formatResolutionNumber(value, maximumFractionDigits = 2) {
+    return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(value);
+  }
+
+  function getResolutionAspectRatio(width, height) {
+    const greatestCommonDivisor = (first, second) => {
+      let a = Math.abs(Math.round(first));
+      let b = Math.abs(Math.round(second));
+      while (b) [a, b] = [b, a % b];
+      return a || 1;
+    };
+    const divisor = greatestCommonDivisor(width, height);
+    return `${Math.round(width / divisor)}:${Math.round(height / divisor)}`;
+  }
+
+  function setResolutionResult(calculator, heading, detail) {
+    if (!calculator.resolutionResult) return;
+    calculator.resolutionResult.querySelector("strong").textContent = heading;
+    calculator.resolutionResult.querySelector("span").textContent = detail;
+  }
+
+  function setResolutionNote(calculator, message, type = "") {
+    if (!calculator.resolutionNote) return;
+    calculator.resolutionNote.textContent = message || "";
+    calculator.resolutionNote.classList.toggle("is-error", type === "error");
+  }
+
+  function updateResolutionCalculator(calculator) {
+    const width = Number(calculator.resolutionFields.width.value);
+    const height = Number(calculator.resolutionFields.height.value);
+    const scale = Number(calculator.resolutionFields.scale.value);
+    const ppiText = calculator.resolutionFields.ppi.value.trim();
+    const ppi = Number(ppiText);
+
+    calculator.resolutionPhysical.hidden = true;
+    calculator.resolutionPhysical.textContent = "";
+
+    if (!(width > 0) || !(height > 0) || !(scale > 0)) {
+      setResolutionResult(calculator, "Enter resolution", "Add a width, height, and scale percentage.");
+      setResolutionNote(calculator, "");
+      return;
+    }
+
+    const scaleFactor = Math.sqrt(scale / 100);
+    const scaledWidth = Math.max(1, Math.round(width * scaleFactor));
+    const scaledHeight = Math.max(1, Math.round(height * scaleFactor));
+    const originalPixels = width * height;
+    const scaledPixels = scaledWidth * scaledHeight;
+    const aspectRatio = getResolutionAspectRatio(width, height);
+
+    calculator.resolutionValues = { width, height, scale, scaledWidth, scaledHeight, originalPixels, scaledPixels, aspectRatio, ppi: ppiText ? ppi : null };
+    setResolutionResult(
+      calculator,
+      `${formatResolutionNumber(scaledWidth, 0)} × ${formatResolutionNumber(scaledHeight, 0)}`,
+      `${formatResolutionNumber(scaledPixels, 0)} pixels · ${aspectRatio} · ${formatResolutionNumber(scale)}% of original pixels`,
+    );
+
+    if (ppiText) {
+      if (!(ppi > 0)) {
+        setResolutionNote(calculator, "Pixel density must be greater than zero.", "error");
+        return;
+      }
+      const physicalWidth = scaledWidth / ppi;
+      const physicalHeight = scaledHeight / ppi;
+      const diagonal = Math.hypot(physicalWidth, physicalHeight);
+      calculator.resolutionPhysical.textContent = `${formatResolutionNumber(physicalWidth)} in × ${formatResolutionNumber(physicalHeight)} in · ${formatResolutionNumber(diagonal)} in diagonal`;
+      calculator.resolutionPhysical.hidden = false;
+    }
+
+    setResolutionNote(calculator, `${formatResolutionNumber(width, 0)} × ${formatResolutionNumber(height, 0)} = ${formatResolutionNumber(originalPixels, 0)} original pixels.`);
+  }
+
+  function initializeResolutionCalculator(calculator) {
+    const element = calculator.element;
+    calculator.resolutionResult = element.querySelector("[data-resolution-result]");
+    calculator.resolutionNote = element.querySelector("[data-resolution-note]");
+    calculator.resolutionPhysical = element.querySelector("[data-resolution-physical]");
+    calculator.resolutionFields = {
+      width: element.querySelector('[data-resolution-field="width"]'),
+      height: element.querySelector('[data-resolution-field="height"]'),
+      scale: element.querySelector('[data-resolution-field="scale"]'),
+      ppi: element.querySelector('[data-resolution-field="ppi"]'),
+    };
+    Object.values(calculator.resolutionFields).forEach((field) => {
+      field?.addEventListener("input", () => updateResolutionCalculator(calculator));
+      field?.addEventListener("change", () => updateResolutionCalculator(calculator));
+    });
+    updateResolutionCalculator(calculator);
+  }
+
   function setMeasurementNote(calculator, message, type = "") {
     if (!calculator.measurementNote) return;
     calculator.measurementNote.textContent = message || "";
@@ -2163,6 +2355,22 @@
       const detail = calculator.measurementResult?.querySelector("span")?.textContent?.trim() || "";
       const note = calculator.measurementNote?.textContent?.trim() || "";
       return [category, heading, detail, note].filter(Boolean).join("\n");
+    }
+
+    if (calculator.type === "resolution") {
+      const values = calculator.resolutionValues;
+      const heading = calculator.resolutionResult?.querySelector("strong")?.textContent?.trim() || "";
+      const detail = calculator.resolutionResult?.querySelector("span")?.textContent?.trim() || "";
+      const physical = calculator.resolutionPhysical?.textContent?.trim() || "";
+      if (!values) return ["Resolution Scale", heading, detail, physical].filter(Boolean).join("\n");
+      return [
+        "Resolution Scale",
+        `Original: ${values.width} × ${values.height}`,
+        `Scale: ${formatResolutionNumber(values.scale)}% of original pixels`,
+        `Scaled: ${heading}`,
+        detail,
+        physical,
+      ].filter(Boolean).join("\n");
     }
 
     const equation = calculator.equationInput?.value?.trim() || "";
@@ -2574,6 +2782,7 @@
       "date-time": "date-time-calculator",
       bmi: "bmi-calculator",
       measurements: "measurements-calculator",
+      resolution: "resolution-calculator",
     };
     element.className = `calculator-window${typeClassMap[calculatorType] ? ` ${typeClassMap[calculatorType]}` : ""}`;
     element.tabIndex = 0;
@@ -2995,6 +3204,387 @@
     }
   }
 
+  function isImageStorageObject(key = "", contentType = "") {
+    return /^image\//i.test(contentType) || /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(key);
+  }
+
+  function getStorageFileName(key = "") {
+    return key.split("/").filter(Boolean).pop() || key;
+  }
+
+  function getStorageFolderName(prefix = "") {
+    return prefix.replace(/\/+$/, "").split("/").filter(Boolean).pop() || prefix;
+  }
+
+  function formatStorageBytes(value) {
+    const bytes = Number(value || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const amount = bytes / 1024 ** index;
+    return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
+  }
+
+  function setStorageStatus(message = "") {
+    if (els.storageStatus) els.storageStatus.textContent = message;
+  }
+
+  function setStorageMigrationBusy(busy) {
+    storageMigrationState.busy = busy;
+    if (els.storageMigrationCloseButton) els.storageMigrationCloseButton.disabled = busy;
+    if (els.storageMigrationDryRunButton) els.storageMigrationDryRunButton.disabled = busy;
+    if (els.storageMigrationStartButton) {
+      els.storageMigrationStartButton.disabled = busy || !storageMigrationState.dryRunComplete;
+    }
+  }
+
+  function renderStorageMigrationProgress(message) {
+    if (els.storageMigrationStatus) els.storageMigrationStatus.textContent = message;
+    const resultCount = storageMigrationState.results.length;
+    if (!els.storageMigrationDetails || !els.storageMigrationSummary || !els.storageMigrationResults) return;
+    els.storageMigrationDetails.hidden = resultCount === 0;
+    if (!resultCount) return;
+    const counts = storageMigrationState.results.reduce((totals, result) => {
+      const status = String(result.status || "unknown");
+      totals[status] = (totals[status] || 0) + 1;
+      return totals;
+    }, {});
+    const countText = Object.entries(counts).map(([status, count]) => `${count} ${status}`).join(", ");
+    els.storageMigrationSummary.textContent = `Details (${resultCount} records: ${countText})`;
+    els.storageMigrationResults.innerHTML = storageMigrationState.results.slice(-100).map((result) => {
+      const id = escapeHtml(String(result.id || "Unknown image"));
+      const status = escapeHtml(String(result.status || "unknown"));
+      const detail = escapeHtml(String(result.reason || result.error || result.newKey || ""));
+      return `<li><strong>${status}</strong><span>${id}${detail ? ` — ${detail}` : ""}</span></li>`;
+    }).join("");
+  }
+
+  function openStorageMigrationDialog() {
+    if (!els.storageMigrationModal) return;
+    storageMigrationState.results = [];
+    storageMigrationState.dryRunComplete = false;
+    renderStorageMigrationProgress("Ready to run a dry run.");
+    setStorageMigrationBusy(false);
+    els.storageMigrationModal.hidden = false;
+    requestAnimationFrame(() => els.storageMigrationDryRunButton?.focus({ preventScroll: true }));
+  }
+
+  function closeStorageMigrationDialog() {
+    if (!els.storageMigrationModal || storageMigrationState.busy) return;
+    els.storageMigrationModal.hidden = true;
+  }
+
+  async function runStorageImageMigration(dryRun) {
+    if (storageMigrationState.busy) return;
+    if (!dryRun && !window.confirm("Start the full image migration? Verified old image objects will be deleted after their database URLs are updated.")) {
+      return;
+    }
+    storageMigrationState.results = [];
+    storageMigrationState.dryRunComplete = false;
+    setStorageMigrationBusy(true);
+    let afterId = "";
+    let batch = 0;
+    try {
+      while (true) {
+        batch += 1;
+        renderStorageMigrationProgress(`${dryRun ? "Checking" : "Migrating"} batch ${batch}…`);
+        const payload = await getStorageResponse("migrate-centralis-image-storage", {
+          dryRun,
+          limit: 50,
+          afterId: afterId || undefined,
+        });
+        const batchResults = Array.isArray(payload.results) ? payload.results : [];
+        storageMigrationState.results.push(...batchResults);
+        const nextAfterId = String(payload.nextAfterId || "");
+        renderStorageMigrationProgress(`${dryRun ? "Checked" : "Migrated"} ${storageMigrationState.results.length} image records across ${batch} batch${batch === 1 ? "" : "es"}.`);
+        if (!nextAfterId || nextAfterId === afterId || !Number(payload.processed || 0)) break;
+        afterId = nextAfterId;
+      }
+      if (dryRun) {
+        storageMigrationState.dryRunComplete = true;
+        renderStorageMigrationProgress(`Dry run complete. Checked ${storageMigrationState.results.length} image records. Review the details, then start the full migration.`);
+      } else {
+        const migrated = storageMigrationState.results.filter((result) => result.status === "migrated").length;
+        const failed = storageMigrationState.results.filter((result) => result.status === "failed").length;
+        renderStorageMigrationProgress(`Migration complete. ${migrated} image${migrated === 1 ? "" : "s"} migrated${failed ? `; ${failed} failed` : ""}.`);
+      }
+    } catch (error) {
+      renderStorageMigrationProgress(error instanceof Error ? error.message : "Could not run the image migration.");
+    } finally {
+      setStorageMigrationBusy(false);
+    }
+  }
+
+  async function getStorageResponse(name, body) {
+    const response = await getFunctionResponse(name, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await parseFunctionError(response, "Storage request failed."));
+    return response.json();
+  }
+
+  function renderStorageTree() {
+    if (!els.storageTree) return;
+    const activePath = `${storageState.bucket}/${storageState.prefix}`;
+    const markup = storageState.buckets.map((bucket) => {
+      const isActiveBucket = bucket === storageState.bucket;
+      const treeKey = `${bucket}/`;
+      const folders = storageState.foldersByPath.get(treeKey) || [];
+      const childButtons = isActiveBucket ? folders.map((folder) => `
+        <button type="button" class="storage-tree-folder${`${bucket}/${folder}` === activePath ? " is-active" : ""}" style="--storage-indent: 26px" data-storage-folder="${escapeHtml(folder)}">
+          <ph-folder weight="fill" aria-hidden="true"></ph-folder><span>${escapeHtml(getStorageFolderName(folder))}</span>
+        </button>`).join("") : "";
+      return `
+        <button type="button" class="storage-tree-bucket${isActiveBucket && !storageState.prefix ? " is-active" : ""}" data-storage-bucket="${escapeHtml(bucket)}">
+          <ph-database weight="bold" aria-hidden="true"></ph-database><span>${escapeHtml(bucket)}</span>
+        </button>${childButtons}`;
+    }).join("");
+    els.storageTree.innerHTML = markup || '<p class="storage-status">No accessible buckets were found.</p>';
+  }
+
+  function renderStorageBreadcrumbs() {
+    if (!els.storageBreadcrumbs) return;
+    if (!storageState.bucket) {
+      els.storageBreadcrumbs.innerHTML = "";
+      return;
+    }
+    const segments = storageState.prefix.split("/").filter(Boolean);
+    const pieces = [`<button type="button" data-storage-path="">${escapeHtml(storageState.bucket)}</button>`];
+    let current = "";
+    segments.forEach((segment) => {
+      current += `${segment}/`;
+      pieces.push(`<span>/</span><button type="button" data-storage-path="${escapeHtml(current)}">${escapeHtml(segment)}</button>`);
+    });
+    els.storageBreadcrumbs.innerHTML = pieces.join("");
+  }
+
+  function renderStorageItems() {
+    if (!els.storageItems) return;
+    els.storageItems.classList.toggle("is-grid", storageState.view === "grid");
+    els.storageItems.classList.toggle("is-list", storageState.view === "list");
+    const folders = storageState.foldersByPath.get(`${storageState.bucket}/${storageState.prefix}`) || [];
+    const foldersMarkup = folders.map((folder) => `
+      <button type="button" class="storage-item storage-folder-item" data-storage-folder="${escapeHtml(folder)}">
+        <span class="storage-item-thumb"><ph-folder weight="fill" aria-hidden="true"></ph-folder></span>
+        <span class="storage-item-name">${escapeHtml(getStorageFolderName(folder))}</span>
+        <span class="storage-item-meta">Folder</span>
+      </button>`).join("");
+    const objectMarkup = storageState.objects.map((object) => {
+      const isImage = isImageStorageObject(object.key, object.contentType);
+      return `
+        <button type="button" class="storage-item${storageState.selected?.key === object.key ? " is-selected" : ""}" data-storage-object="${escapeHtml(object.key)}">
+          <span class="storage-item-thumb" data-storage-thumbnail="${escapeHtml(object.key)}">${isImage ? '<ph-image weight="duotone" aria-hidden="true"></ph-image>' : '<ph-file weight="duotone" aria-hidden="true"></ph-file>'}</span>
+          <span class="storage-item-name">${escapeHtml(getStorageFileName(object.key))}</span>
+          <span class="storage-item-meta">${escapeHtml(formatStorageBytes(object.size))}</span>
+        </button>`;
+    }).join("");
+    els.storageItems.innerHTML = foldersMarkup + objectMarkup || '<p class="storage-status">This folder is empty.</p>';
+    if (els.storageLoadMore) els.storageLoadMore.hidden = !storageState.nextContinuationToken;
+    hydrateStorageThumbnails();
+  }
+
+  async function getStorageObjectUrl(object, download = false) {
+    const payload = await getStorageResponse("get-storage-object-url", {
+      bucket: storageState.bucket,
+      key: object.key,
+      download,
+    });
+    return payload;
+  }
+
+  async function hydrateStorageThumbnails() {
+    const images = storageState.objects.filter((object) => isImageStorageObject(object.key, object.contentType));
+    await Promise.all(images.map(async (object) => {
+      const slot = els.storageItems?.querySelector(`[data-storage-thumbnail="${CSS.escape(object.key)}"]`);
+      const cachedUrl = storageState.imageUrls.get(object.key);
+      if (cachedUrl) {
+        if (slot) slot.innerHTML = `<img src="${escapeHtml(cachedUrl)}" alt="">`;
+        return;
+      }
+      try {
+        const payload = await getStorageObjectUrl(object);
+        storageState.imageUrls.set(object.key, payload.url);
+        if (slot) slot.innerHTML = `<img src="${escapeHtml(payload.url)}" alt="">`;
+      } catch {
+        // An unreadable image remains represented by its generic icon.
+      }
+    }));
+  }
+
+  function renderStoragePreview() {
+    const object = storageState.selected;
+    const hasObject = Boolean(object);
+    if (els.storagePreviewEmpty) els.storagePreviewEmpty.hidden = hasObject;
+    if (els.storagePreviewContent) els.storagePreviewContent.hidden = !hasObject;
+    if (!object || !els.storageFileMetadata) return;
+    const isImage = isImageStorageObject(object.key, object.contentType);
+    if (els.storageImagePreview) els.storageImagePreview.hidden = !isImage;
+    if (els.storageFilePreviewIcon) {
+      els.storageFilePreviewIcon.hidden = isImage;
+      els.storageFilePreviewIcon.innerHTML = '<ph-file weight="duotone" aria-hidden="true"></ph-file>';
+    }
+    if (els.storagePreviewImage && isImage) {
+      els.storagePreviewImage.src = storageState.imageUrls.get(object.key) || "";
+      els.storagePreviewImage.alt = getStorageFileName(object.key);
+    }
+    const modified = object.lastModified ? new Date(object.lastModified).toLocaleString() : "Unknown";
+    els.storageFileMetadata.innerHTML = `
+      <div><dt>Filename</dt><dd>${escapeHtml(getStorageFileName(object.key))}</dd></div>
+      <div><dt>Path</dt><dd>${escapeHtml(object.key)}</dd></div>
+      <div><dt>Size</dt><dd>${escapeHtml(formatStorageBytes(object.size))}</dd></div>
+      <div><dt>Type</dt><dd>${escapeHtml(object.contentType || "Unknown")}</dd></div>
+      <div><dt>Modified</dt><dd>${escapeHtml(modified)}</dd></div>`;
+    if (els.storageOpenButton) els.storageOpenButton.hidden = !isImage;
+  }
+
+  function updateStorageItemSelection(selectedKey) {
+    els.storageItems?.querySelectorAll("[data-storage-object]").forEach((item) => {
+      item.classList.toggle("is-selected", item.dataset.storageObject === selectedKey);
+    });
+  }
+
+  async function selectStorageObject(key) {
+    const object = storageState.objects.find((item) => item.key === key);
+    if (!object) return;
+    storageState.selected = object;
+    updateStorageItemSelection(key);
+    setStorageStatus("Loading file details...");
+    try {
+      const payload = await getStorageObjectUrl(object);
+      Object.assign(object, payload.metadata || {});
+      if (isImageStorageObject(object.key, object.contentType)) storageState.imageUrls.set(object.key, payload.url);
+      renderStoragePreview();
+      setStorageStatus("");
+    } catch (error) {
+      setStorageStatus(error instanceof Error ? error.message : "Could not load file details.");
+    }
+  }
+
+  async function loadStoragePath(bucket, prefix = "", options = {}) {
+    if (!bucket || storageState.loading) return;
+    storageState.loading = true;
+    setStorageStatus("Loading images…");
+    try {
+      const payload = await getStorageResponse("browse-storage", {
+        action: "objects",
+        bucket,
+        prefix,
+        continuationToken: options.append ? storageState.nextContinuationToken : undefined,
+      });
+      storageState.bucket = bucket;
+      storageState.prefix = prefix;
+      storageState.foldersByPath.set(`${bucket}/${prefix}`, payload.folders || []);
+      storageState.objects = options.append ? [...storageState.objects, ...(payload.objects || [])] : (payload.objects || []);
+      storageState.nextContinuationToken = payload.nextContinuationToken || null;
+      storageState.selected = null;
+      renderStorageTree();
+      renderStorageBreadcrumbs();
+      renderStorageItems();
+      renderStoragePreview();
+      setStorageStatus("");
+    } catch (error) {
+      setStorageStatus(error instanceof Error ? error.message : "Could not load storage.");
+    } finally {
+      storageState.loading = false;
+    }
+  }
+
+  async function initializeStorageBrowser() {
+    if (!els.storageBrowser || storageState.loaded || storageState.loading) return;
+    storageState.loading = true;
+    setStorageStatus("Loading buckets...");
+    try {
+      const payload = await getStorageResponse("browse-storage", { action: "buckets" });
+      storageState.buckets = payload.buckets || [];
+      storageState.loaded = true;
+      storageState.loading = false;
+      renderStorageTree();
+      if (storageState.buckets[0]) await loadStoragePath(storageState.buckets[0]);
+      else setStorageStatus("No accessible buckets were found.");
+    } catch (error) {
+      storageState.loading = false;
+      setStorageStatus(error instanceof Error ? error.message : "Could not load storage buckets.");
+    }
+  }
+
+  function bindStorageBrowser() {
+    if (!els.storageBrowser) return;
+    els.storageMigrationOpenButton?.addEventListener("click", openStorageMigrationDialog);
+    els.storageMigrationCloseButton?.addEventListener("click", closeStorageMigrationDialog);
+    els.storageMigrationDryRunButton?.addEventListener("click", () => runStorageImageMigration(true));
+    els.storageMigrationStartButton?.addEventListener("click", () => runStorageImageMigration(false));
+    els.storageMigrationModal?.addEventListener("click", (event) => {
+      if (event.target === els.storageMigrationModal) closeStorageMigrationDialog();
+    });
+    els.storageTree?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-storage-bucket], [data-storage-folder]");
+      if (!button) return;
+      if (button.dataset.storageBucket) loadStoragePath(button.dataset.storageBucket, "");
+      if (button.dataset.storageFolder) loadStoragePath(storageState.bucket, button.dataset.storageFolder);
+    });
+    els.storageBreadcrumbs?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-storage-path]");
+      if (button) loadStoragePath(storageState.bucket, button.dataset.storagePath || "");
+    });
+    els.storageItems?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-storage-folder], [data-storage-object]");
+      if (!button) return;
+      if (button.dataset.storageFolder) loadStoragePath(storageState.bucket, button.dataset.storageFolder);
+      if (button.dataset.storageObject) selectStorageObject(button.dataset.storageObject);
+    });
+    els.storageViewButtons.forEach((button) => button.addEventListener("click", () => {
+      storageState.view = button.dataset.storageView || "grid";
+      els.storageViewButtons.forEach((current) => current.classList.toggle("is-active", current === button));
+      renderStorageItems();
+    }));
+    els.storageLoadMore?.addEventListener("click", () => {
+      if (storageState.nextContinuationToken) loadStoragePath(storageState.bucket, storageState.prefix, { append: true });
+    });
+    els.storageOpenButton?.addEventListener("click", () => {
+      const url = storageState.selected && storageState.imageUrls.get(storageState.selected.key);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    });
+    els.storageDownloadButton?.addEventListener("click", async () => {
+      if (!storageState.selected) return;
+      try {
+        const payload = await getStorageObjectUrl(storageState.selected, true);
+        const link = document.createElement("a");
+        link.href = payload.url;
+        link.download = getStorageFileName(storageState.selected.key);
+        document.body.append(link);
+        link.click();
+        link.remove();
+      } catch (error) {
+        setStorageStatus(error instanceof Error ? error.message : "Could not start download.");
+      }
+    });
+    els.storageResizers.forEach((resizer) => resizer.addEventListener("pointerdown", (event) => {
+      const side = resizer.dataset.storageResizer;
+      const startX = event.clientX;
+      const startWidth = side === "left" ? storageState.leftWidth : storageState.rightWidth;
+      resizer.setPointerCapture(event.pointerId);
+      resizer.classList.add("is-dragging");
+      const move = (moveEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const next = side === "left" ? startWidth + delta : startWidth - delta;
+        const bounded = Math.min(side === "left" ? 420 : 600, Math.max(side === "left" ? 180 : 200, next));
+        if (side === "left") storageState.leftWidth = bounded;
+        else storageState.rightWidth = bounded;
+        els.storageBrowser.style.setProperty(side === "left" ? "--storage-tree-width" : "--storage-preview-width", `${bounded}px`);
+      };
+      const end = () => {
+        resizer.classList.remove("is-dragging");
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", end);
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", end, { once: true });
+    }));
+  }
+
+  bindStorageBrowser();
+
   els.tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       const tabName = tab.dataset.usefulTab;
@@ -3010,6 +3600,9 @@
       });
       if (tabName === "calculators") {
         scheduleCalculatorResultsFit();
+      }
+      if (tabName === "storage") {
+        initializeStorageBrowser();
       }
     });
   });

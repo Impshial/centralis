@@ -1,5 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListBucketsCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "npm:@aws-sdk/client-s3";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner";
 
 export const corsHeaders = {
@@ -102,9 +110,17 @@ export async function getAuthUser(req: Request) {
   return data.user;
 }
 
-export function createImageKey(userId: string, objectId: string, extension = "png") {
+export function createImageKey(moduleName: string, imageId: string, extension = "png") {
+  const cleanModuleName = moduleName.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "legacy";
   const cleanExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
-  return `images/${objectId}/${crypto.randomUUID()}.${cleanExtension}`;
+  // The iDrive bucket is already named "centralis". Keep the object key
+  // relative to that bucket so objects do not end up under centralis/centralis.
+  return `images/${cleanModuleName}/${imageId}.${cleanExtension}`;
+}
+
+export function createImageGenerationKey(kind: "output" | "uploaded", imageId: string, extension = "png") {
+  const cleanExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  return `images/image-generation/${kind}/${imageId}.${cleanExtension}`;
 }
 
 export function buildPublicUrl(key: string) {
@@ -184,7 +200,75 @@ export async function deleteImageObject(imageUrl: string) {
   }));
 }
 
+export async function deleteStorageObject(bucket: string, key: string) {
+  await createS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+export async function listStorageBuckets() {
+  const response = await createS3Client().send(new ListBucketsCommand({}));
+  return (response.Buckets || [])
+    .map((bucket) => bucket.Name)
+    .filter((bucket): bucket is string => Boolean(bucket))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export async function listStorageObjects(options: {
+  bucket: string;
+  prefix?: string;
+  continuationToken?: string;
+  maxKeys?: number;
+}) {
+  const response = await createS3Client().send(new ListObjectsV2Command({
+    Bucket: options.bucket,
+    Prefix: options.prefix || "",
+    Delimiter: "/",
+    ContinuationToken: options.continuationToken || undefined,
+    MaxKeys: Math.min(Math.max(options.maxKeys || 250, 1), 1000),
+  }));
+
+  return {
+    folders: (response.CommonPrefixes || [])
+      .map((entry) => entry.Prefix)
+      .filter((prefix): prefix is string => Boolean(prefix)),
+    objects: (response.Contents || [])
+      .filter((entry) => Boolean(entry.Key) && entry.Key !== options.prefix)
+      .map((entry) => ({
+        key: entry.Key as string,
+        size: Number(entry.Size || 0),
+        lastModified: entry.LastModified?.toISOString() || null,
+        etag: entry.ETag || null,
+      })),
+    nextContinuationToken: response.NextContinuationToken || null,
+  };
+}
+
+export async function createSignedStorageUrl(options: {
+  bucket: string;
+  key: string;
+  download?: boolean;
+  expiresIn?: number;
+}) {
+  return getSignedUrl(createS3Client(), new GetObjectCommand({
+    Bucket: options.bucket,
+    Key: options.key,
+    ResponseContentDisposition: options.download
+      ? `attachment; filename="${options.key.split("/").pop() || "download"}"`
+      : undefined,
+  }), { expiresIn: options.expiresIn || 900 });
+}
+
+export async function getStorageObjectMetadata(bucket: string, key: string) {
+  const response = await createS3Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  return {
+    size: Number(response.ContentLength || 0),
+    contentType: response.ContentType || "application/octet-stream",
+    lastModified: response.LastModified?.toISOString() || null,
+    metadata: response.Metadata || {},
+  };
+}
+
 export async function insertImageRow(options: {
+  id: string;
   objectId: string;
   imageUrl: string;
   provider: string;
@@ -206,6 +290,7 @@ export async function insertImageRow(options: {
   const { data, error } = await supabase
     .from("image_table")
     .insert({
+      id: options.id,
       object_id: options.objectId,
       image_url: options.imageUrl,
       provider: options.provider,

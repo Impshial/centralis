@@ -590,6 +590,7 @@ async function uploadMoviePoster(file) {
 
   const body = new FormData();
   body.append("objectId", movieImageObjectId(movieState.activeMovie.id));
+  body.append("storageModule", "movie-tracker");
   body.append("file", file);
 
   const response = await getFunctionResponse("upload-object-image", { body });

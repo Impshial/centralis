@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
     const user = await getAuthUser(req);
     const formData = await req.formData();
     const objectId = String(formData.get("objectId") || "").trim();
+    const storageModule = String(formData.get("storageModule") || "universe-builder").trim();
     const file = formData.get("file");
 
     if (!objectId) {
@@ -32,7 +33,8 @@ Deno.serve(async (req) => {
     }
 
     const extension = file.name.split(".").pop() || file.type.split("/").pop() || "png";
-    const key = createImageKey(user.id, objectId, extension);
+    const imageId = crypto.randomUUID();
+    const key = createImageKey(storageModule, imageId, extension);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const imageUrl = await uploadImageBytes({
       bytes,
@@ -40,6 +42,7 @@ Deno.serve(async (req) => {
       contentType: file.type || "application/octet-stream",
     });
     const image = await insertImageRow({
+      id: imageId,
       objectId,
       imageUrl,
       provider: "upload",

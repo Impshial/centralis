@@ -42,6 +42,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu" role="menu">
         <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
         <a href="chat-repository.html" role="menuitem">Chat Repository</a>
+        <a href="image-generation.html" role="menuitem">Image Generation</a>
         <button type="button" role="menuitem">Episode Roulette</button>
       </div>
     </div>
@@ -61,20 +62,6 @@ const CENTRALIS_HEADER_MARKUP = `
       </div>
     </div>
 
-    <div class="menu-wrap">
-      <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
-        </svg>
-        <span>Settings</span>
-      </button>
-      <div class="dropdown-menu" role="menu">
-        <button type="button" role="menuitem">Preferences</button>
-        <button type="button" role="menuitem">Privacy</button>
-        <button type="button" role="menuitem">Shortcuts</button>
-      </div>
-    </div>
   </nav>
 
   <div class="header-actions">
@@ -105,6 +92,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu align-right" role="menu">
         <button type="button" role="menuitem">Profile</button>
         <button type="button" role="menuitem">Account</button>
+        <a href="settings.html" role="menuitem">Settings</a>
         <button type="button" role="menuitem">Notifications</button>
         <button type="button" role="menuitem" data-sign-out>Sign Out</button>
       </div>
@@ -268,7 +256,7 @@ let elementTypeSeedPromise = null;
 let pendingUniverseDelete = null;
 let homepageIconReadyPromise = null;
 
-window.centralisScriptVersion = "centralis-header-1";
+window.centralisScriptVersion = "global-ai-settings-1";
 console.warn("Centralis script loaded", window.centralisScriptVersion);
 
 if (window.supabase && window.CENTRALIS_SUPABASE_CONFIG) {
@@ -1030,6 +1018,51 @@ async function ensureUserSettings(userId) {
   return newSettings;
 }
 
+async function getCurrentUserSettings() {
+  if (currentUserSettings) {
+    return currentUserSettings;
+  }
+
+  const appUser = await getCurrentAppUser();
+  if (!appUser?.id) {
+    return null;
+  }
+
+  currentUserSettings = await ensureUserSettings(appUser.id);
+  return currentUserSettings;
+}
+
+async function updateCurrentUserSettings(updates = {}) {
+  if (!supabaseClient || !updates || typeof updates !== "object") {
+    throw new Error("User settings are not available.");
+  }
+
+  const appUser = await getCurrentAppUser();
+  const settings = await getCurrentUserSettings();
+  if (!appUser?.id || !settings?.id) {
+    throw new Error("Sign in to update your settings.");
+  }
+
+  const { data, error } = await withTimeout(supabaseClient
+    .from("user_settings")
+    .update(updates)
+    .eq("id", settings.id)
+    .eq("user_id", appUser.id)
+    .select()
+    .single(), "Saving user settings");
+
+  if (error || !data) {
+    throw error || new Error("Could not save user settings.");
+  }
+
+  currentUserSettings = data;
+  applyUserSettings(data);
+  window.dispatchEvent(new CustomEvent("centralis:user-settings-changed", {
+    detail: { settings: data }
+  }));
+  return data;
+}
+
 function applyUserSettings(settings) {
   if (!settings?.theme) {
     return;
@@ -1347,6 +1380,8 @@ async function getCurrentAppUser() {
 }
 
 window.centralisGetCurrentAppUser = getCurrentAppUser;
+window.centralisGetUserSettings = getCurrentUserSettings;
+window.centralisUpdateUserSettings = updateCurrentUserSettings;
 
 function getCatalogTypeId(template) {
   return template.default_element_type_id ?? template.element_type_id ?? template.type_id ?? null;

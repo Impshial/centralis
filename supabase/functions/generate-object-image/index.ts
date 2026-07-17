@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
     const user = await getAuthUser(req);
     const body = await req.json();
     const objectId = String(body.objectId || "").trim();
+    const storageModule = String(body.storageModule || "universe-builder").trim();
     if (!objectId) {
       return jsonResponse({ error: "objectId is required." }, 400);
     }
@@ -79,13 +80,15 @@ Deno.serve(async (req) => {
     }
 
     const revisedPrompt = generated?.revised_prompt || null;
-    const key = createImageKey(user.id, objectId, "png");
+    const imageId = crypto.randomUUID();
+    const key = createImageKey(storageModule, imageId, "png");
     const imageUrl = await uploadImageBytes({
       bytes: base64ToBytes(imageBase64),
       key,
       contentType: "image/png",
     });
     const image = await insertImageRow({
+      id: imageId,
       objectId,
       imageUrl,
       provider: `openai:${IMAGE_MODEL}`,

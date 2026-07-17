@@ -1671,7 +1671,10 @@ async function generateChatLogImage(chatLog, html, options = {}) {
     const promptHtml = html ?? await fetchChatLogHtml(chatLog.id);
     const response = await getFunctionResponse("generate-object-image", {
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildChatImageRequestBody(chatLog, promptHtml, options.promptOverride)),
+      body: JSON.stringify({
+        ...buildChatImageRequestBody(chatLog, promptHtml, options.promptOverride),
+        storageModule: "chat-repository",
+      }),
     });
     if (!response.ok) {
       throw new Error(await parseFunctionError(response, "Could not generate image."));
@@ -1715,6 +1718,7 @@ async function uploadChatLogImage(chatLogId, file) {
   chatRepositoryState.uploadingImage = true;
   const body = new FormData();
   body.append("objectId", chatLogId);
+  body.append("storageModule", "chat-repository");
   body.append("file", file);
   try {
     const response = await getFunctionResponse("upload-object-image", { body });

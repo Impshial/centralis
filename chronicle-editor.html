@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/theme/toastui-editor-dark.min.css">
-  <link rel="stylesheet" href="styles.css?v=button-padding-2">
+  <link rel="stylesheet" href="styles.css?v=chronicle-editor-images-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
 <body data-auth-required="true" data-page="chronicle-editor">
@@ -187,10 +187,118 @@
     </section>
   </div>
 
+  <div class="modal-backdrop image-viewer-backdrop" id="chronicle-image-viewer-modal" data-strict-modal hidden>
+    <section class="modal-dialog image-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-image-viewer-title">
+      <div class="image-viewer-header">
+        <h2 id="chronicle-image-viewer-title" data-chronicle-image-viewer-title>Image</h2>
+        <button class="modal-close" type="button" aria-label="Close image viewer" data-chronicle-image-viewer-close>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="image-viewer-stage">
+        <button class="image-viewer-nav image-viewer-prev" type="button" aria-label="Previous image" data-chronicle-image-viewer-prev>
+          <ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>
+        </button>
+        <div class="image-viewer-frame">
+          <img src="" alt="" draggable="false" data-chronicle-image-viewer-img>
+        </div>
+        <button class="image-viewer-nav image-viewer-next" type="button" aria-label="Next image" data-chronicle-image-viewer-next>
+          <ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>
+        </button>
+      </div>
+      <div class="image-viewer-thumbs" data-chronicle-image-viewer-thumbs aria-label="Image thumbnails"></div>
+      <p class="form-status image-viewer-status" data-chronicle-image-viewer-status role="status"></p>
+      <label class="image-primary-toggle">
+        <input type="checkbox" data-chronicle-image-viewer-primary>
+        <span>Set as primary image</span>
+      </label>
+      <div class="image-viewer-footer">
+        <div class="image-viewer-left-actions">
+          <button class="secondary-action image-viewer-action" type="button" data-chronicle-image-viewer-open>
+            <ph-arrow-square-out weight="bold" aria-hidden="true"></ph-arrow-square-out>
+            Open
+          </button>
+          <button class="secondary-action image-viewer-action" type="button" data-chronicle-image-viewer-download>
+            <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+            Download
+          </button>
+          <button class="danger-action image-viewer-action" type="button" data-chronicle-image-viewer-delete>
+            <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+            Delete
+          </button>
+        </div>
+        <button class="secondary-action image-viewer-action" type="button" data-chronicle-image-viewer-close>Close</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="chronicle-ai-module-generate-modal" data-strict-modal hidden>
+    <section class="modal-dialog chronicle-ai-module-dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-ai-module-generate-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="chronicle-ai-module-generate-title">Generate Chronicle Details</h2>
+          <p class="modal-subtitle">Choose the template modules AI may consider, then review all suggested fields before adding them to the editor.</p>
+        </div>
+      </div>
+
+      <form class="chronicle-ai-module-form" data-chronicle-ai-module-generate-form>
+        <label class="form-field">
+          <span>Generation Instructions <em>(optional)</em></span>
+          <textarea name="chronicle-ai-module-instructions" data-chronicle-ai-module-instructions rows="4" placeholder="Add direction for the Chronicle details you want to develop..."></textarea>
+        </label>
+
+        <section class="chronicle-ai-module-picker" aria-labelledby="chronicle-ai-module-picker-title">
+          <div class="chronicle-ai-module-picker-header">
+            <h3 id="chronicle-ai-module-picker-title">Template Modules</h3>
+            <span>All selected by default</span>
+          </div>
+          <div class="chronicle-ai-module-picker-list" data-chronicle-ai-module-checklist></div>
+        </section>
+
+        <p class="form-status" data-chronicle-ai-module-generate-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-chronicle-ai-module-generate-cancel>Cancel</button>
+          <button class="primary-action" type="submit" data-chronicle-ai-module-generate-submit>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            Generate
+          </button>
+        </div>
+      </form>
+
+      <div class="chronicle-ai-generation-overlay" aria-live="assertive">
+        <ph-spinner gap="none" aria-hidden="true"></ph-spinner>
+        <strong>Generating Chronicle Details…</strong>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="chronicle-ai-module-review-modal" data-strict-modal hidden>
+    <section class="modal-dialog chronicle-ai-module-review-dialog" role="dialog" aria-modal="true" aria-labelledby="chronicle-ai-module-review-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="chronicle-ai-module-review-title">Review Chronicle Suggestions</h2>
+          <p class="modal-subtitle">Edit the suggestions you want to stage. Nothing is saved until you use Save Element.</p>
+        </div>
+      </div>
+
+      <form class="chronicle-ai-module-review-form" data-chronicle-ai-module-review-form>
+        <div class="chronicle-ai-module-review-list" data-chronicle-ai-module-review-content></div>
+        <p class="form-status" data-chronicle-ai-module-review-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-chronicle-ai-module-review-cancel>Cancel</button>
+          <button class="primary-action" type="submit">Add to Editor</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=centralis-header-1"></script>
-  <script src="chronicle.js?v=chronicle-module-buttons-1"></script>
+  <script src="script.js?v=global-ai-settings-1"></script>
+  <script src="chronicle.js?v=chronicle-editor-images-1"></script>
 </body>
 </html>

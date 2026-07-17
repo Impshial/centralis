@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="styles.css?v=global-ai-settings-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="settings">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="settings-page" aria-labelledby="settings-title">
+      <header class="settings-page-header">
+        <p class="settings-eyebrow">Account</p>
+        <h1 id="settings-title">Settings</h1>
+        <p>Manage your Centralis preferences.</p>
+      </header>
+
+      <section class="settings-workspace" aria-label="Settings workspace">
+        <nav class="settings-tab-list" role="tablist" aria-orientation="vertical" aria-label="Settings categories">
+          <button
+            class="settings-tab is-active"
+            type="button"
+            role="tab"
+            id="settings-tab-ai"
+            aria-selected="true"
+            aria-controls="settings-panel-ai"
+            data-settings-tab="ai"
+          >
+            <ph-sparkle weight="fill" aria-hidden="true"></ph-sparkle>
+            <span>AI Settings</span>
+          </button>
+        </nav>
+
+        <section
+          class="settings-tab-panel is-active"
+          role="tabpanel"
+          id="settings-panel-ai"
+          aria-labelledby="settings-tab-ai"
+          data-settings-panel="ai"
+        >
+          <header class="settings-panel-header">
+            <div>
+              <p class="settings-panel-eyebrow">AI</p>
+              <h2>AI Settings</h2>
+              <p>These preferences apply to every new Centralis AI request.</p>
+            </div>
+          </header>
+
+          <form class="settings-ai-form" data-ai-settings-form>
+            <label class="form-field" for="settings-ai-model">
+              <span>Model</span>
+              <select id="settings-ai-model" data-settings-ai-model>
+                <option value="gpt-5.6-luna">GPT-5.6 Luna</option>
+                <option value="gpt-5.6-terra">GPT-5.6 Terra</option>
+                <option value="gpt-5.6-sol">GPT-5.6 Sol</option>
+                <option value="gpt-5.5">GPT-5.5</option>
+                <option value="gpt-5.4">GPT-5.4</option>
+                <option value="gpt-5.4-nano">GPT-5.4 Nano</option>
+                <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+              </select>
+            </label>
+
+            <label class="form-field" for="settings-ai-effort">
+              <span>Effort</span>
+              <select id="settings-ai-effort" data-settings-ai-effort>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="pro">Pro</option>
+              </select>
+            </label>
+
+            <label class="form-field" for="settings-ai-verbosity">
+              <span>Verbosity</span>
+              <select id="settings-ai-verbosity" data-settings-ai-verbosity>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+
+            <div class="settings-ai-form-footer">
+              <p class="form-status" data-settings-status role="status" aria-live="polite"></p>
+              <button class="secondary-action" type="button" data-settings-ai-reset>Reset to defaults</button>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=global-ai-settings-1"></script>
+  <script src="settings.js?v=global-ai-settings-1"></script>
+</body>
+</html>

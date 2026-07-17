@@ -6,7 +6,7 @@
   <title>Universe Canvas | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
-  <link rel="stylesheet" href="styles.css?v=ai-header-controls-right-1">
+  <link rel="stylesheet" href="styles.css?v=chronicle-wiki-images-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -816,10 +816,21 @@
         <aside class="wide-template-sidebar">
           <div class="template-panel-actions">
             <strong>Templates</strong>
-            <button class="secondary-action compact-action" type="button" data-wide-add-template>
-              <ph-plus weight="bold" aria-hidden="true"></ph-plus>
-              Add
-            </button>
+            <div class="template-library-actions">
+              <button class="secondary-action compact-action" type="button" data-wide-add-template>
+                <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+                Add
+              </button>
+              <button class="secondary-action compact-action" type="button" data-wide-import-template>
+                <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                Import
+              </button>
+            </div>
+          </div>
+          <div class="template-library-reference-actions" aria-label="Template JSON tools">
+            <button type="button" data-download-template-schema>Download JSON Schema</button>
+            <button type="button" data-download-template-example>Download Example JSON</button>
+            <button type="button" data-copy-template-llm-instructions>Copy LLM Instructions</button>
           </div>
           <div class="wide-template-list" data-wide-template-list></div>
         </aside>
@@ -851,6 +862,10 @@
           <p class="details-pane-kicker" data-rich-details-kind>Chronicle Details</p>
         </div>
         <div class="rich-details-actions">
+          <label class="rich-details-hide-empty-toggle">
+            <input type="checkbox" data-rich-details-hide-empty checked>
+            <span>Hide Empty Fields</span>
+          </label>
           <button class="secondary-action compact-action" type="button" data-rich-details-edit>Edit in Chronicle</button>
           <button class="modal-close" type="button" aria-label="Close Chronicle preview" data-rich-details-close>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -932,7 +947,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=centralis-header-1"></script>
+  <script src="script.js?v=global-ai-settings-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>

@@ -7,7 +7,6 @@ import {
 } from "../_shared/image-storage.ts";
 import {
   cleanUniverseId,
-  cleanUniverseAiSettings,
   cleanUserMessage,
   getAppUser,
   getOrCreateAiChat,
@@ -15,6 +14,7 @@ import {
   loadAiMessages,
   loadAiProposals,
   loadRecentAiMessagesForPrompt,
+  loadUserUniverseAiSettings,
   loadUniverseContext,
   sendUniverseElementProposalRequest,
   sendUniverseExpertRequest,
@@ -38,7 +38,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const universeId = cleanUniverseId(body.universeId);
     const message = cleanUserMessage(body.message);
-    const settings = cleanUniverseAiSettings(body);
 
     if (!universeId) {
       return jsonResponse({ error: "universeId is required." }, 400);
@@ -48,6 +47,7 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createAdminClient();
+    const settings = await loadUserUniverseAiSettings(supabase, appUser.id);
     const context = await loadUniverseContext(supabase, universeId, appUser.id);
     const source = await getOrCreateAiSource(supabase, universeId, appUser.id);
     const vectorStoreId = String(source.vector_store_id || "");

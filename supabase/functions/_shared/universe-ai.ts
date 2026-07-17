@@ -28,6 +28,7 @@ type ElementRecord = {
   name: string;
   description: string | null;
   element_type_id: string | null;
+  rich_template_id: string | null;
 };
 
 type ElementLinkRecord = {
@@ -37,11 +38,45 @@ type ElementLinkRecord = {
   label: string | null;
 };
 
+type ChronicleModuleRecord = {
+  element_id: string;
+  module_type: string;
+  data: Record<string, unknown> | null;
+  sort_order: number | null;
+};
+
+type ChronicleSectionRecord = {
+  id: string;
+  name: string;
+  sort_order: number | null;
+  is_hidden: boolean | null;
+};
+
+type ChronicleFieldRecord = {
+  id: string;
+  section_id: string | null;
+  label: string | null;
+  field_key: string | null;
+  field_type: string | null;
+  sort_order: number | null;
+  is_hidden: boolean | null;
+};
+
+type ChronicleFieldValueRecord = {
+  element_id: string;
+  template_field_id: string;
+  value: unknown;
+};
+
 type UniverseContext = {
   universe: UniverseRecord;
   elementTypesById: Map<string, ElementTypeRecord>;
   elements: ElementRecord[];
   links: ElementLinkRecord[];
+  chronicleModules: ChronicleModuleRecord[];
+  chronicleSectionsById: Map<string, ChronicleSectionRecord>;
+  chronicleFieldsBySectionId: Map<string, ChronicleFieldRecord[]>;
+  chronicleValuesByElementId: Map<string, Map<string, unknown>>;
 };
 
 const UNIVERSE_AI_MODELS = new Set([
@@ -82,6 +117,33 @@ export function cleanUniverseAiSettings(value: Record<string, unknown> = {}): Un
     reasoningEffort: reasoningEffort as UniverseAiSettings["reasoningEffort"],
     verbosity: verbosity as UniverseAiSettings["verbosity"],
   };
+}
+
+export async function loadUserUniverseAiSettings(
+  supabase: ReturnType<typeof createAdminClient>,
+  appUserId: number,
+): Promise<UniverseAiSettings> {
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("ai_model, ai_reasoning_effort, ai_verbosity")
+    .eq("user_id", appUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  // The migration gives every current user the Centralis defaults. This branch
+  // preserves the former server fallback while older rows are being upgraded.
+  if (!data) {
+    return cleanUniverseAiSettings({});
+  }
+
+  return cleanUniverseAiSettings({
+    model: data.ai_model,
+    reasoningEffort: data.ai_reasoning_effort,
+    verbosity: data.ai_verbosity,
+  });
 }
 
 export function getUniverseAiModel(selectedModel?: string) {
@@ -201,7 +263,7 @@ export async function loadUniverseContext(supabase: ReturnType<typeof createAdmi
   const [elementResponse, linkResponse, typeResponse] = await Promise.all([
     supabase
       .from("elements")
-      .select("id,name,description,element_type_id")
+      .select("id,name,description,element_type_id,rich_template_id")
       .eq("universe_id", universeId)
       .eq("user_id", appUserId)
       .order("name", { ascending: true }),
@@ -221,6 +283,37 @@ export async function loadUniverseContext(supabase: ReturnType<typeof createAdmi
   if (linkResponse.error) throw linkResponse.error;
   if (typeResponse.error) throw typeResponse.error;
 
+  const elementIds = (elementResponse.data || []).map((element) => String(element.id)).filter(Boolean);
+  const [moduleResponse, sectionResponse, fieldResponse, valueResponse] = await Promise.all([
+    elementIds.length
+      ? supabase
+        .from("chronicle_modules")
+        .select("element_id,module_type,data,sort_order")
+        .in("element_id", elementIds)
+        .eq("module_type", "template_section")
+        .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("element_template_sections")
+      .select("id,name,sort_order,is_hidden")
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("element_type_template_fields")
+      .select("id,section_id,label,field_key,field_type,sort_order,is_hidden")
+      .order("sort_order", { ascending: true }),
+    elementIds.length
+      ? supabase
+        .from("element_template_field_values")
+        .select("element_id,template_field_id,value")
+        .in("element_id", elementIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (moduleResponse.error) throw moduleResponse.error;
+  if (sectionResponse.error) throw sectionResponse.error;
+  if (fieldResponse.error) throw fieldResponse.error;
+  if (valueResponse.error) throw valueResponse.error;
+
   const elementTypesById = new Map<string, ElementTypeRecord>();
   (typeResponse.data || []).forEach((type) => {
     if (type.id) {
@@ -231,11 +324,42 @@ export async function loadUniverseContext(supabase: ReturnType<typeof createAdmi
     }
   });
 
+  const chronicleSectionsById = new Map<string, ChronicleSectionRecord>();
+  (sectionResponse.data || []).forEach((section) => {
+    if (section.id) {
+      chronicleSectionsById.set(String(section.id), section as ChronicleSectionRecord);
+    }
+  });
+  const chronicleFieldsBySectionId = new Map<string, ChronicleFieldRecord[]>();
+  (fieldResponse.data || []).forEach((field) => {
+    const sectionId = String(field.section_id || "");
+    if (!sectionId) return;
+    const sectionFields = chronicleFieldsBySectionId.get(sectionId) || [];
+    sectionFields.push(field as ChronicleFieldRecord);
+    chronicleFieldsBySectionId.set(sectionId, sectionFields);
+  });
+  chronicleFieldsBySectionId.forEach((fields) => {
+    fields.sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0));
+  });
+  const chronicleValuesByElementId = new Map<string, Map<string, unknown>>();
+  (valueResponse.data || []).forEach((fieldValue) => {
+    const elementId = String(fieldValue.element_id || "");
+    const fieldId = String(fieldValue.template_field_id || "");
+    if (!elementId || !fieldId) return;
+    const values = chronicleValuesByElementId.get(elementId) || new Map<string, unknown>();
+    values.set(fieldId, fieldValue.value);
+    chronicleValuesByElementId.set(elementId, values);
+  });
+
   return {
     universe: universe as UniverseRecord,
     elementTypesById,
     elements: (elementResponse.data || []) as ElementRecord[],
     links: (linkResponse.data || []) as ElementLinkRecord[],
+    chronicleModules: (moduleResponse.data || []) as ChronicleModuleRecord[],
+    chronicleSectionsById,
+    chronicleFieldsBySectionId,
+    chronicleValuesByElementId,
   };
 }
 
@@ -249,6 +373,64 @@ function getElementTypeName(element: ElementRecord, context: UniverseContext) {
   return element.element_type_id
     ? context.elementTypesById.get(String(element.element_type_id))?.name || "Unknown Type"
     : "No Type";
+}
+
+function hasCanonValue(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
+  return String(value ?? "").trim().length > 0;
+}
+
+function formatCanonValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => markdownEscape(item)).filter(Boolean).join(", ");
+  }
+  if (value && typeof value === "object") {
+    return markdownEscape(JSON.stringify(value));
+  }
+  return markdownEscape(value);
+}
+
+function appendChronicleCanon(lines: string[], element: ElementRecord, context: UniverseContext) {
+  const elementId = String(element.id);
+  const values = context.chronicleValuesByElementId.get(elementId);
+  if (!values?.size) return;
+
+  const assignedSectionIds = context.chronicleModules
+    .filter((module) => String(module.element_id) === elementId)
+    .map((module) => String(module.data?.section_id || ""))
+    .filter(Boolean);
+  if (!assignedSectionIds.length) return;
+
+  const sectionDetails = assignedSectionIds
+    .map((sectionId) => {
+      const section = context.chronicleSectionsById.get(sectionId);
+      if (!section || section.is_hidden) return null;
+      const fields = (context.chronicleFieldsBySectionId.get(sectionId) || [])
+        .filter((field) => !field.is_hidden)
+        .map((field) => ({
+          field,
+          value: values.get(String(field.id)),
+        }))
+        .filter(({ value }) => hasCanonValue(value));
+      return fields.length ? { section, fields } : null;
+    })
+    .filter(Boolean) as Array<{ section: ChronicleSectionRecord; fields: Array<{ field: ChronicleFieldRecord; value: unknown }> }>;
+
+  if (!sectionDetails.length) return;
+
+  lines.push("Chronicle Details:", "");
+  sectionDetails.forEach(({ section, fields }) => {
+    lines.push(`#### ${markdownEscape(section.name) || "Untitled Module"}`, "");
+    fields.forEach(({ field, value }) => {
+      const label = markdownEscape(field.label || field.field_key || "Untitled Field");
+      const formattedValue = formatCanonValue(value);
+      if (label && formattedValue) {
+        lines.push(`- **${label}:** ${formattedValue}`);
+      }
+    });
+    lines.push("");
+  });
 }
 
 export function buildUniverseCanonDocument(context: UniverseContext) {
@@ -286,6 +468,7 @@ export function buildUniverseCanonDocument(context: UniverseContext) {
         markdownEscape(element.description) || "No description has been defined.",
         "",
       );
+      appendChronicleCanon(lines, element, context);
     });
   }
 
@@ -846,6 +1029,50 @@ export async function sendUniverseElementProposalRequest(options: {
     options.latestUserMessage,
     options.assistantReply,
   );
+}
+
+export async function sendChronicleDetailsRequest(options: {
+  vectorStoreId: string;
+  prompt: string;
+  settings: UniverseAiSettings;
+}) {
+  const response = await openAiRequest("/responses", {
+    method: "POST",
+    body: JSON.stringify({
+      model: getUniverseAiModel(options.settings.model),
+      instructions: [
+        "You generate strict JSON for reviewable Centralis Chronicle module suggestions.",
+        "Return only the requested JSON object with no markdown, prose, or code fences.",
+        "Use the attached universe canon through file search as factual setting context.",
+        "Do not treat missing canon as established fact.",
+        FICTIONAL_NAMING_PROMPT_SECTION,
+      ].join("\n\n"),
+      input: [{
+        role: "user",
+        content: options.prompt,
+      }],
+      tools: [{
+        type: "file_search",
+        vector_store_ids: [options.vectorStoreId],
+        max_num_results: 10,
+      }],
+      text: {
+        format: { type: "json_object" },
+        verbosity: options.settings.verbosity,
+      },
+      reasoning: {
+        effort: getResponsesReasoningEffort(options.settings.reasoningEffort),
+      },
+      max_output_tokens: 7000,
+    }),
+  });
+
+  const text = extractOpenAiResponseText(response);
+  if (!text) {
+    throw new Error("OpenAI did not return Chronicle module suggestions.");
+  }
+
+  return parseJsonObject(text);
 }
 
 export async function sendUniverseExpertRequest(options: {

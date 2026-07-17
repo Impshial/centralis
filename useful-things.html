@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=text-clear-input-1">
+  <link rel="stylesheet" href="styles.css?v=resolution-calculator-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -170,12 +170,12 @@
               class="useful-things-tab"
               type="button"
               role="tab"
-              id="useful-tab-color-tools"
+              id="useful-tab-storage"
               aria-selected="false"
-              aria-controls="useful-panel-color-tools"
-              data-useful-tab="color-tools"
+              aria-controls="useful-panel-storage"
+              data-useful-tab="storage"
             >
-              <span>Color Tools</span>
+              <span>Storage</span>
             </button>
           </nav>
 
@@ -397,6 +397,7 @@
                   <div class="calculator-add-group">
                     <p>Conversions</p>
                     <button type="button" role="menuitem" data-add-calculator-type="measurements">Measurements</button>
+                    <button type="button" role="menuitem" data-add-calculator-type="resolution">Resolution</button>
                   </div>
                   <div class="calculator-add-group">
                     <p>Health</p>
@@ -451,12 +452,50 @@
           <section
             class="useful-things-tab-panel"
             role="tabpanel"
-            id="useful-panel-color-tools"
-            aria-labelledby="useful-tab-color-tools"
-            data-useful-panel="color-tools"
+            id="useful-panel-storage"
+            aria-labelledby="useful-tab-storage"
+            data-useful-panel="storage"
             hidden
           >
-            <h2>Color Tools</h2>
+            <div class="storage-browser" data-storage-browser>
+              <aside class="storage-pane storage-tree-pane" data-storage-tree-pane>
+                <div class="storage-pane-heading">
+                  <h2>Storage</h2>
+                </div>
+                <div class="storage-tree" data-storage-tree role="tree" aria-label="Storage buckets and folders"></div>
+              </aside>
+              <div class="storage-pane-resizer" data-storage-resizer="left" role="separator" aria-orientation="vertical" aria-label="Resize folders pane"></div>
+              <section class="storage-center-pane" aria-label="Storage contents">
+                <header class="storage-center-header">
+                  <div class="storage-header-path">
+                    <nav class="storage-breadcrumbs" data-storage-breadcrumbs aria-label="Storage path"></nav>
+                    <p class="storage-status" data-storage-status role="status">Choose a storage bucket to begin.</p>
+                  </div>
+                  <div class="storage-view-controls" aria-label="Storage view">
+                    <button type="button" class="icon-button is-active" data-storage-view="grid" aria-label="Grid view"><ph-squares-four weight="bold"></ph-squares-four></button>
+                    <button type="button" class="icon-button" data-storage-view="list" aria-label="List view"><ph-list weight="bold"></ph-list></button>
+                  </div>
+                </header>
+                <div class="storage-items is-grid" data-storage-items aria-label="Storage objects"></div>
+                <button class="secondary-action storage-load-more" type="button" data-storage-load-more hidden>Load more</button>
+              </section>
+              <div class="storage-pane-resizer" data-storage-resizer="right" role="separator" aria-orientation="vertical" aria-label="Resize preview pane"></div>
+              <aside class="storage-pane storage-preview-pane" data-storage-preview-pane>
+                <div class="storage-preview-empty" data-storage-preview-empty>
+                  <ph-folder-open weight="duotone" aria-hidden="true"></ph-folder-open>
+                  <p>Select a file to inspect it.</p>
+                </div>
+                <div class="storage-preview-content" data-storage-preview-content hidden>
+                  <div class="storage-image-preview" data-storage-image-preview hidden><img data-storage-preview-image alt=""></div>
+                  <div class="storage-file-preview-icon" data-storage-file-preview-icon></div>
+                  <dl class="storage-file-metadata" data-storage-file-metadata></dl>
+                  <div class="storage-preview-actions">
+                    <button class="secondary-action" type="button" data-storage-open hidden>Open</button>
+                    <button class="primary-action" type="button" data-storage-download>Download</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </section>
         </div>
       </section>
@@ -495,9 +534,39 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" data-storage-migration-modal hidden>
+    <section
+      class="modal-dialog storage-migration-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="storage-migration-title"
+    >
+      <div class="modal-header">
+        <div>
+          <h2 id="storage-migration-title">Migrate Centralis Images</h2>
+          <p class="modal-subtitle">Move Centralis-managed images into the flat module folders. A completed migration removes each old verified object.</p>
+        </div>
+      </div>
+      <div class="storage-migration-notice">
+        <ph-warning weight="fill" aria-hidden="true"></ph-warning>
+        <p>Run a dry run first to review the scope. The full migration safely processes every batch automatically.</p>
+      </div>
+      <p class="storage-migration-status" data-storage-migration-status role="status">Ready to run a dry run.</p>
+      <details class="storage-migration-details" data-storage-migration-details hidden>
+        <summary data-storage-migration-summary>Migration details</summary>
+        <ul data-storage-migration-results></ul>
+      </details>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-storage-migration-close>Close</button>
+        <button class="secondary-action" type="button" data-storage-migration-dry-run>Run Dry Run</button>
+        <button class="primary-action" type="button" data-storage-migration-start disabled>Start Full Migration</button>
+      </div>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=centralis-header-1"></script>
-  <script src="useful-things.js?v=text-clear-input-1"></script>
+  <script src="script.js?v=global-ai-settings-1"></script>
+  <script src="useful-things.js?v=resolution-calculator-1"></script>
 </body>
 </html>

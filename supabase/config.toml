@@ -56,3 +56,33 @@ verify_jwt = true
 
 [functions.lookup-movie-poster-tmdb]
 verify_jwt = true
+
+[functions.browse-storage]
+verify_jwt = true
+
+[functions.get-storage-object-url]
+verify_jwt = true
+
+[functions.migrate-centralis-image-storage]
+verify_jwt = true
+
+[functions.get-image-generation-session]
+verify_jwt = true
+
+[functions.upload-image-generation-reference]
+verify_jwt = true
+
+[functions.generate-session-images]
+verify_jwt = true
+
+[functions.download-image-generation-zip]
+verify_jwt = true
+
+[functions.delete-image-generation-session]
+verify_jwt = true
+
+[functions.get-image-generation-asset-url]
+verify_jwt = true
+
+[functions.cancel-image-generation]
+verify_jwt = true

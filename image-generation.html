@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Generation | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="styles.css?v=image-generation-message-actions-6">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="image-generation">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+    <main class="image-generation-page" aria-labelledby="image-generation-title">
+      <header class="image-generation-page-header">
+        <div>
+          <h1 id="image-generation-title">Image Generation</h1>
+        </div>
+        <button class="primary-action image-generation-new-session" type="button" data-image-new-session>
+          <ph-plus aria-hidden="true"></ph-plus> New Generation
+        </button>
+      </header>
+
+      <section class="image-generation-layout" aria-label="Image generation workspace">
+        <aside class="image-generation-thumbnail-rail" aria-label="Generated images">
+          <div class="image-generation-thumbnail-rail-header">
+            <h2>Images</h2>
+            <div class="image-generation-thumbnail-actions">
+              <button class="icon-button" type="button" data-image-download-selected disabled title="Download selected image" aria-label="Download selected image">
+                <ph-download-simple aria-hidden="true"></ph-download-simple>
+              </button>
+              <button class="icon-button" type="button" data-image-download-all disabled title="Download all generated images" aria-label="Download all generated images">
+                <ph-archive aria-hidden="true"></ph-archive>
+              </button>
+            </div>
+          </div>
+          <div class="image-generation-session-thumbnails" data-image-session-thumbnails aria-label="Generated image thumbnails"></div>
+        </aside>
+
+        <section class="image-generation-chat-panel">
+          <div class="image-generation-chat-header">
+            <div>
+              <h2 data-image-session-title>New Generation</h2>
+            </div>
+            <p class="image-generation-status" data-image-session-status aria-live="polite"></p>
+          </div>
+
+          <div class="image-generation-conversation" data-image-conversation aria-live="polite">
+            <div class="image-generation-empty-state" data-image-empty-state>
+              <ph-image-square aria-hidden="true"></ph-image-square>
+              <h3>Start a generation</h3>
+              <p>Describe what you want to create. Add references when you want to edit or build from existing images.</p>
+            </div>
+          </div>
+
+          <form class="image-generation-composer" data-image-composer>
+            <div class="image-generation-attachments" data-image-attachments hidden></div>
+            <details class="image-generation-reference-picker" data-image-reference-picker>
+              <summary><ph-images-square aria-hidden="true"></ph-images-square> Session references <span data-image-reference-count>0 selected</span></summary>
+              <div data-image-reference-options></div>
+            </details>
+            <div class="image-generation-composer-row">
+              <input class="visually-hidden" id="image-generation-file-input" data-image-file-input type="file" accept="image/png,image/jpeg,image/webp" multiple>
+              <label class="icon-button image-generation-attach-button" for="image-generation-file-input" title="Add reference images" aria-label="Add reference images">
+                <ph-paperclip aria-hidden="true"></ph-paperclip>
+              </label>
+              <textarea data-image-prompt rows="1" maxlength="32000" placeholder="Describe the image you want to generate…" required></textarea>
+              <button class="primary-action image-generation-send" type="submit" data-image-send>
+                <span>Send</span><ph-paper-plane-tilt-fill aria-hidden="true"></ph-paper-plane-tilt-fill>
+              </button>
+            </div>
+            <label class="image-generation-last-image-option">
+              <input type="checkbox" data-image-use-last>
+              <span>Use Last Generated Image</span>
+            </label>
+            <p class="image-generation-composer-error" data-image-composer-error role="alert"></p>
+          </form>
+        </section>
+
+        <aside class="image-generation-sidebar-section image-generation-parameters-panel" aria-label="Generation parameters">
+            <h2>Parameters</h2>
+            <div class="image-generation-parameter-grid">
+              <label>Model
+                <select data-image-param="model" data-image-model-select></select>
+              </label>
+              <label>Output images
+                <input data-image-param="n" type="number" min="1" max="4" value="1">
+              </label>
+              <label data-image-size-field>Size
+                <select data-image-param="size">
+                  <option value="auto">Automatic</option>
+                  <option value="1024x1024">Square</option>
+                  <option value="1024x1536">Portrait</option>
+                  <option value="1536x1024">Landscape</option>
+                  <option value="1536x864">Widescreen</option>
+                  <option value="2560x1440">2K landscape</option>
+                  <option value="1440x2560">2K portrait</option>
+                  <option value="3840x2160">4K landscape</option>
+                  <option value="2160x3840">4K portrait</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <div class="image-generation-custom-size" data-image-custom-size hidden>
+                <label>Width <input data-image-param="width" type="number" min="16" max="3840" step="16" placeholder="1024"></label>
+                <span>×</span>
+                <label>Height <input data-image-param="height" type="number" min="16" max="3840" step="16" placeholder="1024"></label>
+              </div>
+              <label data-image-quality-field>Quality
+                <select data-image-param="quality">
+                  <option value="auto">Auto</option>
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+              <label>Format
+                <select data-image-param="format">
+                  <option value="png" selected>PNG</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="webp">WebP</option>
+                </select>
+              </label>
+              <label data-image-compression-field hidden>Compression
+                <input data-image-param="compression" type="number" min="0" max="100" value="90">
+              </label>
+              <label data-image-background-field>Background
+                <select data-image-param="background">
+                  <option value="auto" selected>Auto</option>
+                  <option value="opaque">Opaque</option>
+                </select>
+              </label>
+              <label>Moderation
+                <select data-image-param="moderation">
+                  <option value="auto">Auto</option>
+                  <option value="low" selected>Low</option>
+                </select>
+              </label>
+              <p class="image-generation-model-support-note" data-image-model-support-note></p>
+            </div>
+        </aside>
+        <aside class="image-generation-sidebar-section image-generation-sessions-section" aria-label="Generation sessions">
+            <div class="image-generation-session-heading">
+              <h2>Sessions</h2>
+              <button class="icon-button" type="button" data-image-new-session title="New Generation" aria-label="New Generation"><ph-plus aria-hidden="true"></ph-plus></button>
+            </div>
+            <div class="image-generation-session-list" data-image-session-list></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <div class="modal-backdrop image-generation-viewer-backdrop" id="image-generation-viewer-modal" hidden>
+    <section class="modal-dialog image-generation-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="image-generation-viewer-title">
+      <header class="image-generation-viewer-header">
+        <h2 id="image-generation-viewer-title" data-image-viewer-title>Generated image</h2>
+        <div class="image-generation-viewer-actions">
+          <button type="button" class="secondary-action" data-image-viewer-open>
+            <ph-arrow-square-out aria-hidden="true"></ph-arrow-square-out>
+            Open in New Tab
+          </button>
+          <button type="button" class="modal-close" aria-label="Close image viewer" data-image-viewer-close>
+            <ph-x aria-hidden="true"></ph-x>
+          </button>
+        </div>
+      </header>
+      <div class="image-generation-viewer-stage">
+        <img src="" alt="" data-image-viewer-image>
+      </div>
+    </section>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=image-generation-7"></script>
+  <script src="image-generation.js?v=image-generation-openai-controls-1"></script>
+</body>
+</html>

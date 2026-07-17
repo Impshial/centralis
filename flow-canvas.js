@@ -1755,6 +1755,24 @@
     verbosity: "medium"
   };
 
+  function normalizeUniverseAiSettings(settings = {}) {
+    const model = String(settings.ai_model || settings.model || "").trim();
+    const reasoningEffort = String(settings.ai_reasoning_effort || settings.reasoningEffort || "").trim().toLowerCase();
+    const verbosity = String(settings.ai_verbosity || settings.verbosity || "").trim().toLowerCase();
+
+    return {
+      model: UNIVERSE_AI_MODELS.some((item) => item.value === model)
+        ? model
+        : DEFAULT_UNIVERSE_AI_SETTINGS.model,
+      reasoningEffort: UNIVERSE_AI_EFFORTS.includes(reasoningEffort)
+        ? reasoningEffort
+        : DEFAULT_UNIVERSE_AI_SETTINGS.reasoningEffort,
+      verbosity: UNIVERSE_AI_VERBOSITIES.includes(verbosity)
+        ? verbosity
+        : DEFAULT_UNIVERSE_AI_SETTINGS.verbosity
+    };
+  }
+
   function capitalize(value) {
     const text = String(value || "");
     return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : "";
@@ -2294,7 +2312,7 @@
     renderUniverseAiChatContent(controls.content, state, actions);
   }
 
-  function renderImageGallery(images, nodeId) {
+  function renderImageGallery(images, nodeId, variantClass = "") {
     if (!images?.length) {
       return '<p class="details-empty">No images yet.</p>';
     }
@@ -2304,7 +2322,7 @@
     const primaryIndex = 0;
 
     return `
-      <div class="image-gallery">
+      <div class="image-gallery ${escapeHtml(variantClass)}">
         <button class="image-primary" type="button" data-image-primary data-node-id="${escapeHtml(nodeId)}" data-image-id="${escapeHtml(primaryImage.id)}">
           <img src="${escapeHtml(primaryImage.image_url)}" alt="" data-image-primary-img>
           <span data-image-counter>${primaryIndex + 1} / ${images.length}</span>
@@ -2756,7 +2774,7 @@
     `).join("");
   }
 
-  function renderChroniclePreviewModules(data) {
+  function renderChroniclePreviewModules(data, { hideEmptyFields = false } = {}) {
     const modules = data?.modules || [];
     const sectionsById = new Map((data?.sections || []).map((section) => [section.id, section]));
     const valuesByFieldId = new Map((data?.values || []).map((value) => [value.template_field_id, value]));
@@ -2772,20 +2790,28 @@
       return '<p class="details-empty">No Chronicle modules assigned.</p>';
     }
 
-    return modules.map((module) => {
+    const moduleMarkup = modules.map((module) => {
       const sectionId = getChronicleModuleSectionId(module);
       const section = sectionsById.get(sectionId);
       const fields = fieldsBySectionId.get(sectionId) || [];
+      const visibleFields = hideEmptyFields
+        ? fields.filter((field) => hasMeaningfulValue(getFieldStoredValue(valuesByFieldId, field)))
+        : fields;
+      if (hideEmptyFields && !visibleFields.length) {
+        return "";
+      }
       return `
         <section class="rich-template-section chronicle-preview-module chronicle-wiki-section">
           <div class="rich-template-section-header">
             <h3>${escapeHtml(section?.name || module.title || "Untitled Module")}</h3>
             ${section?.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
           </div>
-          ${renderChronicleWikiFields(fields, valuesByFieldId)}
+          ${renderChronicleWikiFields(visibleFields, valuesByFieldId)}
         </section>
       `;
-    }).join("");
+    }).filter(Boolean).join("");
+
+    return moduleMarkup || '<p class="details-empty">No populated Chronicle fields yet.</p>';
   }
 
   function renderCustomFields(customFields = [], mode = "edit") {
@@ -4156,6 +4182,7 @@
     const [aiChatPopoutOpen, setAiChatPopoutOpen] = React.useState(false);
     const aiChatScrollToBottomRef = React.useRef(false);
     const [aiExpertSettings, setAiExpertSettings] = React.useState(DEFAULT_UNIVERSE_AI_SETTINGS);
+    const aiExpertSettingsRef = React.useRef(DEFAULT_UNIVERSE_AI_SETTINGS);
     const [aiExpertSettingsOpen, setAiExpertSettingsOpen] = React.useState(false);
     const [aiExpertSettingsExpanded, setAiExpertSettingsExpanded] = React.useState("");
     const [aiChatState, setAiChatState] = React.useState({
@@ -4179,6 +4206,32 @@
     const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
+
+    React.useEffect(() => {
+      let active = true;
+      const applySettings = (settings) => {
+        if (!active) return;
+        const normalized = normalizeUniverseAiSettings(settings);
+        aiExpertSettingsRef.current = normalized;
+        setAiExpertSettings(normalized);
+      };
+      const loadSettings = async () => {
+        try {
+          const settings = await window.centralisGetUserSettings?.();
+          if (settings) applySettings(settings);
+        } catch (error) {
+          console.warn("Could not load global AI settings.", error);
+        }
+      };
+      const handleSettingsChanged = (event) => applySettings(event.detail?.settings);
+
+      loadSettings();
+      window.addEventListener("centralis:user-settings-changed", handleSettingsChanged);
+      return () => {
+        active = false;
+        window.removeEventListener("centralis:user-settings-changed", handleSettingsChanged);
+      };
+    }, []);
     const nodesRef = React.useRef(nodes);
     const edgesRef = React.useRef(edges);
     const undoStackRef = React.useRef([]);
@@ -4851,6 +4904,36 @@
       }
     }, [fetchUniverseAiChat, syncUniverseAiSource]);
 
+    const saveAiExpertSettings = React.useCallback(async (change) => {
+      const previous = aiExpertSettingsRef.current;
+      const requested = typeof change === "function" ? change(previous) : change;
+      const next = normalizeUniverseAiSettings(requested);
+      aiExpertSettingsRef.current = next;
+      setAiExpertSettings(next);
+
+      try {
+        const saved = await window.centralisUpdateUserSettings?.({
+          ai_model: next.model,
+          ai_reasoning_effort: next.reasoningEffort,
+          ai_verbosity: next.verbosity
+        });
+        if (!saved) {
+          throw new Error("Global AI settings are not available.");
+        }
+        const normalized = normalizeUniverseAiSettings(saved);
+        aiExpertSettingsRef.current = normalized;
+        setAiExpertSettings(normalized);
+      } catch (error) {
+        console.warn("Could not save global AI settings.", error);
+        aiExpertSettingsRef.current = previous;
+        setAiExpertSettings(previous);
+        setAiChatState((current) => ({
+          ...current,
+          error: "Could not save your AI settings. Please try again."
+        }));
+      }
+    }, []);
+
     const sendUniverseAiMessage = React.useCallback(async (message) => {
       const cleanMessage = String(message || "").trim();
       if (!cleanMessage) {
@@ -4882,10 +4965,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             universeId,
-            message: cleanMessage,
-            model: aiExpertSettings.model,
-            reasoningEffort: aiExpertSettings.reasoningEffort,
-            verbosity: aiExpertSettings.verbosity
+            message: cleanMessage
           })
         });
         aiChatScrollToBottomRef.current = true;
@@ -4906,7 +4986,7 @@
           statusMessage: ""
         }));
       }
-    }, [aiExpertSettings]);
+    }, []);
 
     const consumeAiChatScrollRequest = React.useCallback(() => {
       aiChatScrollToBottomRef.current = false;
@@ -5562,6 +5642,7 @@
       const templateMain = document.querySelector("[data-wide-template-main]");
       const templateStatus = document.querySelector("[data-template-editor-status]");
       const wideAddTemplateButton = document.querySelector("[data-wide-add-template]");
+      const wideImportTemplateButton = document.querySelector("[data-wide-import-template]");
       const templateNestedDialog = document.querySelector("[data-template-nested-dialog]");
       const templateNestedTitle = document.querySelector("[data-template-nested-title]");
       const templateNestedContent = document.querySelector("[data-template-nested-content]");
@@ -5572,6 +5653,7 @@
       let activeEditor = null;
       let activeNestedEditor = null;
       let templateEditorTypeId = null;
+      let templateEditorTypeOverride = null;
       let selectedTemplateId = null;
       let templatesByTypeId = new Map();
       let sectionsByTemplateId = new Map();
@@ -5581,6 +5663,18 @@
       let selectedIcon = DEFAULT_ELEMENT_TYPE_ICON;
       let selectedColor = DEFAULT_ELEMENT_TYPE_COLOR;
       let iconNames = FALLBACK_PHOSPHOR_ICONS;
+      const TEMPLATE_IMPORT_FORMAT = "centralis.element-template.v1";
+      const TEMPLATE_IMPORT_VERSION = 1;
+      const SUPPORTED_TEMPLATE_FIELD_TYPES = ["text", "textarea", "rich_text", "number", "date", "checkbox", "select", "multi_select", "url"];
+      let templateImportInput = document.querySelector("[data-template-import-file]");
+      if (!templateImportInput) {
+        templateImportInput = document.createElement("input");
+        templateImportInput.type = "file";
+        templateImportInput.accept = "application/json,.json";
+        templateImportInput.hidden = true;
+        templateImportInput.dataset.templateImportFile = "";
+        document.body.appendChild(templateImportInput);
+      }
 
       function setTypeStatus(message, type) {
         if (!status) {
@@ -5599,14 +5693,200 @@
         target.classList.toggle("is-success", type === "success");
       }
 
+      function getTemplateImportSchema() {
+        const fieldSchema = {
+          type: "object",
+          additionalProperties: false,
+          required: ["field_key", "label", "field_type"],
+          properties: {
+            field_key: { type: "string", minLength: 1, pattern: "^[a-z][a-z0-9_]*$", description: "Unique snake_case key within this template." },
+            label: { type: "string", minLength: 1 },
+            field_type: { type: "string", enum: SUPPORTED_TEMPLATE_FIELD_TYPES },
+            section: { type: "string", description: "Optional section key or section name." },
+            description: { type: "string" },
+            placeholder: { type: "string" },
+            default_value: { type: "string" },
+            options: { type: "array", items: { type: "string" }, description: "Required for select and multi_select fields." },
+            is_required: { type: "boolean", default: false },
+            sort_order: { type: "integer", minimum: 0 }
+          }
+        };
+        return {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://centralis.app/schemas/element-template.v1.json",
+          title: "Centralis Element Template Import",
+          description: "One editable Chronicle template for one Centralis Element Type.",
+          type: "object",
+          additionalProperties: false,
+          required: ["format", "version", "template", "fields"],
+          properties: {
+            format: { const: TEMPLATE_IMPORT_FORMAT },
+            version: { const: TEMPLATE_IMPORT_VERSION },
+            template: {
+              type: "object",
+              additionalProperties: false,
+              required: ["name"],
+              properties: {
+                name: { type: "string", minLength: 1 },
+                description: { type: "string" }
+              }
+            },
+            sections: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["key", "name"],
+                properties: {
+                  key: { type: "string", minLength: 1, description: "Unique stable identifier referenced by fields.section." },
+                  name: { type: "string", minLength: 1 },
+                  description: { type: "string" },
+                  sort_order: { type: "integer", minimum: 0 }
+                }
+              }
+            },
+            fields: { type: "array", minItems: 1, items: fieldSchema }
+          }
+        };
+      }
+
+      function getTemplateImportExample() {
+        return {
+          format: TEMPLATE_IMPORT_FORMAT,
+          version: TEMPLATE_IMPORT_VERSION,
+          template: {
+            name: "Settlement Template",
+            description: "A flexible template for fictional settlements."
+          },
+          sections: [
+            { key: "overview", name: "Overview", description: "Core identity and purpose.", sort_order: 10 },
+            { key: "culture", name: "Culture", description: "Everyday life and social patterns.", sort_order: 20 }
+          ],
+          fields: [
+            { field_key: "summary", label: "Summary", field_type: "textarea", section: "overview", description: "A concise overview of the settlement.", is_required: true, sort_order: 10 },
+            { field_key: "population", label: "Population", field_type: "number", section: "overview", placeholder: "Approximate population", sort_order: 20 },
+            { field_key: "government", label: "Government", field_type: "select", section: "culture", options: ["Council", "Monarchy", "Assembly", "Corporate", "Other"], sort_order: 10 },
+            { field_key: "customs", label: "Customs", field_type: "rich_text", section: "culture", sort_order: 20 }
+          ]
+        };
+      }
+
+      function getTemplateLlmInstructions() {
+        return `Return only valid JSON that conforms to the Centralis Element Template Import JSON Schema. Create exactly one template. Do not include Markdown fences, prose, comments, or fields outside the schema. Use only the permitted field_type values. Every field_key must be unique snake_case. For select and multi_select fields, include a non-empty options array. Use section keys defined in sections when assigning fields.`;
+      }
+
+      function getImportOptions(rawOptions, rawAllowedValues) {
+        if (Array.isArray(rawOptions)) return rawOptions.map((item) => String(item).trim()).filter(Boolean);
+        if (Array.isArray(rawAllowedValues)) return rawAllowedValues.map((item) => String(item).trim()).filter(Boolean);
+        if (rawOptions && typeof rawOptions === "object" && Array.isArray(rawOptions.choices)) {
+          return rawOptions.choices.map((item) => String(item).trim()).filter(Boolean);
+        }
+        return [];
+      }
+
+      function normalizeImportedTemplatePayload(payload) {
+        if (!payload || typeof payload !== "object") {
+          throw new Error("The selected file is not a JSON object.");
+        }
+        const isCurrentExport = payload.format === RICH_DETAILS_EXPORT_FORMAT;
+        const isImportFormat = payload.format === TEMPLATE_IMPORT_FORMAT;
+        if (!isCurrentExport && !isImportFormat) {
+          throw new Error("This is not a supported Centralis template JSON file.");
+        }
+        if (isImportFormat && Number(payload.version) !== TEMPLATE_IMPORT_VERSION) {
+          throw new Error(`Unsupported template import version: ${payload.version || "missing"}.`);
+        }
+        const templateName = String(payload.template?.name || "").trim();
+        if (!templateName) throw new Error("Template name is required.");
+        if (!Array.isArray(payload.fields) || !payload.fields.length) {
+          throw new Error("The template must contain at least one field.");
+        }
+
+        const sections = [];
+        const sectionByKey = new Map();
+        const addSection = (rawSection, fallbackOrder) => {
+          const name = String(rawSection?.name || rawSection || "").trim();
+          if (!name) return null;
+          const key = normalizeFieldKey(rawSection?.key || name);
+          if (!key) throw new Error(`Section "${name}" needs a valid key.`);
+          if (sectionByKey.has(key)) {
+            if (isImportFormat) throw new Error(`Duplicate section key "${key}".`);
+            return sectionByKey.get(key);
+          }
+          const section = {
+            key,
+            name,
+            description: String(rawSection?.description || "").trim(),
+            sort_order: Number.isFinite(Number(rawSection?.sort_order)) ? Number(rawSection.sort_order) : fallbackOrder
+          };
+          sections.push(section);
+          sectionByKey.set(key, section);
+          return section;
+        };
+
+        if (Array.isArray(payload.sections)) {
+          payload.sections.forEach((section, index) => addSection(section, (index + 1) * 10));
+        }
+
+        const fields = payload.fields.map((rawField, index) => {
+          const label = String(rawField?.label || rawField?.field_key || "").trim();
+          const suppliedFieldKey = String(rawField?.field_key || "").trim();
+          const fieldKey = normalizeFieldKey(suppliedFieldKey || label);
+          const fieldType = String(rawField?.field_type || "textarea").trim().toLowerCase();
+          if (!label || !fieldKey) throw new Error(`Field ${index + 1} needs a label and field_key.`);
+          if (isImportFormat && suppliedFieldKey !== fieldKey) {
+            throw new Error(`Field "${label}" must use a snake_case field_key.`);
+          }
+          if (!SUPPORTED_TEMPLATE_FIELD_TYPES.includes(fieldType)) {
+            throw new Error(`Field "${label}" uses unsupported type "${fieldType}".`);
+          }
+          const rawSection = String(rawField?.section || "").trim();
+          let section = rawSection ? sectionByKey.get(normalizeFieldKey(rawSection)) : null;
+          if (rawSection && !section) {
+            if (!isCurrentExport) {
+              throw new Error(`Field "${label}" references unknown section "${rawSection}".`);
+            }
+            section = addSection(rawSection, (sections.length + 1) * 10);
+          }
+          const options = getImportOptions(rawField?.options, rawField?.allowed_values);
+          if (["select", "multi_select"].includes(fieldType) && !options.length) {
+            throw new Error(`Field "${label}" needs at least one option.`);
+          }
+          return {
+            field_key: fieldKey,
+            label,
+            field_type: fieldType,
+            section_key: section?.key || "",
+            description: String(rawField?.description || "").trim(),
+            placeholder: String(rawField?.placeholder || "").trim(),
+            default_value: String(rawField?.default_value || "").trim(),
+            options,
+            is_required: rawField?.is_required === true,
+            sort_order: Number.isFinite(Number(rawField?.sort_order)) ? Number(rawField.sort_order) : (index + 1) * 10
+          };
+        });
+
+        const fieldKeys = new Set();
+        fields.forEach((field) => {
+          if (fieldKeys.has(field.field_key)) throw new Error(`Duplicate field_key "${field.field_key}".`);
+          fieldKeys.add(field.field_key);
+        });
+
+        return {
+          template: { name: templateName, description: String(payload.template?.description || "").trim() },
+          sections,
+          fields
+        };
+      }
+
       function createTypeIconMarkup(iconName, color) {
         const icon = sanitizeIconName(iconName || DEFAULT_ELEMENT_TYPE_ICON);
         const safeColor = sanitizeColor(color || DEFAULT_ELEMENT_TYPE_COLOR);
         return `<span class="element-type-icon" style="--type-color: ${escapeHtml(safeColor)}" aria-hidden="true"><ph-${escapeHtml(icon)} weight="duotone"></ph-${escapeHtml(icon)}></span>`;
       }
 
-      async function refreshTypeTemplateData() {
-        const typeIds = elementTypes.map((type) => type.id).filter(Boolean);
+      async function refreshTypeTemplateData(typeList = elementTypes) {
+        const typeIds = typeList.map((type) => type.id).filter(Boolean);
         templatesByTypeId = new Map();
         sectionsByTemplateId = new Map();
         fieldsByTemplateId = new Map();
@@ -5678,6 +5958,49 @@
         if (!activeNestedEditor) return "";
         const data = activeNestedEditor.data || {};
         const isEdit = activeNestedEditor.mode === "edit";
+        if (activeNestedEditor.kind === "import") {
+          const imported = data.imported;
+          const creatingType = data.targetMode === "new";
+          return `
+            <form class="element-type-editor nested-template-editor template-import-editor" data-template-import-editor>
+              <p class="template-import-summary"><strong>${escapeHtml(imported.template.name)}</strong> — ${imported.sections.length} ${imported.sections.length === 1 ? "section" : "sections"}, ${imported.fields.length} ${imported.fields.length === 1 ? "field" : "fields"}.</p>
+              <fieldset class="template-import-target">
+                <legend>Import Into</legend>
+                <label>
+                  <input type="radio" name="import-target-mode" value="existing"${creatingType ? "" : " checked"}>
+                  Existing Element Type
+                </label>
+                <select name="import-existing-type"${creatingType ? " disabled" : ""}>
+                  ${[...elementTypes].sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""))).map((type) => `<option value="${escapeHtml(type.id)}"${type.id === (data.existingTypeId || templateEditorTypeId) ? " selected" : ""}>${escapeHtml(type.name)}</option>`).join("")}
+                </select>
+                <label>
+                  <input type="radio" name="import-target-mode" value="new"${creatingType ? " checked" : ""}>
+                  New Element Type
+                </label>
+              </fieldset>
+              <div class="template-import-new-type-fields"${creatingType ? "" : " hidden"}>
+                <div class="template-editor-grid">
+                  <label class="template-form-field">
+                    <span>Type Name</span>
+                    <input type="text" name="import-new-type-name" value="${escapeHtml(data.newTypeName || "")}" placeholder="Element type name" autocomplete="off">
+                  </label>
+                  <label class="template-form-field">
+                    <span>Icon</span>
+                    <input type="text" name="import-new-type-icon" value="${escapeHtml(data.newTypeIcon || DEFAULT_ELEMENT_TYPE_ICON)}" placeholder="Phosphor icon name">
+                  </label>
+                  <label class="template-form-field">
+                    <span>Color</span>
+                    <input type="text" name="import-new-type-color" value="${escapeHtml(data.newTypeColor || DEFAULT_ELEMENT_TYPE_COLOR)}" placeholder="#6366f1">
+                  </label>
+                </div>
+              </div>
+              <div class="type-editor-actions">
+                <button class="secondary-action compact-action" type="button" data-cancel-nested-editor>Cancel</button>
+                <button class="primary-action compact-action" type="submit">Import Template</button>
+              </div>
+            </form>
+          `;
+        }
         if (activeNestedEditor.kind === "template") {
           return `
             <form class="element-type-editor nested-template-editor" data-template-editor>
@@ -5738,7 +6061,7 @@
               <label class="template-form-field">
                 <span>Field Type</span>
                 <select name="field-type">
-                  ${["text", "textarea", "rich_text", "number", "date", "checkbox", "select", "multi_select", "url"].map((type) => `<option value="${type}"${fieldType === type ? " selected" : ""}>${type.replace("_", " ")}</option>`).join("")}
+                  ${SUPPORTED_TEMPLATE_FIELD_TYPES.map((type) => `<option value="${type}"${fieldType === type ? " selected" : ""}>${type.replace("_", " ")}</option>`).join("")}
                 </select>
               </label>
               <label class="template-form-field">
@@ -5793,10 +6116,10 @@
             <span class="template-row-meta">${escapeHtml(getTemplateFieldType(field))}${field.is_required ? " *" : ""}</span>
             <span class="template-row-order">${escapeHtml(field.sort_order ?? 0)}</span>
             <div class="element-type-actions template-row-actions">
-              <button type="button" data-edit-field="${escapeHtml(field.id)}" aria-label="Edit field"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
-              ${field.is_default
-                ? `<button type="button" data-toggle-field-hidden="${escapeHtml(field.id)}" aria-label="${field.is_hidden ? "Show" : "Hide"} field"><ph-${field.is_hidden ? "eye" : "eye-slash"} weight="bold" aria-hidden="true"></ph-${field.is_hidden ? "eye" : "eye-slash"}></button>`
-                : `<button type="button" data-delete-field="${escapeHtml(field.id)}" aria-label="Delete field"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>`}
+              ${field.is_default || template.is_default
+                ? ""
+                : `<button type="button" data-edit-field="${escapeHtml(field.id)}" aria-label="Edit field"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
+                  <button type="button" data-delete-field="${escapeHtml(field.id)}" aria-label="Delete field"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>`}
             </div>
           </div>
         `).join("");
@@ -5820,7 +6143,7 @@
           <div class="template-subgroup">
             <div class="template-subgroup-header">
               <strong>Sections</strong>
-              <button class="secondary-action compact-action" type="button" data-add-section="${escapeHtml(template.id)}">Add Section</button>
+              ${template.is_default ? "" : `<button class="secondary-action compact-action" type="button" data-add-section="${escapeHtml(template.id)}">Add Section</button>`}
             </div>
             ${activeNestedEditor?.kind === "section" && activeNestedEditor.mode === "add" && activeNestedEditor.templateId === template.id ? createNestedEditorMarkup() : ""}
             ${sections.length ? sections.map((section) => `
@@ -5829,24 +6152,24 @@
                 <span class="template-row-meta">${escapeHtml(section.description || "")}</span>
                 <span class="template-row-order">${escapeHtml(section.sort_order ?? 0)}</span>
                 <div class="element-type-actions template-row-actions">
-                  <button type="button" data-add-field="${escapeHtml(template.id)}" data-field-section="${escapeHtml(section.id)}" aria-label="Add field to section"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>
-                  <button type="button" data-edit-section="${escapeHtml(section.id)}" aria-label="Edit section"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
-                  ${section.is_default
-                    ? `<button type="button" data-toggle-section-hidden="${escapeHtml(section.id)}" aria-label="${section.is_hidden ? "Show" : "Hide"} section"><ph-${section.is_hidden ? "eye" : "eye-slash"} weight="bold" aria-hidden="true"></ph-${section.is_hidden ? "eye" : "eye-slash"}></button>`
-                    : `<button type="button" data-delete-section="${escapeHtml(section.id)}" aria-label="Delete section"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>`}
+                  ${section.is_default || template.is_default
+                    ? ""
+                    : `<button type="button" data-add-field="${escapeHtml(template.id)}" data-field-section="${escapeHtml(section.id)}" aria-label="Add field to section"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>
+                      <button type="button" data-edit-section="${escapeHtml(section.id)}" aria-label="Edit section"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
+                      <button type="button" data-delete-section="${escapeHtml(section.id)}" aria-label="Delete section"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>`}
                 </div>
               </div>
               <div class="section-field-list">
                 ${renderFieldRows(template, fieldsBySectionId.get(section.id) || [])}
               </div>
             `).join("") : '<p class="template-empty">No sections yet.</p>'}
-            ${unsectionedFields.length || (activeNestedEditor?.kind === "field" && activeNestedEditor.mode === "add" && activeNestedEditor.templateId === template.id && !activeNestedEditor.data?.section_id) ? `
+            ${unsectionedFields.length || (!template.is_default && activeNestedEditor?.kind === "field" && activeNestedEditor.mode === "add" && activeNestedEditor.templateId === template.id && !activeNestedEditor.data?.section_id) ? `
               <div class="template-child-row unsectioned-fields-row">
                 <span class="template-row-title">Unsectioned</span>
                 <span class="template-row-meta">Fields without a section</span>
                 <span class="template-row-order"></span>
                 <div class="element-type-actions template-row-actions">
-                  <button type="button" data-add-field="${escapeHtml(template.id)}" aria-label="Add unsectioned field"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>
+                  ${template.is_default ? "" : `<button type="button" data-add-field="${escapeHtml(template.id)}" aria-label="Add unsectioned field"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>`}
                 </div>
               </div>
               <div class="section-field-list">
@@ -5868,6 +6191,9 @@
               <span class="element-type-expand" aria-hidden="true"></span>
               ${createTypeIconMarkup(type.icon, type.color)}
               <span class="element-type-name">${escapeHtml(type.name)}</span>
+              <button class="secondary-action compact-action element-type-template-button" type="button" data-open-type-templates="${escapeHtml(type.id)}">
+                Templates
+              </button>
               <div class="element-type-actions">
                 <button type="button" data-edit-type="${escapeHtml(type.id)}" aria-label="Edit ${escapeHtml(type.name)}"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
                 <button type="button" data-delete-type="${escapeHtml(type.id)}" aria-label="Delete ${escapeHtml(type.name)}"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>
@@ -5878,7 +6204,8 @@
       }
 
       function getSelectedTemplateEditorType() {
-        return getElementTypeById(templateEditorTypeId);
+        return getElementTypeById(templateEditorTypeId)
+          || (templateEditorTypeOverride?.id === templateEditorTypeId ? templateEditorTypeOverride : null);
       }
 
       function getSelectedTemplate() {
@@ -5897,6 +6224,9 @@
         }
         if (wideAddTemplateButton) {
           wideAddTemplateButton.disabled = !type;
+        }
+        if (wideImportTemplateButton) {
+          wideImportTemplateButton.disabled = !type;
         }
 
         templateList.innerHTML = templates.length ? templates.map((template) => `
@@ -5932,10 +6262,10 @@
             </div>
             <div class="wide-template-actions">
               <button class="secondary-action compact-action" type="button" data-duplicate-template="${escapeHtml(selectedTemplate.id)}">Duplicate</button>
-              <button class="secondary-action compact-action" type="button" data-edit-template="${escapeHtml(selectedTemplate.id)}">Edit</button>
               ${selectedTemplate.is_default
-                ? '<button class="secondary-action compact-action" type="button" disabled>Default</button>'
-                : `<button class="secondary-action compact-action danger-action" type="button" data-delete-template="${escapeHtml(selectedTemplate.id)}">Delete</button>`}
+                ? '<button class="secondary-action compact-action" type="button" disabled>Read-only</button>'
+                : `<button class="secondary-action compact-action" type="button" data-edit-template="${escapeHtml(selectedTemplate.id)}">Edit</button>
+                  <button class="secondary-action compact-action danger-action" type="button" data-delete-template="${escapeHtml(selectedTemplate.id)}">Delete</button>`}
             </div>
           </div>
           ${isTemplateEditorOpen ? createNestedEditorMarkup() : ""}
@@ -5948,13 +6278,15 @@
 
       function renderNestedTemplateDialog() {
         if (!templateNestedDialog || !templateNestedContent || !templateNestedTitle) return;
-        if (!activeNestedEditor || !["section", "field"].includes(activeNestedEditor.kind)) {
+        if (!activeNestedEditor || !["section", "field", "import"].includes(activeNestedEditor.kind)) {
           templateNestedDialog.hidden = true;
           templateNestedContent.innerHTML = "";
           return;
         }
-        const noun = activeNestedEditor.kind === "section" ? "Section" : "Field";
-        templateNestedTitle.textContent = `${activeNestedEditor.mode === "edit" ? "Edit" : "Add"} ${noun}`;
+        const noun = activeNestedEditor.kind === "section" ? "Section" : activeNestedEditor.kind === "field" ? "Field" : "Template JSON";
+        templateNestedTitle.textContent = activeNestedEditor.kind === "import"
+          ? "Import Template JSON"
+          : `${activeNestedEditor.mode === "edit" ? "Edit" : "Add"} ${noun}`;
         templateNestedContent.innerHTML = createNestedEditorMarkup();
         templateNestedDialog.hidden = false;
         requestAnimationFrame(() => {
@@ -5964,6 +6296,7 @@
 
       async function openTemplateEditor(typeId) {
         templateEditorTypeId = typeId;
+        templateEditorTypeOverride = null;
         activeNestedEditor = null;
         setTemplateStatus("");
         try {
@@ -5987,6 +6320,7 @@
         }
         activeNestedEditor = null;
         templateEditorTypeId = null;
+        templateEditorTypeOverride = null;
         selectedTemplateId = null;
         setTemplateStatus("");
       }
@@ -6261,9 +6595,12 @@
       }
 
       function handleListClick(event) {
+        const templatesButton = event.target.closest("[data-open-type-templates]");
         const editButton = event.target.closest("[data-edit-type]");
         const deleteButton = event.target.closest("[data-delete-type]");
-        if (editButton) {
+        if (templatesButton) {
+          openTemplateEditor(templatesButton.dataset.openTypeTemplates);
+        } else if (editButton) {
           openEditor("edit", getElementTypeById(editButton.dataset.editType));
         } else if (deleteButton) {
           deleteType(deleteButton.dataset.deleteType);
@@ -6278,6 +6615,10 @@
         }
         const selectTemplateButton = event.target.closest("[data-select-template]");
         const addTemplateButton = event.target.closest("[data-wide-add-template]");
+        const importTemplateButton = event.target.closest("[data-wide-import-template]");
+        const downloadSchemaButton = event.target.closest("[data-download-template-schema]");
+        const downloadExampleButton = event.target.closest("[data-download-template-example]");
+        const copyInstructionsButton = event.target.closest("[data-copy-template-llm-instructions]");
         const editTemplateButton = event.target.closest("[data-edit-template]");
         const deleteTemplateButton = event.target.closest("[data-delete-template]");
         const duplicateTemplateButton = event.target.closest("[data-duplicate-template]");
@@ -6295,6 +6636,14 @@
           selectedTemplateId = selectTemplateButton.dataset.selectTemplate;
           activeNestedEditor = null;
           renderWideTemplateEditor();
+        } else if (importTemplateButton) {
+          startTemplateImport();
+        } else if (downloadSchemaButton) {
+          downloadTemplateReference("schema");
+        } else if (downloadExampleButton) {
+          downloadTemplateReference("example");
+        } else if (copyInstructionsButton) {
+          copyTemplateLlmInstructions();
         } else if (addTemplateButton) {
           activeNestedEditor = { kind: "template", mode: "add", typeId: templateEditorTypeId, data: {} };
           renderWideTemplateEditor();
@@ -6343,6 +6692,14 @@
         }
       }
 
+      function handleTemplateEditorChange(event) {
+        if (!activeNestedEditor || activeNestedEditor.kind !== "import") return;
+        if (event.target.matches('[name="import-target-mode"]')) {
+          activeNestedEditor.data.targetMode = event.target.value === "new" ? "new" : "existing";
+          renderWideTemplateEditor();
+        }
+      }
+
       async function saveNestedEditor(event) {
         event.preventDefault();
         if (!activeNestedEditor) return;
@@ -6350,7 +6707,15 @@
         const submitButton = form.querySelector('[type="submit"]');
         if (submitButton) submitButton.disabled = true;
         try {
+          if (activeNestedEditor.kind === "import") {
+            await saveImportedTemplate(form);
+            return;
+          }
           if (activeNestedEditor.kind === "template") {
+            const template = activeNestedEditor.templateId
+              ? [...templatesByTypeId.values()].flat().find((item) => item.id === activeNestedEditor.templateId)
+              : null;
+            if (template?.is_default) throw new Error("Seeded templates are read-only. Duplicate this template to customize it.");
             const name = String(new FormData(form).get("template-name") || "").trim();
             const description = String(new FormData(form).get("template-description") || "").trim();
             if (!name) throw new Error("Template name is required.");
@@ -6363,6 +6728,11 @@
               selectedTemplateId = response.data.id;
             }
           } else if (activeNestedEditor.kind === "section") {
+            const section = activeNestedEditor.sectionId
+              ? [...sectionsByTemplateId.values()].flat().find((item) => item.id === activeNestedEditor.sectionId)
+              : null;
+            const owningTemplate = [...templatesByTypeId.values()].flat().find((item) => item.id === activeNestedEditor.templateId);
+            if (section?.is_default || owningTemplate?.is_default) throw new Error("Seeded template sections are read-only. Duplicate the template to customize it.");
             const formData = new FormData(form);
             const name = String(formData.get("section-name") || "").trim();
             if (!name) throw new Error("Section name is required.");
@@ -6376,6 +6746,11 @@
               : await window.centralisSupabase.from("element_template_sections").insert({ ...payload, template_id: activeNestedEditor.templateId, is_default: false });
             if (response.error) throw response.error;
           } else if (activeNestedEditor.kind === "field") {
+            const field = activeNestedEditor.fieldId
+              ? [...fieldsByTemplateId.values()].flat().find((item) => item.id === activeNestedEditor.fieldId)
+              : null;
+            const owningTemplate = [...templatesByTypeId.values()].flat().find((item) => item.id === activeNestedEditor.templateId);
+            if (field?.is_default || owningTemplate?.is_default) throw new Error("Seeded template fields are read-only. Duplicate the template to customize it.");
             const formData = new FormData(form);
             const label = String(formData.get("field-label") || "").trim();
             if (!label) throw new Error("Field label is required.");
@@ -6443,8 +6818,9 @@
 
       async function deleteSection(sectionId) {
         const section = [...sectionsByTemplateId.values()].flat().find((item) => item.id === sectionId);
-        if (section?.is_default) {
-          setTemplateStatus("Default sections can be hidden, but not deleted.", "error");
+        const template = [...templatesByTypeId.values()].flat().find((item) => item.id === section?.template_id);
+        if (section?.is_default || template?.is_default) {
+          setTemplateStatus("Seeded template sections are read-only. Duplicate the template to customize it.", "error");
           return;
         }
         if (!window.confirm("Delete this section? Its fields will become unsectioned.")) return;
@@ -6461,8 +6837,9 @@
 
       async function deleteField(fieldId) {
         const field = [...fieldsByTemplateId.values()].flat().find((item) => item.id === fieldId);
-        if (field?.is_default) {
-          setTemplateStatus("Default fields can be hidden, but not deleted.", "error");
+        const template = [...templatesByTypeId.values()].flat().find((item) => item.id === field?.template_id);
+        if (field?.is_default || template?.is_default) {
+          setTemplateStatus("Seeded template fields are read-only. Duplicate the template to customize it.", "error");
           return;
         }
         if (!window.confirm("Delete this field and its saved values?")) return;
@@ -6480,6 +6857,11 @@
       async function toggleSectionHidden(sectionId) {
         const section = [...sectionsByTemplateId.values()].flat().find((item) => item.id === sectionId);
         if (!section) return;
+        const template = [...templatesByTypeId.values()].flat().find((item) => item.id === section.template_id);
+        if (section.is_default || template?.is_default) {
+          setTemplateStatus("Seeded template sections are read-only. Duplicate the template to customize it.", "error");
+          return;
+        }
         try {
           const response = await window.centralisSupabase
             .from("element_template_sections")
@@ -6497,6 +6879,11 @@
       async function toggleFieldHidden(fieldId) {
         const field = [...fieldsByTemplateId.values()].flat().find((item) => item.id === fieldId);
         if (!field) return;
+        const template = [...templatesByTypeId.values()].flat().find((item) => item.id === field.template_id);
+        if (field.is_default || template?.is_default) {
+          setTemplateStatus("Seeded template fields are read-only. Duplicate the template to customize it.", "error");
+          return;
+        }
         try {
           const response = await window.centralisSupabase
             .from("element_type_template_fields")
@@ -6583,13 +6970,178 @@
         }
       }
 
+      function startTemplateImport() {
+        if (!templateEditorTypeId) {
+          setTemplateStatus("Choose an Element Type before importing a template.", "error");
+          return;
+        }
+        templateImportInput?.click();
+      }
+
+      async function handleTemplateImportFile(file) {
+        if (!file) return;
+        try {
+          const imported = normalizeImportedTemplatePayload(JSON.parse(await file.text()));
+          activeNestedEditor = {
+            kind: "import",
+            mode: "add",
+            data: {
+              imported,
+              targetMode: "existing",
+              existingTypeId: templateEditorTypeId,
+              newTypeIcon: DEFAULT_ELEMENT_TYPE_ICON,
+              newTypeColor: DEFAULT_ELEMENT_TYPE_COLOR
+            }
+          };
+          renderWideTemplateEditor();
+        } catch (error) {
+          setTemplateStatus(`Could not read template JSON: ${getReadableError(error)}`, "error");
+        } finally {
+          templateImportInput.value = "";
+        }
+      }
+
+      function handleTemplateImportInputChange(event) {
+        handleTemplateImportFile(event.target.files?.[0]);
+      }
+
+      async function saveImportedTemplate(form) {
+        const importData = activeNestedEditor?.data;
+        const imported = importData?.imported;
+        if (!imported) throw new Error("Template import data is missing.");
+        const formData = new FormData(form);
+        const targetMode = String(formData.get("import-target-mode") || "existing");
+        let targetTypeId = "";
+        let createdTypeId = "";
+        let createdTemplateId = "";
+        let importedType = null;
+        try {
+          if (targetMode === "new") {
+            const typeName = String(formData.get("import-new-type-name") || "").trim();
+            if (!typeName) throw new Error("A new Element Type name is required.");
+            const { data: createdType, error: typeError } = await window.centralisSupabase
+              .from("element_types")
+              .insert({
+                user_id: universe.user_id,
+                name: typeName,
+                icon: sanitizeIconName(formData.get("import-new-type-icon") || DEFAULT_ELEMENT_TYPE_ICON),
+                color: sanitizeColor(formData.get("import-new-type-color") || DEFAULT_ELEMENT_TYPE_COLOR, DEFAULT_ELEMENT_TYPE_COLOR)
+              })
+              .select("id,name,icon,color")
+              .single();
+            if (typeError) throw typeError;
+            targetTypeId = createdType.id;
+            createdTypeId = createdType.id;
+            importedType = createdType;
+          } else {
+            targetTypeId = String(formData.get("import-existing-type") || "");
+            if (!getElementTypeById(targetTypeId)) throw new Error("Choose an existing Element Type.");
+          }
+
+          const { data: createdTemplate, error: templateError } = await window.centralisSupabase
+            .from("element_type_templates")
+            .insert({
+              element_type_id: targetTypeId,
+              name: imported.template.name,
+              description: imported.template.description || null,
+              is_default: false,
+              source_default_template_id: null
+            })
+            .select("id")
+            .single();
+          if (templateError) throw templateError;
+          createdTemplateId = createdTemplate.id;
+
+          const sectionIdsByKey = new Map();
+          if (imported.sections.length) {
+            const { data: createdSections, error: sectionError } = await window.centralisSupabase
+              .from("element_template_sections")
+              .insert(imported.sections.map((section) => ({
+                template_id: createdTemplateId,
+                name: section.name,
+                description: section.description || null,
+                sort_order: section.sort_order,
+                is_default: false,
+                is_hidden: false,
+                source_default_section_id: null
+              })))
+              .select("id");
+            if (sectionError) throw sectionError;
+            imported.sections.forEach((section, index) => {
+              if (createdSections?.[index]?.id) sectionIdsByKey.set(section.key, createdSections[index].id);
+            });
+          }
+
+          const { error: fieldError } = await window.centralisSupabase
+            .from("element_type_template_fields")
+            .insert(imported.fields.map((field) => ({
+              template_id: createdTemplateId,
+              section_id: field.section_key ? sectionIdsByKey.get(field.section_key) || null : null,
+              field_key: field.field_key,
+              label: field.label,
+              field_type: field.field_type,
+              description: field.description || null,
+              placeholder: field.placeholder || null,
+              default_value: field.default_value || null,
+              options: field.options.length ? { choices: field.options } : null,
+              is_required: field.is_required,
+              sort_order: field.sort_order,
+              is_default: false,
+              is_hidden: false,
+              source_default_field_id: null
+            })));
+          if (fieldError) throw fieldError;
+
+          let refreshedTypes = elementTypes;
+          if (createdTypeId) {
+            refreshedTypes = await fetchElementTypes();
+            syncElementTypes(refreshedTypes);
+          }
+          await refreshTypeTemplateData(refreshedTypes);
+          templateEditorTypeId = targetTypeId;
+          templateEditorTypeOverride = importedType;
+          selectedTemplateId = createdTemplateId;
+          activeNestedEditor = null;
+          renderTypeList();
+          renderWideTemplateEditor();
+          setTemplateStatus("Template imported.", "success");
+        } catch (error) {
+          if (createdTemplateId) {
+            await window.centralisSupabase.from("element_type_templates").delete().eq("id", createdTemplateId);
+          }
+          if (createdTypeId) {
+            await window.centralisSupabase.from("element_types").delete().eq("id", createdTypeId).eq("user_id", universe.user_id);
+          }
+          throw error;
+        }
+      }
+
+      function downloadTemplateReference(kind) {
+        if (kind === "schema") {
+          downloadJsonFile("centralis-element-template-schema.v1.json", getTemplateImportSchema());
+        } else {
+          downloadJsonFile("centralis-element-template-example.v1.json", getTemplateImportExample());
+        }
+      }
+
+      async function copyTemplateLlmInstructions() {
+        try {
+          await navigator.clipboard.writeText(getTemplateLlmInstructions());
+          setTemplateStatus("LLM instructions copied.", "success");
+        } catch (error) {
+          setTemplateStatus(`Could not copy instructions: ${getReadableError(error)}`, "error");
+        }
+      }
+
       opener.addEventListener("click", openTypesModal);
       closeButton?.addEventListener("click", closeTypesModal);
       addButton?.addEventListener("click", handleAddClick);
       list.addEventListener("click", handleListClick);
       templateCloseButton?.addEventListener("click", closeTemplateEditor);
       templateModal?.addEventListener("click", handleTemplateEditorClick);
+      templateModal?.addEventListener("change", handleTemplateEditorChange);
       templateModal?.addEventListener("submit", saveNestedEditor);
+      templateImportInput?.addEventListener("change", handleTemplateImportInputChange);
       editorHost.addEventListener("click", handleEditorClick);
       editorHost.addEventListener("input", handleEditorInput);
       editorHost.addEventListener("submit", saveType);
@@ -6600,7 +7152,9 @@
         list.removeEventListener("click", handleListClick);
         templateCloseButton?.removeEventListener("click", closeTemplateEditor);
         templateModal?.removeEventListener("click", handleTemplateEditorClick);
+        templateModal?.removeEventListener("change", handleTemplateEditorChange);
         templateModal?.removeEventListener("submit", saveNestedEditor);
+        templateImportInput?.removeEventListener("change", handleTemplateImportInputChange);
         editorHost.removeEventListener("click", handleEditorClick);
         editorHost.removeEventListener("input", handleEditorInput);
         editorHost.removeEventListener("submit", saveType);
@@ -6738,13 +7292,13 @@
         settings: aiExpertSettings,
         settingsOpen: aiExpertSettingsOpen,
         settingsExpanded: aiExpertSettingsExpanded,
-        onSettingsChange: setAiExpertSettings,
+        onSettingsChange: saveAiExpertSettings,
         onSettingsOpenChange: setAiExpertSettingsOpen,
         onSettingsToggle: setAiExpertSettingsExpanded,
         forceScrollToBottom: aiChatScrollToBottomRef.current,
         onScrollToBottomHandled: consumeAiChatScrollRequest
       });
-    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded, consumeAiChatScrollRequest]);
+    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded, saveAiExpertSettings, consumeAiChatScrollRequest]);
 
     React.useEffect(() => {
       if (!aiChatPopoutOpen) {
@@ -6770,11 +7324,11 @@
       setUniverseAiSettingsControl(popout, closeButton, aiExpertSettings, {
         open: aiExpertSettingsOpen,
         expanded: aiExpertSettingsExpanded,
-        onChange: setAiExpertSettings,
+        onChange: saveAiExpertSettings,
         onOpenChange: setAiExpertSettingsOpen,
         onToggle: setAiExpertSettingsExpanded
       });
-    }, [aiChatPopoutOpen, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded]);
+    }, [aiChatPopoutOpen, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded, saveAiExpertSettings]);
 
     React.useEffect(() => {
       function handleViewDetails(event) {
@@ -6822,6 +7376,7 @@
       const status = document.querySelector("[data-rich-details-status]");
       const saveButton = document.querySelector("[data-rich-details-save]");
       const editButton = document.querySelector("[data-rich-details-edit]");
+      const hideEmptyFieldsToggle = document.querySelector("[data-rich-details-hide-empty]");
       const cancelButton = document.querySelector("[data-rich-details-cancel]");
       const closeButtons = document.querySelectorAll("[data-rich-details-close]");
       const transferWrap = document.querySelector(".rich-details-transfer-menu");
@@ -6843,6 +7398,7 @@
 
       const node = nodes.find((currentNode) => currentNode.id === richDetailsNodeId);
       let richStatusTimeoutId = 0;
+      let hideEmptyFields = hideEmptyFieldsToggle?.checked !== false;
       function closeRichDetails() {
         modal.hidden = true;
         setRichDetailsNodeId(null);
@@ -6906,39 +7462,21 @@
           return;
         }
 
-        const templateMarkup = renderChroniclePreviewModules(richDetailsData);
+        const hasDescription = hasMeaningfulValue(node.data?.description);
+        const templateMarkup = renderChroniclePreviewModules(richDetailsData, { hideEmptyFields });
         body.innerHTML = `
           <div class="rich-details-form rich-details-view">
             <section class="rich-details-section rich-details-images chronicle-preview-images">
-              <div class="rich-section-title-row chronicle-preview-image-header">
-                <h3>Images</h3>
-                <div class="image-actions">
-                  <button class="secondary-action image-action-button" type="button" data-generate-image>
-                    <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
-                    Generate
-                  </button>
-                  <div class="image-upload-row">
-                    <label class="secondary-action image-action-button" for="rich-details-image-upload">
-                      <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
-                      Upload
-                    </label>
-                    <input id="rich-details-image-upload" type="file" accept="image/*" data-image-upload hidden>
-                  </div>
-                </div>
-              </div>
-              ${renderImageGallery(node.data.images, node.id)}
-              <p class="form-status image-upload-status" data-image-upload-status role="status"></p>
+              ${renderImageGallery(node.data.images, node.id, "chronicle-wiki-image-gallery")}
             </section>
             <section class="rich-details-section rich-details-basics">
               <dl class="rich-template-fields rich-basics-fields">
-                <div class="rich-view-field">
-                  <dt>Name</dt>
-                  <dd>${escapeHtml(node.data?.name || "Untitled Node")}</dd>
-                </div>
-                <div class="rich-view-field is-textarea-field">
-                  <dt>Description</dt>
-                  <dd class="${hasMeaningfulValue(node.data?.description) ? "" : "is-empty"}">${hasMeaningfulValue(node.data?.description) ? renderMarkdownDescription(node.data.description) : "--"}</dd>
-                </div>
+                ${!hideEmptyFields || hasDescription ? `
+                  <div class="rich-view-field is-textarea-field chronicle-wiki-core-field">
+                    <dt>Description</dt>
+                    <dd class="${hasDescription ? "" : "is-empty"}">${hasDescription ? renderMarkdownDescription(node.data.description) : "--"}</dd>
+                  </div>
+                ` : ""}
               </dl>
             </section>
             <section class="rich-details-section">
@@ -6957,23 +7495,6 @@
         `;
 
         setupImageGallery(body);
-        body.querySelector("[data-generate-image]")?.addEventListener("click", () => {
-          window.dispatchEvent(new CustomEvent("centralis:generate-image", {
-            detail: { nodeId: node.id, prompt: createImagePrompt(node), source: "rich-details" }
-          }));
-        });
-        body.querySelector("[data-image-upload]")?.addEventListener("change", (event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            window.dispatchEvent(new CustomEvent("centralis:upload-image", {
-              detail: {
-                nodeId: node.id,
-                file,
-                statusElement: body.querySelector("[data-image-upload-status]")
-              }
-            }));
-          }
-        });
       }
 
       function closeRichTransferMenu() {
@@ -7312,6 +7833,13 @@
         importRichDetailsFile(event.target.files?.[0]);
       }
 
+      function handleHideEmptyFieldsChange(event) {
+        const toggle = event.target.closest("[data-rich-details-hide-empty]");
+        if (!toggle) return;
+        hideEmptyFields = toggle.checked;
+        renderRichDetails();
+      }
+
       function showRichEditMode() {
         if (node?.data?.recordId) {
           window.location.href = getChronicleEditorUrl(node);
@@ -7463,6 +7991,7 @@
       transferTrigger?.addEventListener("click", toggleRichTransferMenu);
       transferMenu?.addEventListener("click", handleRichTransferMenuClick);
       importInput?.addEventListener("change", handleRichImportInputChange);
+      document.addEventListener("change", handleHideEmptyFieldsChange);
       document.addEventListener("click", handleRichTransferOutsideClick);
       document.addEventListener("keydown", handleRichTransferKeydown);
       closeButtons.forEach((button) => button.addEventListener("click", closeRichDetails));
@@ -7474,6 +8003,7 @@
         transferTrigger?.removeEventListener("click", toggleRichTransferMenu);
         transferMenu?.removeEventListener("click", handleRichTransferMenuClick);
         importInput?.removeEventListener("change", handleRichImportInputChange);
+        document.removeEventListener("change", handleHideEmptyFieldsChange);
         document.removeEventListener("click", handleRichTransferOutsideClick);
         document.removeEventListener("keydown", handleRichTransferKeydown);
         closeButtons.forEach((button) => button.removeEventListener("click", closeRichDetails));
@@ -7497,6 +8027,7 @@
 
         const body = new FormData();
         body.append("objectId", node.data.recordId);
+        body.append("storageModule", "universe-builder");
         body.append("file", file);
 
         try {
@@ -7600,6 +8131,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               objectId: node.data.recordId,
+              storageModule: "universe-builder",
               objectKind: node.data.kind,
               elementType: isRichDetailsGeneration ? "" : meta.label,
               name: isRichDetailsGeneration ? "" : node.data.name,
@@ -9434,6 +9966,74 @@
         await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
       }
       setTransferStatus(`Removed ${selectedNodes.length} ${selectedNodes.length === 1 ? "element" : "elements"} from group.`, "success");
+      return true;
+    }
+
+    async function removeGroupFromParent(groupNode) {
+      const parentGroupId = groupNode?.data?.parentGroupId || toRecordId(groupNode?.parentId);
+      if (!groupNode?.data?.recordId || !parentGroupId) {
+        setTransferStatus("This group is not inside another group.", "error");
+        return false;
+      }
+
+      const parentGroupNode = nodesRef.current.find((node) => node.id === `group:${parentGroupId}`);
+      if (!parentGroupNode) {
+        setTransferStatus("Could not find this group's parent.", "error");
+        return false;
+      }
+
+      pushCanvasHistory();
+      const nodesById = new Map(nodesRef.current.map((node) => [node.id, node]));
+      const absolutePosition = getAbsoluteNodePosition(groupNode, nodesById);
+      const { error } = await window.centralisSupabase
+        .from("element_groups")
+        .update({
+          parent_group_id: null,
+          group_position_x: null,
+          group_position_y: null,
+          position_x: Math.round(absolutePosition.x),
+          position_y: Math.round(absolutePosition.y),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", groupNode.data.recordId);
+      if (error) {
+        setTransferStatus(`Could not remove group from parent: ${getReadableError(error)}`, "error");
+        return false;
+      }
+
+      const detachedNodes = nodesRef.current.map((node) => {
+        if (node.id !== groupNode.id) {
+          return { ...node, selected: false };
+        }
+        return {
+          ...node,
+          parentId: undefined,
+          extent: undefined,
+          expandParent: undefined,
+          zIndex: -1,
+          selected: true,
+          position: {
+            x: Math.round(absolutePosition.x),
+            y: Math.round(absolutePosition.y)
+          },
+          data: {
+            ...node.data,
+            parentGroupId: null
+          }
+        };
+      });
+      const fitted = await layoutSingleGroupInNodes(detachedNodes, parentGroupId);
+      const finalNodes = fitted.nodes.map((node) => ({
+        ...node,
+        selected: node.id === groupNode.id
+      }));
+      setNodes(finalNodes);
+      nodesRef.current = finalNodes;
+
+      if (fitted) {
+        await persistGroupFit(fitted.groupUpdates, fitted.childUpdates);
+      }
+      setTransferStatus(`Removed "${groupNode.data.name || "group"}" from its parent group.`, "success");
       return true;
     }
 
@@ -12172,6 +12772,10 @@
     const contextGroupId = contextMenuNode?.data?.kind === "group"
       ? contextMenuNode.data.recordId
       : contextSelectedElements[0]?.data?.groupId || "";
+    const contextIsNestedGroup = Boolean(
+      contextMenuNode?.data?.kind === "group"
+      && (contextMenuNode.data?.parentGroupId || contextMenuNode.parentId)
+    );
     const aiPopoutStatus = getUniverseAiStatusMeta(aiChatState);
     const aiPopoutStatusLine = getUniverseAiReadyStatusLine(aiPopoutStatus);
 
@@ -12468,6 +13072,18 @@
             }
           },
           "Auto Layout Group"
+        ),
+        contextIsNestedGroup && React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: async (event) => {
+              event.stopPropagation();
+              closeContextMenu();
+              await removeGroupFromParent(contextMenuNode);
+            }
+          },
+          "Remove From Group"
         ),
         contextMenuNode?.data?.kind === "group" && React.createElement("div", {
           className: "node-context-menu-separator",

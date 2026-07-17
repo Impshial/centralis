@@ -25,6 +25,7 @@
     search: "",
     sort: "updated-desc",
     activeImageGenerationElementId: "",
+    activeImageViewerId: "",
     elementTypes: [],
     standaloneElements: [],
     universeElements: [],
@@ -33,6 +34,10 @@
     universesById: new Map(),
     routeContext: null,
     workspace: createEmptyWorkspace(),
+    aiModuleGeneration: {
+      isGenerating: false,
+      proposal: null
+    },
     isLoading: true,
     markdownEditors: new Map(),
     activeTextEditorDialog: null,
@@ -121,6 +126,22 @@
     dom.generateImageSubtitle = document.querySelector("[data-chronicle-generate-image-subtitle]");
     dom.generateImageStatus = document.querySelector("[data-chronicle-generate-image-status]");
     dom.generateImageSubmit = document.querySelector("[data-chronicle-generate-image-submit]");
+    dom.imageViewerModal = document.getElementById("chronicle-image-viewer-modal");
+    dom.imageViewerTitle = document.querySelector("[data-chronicle-image-viewer-title]");
+    dom.imageViewerImage = document.querySelector("[data-chronicle-image-viewer-img]");
+    dom.imageViewerThumbs = document.querySelector("[data-chronicle-image-viewer-thumbs]");
+    dom.imageViewerStatus = document.querySelector("[data-chronicle-image-viewer-status]");
+    dom.imageViewerPrimary = document.querySelector("[data-chronicle-image-viewer-primary]");
+    dom.aiModuleGenerateModal = document.getElementById("chronicle-ai-module-generate-modal");
+    dom.aiModuleGenerateForm = document.querySelector("[data-chronicle-ai-module-generate-form]");
+    dom.aiModuleChecklist = document.querySelector("[data-chronicle-ai-module-checklist]");
+    dom.aiModuleInstructions = document.querySelector("[data-chronicle-ai-module-instructions]");
+    dom.aiModuleGenerateStatus = document.querySelector("[data-chronicle-ai-module-generate-status]");
+    dom.aiModuleGenerateSubmit = document.querySelector("[data-chronicle-ai-module-generate-submit]");
+    dom.aiModuleReviewModal = document.getElementById("chronicle-ai-module-review-modal");
+    dom.aiModuleReviewForm = document.querySelector("[data-chronicle-ai-module-review-form]");
+    dom.aiModuleReviewContent = document.querySelector("[data-chronicle-ai-module-review-content]");
+    dom.aiModuleReviewStatus = document.querySelector("[data-chronicle-ai-module-review-status]");
   }
 
   function bindEvents() {
@@ -183,6 +204,11 @@
         closeGenerateImageDialog();
       }
     });
+    bindChronicleImageViewer();
+    document.querySelector("[data-chronicle-ai-module-generate-cancel]")?.addEventListener("click", closeAiModuleGenerateDialog);
+    document.querySelector("[data-chronicle-ai-module-review-cancel]")?.addEventListener("click", closeAiModuleReviewDialog);
+    dom.aiModuleGenerateForm?.addEventListener("submit", handleAiModuleGenerateSubmit);
+    dom.aiModuleReviewForm?.addEventListener("submit", handleAiModuleReviewSubmit);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && dom.generateImageModal && !dom.generateImageModal.hidden) {
         closeGenerateImageDialog();
@@ -581,7 +607,7 @@
     const assignedModules = getAssignedSectionModules(workspace);
     const assignedModuleSectionIds = new Set(assignedModules.map((item) => item.section.id));
     const canManageModules = Boolean(workspace.template?.id);
-    const headerImage = workspace.images?.[0] || null;
+    const images = normalizeImages(workspace.images || []);
 
     dom.workspace.innerHTML = `
       <form class="chronicle-workspace" data-chronicle-workspace-form>
@@ -604,7 +630,7 @@
             <button class="primary-action" type="submit" data-chronicle-workspace-save>Save Element</button>
           </div>
         </div>
-        ${renderWorkspaceImagePanel(headerImage, element.name)}
+        ${renderWorkspaceImagePanel(images, element.name)}
         <section class="chronicle-editor-section chronicle-editor-basics">
           <h3>Basics</h3>
           <div class="chronicle-basics-fields">
@@ -636,7 +662,10 @@
         <div class="chronicle-workspace-grid">
           <aside class="chronicle-module-sidebar">
             <section class="chronicle-editor-section">
-              <h3>Modules</h3>
+              <div class="chronicle-section-title-row chronicle-module-title-row">
+                <h3>Modules</h3>
+                ${renderAiModuleGenerationControl(workspace)}
+              </div>
               ${canManageModules
                 ? renderModuleChecklist(workspace, assignedModuleSectionIds)
                 : '<p class="chronicle-muted">Choose a template before adding section modules.</p>'}
@@ -678,30 +707,55 @@
     return `
       <figure class="chronicle-editor-image-header">
         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(elementName || "Element image")}">
-        <a class="chronicle-editor-view-image" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer">
+        <button class="chronicle-editor-view-image" type="button" data-chronicle-open-image="${escapeHtml(image.id || "")}">
           <ph-arrow-square-out weight="bold" aria-hidden="true"></ph-arrow-square-out>
-          View Image
-        </a>
+          Open Image
+        </button>
       </figure>
     `;
   }
 
-  function renderWorkspaceImagePanel(image, elementName) {
-    const imageMarkup = image?.image_url ? renderWorkspaceImageHeader(image, elementName) : "";
+  function renderWorkspaceImageThumbnails(images, elementName) {
+    if (!images.length) {
+      return "";
+    }
+
+    return `
+      <div class="chronicle-editor-image-thumbnails" aria-label="Element images">
+        ${images.map((image, index) => `
+          <button class="chronicle-editor-image-thumb${index === 0 ? " is-active" : ""}" type="button" data-chronicle-open-image="${escapeHtml(image.id || "")}" aria-label="Open image ${index + 1}">
+            <img src="${escapeHtml(image.image_url || "")}" alt="${escapeHtml(elementName || "Element image")} ${index + 1}">
+          </button>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderWorkspaceImagePanel(images, elementName) {
+    const primaryImage = images[0] || null;
+    const imageMarkup = primaryImage?.image_url ? renderWorkspaceImageHeader(primaryImage, elementName) : '<div class="chronicle-editor-image-empty"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><p>No images yet.</p></div>';
 
     return `
       <section class="chronicle-editor-image-panel">
         <div class="chronicle-editor-image-actions">
           <div>
             <p class="chronicle-eyebrow">Image</p>
-            <h3>${image?.image_url ? "Primary Image" : "Generate Concept Art"}</h3>
+            <h3>${primaryImage?.image_url ? "Primary Image" : "Generate Concept Art"}</h3>
           </div>
-          <button class="primary-action compact-action" type="button" data-chronicle-generate-image>
-            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
-            ${image?.image_url ? "Generate New Image" : "Generate Image"}
-          </button>
+          <div class="chronicle-editor-image-buttons">
+            <button class="primary-action compact-action" type="button" data-chronicle-generate-image>
+              <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+              ${primaryImage?.image_url ? "Generate New Image" : "Generate Image"}
+            </button>
+            <label class="secondary-action compact-action" for="chronicle-image-upload">
+              <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+              Upload Image
+            </label>
+            <input id="chronicle-image-upload" type="file" accept="image/*" data-chronicle-image-upload hidden>
+          </div>
         </div>
         ${imageMarkup}
+        ${renderWorkspaceImageThumbnails(images, elementName)}
       </section>
     `;
   }
@@ -725,6 +779,27 @@
       return '<p class="chronicle-muted">This element type does not have templates yet.</p>';
     }
     return "";
+  }
+
+  function renderAiModuleGenerationControl(workspace) {
+    const universeId = workspace.universe?.id || workspace.element?.universe_id || "";
+    const canGenerate = Boolean(universeId && workspace.template?.id && workspace.sections.length);
+    const reason = !universeId
+      ? "Attach this element to a Universe before using Chronicle AI."
+      : !workspace.template?.id
+        ? "Choose a Chronicle template before using Chronicle AI."
+        : !workspace.sections.length
+          ? "This template does not have visible modules to generate."
+          : "Generate suggestions for blank Chronicle fields.";
+    return `
+      <div class="chronicle-ai-module-control">
+        <button class="secondary-action compact-action chronicle-ai-module-button" type="button" data-chronicle-ai-open${canGenerate ? "" : " disabled"} title="${escapeHtml(reason)}">
+          <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+          Generate with AI
+        </button>
+        ${canGenerate ? "" : `<p class="chronicle-ai-module-hint">${escapeHtml(reason)}</p>`}
+      </div>
+    `;
   }
 
   function renderModuleChecklist(workspace, assignedSectionIds) {
@@ -813,6 +888,10 @@
 
   function isModuleCollapsed(module) {
     return module?.data?.collapsed === true;
+  }
+
+  function isDraftSectionModule(module) {
+    return Boolean(module?.data?.ai_draft || String(module?.source || "") === "ai_draft");
   }
 
   function groupFieldsBySection(fields = []) {
@@ -1133,6 +1212,12 @@
   }
 
   async function handleWorkspaceClick(event) {
+    const aiModuleButton = event.target.closest("[data-chronicle-ai-open]");
+    if (aiModuleButton) {
+      openAiModuleGenerateDialog();
+      return;
+    }
+
     const textEditorButton = event.target.closest("[data-open-text-editor]");
     if (textEditorButton) {
       openTextEditorDialog(textEditorButton);
@@ -1142,6 +1227,12 @@
     const generateImageButton = event.target.closest("[data-chronicle-generate-image]");
     if (generateImageButton) {
       openGenerateImageDialog();
+      return;
+    }
+
+    const openImageButton = event.target.closest("[data-chronicle-open-image]");
+    if (openImageButton) {
+      openChronicleImageViewer(openImageButton.dataset.chronicleOpenImage || "");
       return;
     }
 
@@ -1183,6 +1274,359 @@
       }
       row?.remove();
     }
+  }
+
+  function captureWorkspaceDraft() {
+    const workspace = state.workspace;
+    const form = dom.workspace?.querySelector("[data-chronicle-workspace-form]");
+    if (!workspace?.element || !form) {
+      return;
+    }
+
+    syncAllInlineMarkdownEditors();
+    const valuesByFieldId = new Map(workspace.values.map((value) => [value.template_field_id, value]));
+    workspace.fields.forEach((field) => {
+      const control = form.elements.namedItem(`workspace-field:${field.id}`);
+      if (!control) {
+        return;
+      }
+      const value = readTemplateFieldValue(form, field);
+      if (hasMeaningfulValue(value)) {
+        valuesByFieldId.set(field.id, {
+          ...(valuesByFieldId.get(field.id) || {}),
+          element_id: workspace.element.id,
+          template_field_id: field.id,
+          value
+        });
+      } else {
+        valuesByFieldId.delete(field.id);
+      }
+    });
+
+    state.workspace = {
+      ...workspace,
+      element: {
+        ...workspace.element,
+        name: String(form.elements.namedItem("workspace-name")?.value || "").trim() || workspace.element.name,
+        description: String(form.elements.namedItem("workspace-description")?.value || "").trim() || null
+      },
+      values: [...valuesByFieldId.values()]
+    };
+  }
+
+  function renderAiModuleChecklist() {
+    const workspace = state.workspace;
+    const fieldsBySectionId = groupFieldsBySection(workspace.fields);
+    dom.aiModuleChecklist.innerHTML = workspace.sections.map((section) => {
+      const fields = fieldsBySectionId.get(section.id) || [];
+      return `
+        <details class="chronicle-ai-module-option" open>
+          <summary>
+            <label class="chronicle-ai-module-select">
+              <input type="checkbox" name="chronicle-ai-section" value="${escapeHtml(section.id)}" checked>
+              <span>
+                <strong>${escapeHtml(section.name || "Untitled Module")}</strong>
+                <em>${fields.length} ${fields.length === 1 ? "field" : "fields"}</em>
+              </span>
+            </label>
+          </summary>
+          ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+          <ul>
+            ${fields.length
+              ? fields.map((field) => `<li><strong>${escapeHtml(getTemplateFieldLabel(field))}</strong><span>${escapeHtml(getTemplateFieldType(field))}${field.description ? ` — ${escapeHtml(field.description)}` : ""}</span></li>`).join("")
+              : "<li>This module has no fields.</li>"}
+          </ul>
+        </details>
+      `;
+    }).join("");
+  }
+
+  function openAiModuleGenerateDialog() {
+    const workspace = state.workspace;
+    if (!workspace?.universe?.id && !workspace?.element?.universe_id) {
+      setWorkspaceStatus("Attach this element to a Universe before using Chronicle AI.", "error");
+      return;
+    }
+    if (!workspace?.template?.id || !workspace.sections.length) {
+      setWorkspaceStatus("Choose a Chronicle template with visible modules before using AI.", "error");
+      return;
+    }
+    if (!dom.aiModuleGenerateModal) {
+      return;
+    }
+
+    captureWorkspaceDraft();
+    state.aiModuleGeneration = { isGenerating: false, proposal: null };
+    dom.aiModuleGenerateForm?.reset();
+    renderAiModuleChecklist();
+    setAiModuleGenerateStatus("");
+    dom.aiModuleGenerateModal.hidden = false;
+    document.body.classList.add("centralis-modal-open");
+    requestAnimationFrame(() => dom.aiModuleInstructions?.focus());
+  }
+
+  function closeAiModuleGenerateDialog() {
+    if (state.aiModuleGeneration.isGenerating || !dom.aiModuleGenerateModal) {
+      return;
+    }
+    dom.aiModuleGenerateModal.hidden = true;
+    if (dom.aiModuleReviewModal?.hidden !== false) {
+      document.body.classList.remove("centralis-modal-open");
+    }
+  }
+
+  function setAiModuleGenerateStatus(message, tone = "") {
+    if (!dom.aiModuleGenerateStatus) {
+      return;
+    }
+    dom.aiModuleGenerateStatus.textContent = message;
+    dom.aiModuleGenerateStatus.classList.toggle("is-error", tone === "error");
+    dom.aiModuleGenerateStatus.classList.toggle("is-success", tone === "success");
+  }
+
+  function setAiModuleGenerateBusy(isBusy) {
+    state.aiModuleGeneration = {
+      ...state.aiModuleGeneration,
+      isGenerating: isBusy
+    };
+    dom.aiModuleGenerateModal?.classList.toggle("is-generating", isBusy);
+    if (dom.aiModuleGenerateSubmit) {
+      dom.aiModuleGenerateSubmit.disabled = isBusy;
+      dom.aiModuleGenerateSubmit.innerHTML = isBusy
+        ? '<ph-spinner gap="none" aria-hidden="true"></ph-spinner> Generating...'
+        : '<ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle> Generate';
+    }
+  }
+
+  function getWorkspaceFieldValuesForAi() {
+    return Object.fromEntries(state.workspace.values
+      .filter((value) => value?.template_field_id)
+      .map((value) => [value.template_field_id, String(value.value || "")]));
+  }
+
+  async function handleAiModuleGenerateSubmit(event) {
+    event.preventDefault();
+    const workspace = state.workspace;
+    if (!workspace?.element?.id || !workspace.template?.id || state.aiModuleGeneration.isGenerating) {
+      return;
+    }
+
+    captureWorkspaceDraft();
+    const selectedSectionIds = [...dom.aiModuleGenerateForm.querySelectorAll('[name="chronicle-ai-section"]:checked')]
+      .map((input) => input.value)
+      .filter(Boolean);
+    if (!selectedSectionIds.length) {
+      setAiModuleGenerateStatus("Choose at least one module to consider.", "error");
+      return;
+    }
+
+    setAiModuleGenerateBusy(true);
+    setAiModuleGenerateStatus("Preparing universe knowledge...");
+    try {
+      const universeId = workspace.universe?.id || workspace.element.universe_id;
+      const syncResponse = await window.centralisSupabase.functions.invoke("sync-universe-ai-source", {
+        body: { universeId }
+      });
+      throwIfError(syncResponse);
+      if (syncResponse.data?.error) {
+        throw new Error(syncResponse.data.error);
+      }
+
+      setAiModuleGenerateStatus("Generating Chronicle details...");
+      const response = await window.centralisSupabase.functions.invoke("generate-chronicle-details", {
+        body: {
+          elementId: workspace.element.id,
+          templateId: workspace.template.id,
+          sectionIds: selectedSectionIds,
+          instructions: dom.aiModuleInstructions?.value || "",
+          elementDraft: {
+            name: state.workspace.element.name || "",
+            description: state.workspace.element.description || ""
+          },
+          fieldValues: getWorkspaceFieldValuesForAi()
+        }
+      });
+      throwIfError(response);
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      const proposal = response.data?.proposal;
+      if (!proposal?.modules?.length) {
+        setAiModuleGenerateStatus("No suitable blank Chronicle fields were suggested. Try different modules or add more direction.", "error");
+        return;
+      }
+
+      state.aiModuleGeneration = { isGenerating: false, proposal };
+      dom.aiModuleGenerateModal.hidden = true;
+      openAiModuleReviewDialog();
+    } catch (error) {
+      console.error("Could not generate Chronicle details.", error);
+      setAiModuleGenerateStatus(`Could not generate Chronicle details: ${getReadableError(error)}`, "error");
+    } finally {
+      if (dom.aiModuleGenerateModal?.hidden === false) {
+        setAiModuleGenerateBusy(false);
+      }
+    }
+  }
+
+  function renderAiReviewField(module, field) {
+    const name = `chronicle-ai-review:${module.sectionId}:${field.fieldId}`;
+    const type = String(field.fieldType || "text");
+    const options = Array.isArray(field.options) ? field.options : [];
+    const value = String(field.value || "");
+    let control = "";
+
+    if (type === "textarea" || type === "rich_text") {
+      control = `<textarea name="${escapeHtml(name)}" rows="4" data-chronicle-ai-review-field data-field-id="${escapeHtml(field.fieldId)}">${escapeHtml(value)}</textarea>`;
+    } else if (type === "checkbox") {
+      control = `<label class="chronicle-checkbox"><input type="checkbox" name="${escapeHtml(name)}" data-chronicle-ai-review-field data-field-id="${escapeHtml(field.fieldId)}"${value === "true" ? " checked" : ""}> <span>Enabled</span></label>`;
+    } else if (type === "select" || type === "multi_select") {
+      const selectedValues = new Set(value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean));
+      control = `<select name="${escapeHtml(name)}" data-chronicle-ai-review-field data-field-id="${escapeHtml(field.fieldId)}"${type === "multi_select" ? " multiple" : ""}>
+        ${type === "select" ? '<option value="">Select...</option>' : ""}
+        ${options.map((option) => `<option value="${escapeHtml(option)}"${selectedValues.has(option) ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+      </select>`;
+    } else {
+      const inputType = ["number", "date", "url"].includes(type) ? type : "text";
+      control = `<input type="${inputType}" name="${escapeHtml(name)}" value="${escapeHtml(value)}" data-chronicle-ai-review-field data-field-id="${escapeHtml(field.fieldId)}">`;
+    }
+
+    return `
+      <label class="form-field chronicle-ai-review-field">
+        <span>${escapeHtml(field.label || "Untitled Field")}</span>
+        ${control}
+      </label>
+    `;
+  }
+
+  function openAiModuleReviewDialog() {
+    const proposal = state.aiModuleGeneration.proposal;
+    if (!proposal?.modules?.length || !dom.aiModuleReviewModal) {
+      return;
+    }
+    dom.aiModuleReviewContent.innerHTML = proposal.modules.map((module) => `
+      <article class="chronicle-ai-review-module" data-chronicle-ai-review-module="${escapeHtml(module.sectionId)}">
+        <label class="chronicle-ai-review-module-toggle">
+          <input type="checkbox" name="chronicle-ai-review-module" value="${escapeHtml(module.sectionId)}" checked>
+          <span>
+            <strong>${escapeHtml(module.sectionName || "Untitled Module")}</strong>
+            <em>${module.isExisting ? "Existing module — blank fields only" : "New module"}</em>
+          </span>
+        </label>
+        ${module.sectionDescription ? `<p>${escapeHtml(module.sectionDescription)}</p>` : ""}
+        <div class="chronicle-ai-review-fields">
+          ${module.fields.map((field) => renderAiReviewField(module, field)).join("")}
+        </div>
+      </article>
+    `).join("");
+    if (dom.aiModuleReviewStatus) {
+      dom.aiModuleReviewStatus.textContent = "";
+    }
+    dom.aiModuleReviewModal.hidden = false;
+    document.body.classList.add("centralis-modal-open");
+  }
+
+  function closeAiModuleReviewDialog() {
+    if (!dom.aiModuleReviewModal) {
+      return;
+    }
+    dom.aiModuleReviewModal.hidden = true;
+    state.aiModuleGeneration = { isGenerating: false, proposal: null };
+    if (dom.aiModuleGenerateModal?.hidden !== false) {
+      document.body.classList.remove("centralis-modal-open");
+    }
+  }
+
+  function readAiReviewFieldValue(control, fieldType) {
+    if (fieldType === "checkbox") {
+      return control?.checked ? "true" : "";
+    }
+    if (fieldType === "multi_select") {
+      return control ? [...control.selectedOptions].map((option) => option.value).join("\n") : "";
+    }
+    return String(control?.value || "").trim();
+  }
+
+  function setAiModuleReviewStatus(message, tone = "") {
+    if (!dom.aiModuleReviewStatus) {
+      return;
+    }
+    dom.aiModuleReviewStatus.textContent = message;
+    dom.aiModuleReviewStatus.classList.toggle("is-error", tone === "error");
+  }
+
+  async function handleAiModuleReviewSubmit(event) {
+    event.preventDefault();
+    const proposal = state.aiModuleGeneration.proposal;
+    const workspace = state.workspace;
+    if (!proposal?.modules?.length || !workspace?.element?.id || !workspace.template?.id) {
+      return;
+    }
+
+    captureWorkspaceDraft();
+    const selectedSectionIds = new Set([...dom.aiModuleReviewForm.querySelectorAll('[name="chronicle-ai-review-module"]:checked')]
+      .map((input) => input.value));
+    if (!selectedSectionIds.size) {
+      setAiModuleReviewStatus("Choose at least one suggested module to add to the editor.", "error");
+      return;
+    }
+
+    const fieldsById = new Map(workspace.fields.map((field) => [field.id, field]));
+    const valuesByFieldId = new Map(workspace.values.map((value) => [value.template_field_id, value]));
+    const existingSections = new Set(getAssignedSectionModules(workspace).map((item) => item.section.id));
+    let nextSortOrder = getNextModuleSortOrder(workspace.modules);
+    const nextModules = [...workspace.modules];
+
+    proposal.modules.forEach((module) => {
+      if (!selectedSectionIds.has(module.sectionId)) {
+        return;
+      }
+      if (!existingSections.has(module.sectionId)) {
+        nextModules.push({
+          id: `ai-draft:${module.sectionId}`,
+          element_id: workspace.element.id,
+          user_id: state.user.id,
+          module_type: TEMPLATE_SECTION_MODULE_TYPE,
+          source: "ai_draft",
+          title: module.sectionName || "Untitled Module",
+          sort_order: nextSortOrder,
+          data: {
+            section_id: module.sectionId,
+            template_id: workspace.template.id,
+            ai_draft: true
+          }
+        });
+        nextSortOrder += 10;
+        existingSections.add(module.sectionId);
+      }
+
+      module.fields.forEach((suggestion) => {
+        const field = fieldsById.get(suggestion.fieldId);
+        const control = dom.aiModuleReviewForm.elements.namedItem(`chronicle-ai-review:${module.sectionId}:${suggestion.fieldId}`);
+        if (!field || !control || hasMeaningfulValue(valuesByFieldId.get(field.id)?.value)) {
+          return;
+        }
+        const value = readAiReviewFieldValue(control, getTemplateFieldType(field));
+        if (!hasMeaningfulValue(value)) {
+          return;
+        }
+        valuesByFieldId.set(field.id, {
+          element_id: workspace.element.id,
+          template_field_id: field.id,
+          value
+        });
+      });
+    });
+
+    state.workspace = {
+      ...workspace,
+      modules: nextModules.sort(sortModules),
+      values: [...valuesByFieldId.values()]
+    };
+    closeAiModuleReviewDialog();
+    renderWorkspace();
+    setWorkspaceStatus("AI suggestions added to the editor. Save Element when you are ready to persist them.", "success");
   }
 
   function clampImagePrompt(prompt, maxLength = MAX_IMAGE_PROMPT_LENGTH) {
@@ -1302,6 +1746,211 @@
     renderWorkspace();
   }
 
+  async function uploadWorkspaceImage(file) {
+    const element = state.workspace?.element;
+    if (!element?.id) {
+      return;
+    }
+    if (!file.type?.startsWith("image/")) {
+      setWorkspaceStatus("Choose an image file to upload.", "error");
+      return;
+    }
+
+    const body = new FormData();
+    body.append("objectId", element.id);
+    body.append("storageModule", "chronicle");
+    body.append("file", file);
+    setWorkspaceStatus("Uploading image...");
+
+    try {
+      const response = await window.centralisSupabase.functions.invoke("upload-object-image", { body });
+      throwIfError(response);
+      await refreshWorkspaceImages();
+      setWorkspaceStatus("Image uploaded.", "success");
+    } catch (error) {
+      setWorkspaceStatus(`Could not upload image: ${getReadableError(error)}`, "error");
+    }
+  }
+
+  function getWorkspaceViewerImages() {
+    return normalizeImages(state.workspace?.images || []);
+  }
+
+  function getActiveWorkspaceViewerImage() {
+    const images = getWorkspaceViewerImages();
+    return images.find((image) => image.id === state.activeImageViewerId) || images[0] || null;
+  }
+
+  function setChronicleImageViewerStatus(message, tone = "") {
+    if (!dom.imageViewerStatus) {
+      return;
+    }
+    dom.imageViewerStatus.textContent = message || "";
+    dom.imageViewerStatus.classList.toggle("is-error", tone === "error");
+    dom.imageViewerStatus.classList.toggle("is-success", tone === "success");
+  }
+
+  function renderChronicleImageViewer() {
+    const modal = dom.imageViewerModal;
+    const activeImage = getActiveWorkspaceViewerImage();
+    const images = getWorkspaceViewerImages();
+    if (!modal || !activeImage || !images.length) {
+      closeChronicleImageViewer();
+      return;
+    }
+
+    const activeIndex = Math.max(0, images.findIndex((image) => image.id === activeImage.id));
+    state.activeImageViewerId = activeImage.id;
+    if (dom.imageViewerTitle) {
+      dom.imageViewerTitle.textContent = `${state.workspace?.element?.name || "Element"} Image (${activeIndex + 1} of ${images.length})`;
+    }
+    if (dom.imageViewerImage) {
+      dom.imageViewerImage.src = activeImage.image_url || "";
+      dom.imageViewerImage.alt = state.workspace?.element?.name || "Element image";
+      dom.imageViewerImage.style.transform = "";
+    }
+    if (dom.imageViewerThumbs) {
+      dom.imageViewerThumbs.innerHTML = images.map((image, index) => `
+        <button class="image-thumb${image.id === activeImage.id ? " is-active" : ""}" type="button" data-chronicle-image-viewer-thumb="${escapeHtml(image.id || "")}" aria-label="Show image ${index + 1}">
+          <img src="${escapeHtml(image.image_url || "")}" alt="">
+        </button>
+      `).join("");
+    }
+    if (dom.imageViewerPrimary) {
+      dom.imageViewerPrimary.checked = Boolean(activeImage.is_primary);
+      dom.imageViewerPrimary.disabled = Boolean(activeImage.is_primary);
+    }
+    const previous = modal.querySelector("[data-chronicle-image-viewer-prev]");
+    const next = modal.querySelector("[data-chronicle-image-viewer-next]");
+    if (previous) previous.disabled = images.length < 2;
+    if (next) next.disabled = images.length < 2;
+    setChronicleImageViewerStatus("");
+  }
+
+  function openChronicleImageViewer(imageId = "") {
+    const images = getWorkspaceViewerImages();
+    if (!images.length || !dom.imageViewerModal) {
+      return;
+    }
+    state.activeImageViewerId = images.some((image) => image.id === imageId) ? imageId : images[0].id;
+    dom.imageViewerModal.hidden = false;
+    document.body.classList.add("centralis-modal-open");
+    renderChronicleImageViewer();
+  }
+
+  function closeChronicleImageViewer() {
+    if (dom.imageViewerModal) {
+      dom.imageViewerModal.hidden = true;
+    }
+    state.activeImageViewerId = "";
+    setChronicleImageViewerStatus("");
+    document.body.classList.remove("centralis-modal-open");
+  }
+
+  function moveChronicleImageViewer(direction) {
+    const images = getWorkspaceViewerImages();
+    if (!images.length) {
+      return;
+    }
+    const index = Math.max(0, images.findIndex((image) => image.id === state.activeImageViewerId));
+    state.activeImageViewerId = images[(index + direction + images.length) % images.length].id;
+    renderChronicleImageViewer();
+  }
+
+  async function setChronicleViewerPrimaryImage() {
+    const image = getActiveWorkspaceViewerImage();
+    if (!image || image.is_primary || !dom.imageViewerPrimary) {
+      return;
+    }
+
+    dom.imageViewerPrimary.disabled = true;
+    setChronicleImageViewerStatus("Setting primary image...");
+    try {
+      const response = await window.centralisSupabase.functions.invoke("set-primary-image", {
+        body: { imageId: image.id }
+      });
+      throwIfError(response);
+      await refreshWorkspaceImages();
+      renderChronicleImageViewer();
+      setChronicleImageViewerStatus("Primary image updated.", "success");
+    } catch (error) {
+      setChronicleImageViewerStatus(`Could not set primary image: ${getReadableError(error)}`, "error");
+      dom.imageViewerPrimary.checked = false;
+      dom.imageViewerPrimary.disabled = false;
+    }
+  }
+
+  async function deleteChronicleViewerImage() {
+    const image = getActiveWorkspaceViewerImage();
+    if (!image || !window.confirm("Delete this image?")) {
+      return;
+    }
+
+    const deleteButton = dom.imageViewerModal?.querySelector("[data-chronicle-image-viewer-delete]");
+    if (deleteButton) deleteButton.disabled = true;
+    setChronicleImageViewerStatus("Deleting image...");
+    try {
+      const response = await window.centralisSupabase.functions.invoke("delete-object-image", {
+        body: { imageId: image.id }
+      });
+      throwIfError(response);
+      const remainingImages = getWorkspaceViewerImages().filter((item) => item.id !== image.id);
+      state.activeImageViewerId = remainingImages[0]?.id || "";
+      await refreshWorkspaceImages();
+      if (!state.activeImageViewerId) {
+        closeChronicleImageViewer();
+      } else {
+        renderChronicleImageViewer();
+        setChronicleImageViewerStatus("Image deleted.", "success");
+      }
+    } catch (error) {
+      setChronicleImageViewerStatus(`Could not delete image: ${getReadableError(error)}`, "error");
+    } finally {
+      if (deleteButton) deleteButton.disabled = false;
+    }
+  }
+
+  function bindChronicleImageViewer() {
+    const modal = dom.imageViewerModal;
+    if (!modal) {
+      return;
+    }
+
+    modal.querySelectorAll("[data-chronicle-image-viewer-close]").forEach((button) => {
+      button.addEventListener("click", closeChronicleImageViewer);
+    });
+    modal.querySelector("[data-chronicle-image-viewer-prev]")?.addEventListener("click", () => moveChronicleImageViewer(-1));
+    modal.querySelector("[data-chronicle-image-viewer-next]")?.addEventListener("click", () => moveChronicleImageViewer(1));
+    modal.querySelector("[data-chronicle-image-viewer-open]")?.addEventListener("click", () => {
+      const image = getActiveWorkspaceViewerImage();
+      if (image?.image_url) {
+        window.open(image.image_url, "_blank", "noopener,noreferrer");
+      }
+    });
+    modal.querySelector("[data-chronicle-image-viewer-download]")?.addEventListener("click", () => {
+      const image = getActiveWorkspaceViewerImage();
+      if (!image?.image_url) {
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = image.image_url;
+      link.download = `centralis-image-${image.id || Date.now()}.png`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+    });
+    modal.querySelector("[data-chronicle-image-viewer-delete]")?.addEventListener("click", deleteChronicleViewerImage);
+    dom.imageViewerPrimary?.addEventListener("change", setChronicleViewerPrimaryImage);
+    modal.querySelector("[data-chronicle-image-viewer-thumbs]")?.addEventListener("click", (event) => {
+      const thumb = event.target.closest("[data-chronicle-image-viewer-thumb]");
+      if (!thumb) {
+        return;
+      }
+      state.activeImageViewerId = thumb.dataset.chronicleImageViewerThumb || "";
+      renderChronicleImageViewer();
+    });
+  }
+
   async function handleGenerateImageSubmit(event) {
     event.preventDefault();
     if (dom.generateImageForm?.dataset.generating === "true") {
@@ -1322,6 +1971,7 @@
       const response = await window.centralisSupabase.functions.invoke("generate-object-image", {
         body: {
           objectId: element.id,
+          storageModule: "chronicle",
           objectKind: "element",
           elementType: type?.name || "",
           name: element.name || "",
@@ -1534,6 +2184,15 @@
 
   async function handleWorkspaceChange(event) {
     const target = event.target;
+    if (target.matches("[data-chronicle-image-upload]")) {
+      const file = target.files?.[0];
+      target.value = "";
+      if (file) {
+        await uploadWorkspaceImage(file);
+      }
+      return;
+    }
+
     if (target.matches("[data-chronicle-element-type-select]")) {
       await updateWorkspaceElementType(target.value);
       return;
@@ -1650,6 +2309,15 @@
       ...(module.data || {}),
       collapsed: !isModuleCollapsed(module)
     };
+    if (isDraftSectionModule(module)) {
+      state.workspace = {
+        ...state.workspace,
+        modules: state.workspace.modules.map((item) => item.id === module.id ? { ...item, data: nextData } : item)
+      };
+      renderWorkspace();
+      return;
+    }
+
     const updateResponse = await window.centralisSupabase
       .from(CHRONICLE_MODULES_TABLE)
       .update({
@@ -1671,6 +2339,18 @@
 
   async function removeSectionModule(sectionId) {
     if (!state.workspace?.element?.id || !sectionId) {
+      return;
+    }
+
+    const draftModule = state.workspace.modules.find((module) => getModuleSectionId(module) === sectionId && isDraftSectionModule(module));
+    if (draftModule) {
+      const sectionFieldIds = new Set((groupFieldsBySection(state.workspace.fields).get(sectionId) || []).map((field) => field.id));
+      state.workspace = {
+        ...state.workspace,
+        modules: state.workspace.modules.filter((module) => module.id !== draftModule.id),
+        values: state.workspace.values.filter((value) => !sectionFieldIds.has(value.template_field_id))
+      };
+      renderWorkspace();
       return;
     }
 
@@ -1761,6 +2441,30 @@
         throwIfError(moduleDeleteResponse);
       }
 
+      let persistedDraftModules = [];
+      if (!shouldResetModules) {
+        const draftModules = state.workspace.modules.filter(isDraftSectionModule);
+        if (draftModules.length) {
+          const draftModuleResponse = await window.centralisSupabase
+            .from(CHRONICLE_MODULES_TABLE)
+            .insert(draftModules.map((module) => ({
+              element_id: element.id,
+              user_id: state.user.id,
+              module_type: TEMPLATE_SECTION_MODULE_TYPE,
+              source: "ai",
+              title: module.title || "Untitled Module",
+              sort_order: module.sort_order || getNextModuleSortOrder(state.workspace.modules),
+              data: {
+                ...(module.data || {}),
+                ai_draft: false
+              }
+            })))
+            .select("*");
+          throwIfError(draftModuleResponse);
+          persistedDraftModules = draftModuleResponse.data || [];
+        }
+      }
+
       const savedTemplateValues = [];
       const valueResponses = await Promise.all(state.workspace.fields
         .filter((field) => assignedFieldIds.has(field.id))
@@ -1835,9 +2539,11 @@
         customRows,
         customResponses,
         deletedCustomFieldIds: allDeletedCustomFieldIds,
-        clearAssignedModules: shouldResetModules
+        clearAssignedModules: shouldResetModules,
+        persistedDraftModules
       });
       setWorkspaceStatus("Element saved.", "success");
+      syncUniverseAiKnowledgeAfterChronicleSave(state.workspace.universe?.id);
     } catch (error) {
       console.error("Could not save Chronicle workspace.", error);
       setWorkspaceStatus(`Could not save element: ${getReadableError(error)}`, "error");
@@ -1845,6 +2551,43 @@
       if (saveButton) {
         saveButton.disabled = false;
       }
+    }
+  }
+
+  async function syncUniverseAiKnowledgeAfterChronicleSave(universeId) {
+    if (!universeId || !window.centralisSupabase?.functions) {
+      return;
+    }
+
+    try {
+      // Do not create OpenAI storage merely because an ordinary Chronicle form
+      // was saved. If this universe already has AI knowledge, refresh it now;
+      // otherwise its first AI use will build a complete canon from scratch.
+      const { data: source, error: sourceError } = await window.centralisSupabase
+        .from("universe_ai_sources")
+        .select("universe_id")
+        .eq("universe_id", universeId)
+        .eq("user_id", state.user.id)
+        .maybeSingle();
+      if (sourceError || !source) {
+        if (sourceError) {
+          console.warn("Could not check Universe AI knowledge after Chronicle save.", sourceError);
+        }
+        return;
+      }
+
+      const { error } = await window.centralisSupabase.functions.invoke("sync-universe-ai-source", {
+        body: { universeId }
+      });
+      if (error) {
+        console.warn("Could not refresh Universe AI knowledge after Chronicle save.", error);
+        showToast("Element saved. Universe AI knowledge will refresh the next time AI is used.", "info");
+        return;
+      }
+      showToast("Universe AI knowledge synced.", "success");
+    } catch (error) {
+      console.warn("Could not refresh Universe AI knowledge after Chronicle save.", error);
+      showToast("Element saved. Universe AI knowledge will refresh the next time AI is used.", "info");
     }
   }
 
@@ -2153,7 +2896,8 @@
     customRows,
     customResponses,
     deletedCustomFieldIds,
-    clearAssignedModules = false
+    clearAssignedModules = false,
+    persistedDraftModules = []
   }) {
     const updatedAt = new Date().toISOString();
     const savedValueMap = new Map((savedTemplateValues || []).map((value) => [value.template_field_id, value]));
@@ -2177,6 +2921,9 @@
       field
     ]));
     const deletedIds = new Set(deletedCustomFieldIds || []);
+    const persistedDraftsBySectionId = new Map((persistedDraftModules || [])
+      .map((module) => [getModuleSectionId(module), module])
+      .filter(([sectionId]) => Boolean(sectionId)));
     const nextCustomFields = (customRows || []).map((row, index) => {
       const id = row.dataset.customFieldId;
       const customName = String(row.querySelector('[name="custom-name"]')?.value || "").trim();
@@ -2200,7 +2947,11 @@
       ...state.workspace,
       originalElementTypeId: elementTypeId || "",
       originalTemplateId: templateId || "",
-      modules: clearAssignedModules ? [] : state.workspace.modules,
+      modules: clearAssignedModules
+        ? []
+        : state.workspace.modules.map((module) => isDraftSectionModule(module)
+          ? persistedDraftsBySectionId.get(getModuleSectionId(module)) || module
+          : module).sort(sortModules),
       modulesResetPending: false,
       element: {
         ...state.workspace.element,

@@ -1151,6 +1151,7 @@ async function handleGenerateLifeformImage(lifeformId, button) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         objectId: lifeform.id,
+        storageModule: "stellar-architect",
         objectKind: "stellar lifeform",
         elementType: lifeform.kingdom || "Alien lifeform",
         name: lifeform.name || lifeform.designation || "",
