@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=todo-v1">
+  <link rel="stylesheet" href="styles.css?v=settings-admin-db-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs"></script>
 </head>
@@ -33,6 +33,20 @@
           >
             <ph-sparkle weight="fill" aria-hidden="true"></ph-sparkle>
             <span>AI Settings</span>
+          </button>
+          <button
+            class="settings-tab"
+            type="button"
+            role="tab"
+            id="settings-tab-database"
+            aria-selected="false"
+            aria-controls="settings-panel-database"
+            data-settings-tab="database"
+            data-admin-only
+            hidden
+          >
+            <ph-database weight="fill" aria-hidden="true"></ph-database>
+            <span>Database</span>
           </button>
         </nav>
 
@@ -90,6 +104,46 @@
             </div>
           </form>
         </section>
+
+        <section
+          class="settings-tab-panel"
+          role="tabpanel"
+          id="settings-panel-database"
+          aria-labelledby="settings-tab-database"
+          data-settings-panel="database"
+          data-admin-only
+          hidden
+        >
+          <header class="settings-panel-header">
+            <div>
+              <p class="settings-panel-eyebrow">Admin</p>
+              <h2>Database</h2>
+              <p>Admin-only database utilities for Centralis.</p>
+            </div>
+          </header>
+
+          <div class="settings-database-grid" aria-label="Database tools">
+            <article class="settings-database-card">
+              <div class="settings-database-card-icon" aria-hidden="true">
+                <ph-shield-check weight="duotone"></ph-shield-check>
+              </div>
+              <div>
+                <h3>Admin Access Active</h3>
+                <p>This account can view admin-only settings.</p>
+              </div>
+            </article>
+
+            <article class="settings-database-card">
+              <div class="settings-database-card-icon" aria-hidden="true">
+                <ph-wrench weight="duotone"></ph-wrench>
+              </div>
+              <div>
+                <h3>Database Tools</h3>
+                <p>No database utilities are configured yet.</p>
+              </div>
+            </article>
+          </div>
+        </section>
       </section>
     </main>
   </div>
@@ -97,6 +151,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=todo-v1"></script>
-  <script src="settings.js?v=global-ai-settings-1"></script>
+  <script src="settings.js?v=settings-admin-db-1"></script>
 </body>
 </html>

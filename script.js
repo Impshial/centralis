@@ -1698,6 +1698,13 @@ function applyUserSettings(settings) {
   updateThemeLabel();
 }
 
+function publishCurrentAppUserChange() {
+  window.centralisCurrentAppUser = currentAppUser;
+  window.dispatchEvent(new CustomEvent("centralis:current-user-changed", {
+    detail: { user: currentAppUser }
+  }));
+}
+
 async function prepareSignedInUser(authUser) {
   if (profileLoadPromise) {
     return withTimeout(profileLoadPromise, "Loading user profile");
@@ -1705,7 +1712,7 @@ async function prepareSignedInUser(authUser) {
 
   profileLoadPromise = (async () => {
     currentAppUser = await ensureUserProfile(authUser);
-    window.centralisCurrentAppUser = currentAppUser;
+    publishCurrentAppUserChange();
     currentUserSettings = await ensureUserSettings(currentAppUser.id);
     startElementTypeLibrarySeed(currentAppUser.id);
     applyUserSettings(currentUserSettings);
@@ -3452,6 +3459,7 @@ signOutButtons.forEach((button) => {
 
     currentAppUser = null;
     currentUserSettings = null;
+    publishCurrentAppUserChange();
     window.location.href = "index.html";
   });
 });

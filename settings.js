@@ -8,6 +8,7 @@
   const els = {
     tabs: Array.from(document.querySelectorAll("[data-settings-tab]")),
     panels: Array.from(document.querySelectorAll("[data-settings-panel]")),
+    adminOnly: Array.from(document.querySelectorAll("[data-admin-only]")),
     form: document.querySelector("[data-ai-settings-form]"),
     model: document.querySelector("[data-settings-ai-model]"),
     effort: document.querySelector("[data-settings-ai-effort]"),
@@ -23,6 +24,7 @@
   let savedSettings = { ...DEFAULT_AI_SETTINGS };
   let saving = false;
   let statusTimer = 0;
+  let activeTab = "ai";
 
   function getReadableError(error) {
     return error?.message || "Could not save AI settings.";
@@ -79,6 +81,12 @@
   }
 
   function activateTab(tabName) {
+    const tab = els.tabs.find((candidate) => candidate.dataset.settingsTab === tabName);
+    if (!tab || tab.hidden) {
+      tabName = "ai";
+    }
+
+    activeTab = tabName;
     els.tabs.forEach((tab) => {
       const isActive = tab.dataset.settingsTab === tabName;
       tab.classList.toggle("is-active", isActive);
@@ -89,6 +97,19 @@
       panel.classList.toggle("is-active", isActive);
       panel.hidden = !isActive;
     });
+  }
+
+  function syncAdminVisibility(user = window.centralisCurrentAppUser) {
+    const isAdmin = user?.admin === true;
+    els.adminOnly.forEach((element) => {
+      element.hidden = !isAdmin;
+    });
+
+    if (!isAdmin && activeTab === "database") {
+      activeTab = "ai";
+    }
+
+    activateTab(activeTab);
   }
 
   async function saveSettings() {
@@ -133,10 +154,17 @@
     savedSettings = applySettings(event.detail.settings);
   });
 
+  window.addEventListener("centralis:current-user-changed", (event) => {
+    syncAdminVisibility(event.detail?.user || null);
+  });
+
   (async () => {
+    syncAdminVisibility();
     setSaving(true);
     setStatus("Loading AI settings...");
     try {
+      const appUser = await window.centralisGetCurrentAppUser?.();
+      syncAdminVisibility(appUser);
       const settings = await window.centralisGetUserSettings();
       savedSettings = applySettings(settings || DEFAULT_AI_SETTINGS);
       setStatus("");

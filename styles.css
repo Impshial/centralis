@@ -96,7 +96,8 @@
   cursor: pointer;
 }
 
-.settings-tab ph-sparkle {
+.settings-tab ph-sparkle,
+.settings-tab ph-database {
   color: var(--accent);
   font-size: 1.05rem;
 }
@@ -160,6 +161,53 @@
   margin: 0;
 }
 
+.settings-database-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding-top: 26px;
+}
+
+.settings-database-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 132px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  border-radius: 8px;
+}
+
+.settings-database-card-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: 8px;
+}
+
+.settings-database-card-icon ph-shield-check,
+.settings-database-card-icon ph-wrench {
+  font-size: 1.35rem;
+}
+
+.settings-database-card h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.settings-database-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 @media (max-width: 720px) {
   .settings-page {
     width: min(100% - 28px, 1180px);
@@ -204,6 +252,10 @@
 
   .settings-ai-form-footer .secondary-action {
     width: 100%;
+  }
+
+  .settings-database-grid {
+    grid-template-columns: 1fr;
   }
 }
 
