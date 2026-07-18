@@ -26,6 +26,18 @@ npm start
 
 The local server is intentionally simple. It serves the static files from this directory and relies on CDN-hosted browser dependencies.
 
+## Vercel Deployment Notes
+
+Centralis deploys to Vercel as a static site. Use the "Other" framework preset, leave the build command blank, and serve the repository root.
+
+After deployment, update Supabase Auth URL configuration:
+
+- Site URL: the production Vercel URL, for example `https://centralis-nu.vercel.app`
+- Redirect URLs: include the production URL and `https://centralis-nu.vercel.app/index.html`
+- Keep local development URLs such as `http://127.0.0.1:4173` and `http://127.0.0.1:4173/index.html` if you still test locally
+
+Google OAuth redirects are generated from the current browser origin, so a Vercel sign-in should return to Vercel as long as the Vercel URL is allowlisted in Supabase.
+
 ## Major Modules
 
 ### Centralis Dashboard

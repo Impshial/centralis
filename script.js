@@ -3450,16 +3450,15 @@ if (googleAuthButton) {
       return;
     }
 
-    setAuthStatus("Opening Google login...");
+    setAuthStatus("Redirecting to Google login...");
 
-    const { data, error } = await supabaseClient.auth.signInWithOAuth({
+    const { error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/index.html`,
+        redirectTo: new URL("index.html", window.location.origin).href,
         queryParams: {
           prompt: "select_account"
-        },
-        skipBrowserRedirect: true
+        }
       }
     });
 
@@ -3467,19 +3466,6 @@ if (googleAuthButton) {
       setAuthStatus(error.message, "error");
       return;
     }
-
-    if (!data?.url) {
-      setAuthStatus("Google did not return a login URL. Check the Google provider settings in Supabase.", "error");
-      return;
-    }
-
-    const authWindow = window.open(data.url, "_blank", "noopener,noreferrer");
-    if (!authWindow) {
-      window.location.href = data.url;
-      return;
-    }
-
-    setAuthStatus("Google login opened in a new tab. Return here after signing in.", "success");
   });
 }
 
