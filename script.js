@@ -23,9 +23,9 @@ const CENTRALIS_HEADER_MARKUP = `
         <span>World Building</span>
       </button>
       <div class="dropdown-menu" role="menu">
-        <a href="universe-builder.html" role="menuitem">Universe Builder</a>
-        <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
-        <a href="chronicle.html" role="menuitem">Chronicle</a>
+        <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
+        <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
+        <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
       </div>
     </div>
 
@@ -40,10 +40,10 @@ const CENTRALIS_HEADER_MARKUP = `
         <span>Entertainment</span>
       </button>
       <div class="dropdown-menu" role="menu">
-        <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
-        <a href="chat-repository.html" role="menuitem">Chat Repository</a>
-        <a href="image-generation.html" role="menuitem">Image Generation</a>
-        <button type="button" role="menuitem">Episode Roulette</button>
+        <a href="movie-tracker.html" role="menuitem"><ph-film-slate weight="duotone" aria-hidden="true"></ph-film-slate><span>Movie Tracker</span></a>
+        <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
+        <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
+        <a href="episode-roulette.html" role="menuitem"><ph-dice-five weight="duotone" aria-hidden="true"></ph-dice-five><span>Episode Roulette</span></a>
       </div>
     </div>
 
@@ -55,10 +55,9 @@ const CENTRALIS_HEADER_MARKUP = `
         <span>Utilities</span>
       </button>
       <div class="dropdown-menu" role="menu">
-        <a href="calendar.html" role="menuitem">Calendar</a>
-        <a href="useful-things.html" role="menuitem">Useful Things</a>
-        <button type="button" role="menuitem">Tool Two</button>
-        <button type="button" role="menuitem">Tool Three</button>
+        <a href="calendar.html" role="menuitem"><ph-calendar-blank weight="duotone" aria-hidden="true"></ph-calendar-blank><span>Calendar</span></a>
+        <a href="todo.html" role="menuitem"><ph-check-square-offset weight="duotone" aria-hidden="true"></ph-check-square-offset><span>ToDo</span></a>
+        <a href="useful-things.html" role="menuitem"><ph-wrench weight="duotone" aria-hidden="true"></ph-wrench><span>Useful Things</span></a>
       </div>
     </div>
 
@@ -90,11 +89,11 @@ const CENTRALIS_HEADER_MARKUP = `
         </svg>
       </button>
       <div class="dropdown-menu align-right" role="menu">
-        <button type="button" role="menuitem">Profile</button>
-        <button type="button" role="menuitem">Account</button>
-        <a href="settings.html" role="menuitem">Settings</a>
-        <button type="button" role="menuitem">Notifications</button>
-        <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+        <button type="button" role="menuitem"><ph-user-circle weight="duotone" aria-hidden="true"></ph-user-circle><span>Profile</span></button>
+        <button type="button" role="menuitem"><ph-identification-card weight="duotone" aria-hidden="true"></ph-identification-card><span>Account</span></button>
+        <a href="settings.html" role="menuitem"><ph-gear-six weight="duotone" aria-hidden="true"></ph-gear-six><span>Settings</span></a>
+        <button type="button" role="menuitem"><ph-bell weight="duotone" aria-hidden="true"></ph-bell><span>Notifications</span></button>
+        <button type="button" role="menuitem" data-sign-out><ph-sign-out weight="duotone" aria-hidden="true"></ph-sign-out><span>Sign Out</span></button>
       </div>
     </div>
   </div>
@@ -127,9 +126,27 @@ const homeChatLogList = document.querySelector("[data-home-chat-log-list]");
 const homeUniverseCount = document.querySelector("[data-home-universe-count]");
 const homeChronicleCount = document.querySelector("[data-home-chronicle-count]");
 const homeChatLogCount = document.querySelector("[data-home-chat-log-count]");
+const homeStatus = document.querySelector("[data-home-status]");
+const homeRefreshed = document.querySelector("[data-home-refreshed]");
+const homeStatCards = document.querySelectorAll("[data-home-stat]");
+const homeUpcomingList = document.querySelector("[data-home-upcoming-events]");
+const homeUpcomingCount = document.querySelector("[data-home-upcoming-count]");
+const homeModuleGrid = document.querySelector("[data-home-module-grid]");
+const homeTodoSummary = document.querySelector("[data-home-todo-summary]");
+const homeSourceDocumentList = document.querySelector("[data-home-source-document-list]");
+const homeSourceDocumentCount = document.querySelector("[data-home-source-document-count]");
 const googleAuthButton = document.querySelector("[data-auth-google]");
 const signOutButtons = document.querySelectorAll("[data-sign-out]");
 const createUniverseButtons = document.querySelectorAll("[data-create-universe]");
+const sourceDocumentsModal = document.getElementById("universe-source-documents-modal");
+const sourceDocumentsForm = document.querySelector("[data-source-documents-form]");
+const sourceDocumentsStatus = document.querySelector("[data-source-documents-status]");
+const sourceDocumentsSubmit = document.querySelector("[data-source-documents-submit]");
+const sourceDocumentsClosers = document.querySelectorAll("[data-source-documents-close]");
+const sourceDocumentsUniverseName = document.querySelector("[data-source-documents-universe-name]");
+const sourceDocumentsList = document.querySelector("[data-source-documents-list]");
+const sourceDocumentsCount = document.querySelector("[data-source-documents-count]");
+const currentUniverseDocumentsButtons = document.querySelectorAll("[data-open-current-universe-documents]");
 const universeNameLabel = document.querySelector("[data-universe-name-label]");
 const universeNameInput = document.querySelector("[data-universe-name-input]");
 const universeDescriptionLabel = document.querySelector("[data-universe-description-label]");
@@ -170,10 +187,11 @@ const ELEMENT_TEMPLATE_SECTIONS_TABLE = "element_template_sections";
 const ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "element_type_template_fields";
 const ELEMENTS_TABLE = "elements";
 const ELEMENT_LINKS_TABLE = "element_links";
+const UNIVERSE_SOURCE_DOCUMENTS_TABLE = "universe_source_documents";
 const SUPABASE_TIMEOUT_MS = 15000;
 const EDGE_FUNCTION_TIMEOUT_MS = 60000;
 const HOMEPAGE_ICON_READY_TIMEOUT_MS = 1200;
-const HOME_SECTION_CACHE_PREFIX = "centralis-home-section-v2";
+const HOME_SECTION_CACHE_PREFIX = "centralis-home-section-v3";
 const UNIVERSE_BUILDER_VIEW_MODE_KEY = "centralis-universe-builder-view-mode";
 const DEFAULT_UNIVERSE_POSITION = { x: 120, y: 120 };
 const DEFAULT_UNIVERSE_FORMAT = {
@@ -255,8 +273,10 @@ let profileLoadPromise = null;
 let elementTypeSeedPromise = null;
 let pendingUniverseDelete = null;
 let homepageIconReadyPromise = null;
+let activeSourceDocumentsUniverse = null;
+let sourceDocumentsUploading = false;
 
-window.centralisScriptVersion = "global-ai-settings-1";
+window.centralisScriptVersion = "documents-ui-1";
 console.warn("Centralis script loaded", window.centralisScriptVersion);
 
 if (window.supabase && window.CENTRALIS_SUPABASE_CONFIG) {
@@ -331,9 +351,89 @@ function formatFileSize(bytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatDocumentType(mimeType, filename = "") {
+  const extension = String(filename || "").split(".").pop()?.toUpperCase() || "";
+  if (extension && extension.length <= 5) {
+    return extension;
+  }
+  return String(mimeType || "Document").replace(/^application\//, "").replace(/^text\//, "").toUpperCase();
+}
+
+function getSourceDocumentTitle(document) {
+  return document?.display_name || document?.original_filename || "Untitled document";
+}
+
+function setSourceDocumentsStatus(message, type = "") {
+  if (!sourceDocumentsStatus) return;
+  sourceDocumentsStatus.textContent = message || "";
+  sourceDocumentsStatus.classList.toggle("is-error", type === "error");
+  sourceDocumentsStatus.classList.toggle("is-success", type === "success");
+}
+
 function setHomeCount(element, count, noun) {
   if (!element) return;
   element.textContent = count === 1 ? `1 ${noun}` : `${count} ${noun}s`;
+}
+
+function formatCompactNumber(value) {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat(undefined, {
+    notation: number >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(number);
+}
+
+function pluralize(count, singular, plural = `${singular}s`) {
+  return Number(count) === 1 ? singular : plural;
+}
+
+function getRecentCutoff(days = 14) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return cutoff;
+}
+
+function isRecentDate(value, days = 14) {
+  if (!value) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date >= getRecentCutoff(days);
+}
+
+function setHomeStatus(message) {
+  if (!homeStatus) return;
+  homeStatus.textContent = message || "";
+}
+
+function setHomeRefreshed(date = new Date()) {
+  if (!homeRefreshed) return;
+  homeRefreshed.textContent = `Updated ${new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)}`;
+}
+
+function getHomeStatCard(key) {
+  return [...homeStatCards].find((card) => card.dataset.homeStat === key);
+}
+
+function setHomeStat(key, value, detail, { isError = false } = {}) {
+  const card = getHomeStatCard(key);
+  if (!card) return;
+  const valueElement = card.querySelector("[data-home-stat-value]");
+  const detailElement = card.querySelector("[data-home-stat-detail]");
+  if (valueElement) valueElement.textContent = value;
+  if (detailElement) detailElement.textContent = detail;
+  card.classList.toggle("is-error", isError);
+}
+
+function setHomeStatsLoading() {
+  homeStatCards.forEach((card) => {
+    const valueElement = card.querySelector("[data-home-stat-value]");
+    const detailElement = card.querySelector("[data-home-stat-detail]");
+    if (valueElement) valueElement.textContent = "...";
+    if (detailElement) detailElement.textContent = "Loading...";
+    card.classList.remove("is-error");
+  });
 }
 
 function setUniverseBuilderCount(visibleCount, totalCount = visibleCount) {
@@ -503,6 +603,513 @@ function getHomeCardImageStyle(image) {
   return ` style="--home-card-image: url('${escapeHtml(image.image_url)}')"`;
 }
 
+function getUniverseGenreIconName(universe) {
+  const text = `${universe?.name || ""} ${universe?.description || ""}`.toLowerCase();
+  const matches = [
+    { icon: "ph-castle-turret", words: ["fantasy", "magic", "mage", "dragon", "kingdom", "realm", "fae", "sorcery"] },
+    { icon: "ph-rocket-launch", words: ["sci-fi", "science fiction", "space", "starship", "galaxy", "cyber", "alien", "planet", "stellar"] },
+    { icon: "ph-detective", words: ["mystery", "detective", "noir", "crime", "investigation", "murder"] },
+    { icon: "ph-ghost", words: ["horror", "haunted", "ghost", "curse", "demon", "eldritch", "nightmare"] },
+    { icon: "ph-scroll", words: ["historical", "ancient", "empire", "dynasty", "medieval", "renaissance"] },
+    { icon: "ph-heart", words: ["romance", "love", "relationship"] },
+    { icon: "ph-mask-happy", words: ["comedy", "satire", "whimsical"] },
+    { icon: "ph-sword", words: ["adventure", "quest", "warrior", "battle"] },
+    { icon: "ph-city", words: ["urban", "city", "municipal", "metropolis"] },
+    { icon: "ph-tree-evergreen", words: ["nature", "wilderness", "forest", "wild"] },
+  ];
+  return matches.find((match) => match.words.some((word) => text.includes(word)))?.icon || "ph-globe-hemisphere-west";
+}
+
+function renderSourceDocumentRows(documents = [], { isHomepage = false } = {}) {
+  if (!documents.length) {
+    return '<p class="empty-state">No documents uploaded yet.</p>';
+  }
+
+  return documents.map((document) => {
+    const universeName = document.universe_name || document.universes?.name || "";
+    const href = `universe-canvas.html?universe_id=${encodeURIComponent(document.universe_id || "")}&documents=1`;
+    const tagName = isHomepage ? "a" : "div";
+    const hrefAttribute = isHomepage ? ` href="${href}"` : "";
+    return `
+      <${tagName} class="${isHomepage ? "home-source-document-card" : "source-document-row"}"${hrefAttribute}>
+        <span class="${isHomepage ? "home-chronicle-icon" : "source-document-icon"}" aria-hidden="true"><ph-file-arrow-up weight="duotone"></ph-file-arrow-up></span>
+        <span class="${isHomepage ? "home-chronicle-main" : "source-document-main"}">
+          <strong>${escapeHtml(getSourceDocumentTitle(document))}</strong>
+          <span>${escapeHtml([
+            universeName,
+            formatDocumentType(document.mime_type, document.original_filename),
+            formatFileSize(document.file_size),
+            formatShortDate(document.created_at),
+          ].filter(Boolean).join(" - "))}</span>
+          ${!isHomepage && document.display_name ? `<em>${escapeHtml(document.original_filename || "")}</em>` : ""}
+        </span>
+      </${tagName}>
+    `;
+  }).join("");
+}
+
+async function loadUniverseSourceDocuments(universeId) {
+  if (!sourceDocumentsList || !sourceDocumentsCount || !supabaseClient || !universeId) {
+    return;
+  }
+
+    sourceDocumentsList.innerHTML = '<p class="empty-state">Loading documents...</p>';
+  sourceDocumentsCount.textContent = "Loading...";
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("list-universe-source-documents", {
+      body: { universeId },
+    });
+    if (error) throw error;
+
+    const documents = data?.documents || [];
+    setHomeCount(sourceDocumentsCount, documents.length, "document");
+    sourceDocumentsList.innerHTML = renderSourceDocumentRows(documents);
+  } catch (error) {
+    sourceDocumentsCount.textContent = "Error";
+    sourceDocumentsList.innerHTML = `<p class="empty-state is-error">Could not load documents: ${getReadableError(error)}</p>`;
+  }
+}
+
+function openSourceDocumentsDialog(universe) {
+  if (!sourceDocumentsModal || !universe?.id) {
+    return;
+  }
+
+  activeSourceDocumentsUniverse = universe;
+  if (sourceDocumentsUniverseName) {
+    sourceDocumentsUniverseName.textContent = universe.name || "Untitled Universe";
+  }
+  sourceDocumentsForm?.reset();
+  setSourceDocumentsStatus("");
+  openModal(sourceDocumentsModal);
+  loadUniverseSourceDocuments(universe.id);
+}
+
+function getCurrentUniverseForDocuments() {
+  const params = new URLSearchParams(window.location.search);
+  const universeId = params.get("universe_id") || sessionStorage.getItem("centralis-current-universe-id");
+  if (!universeId) {
+    return null;
+  }
+  const title = document.querySelector("[data-universe-title]")?.textContent?.trim();
+  return {
+    id: universeId,
+    name: title && title !== "Universe Canvas" ? title : "Current Universe",
+  };
+}
+
+function closeSourceDocumentsDialog() {
+  if (sourceDocumentsUploading) {
+    return;
+  }
+
+  activeSourceDocumentsUniverse = null;
+  sourceDocumentsForm?.reset();
+  setSourceDocumentsStatus("");
+  closeModal();
+}
+
+async function uploadUniverseSourceDocument(event) {
+  event.preventDefault();
+  if (!activeSourceDocumentsUniverse?.id || !sourceDocumentsForm || sourceDocumentsUploading) {
+    return;
+  }
+  if (!supabaseClient) {
+    setSourceDocumentsStatus("Supabase is not available yet. Refresh the page and try again.", "error");
+    return;
+  }
+
+  const formData = new FormData(sourceDocumentsForm);
+  const file = formData.get("file");
+  if (!(file instanceof File) || !file.name) {
+    setSourceDocumentsStatus("Choose a document to upload.", "error");
+    return;
+  }
+
+  formData.set("universeId", activeSourceDocumentsUniverse.id);
+  sourceDocumentsUploading = true;
+  if (sourceDocumentsSubmit) sourceDocumentsSubmit.disabled = true;
+  sourceDocumentsClosers.forEach((button) => { button.disabled = true; });
+  setSourceDocumentsStatus("Uploading document...");
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("upload-universe-source-document", {
+      body: formData,
+    });
+    if (error) throw error;
+
+    sourceDocumentsForm.reset();
+    setSourceDocumentsStatus(`Uploaded "${getSourceDocumentTitle(data?.document)}".`, "success");
+    await loadUniverseSourceDocuments(activeSourceDocumentsUniverse.id);
+    if (document.body.dataset.page === "home") {
+      await loadRecentSourceDocuments();
+    }
+  } catch (error) {
+    setSourceDocumentsStatus(`Could not upload document: ${getReadableError(error)}`, "error");
+  } finally {
+    sourceDocumentsUploading = false;
+    if (sourceDocumentsSubmit) sourceDocumentsSubmit.disabled = false;
+    sourceDocumentsClosers.forEach((button) => { button.disabled = false; });
+  }
+}
+
+function getMetricTotal(result) {
+  return Number(result?.total || 0);
+}
+
+function getMetricRecent(result) {
+  return Number(result?.recent || 0);
+}
+
+function formatEventTime(event) {
+  if (!event?.start_time) {
+    return "No start time";
+  }
+
+  const start = new Date(event.start_time);
+  if (!Number.isFinite(start.getTime())) {
+    return "No start time";
+  }
+
+  if (event.is_all_day) {
+    return `${formatShortDate(event.start_time)} - All day`;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(start);
+}
+
+async function fetchHomeUniversesMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from(UNIVERSE_TABLE)
+    .select("id,updated_at,opened_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id), "Loading universe overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const recent = rows.filter((universe) => isRecentDate(universe.opened_at || universe.updated_at)).length;
+  setHomeStat("universes", formatCompactNumber(total), `${recent} ${pluralize(recent, "recent update")}`);
+  return { total, recent };
+}
+
+async function fetchHomeChronicleMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from(ELEMENTS_TABLE)
+    .select("id,updated_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id), "Loading Chronicle overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const recent = rows.filter((element) => isRecentDate(element.updated_at)).length;
+  setHomeStat("chronicle", formatCompactNumber(total), `${recent} ${pluralize(recent, "recent update")}`);
+  return { total, recent };
+}
+
+async function fetchHomeChatLogMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from("chat_logs")
+    .select("id,file_size,updated_at,created_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id)
+    .is("deleted_at", null), "Loading chat log overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const recent = rows.filter((chatLog) => isRecentDate(chatLog.updated_at || chatLog.created_at)).length;
+  const totalSize = rows.reduce((sum, chatLog) => sum + Number(chatLog.file_size || 0), 0);
+  setHomeStat("chat-logs", formatCompactNumber(total), `${formatFileSize(totalSize)} stored`);
+  return { total, recent, totalSize };
+}
+
+async function fetchHomeCalendarMetric() {
+  const calendarsResponse = await withTimeout(supabaseClient
+    .from("calendars")
+    .select("id,name,color")
+    .eq("user_id", currentAppUser.id)
+    .eq("is_visible", true), "Loading calendar list");
+
+  if (calendarsResponse.error) throw calendarsResponse.error;
+
+  const calendars = calendarsResponse.data || [];
+  const calendarIds = calendars.map((calendar) => calendar.id).filter(Boolean);
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
+  let eventsResponse = { data: [], count: 0 };
+  if (calendarIds.length) {
+    eventsResponse = await withTimeout(supabaseClient
+      .from("events")
+      .select("id,title,start_time,end_time,is_all_day,calendar_id,status,color", { count: "exact" })
+      .in("calendar_id", calendarIds)
+      .gte("start_time", now)
+      .order("start_time", { ascending: true })
+      .limit(5), "Loading upcoming calendar events");
+  }
+
+  if (eventsResponse.error) throw eventsResponse.error;
+
+  const tasksResponse = await withTimeout(supabaseClient
+    .from("todo_tasks")
+    .select("id,title,due_date,status,priority,category", { count: "exact" })
+    .eq("user_id", currentAppUser.id)
+    .not("due_date", "is", null)
+    .gte("due_date", today)
+    .order("due_date", { ascending: true })
+    .limit(5), "Loading upcoming tasks");
+
+  if (tasksResponse.error) throw tasksResponse.error;
+
+  const events = eventsResponse.data || [];
+  const tasks = tasksResponse.data || [];
+  const total = events.length + tasks.length;
+  const calendarsById = new Map(calendars.map((calendar) => [calendar.id, calendar]));
+  const items = [
+    ...events.map((event) => ({
+      type: "event",
+      sortDate: event.start_time,
+      event,
+    })),
+    ...tasks.map((task) => ({
+      type: "task",
+      sortDate: `${task.due_date}T00:00:00`,
+      task,
+    })),
+  ].sort((first, second) => new Date(first.sortDate) - new Date(second.sortDate)).slice(0, 5);
+  const nextItem = items[0];
+  setHomeStat("calendar", formatCompactNumber(total), nextItem ? `Next: ${formatShortDate(nextItem.sortDate)}` : "Nothing upcoming");
+  return { total, recent: items.length, events, tasks, items, calendarsById };
+}
+
+async function fetchHomeTodoMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from("todo_tasks")
+    .select("id,status,due_date,updated_at,created_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id), "Loading ToDo overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const open = rows.filter((task) => task.status !== "completed").length;
+  const scheduled = rows.filter((task) => task.due_date).length;
+  if (homeTodoSummary) {
+    homeTodoSummary.textContent = total
+      ? `${open} open - ${scheduled} scheduled`
+      : "No tasks yet. Start a list in ToDo.";
+  }
+  return { total, open, scheduled };
+}
+
+async function fetchHomeMovieMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from("movies")
+    .select("id,downloaded,updated_at,created_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id), "Loading movie overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const downloaded = rows.filter((movie) => movie.downloaded).length;
+  const recent = rows.filter((movie) => isRecentDate(movie.updated_at || movie.created_at)).length;
+  setHomeStat("movies", formatCompactNumber(total), `${downloaded} downloaded`);
+  return { total, downloaded, recent };
+}
+
+async function fetchHomeImageMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from("image_generation_sessions")
+    .select("id,updated_at,created_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id), "Loading image generation overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const recent = rows.filter((session) => isRecentDate(session.updated_at || session.created_at)).length;
+  setHomeStat("images", formatCompactNumber(total), `${recent} ${pluralize(recent, "recent session")}`);
+  return { total, recent };
+}
+
+function renderHomeUpcomingEvents(calendarMetric) {
+  if (!homeUpcomingList) return;
+
+  const items = calendarMetric?.items || [];
+  const calendarsById = calendarMetric?.calendarsById || new Map();
+  if (homeUpcomingCount) {
+    setHomeCount(homeUpcomingCount, calendarMetric?.total || 0, "item");
+  }
+
+  if (!items.length) {
+    homeUpcomingList.innerHTML = `
+      <p class="empty-state">No upcoming events or tasks. <a href="calendar.html">Open Calendar</a> to plan what is next.</p>
+    `;
+    return;
+  }
+
+  homeUpcomingList.innerHTML = items.map((item) => {
+    if (item.type === "task") {
+      const task = item.task;
+      return `
+        <a class="home-upcoming-event is-task" href="todo.html">
+          <span class="home-upcoming-date">Task - ${escapeHtml(formatShortDate(item.sortDate))}</span>
+          <strong>${escapeHtml(task.title || "Untitled Task")}</strong>
+          <span>${escapeHtml(task.category || "ToDo")}</span>
+        </a>
+      `;
+    }
+    const event = item.event;
+    const calendar = calendarsById.get(event.calendar_id);
+    return `
+      <a class="home-upcoming-event" href="calendar.html">
+        <span class="home-upcoming-date">${escapeHtml(formatEventTime(event))}</span>
+        <strong>${escapeHtml(event.title || "Untitled Event")}</strong>
+        <span>${escapeHtml(calendar?.name || "Calendar")}</span>
+      </a>
+    `;
+  }).join("");
+}
+
+function renderHomeModules(metrics = {}) {
+  if (!homeModuleGrid) return;
+
+  const modules = [
+    {
+      title: "Universe Builder",
+      href: "universe-builder.html",
+      icon: "ph-planet",
+      detail: `${getMetricTotal(metrics.universes)} ${pluralize(getMetricTotal(metrics.universes), "universe")}`,
+    },
+    {
+      title: "Chronicle",
+      href: "chronicle.html",
+      icon: "ph-file-text",
+      detail: `${getMetricTotal(metrics.chronicle)} ${pluralize(getMetricTotal(metrics.chronicle), "element")}`,
+    },
+    {
+      title: "Chat Repository",
+      href: "chat-repository.html",
+      icon: "ph-chats-circle",
+      detail: `${getMetricTotal(metrics.chatLogs)} ${pluralize(getMetricTotal(metrics.chatLogs), "log")}`,
+    },
+    {
+      title: "Calendar",
+      href: "calendar.html",
+      icon: "ph-calendar-blank",
+      detail: `${getMetricTotal(metrics.calendar)} upcoming`,
+    },
+    {
+      title: "ToDo",
+      href: "todo.html",
+      icon: "ph-check-square-offset",
+      detail: `${metrics.todos?.open || 0} open`,
+    },
+    {
+      title: "Movie Tracker",
+      href: "movie-tracker.html",
+      icon: "ph-film-slate",
+      detail: `${metrics.movies?.downloaded || 0} downloaded`,
+    },
+    {
+      title: "Stellar Architect",
+      href: "stellar-architect.html#systems",
+      icon: "ph-sparkle",
+      detail: "Systems lab",
+    },
+    {
+      title: "Image Generation",
+      href: "image-generation.html",
+      icon: "ph-image-square",
+      detail: `${getMetricRecent(metrics.images)} recent`,
+    },
+    {
+      title: "Useful Things",
+      href: "useful-things.html",
+      icon: "ph-wrench",
+      detail: "Text, math, generators",
+    },
+  ];
+
+  homeModuleGrid.innerHTML = modules.map((module) => `
+    <a class="home-module-card" href="${module.href}">
+      <span class="home-module-icon" aria-hidden="true"><${module.icon} weight="duotone"></${module.icon}></span>
+      <span>
+        <strong>${escapeHtml(module.title)}</strong>
+        <em>${escapeHtml(module.detail)}</em>
+      </span>
+      <ph-arrow-right weight="bold" aria-hidden="true"></ph-arrow-right>
+    </a>
+  `).join("");
+}
+
+async function loadHomeDashboardOverview() {
+  if (document.body.dataset.page !== "home" || !supabaseClient || !currentAppUser) {
+    return;
+  }
+
+  setHomeStatus("Checking workspace totals and upcoming work...");
+  setHomeRefreshed();
+  setHomeStatsLoading();
+  if (homeUpcomingList) {
+    homeUpcomingList.innerHTML = '<p class="empty-state">Loading upcoming events...</p>';
+  }
+  if (homeUpcomingCount) {
+    homeUpcomingCount.textContent = "Loading...";
+  }
+  if (homeModuleGrid) {
+    homeModuleGrid.innerHTML = '<p class="empty-state">Loading modules...</p>';
+  }
+
+  const metricLoaders = {
+    universes: fetchHomeUniversesMetric,
+    chronicle: fetchHomeChronicleMetric,
+    chatLogs: fetchHomeChatLogMetric,
+    calendar: fetchHomeCalendarMetric,
+    movies: fetchHomeMovieMetric,
+    images: fetchHomeImageMetric,
+    todos: fetchHomeTodoMetric,
+  };
+  const metricEntries = await Promise.all(Object.entries(metricLoaders).map(async ([key, loader]) => {
+    try {
+      return [key, await loader()];
+    } catch (error) {
+      console.warn(`Could not load ${key} homepage metric:`, error);
+      const statKeyByMetric = {
+        chatLogs: "chat-logs",
+        images: "images",
+      };
+      setHomeStat(statKeyByMetric[key] || key, "Error", getReadableError(error), { isError: true });
+      if (key === "todos" && homeTodoSummary) {
+        homeTodoSummary.textContent = "Could not load tasks.";
+      }
+      if (key === "calendar") {
+        if (homeUpcomingCount) homeUpcomingCount.textContent = "Error";
+        if (homeUpcomingList) {
+          homeUpcomingList.innerHTML = `<p class="empty-state is-error">Could not load upcoming events: ${getReadableError(error)}</p>`;
+        }
+      }
+      return [key, { total: 0, recent: 0, error }];
+    }
+  }));
+
+  const metrics = Object.fromEntries(metricEntries);
+  if (!metrics.calendar?.error) {
+    renderHomeUpcomingEvents(metrics.calendar);
+  }
+  renderHomeModules(metrics);
+  setHomeStatus("Overview ready. Recent work is listed below.");
+  setHomeRefreshed();
+}
+
 function toggleHomeSection(button) {
   const panel = button.closest(".home-panel");
   const body = panel?.querySelector("[data-home-section-body]");
@@ -531,13 +1138,14 @@ function isSameDocumentLink(anchor) {
     && targetUrl.hash === window.location.hash;
 }
 
-function createUniverseDeleteMenu(universe) {
+function createUniverseDeleteMenu(universe, { includeSourceDocuments = false } = {}) {
   return `
     <div class="card-menu-wrap">
       <button class="node-kebab card-kebab" type="button" aria-label="Universe actions" aria-expanded="false" aria-haspopup="menu" data-universe-menu-button>
         <ph-dots-three-vertical weight="bold" aria-hidden="true"></ph-dots-three-vertical>
       </button>
       <div class="node-menu card-menu" role="menu" hidden>
+        ${includeSourceDocuments ? `<button type="button" role="menuitem" data-open-source-documents data-universe-id="${escapeHtml(universe.id)}" data-universe-name="${escapeHtml(universe.name || "Untitled Universe")}">Documents</button>` : ""}
         <button class="danger-menu-item" type="button" role="menuitem" data-delete-universe data-universe-id="${escapeHtml(universe.id)}" data-universe-name="${escapeHtml(universe.name || "Untitled Universe")}">Delete Universe</button>
       </div>
     </div>
@@ -885,6 +1493,21 @@ function waitForHomepageIcons() {
       "ph-file-text",
       "ph-dots-three-vertical",
       "ph-caret-up",
+      "ph-calendar-blank",
+      "ph-film-slate",
+      "ph-image-square",
+      "ph-sparkle",
+      "ph-wrench",
+      "ph-dice-five",
+      "ph-user-circle",
+      "ph-identification-card",
+      "ph-gear-six",
+      "ph-bell",
+      "ph-sign-out",
+      "ph-sliders-horizontal",
+      "ph-shield-check",
+      "ph-keyboard",
+      "ph-file-arrow-up",
     ];
     const iconPromises = iconNames.map((name) => customElements.whenDefined(name).catch(() => null));
     const timeoutPromise = new Promise((resolve) => {
@@ -1085,6 +1708,8 @@ async function prepareSignedInUser(authUser) {
     startElementTypeLibrarySeed(currentAppUser.id);
     applyUserSettings(currentUserSettings);
     const homepageDataPromise = Promise.all([
+      loadHomeDashboardOverview(),
+      loadRecentSourceDocuments(),
       loadUniverseCards(),
       loadRecentChronicleElements(),
       loadRecentChatLogs()
@@ -1096,6 +1721,7 @@ async function prepareSignedInUser(authUser) {
     } else {
       await homepageDataPromise;
     }
+    openRequestedSourceDocumentsFromUrl();
     return currentAppUser;
   })();
 
@@ -1145,20 +1771,22 @@ function renderUniverseCards(data, primaryImagesByObjectId, { isBuilderPage = fa
   universeList.innerHTML = visibleUniverses.map((universe) => {
     const image = primaryImagesByObjectId.get(universe.id);
     const isNew = isBuilderPage && !universe.opened_at;
+    const iconName = getUniverseGenreIconName(universe);
     return `
     <article class="universe-card-wrap">
       <a class="universe-card${getHomeCardImageClass(image)}" href="universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}"${getHomeCardImageStyle(image)}>
         ${isNew ? '<span class="universe-new-badge">New</span>' : ""}
         <span class="card-icon" aria-hidden="true">
-          <ph-planet weight="duotone"></ph-planet>
+          <${iconName} weight="duotone"></${iconName}>
         </span>
         <span class="universe-card-copy">
           <strong>${escapeHtml(universe.name || "Untitled Universe")}</strong>
+          ${!isBuilderPage ? `<span class="home-card-meta">Updated ${escapeHtml(formatShortDate(universe.updated_at || universe.opened_at))}</span>` : ""}
           <span class="universe-card-description-short">${escapeHtml(createBlurb(universe.description))}</span>
           <span class="universe-card-description-long">${escapeHtml(createBlurb(universe.description, 420))}</span>
         </span>
       </a>
-      ${createUniverseDeleteMenu(universe)}
+      ${createUniverseDeleteMenu(universe, { includeSourceDocuments: false })}
     </article>
   `;
   }).join("");
@@ -1221,6 +1849,44 @@ async function loadUniverseCards() {
   }
 }
 
+async function loadRecentSourceDocuments() {
+  if (!homeSourceDocumentList || !supabaseClient || !currentAppUser) {
+    return;
+  }
+
+  const restoredFromCache = restoreHomeSectionCache("source-documents", homeSourceDocumentList, homeSourceDocumentCount);
+  if (!restoredFromCache) {
+    homeSourceDocumentList.innerHTML = '<p class="empty-state">Loading documents...</p>';
+    if (homeSourceDocumentCount) homeSourceDocumentCount.textContent = "Loading...";
+  }
+
+  try {
+    const { data, error } = await withTimeout(supabaseClient
+      .from(UNIVERSE_SOURCE_DOCUMENTS_TABLE)
+      .select("id,universe_id,original_filename,display_name,mime_type,file_size,created_at,updated_at,universes(name)")
+      .eq("user_id", currentAppUser.id)
+      .order("created_at", { ascending: false })
+      .limit(8), "Loading recent documents");
+
+    if (error) {
+      homeSourceDocumentList.innerHTML = `<p class="empty-state is-error">Could not load documents: ${getReadableError(error)}</p>`;
+      if (homeSourceDocumentCount) homeSourceDocumentCount.textContent = "Error";
+      return;
+    }
+
+    const documents = (data || []).map((document) => ({
+      ...document,
+      universe_name: document.universes?.name || "Untitled Universe",
+    }));
+    setHomeCount(homeSourceDocumentCount, documents.length, "document");
+    homeSourceDocumentList.innerHTML = renderSourceDocumentRows(documents, { isHomepage: true });
+    writeHomeSectionCache("source-documents", homeSourceDocumentList, homeSourceDocumentCount);
+  } catch (error) {
+    homeSourceDocumentList.innerHTML = `<p class="empty-state is-error">Could not load documents: ${getReadableError(error)}</p>`;
+    if (homeSourceDocumentCount) homeSourceDocumentCount.textContent = "Error";
+  }
+}
+
 async function loadRecentChronicleElements() {
   if (!homeChronicleList || !supabaseClient || !currentAppUser) {
     return;
@@ -1280,7 +1946,7 @@ async function loadRecentChronicleElements() {
           <span class="home-chronicle-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
           <span class="home-chronicle-main">
             <strong>${escapeHtml(element.name || "Untitled Element")}</strong>
-            <span>${escapeHtml(universe?.name || "Standalone Element")}</span>
+            <span>${escapeHtml(universe?.name || "Standalone Element")} - ${escapeHtml(formatShortDate(element.updated_at))}</span>
             <em>${escapeHtml(createBlurb(element.description))}</em>
           </span>
         </a>
@@ -1885,6 +2551,24 @@ function openDeleteUniverseDialog(universe) {
   openModal(modal);
 }
 
+function openRequestedSourceDocumentsFromUrl() {
+  if (document.body.dataset.page !== "universe-canvas" || !sourceDocumentsModal) {
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("documents") !== "1" || !sourceDocumentsModal.hidden) {
+    return;
+  }
+
+  const universe = getCurrentUniverseForDocuments();
+  if (!universe) {
+    return;
+  }
+
+  openSourceDocumentsDialog(universe);
+}
+
 function bindUniverseCardMenus() {
   if (!universeList) {
     return;
@@ -1904,6 +2588,18 @@ function bindUniverseCardMenus() {
       if (menu) {
         menu.hidden = isOpen;
       }
+    });
+  });
+
+  universeList.querySelectorAll("[data-open-source-documents]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeUniverseCardMenus();
+      openSourceDocumentsDialog({
+        id: button.dataset.universeId,
+        name: button.dataset.universeName
+      });
     });
   });
 
@@ -2604,6 +3300,26 @@ universeViewModeButtons.forEach((button) => {
 });
 universeBuilderSearch?.addEventListener("input", () => {
   renderUniverseCards(universeBuilderUniverses, universeBuilderPrimaryImages, { isBuilderPage: true });
+});
+
+sourceDocumentsForm?.addEventListener("submit", uploadUniverseSourceDocument);
+sourceDocumentsClosers.forEach((button) => {
+  button.addEventListener("click", closeSourceDocumentsDialog);
+});
+sourceDocumentsModal?.addEventListener("click", (event) => {
+  if (event.target === sourceDocumentsModal) {
+    closeSourceDocumentsDialog();
+  }
+});
+currentUniverseDocumentsButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const universe = getCurrentUniverseForDocuments();
+    if (!universe) {
+      setSourceDocumentsStatus("Open a universe before managing documents.", "error");
+      return;
+    }
+    openSourceDocumentsDialog(universe);
+  });
 });
 
 document.querySelectorAll(".universe-form").forEach((form) => {

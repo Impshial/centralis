@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stellar Architect | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="styles.css?v=todo-v1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
-<body data-auth-required="true" data-page="stellar-architect">
+<body class="stellar-home-route" data-auth-required="true" data-page="stellar-architect">
   <div class="app-shell">
     <header class="site-header" aria-label="Centralis main header">
       <a class="brand" href="index.html" aria-label="Centralis home">
@@ -68,8 +69,6 @@
           <div class="dropdown-menu" role="menu">
           <a href="calendar.html" role="menuitem">Calendar</a>
           <a href="useful-things.html" role="menuitem">Useful Things</a>
-          <button type="button" role="menuitem">Tool Two</button>
-            <button type="button" role="menuitem">Tool Three</button>
           </div>
         </div>
 
@@ -124,7 +123,7 @@
       </div>
     </header>
 
-    <main class="stellar-page">
+    <main class="stellar-page" aria-labelledby="stellar-architect-title">
       <section class="stellar-main" data-stellar-root>
         <div class="stellar-loading">Loading Stellar Architect...</div>
       </section>
@@ -266,8 +265,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=global-ai-settings-1"></script>
-  <script src="stellar-architect.js?v=stellar-v5"></script>
+  <script src="script.js?v=todo-v1"></script>
+  <script src="stellar-architect.js?v=documents-ui-1"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisStellarLoaded) {

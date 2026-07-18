@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=resolution-calculator-1">
+  <link rel="stylesheet" href="styles.css?v=todo-v1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -69,8 +69,6 @@
           <div class="dropdown-menu" role="menu">
             <a href="calendar.html" role="menuitem">Calendar</a>
             <a href="useful-things.html" role="menuitem">Useful Things</a>
-            <button type="button" role="menuitem">Tool Two</button>
-            <button type="button" role="menuitem">Tool Three</button>
           </div>
         </div>
 
@@ -193,12 +191,14 @@
             <div class="text-converter-body">
               <section class="text-converter-pane" aria-labelledby="text-converter-input-title">
                 <div class="text-converter-pane-header">
-                  <h3 id="text-converter-input-title">Input</h3>
-                  <div class="text-converter-input-controls">
-                    <button class="text-converter-clear-input" type="button" data-text-clear-input>
-                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
-                      Clear Text
+                  <div class="text-converter-input-heading">
+                    <h3 id="text-converter-input-title">Input</h3>
+                    <button class="text-converter-save" type="button" data-text-save-input>
+                      <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                      Save
                     </button>
+                  </div>
+                  <div class="text-converter-input-controls">
                     <label class="text-converter-mode-field" for="text-converter-mode">
                       <span>Input mode</span>
                       <select id="text-converter-mode" data-text-converter-mode>
@@ -209,6 +209,7 @@
                   </div>
                 </div>
 
+                <div class="text-converter-input-editor-area">
                 <div class="text-converter-rich-wrap" data-rich-input-wrap>
                   <div class="text-converter-rich-toolbar" role="toolbar" aria-label="WYSIWYG formatting controls">
                     <button type="button" data-rich-command="removeFormat" title="Clear formatting" aria-label="Clear formatting">
@@ -293,6 +294,11 @@
                   aria-label="Raw text input"
                   hidden
                 ></textarea>
+                <button class="text-converter-clear-input" type="button" data-text-clear-input>
+                  <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                  Clear Text
+                </button>
+                </div>
               </section>
 
               <section class="text-converter-actions" aria-label="Conversion targets">
@@ -317,10 +323,16 @@
 
               <section class="text-converter-pane" aria-labelledby="text-converter-output-title">
                 <div class="text-converter-pane-header">
-                  <h3 id="text-converter-output-title">
-                    Output
-                    <span class="text-converter-output-format" data-text-output-format hidden></span>
-                  </h3>
+                  <div class="text-converter-output-heading">
+                    <h3 id="text-converter-output-title">
+                      Output
+                      <span class="text-converter-output-format" data-text-output-format hidden></span>
+                    </h3>
+                    <button class="text-converter-save" type="button" data-text-save-output>
+                      <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                      Save
+                    </button>
+                  </div>
                   <div class="text-converter-output-copy-menu" data-text-output-copy-menu>
                     <button class="text-converter-output-copy" type="button" data-text-output-copy>Copy</button>
                     <button
@@ -566,7 +578,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=global-ai-settings-1"></script>
+  <script src="script.js?v=todo-v1"></script>
   <script src="useful-things.js?v=resolution-calculator-1"></script>
 </body>
 </html>

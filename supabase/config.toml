@@ -57,6 +57,9 @@ verify_jwt = true
 [functions.lookup-movie-poster-tmdb]
 verify_jwt = true
 
+[functions.episode-roulette-tmdb]
+verify_jwt = true
+
 [functions.browse-storage]
 verify_jwt = true
 

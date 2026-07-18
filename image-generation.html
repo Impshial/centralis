@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Image Generation | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=image-generation-message-actions-6">
+  <link rel="stylesheet" href="styles.css?v=todo-v1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -149,6 +149,12 @@
       </section>
     </main>
   </div>
+  <div class="image-generation-page-busy" data-image-deleting-session hidden aria-live="assertive" aria-busy="true">
+    <div>
+      <ph-spinner-gap aria-hidden="true"></ph-spinner-gap>
+      <span>Deleting Session</span>
+    </div>
+  </div>
   <div class="modal-backdrop image-generation-viewer-backdrop" id="image-generation-viewer-modal" hidden>
     <section class="modal-dialog image-generation-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="image-generation-viewer-title">
       <header class="image-generation-viewer-header">
@@ -170,7 +176,7 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=image-generation-7"></script>
+  <script src="script.js?v=todo-v1"></script>
   <script src="image-generation.js?v=image-generation-openai-controls-1"></script>
 </body>
 </html>

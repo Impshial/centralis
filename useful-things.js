@@ -6,10 +6,12 @@
     panels: Array.from(document.querySelectorAll("[data-useful-panel]")),
     modeSelect: document.querySelector("[data-text-converter-mode]"),
     clearInputButton: document.querySelector("[data-text-clear-input]"),
+    saveInputButton: document.querySelector("[data-text-save-input]"),
     richWrap: document.querySelector("[data-rich-input-wrap]"),
     richEditor: document.querySelector("[data-text-rich-editor]"),
     rawInput: document.querySelector("[data-text-raw-input]"),
     output: document.querySelector("[data-text-output]"),
+    saveOutputButton: document.querySelector("[data-text-save-output]"),
     outputBusy: document.querySelector("[data-text-output-busy]"),
     outputFormat: document.querySelector("[data-text-output-format]"),
     outputCopyButton: document.querySelector("[data-text-output-copy]"),
@@ -2998,6 +3000,103 @@
     els.richEditor.innerHTML = escapeHtml(value).replace(/\r?\n/g, "<br>");
   }
 
+  function richHtmlToMarkdown(html) {
+    const template = document.createElement("template");
+    template.innerHTML = sanitizeRichHtml(html || "");
+
+    function renderChildren(node) {
+      return Array.from(node.childNodes).map(renderNode).join("");
+    }
+
+    function renderList(node, ordered) {
+      return Array.from(node.children)
+        .filter((child) => child.tagName === "LI")
+        .map((item, index) => {
+          const marker = ordered ? `${index + 1}.` : "-";
+          const content = renderChildren(item).trim().replace(/\n+/g, "\n  ");
+          return `${marker} ${content}`;
+        })
+        .join("\n");
+    }
+
+    function renderNode(node) {
+      if (node.nodeType === 3) {
+        return (node.nodeValue || "").replace(/\u00a0/g, " ");
+      }
+
+      if (node.nodeType !== 1) return "";
+
+      const tagName = node.tagName.toLowerCase();
+      const content = renderChildren(node);
+
+      switch (tagName) {
+        case "br": return "\n";
+        case "strong":
+        case "b": return `**${content.trim()}**`;
+        case "em":
+        case "i": return `*${content.trim()}*`;
+        case "s":
+        case "strike":
+        case "del": return `~~${content.trim()}~~`;
+        case "code": return `\`${content.replace(/`/g, "\\`")}\``;
+        case "a": {
+          const href = node.getAttribute("href");
+          return href ? `[${content.trim()}](${href})` : content;
+        }
+        case "h1": return `# ${content.trim()}\n\n`;
+        case "h2": return `## ${content.trim()}\n\n`;
+        case "h3": return `### ${content.trim()}\n\n`;
+        case "h4": return `#### ${content.trim()}\n\n`;
+        case "h5": return `##### ${content.trim()}\n\n`;
+        case "h6": return `###### ${content.trim()}\n\n`;
+        case "p":
+        case "div": return `${content.trim()}\n\n`;
+        case "blockquote": return content.trim().split(/\n+/).map((line) => `> ${line}`).join("\n") + "\n\n";
+        case "pre": return `\`\`\`\n${(node.textContent || "").trim()}\n\`\`\`\n\n`;
+        case "ul": return `${renderList(node, false)}\n\n`;
+        case "ol": return `${renderList(node, true)}\n\n`;
+        case "hr": return "---\n\n";
+        default: return content;
+      }
+    }
+
+    return renderChildren(template.content).replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function downloadTextFile(contents, filename) {
+    const blob = new Blob([contents], { type: "text/plain;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  }
+
+  function saveConverterInput() {
+    const isRaw = getCurrentMode() === "raw";
+    const contents = isRaw ? els.rawInput.value : richHtmlToMarkdown(els.richEditor.innerHTML);
+
+    if (!contents.trim()) {
+      setStatus("Add text before saving.", "error");
+      return;
+    }
+
+    downloadTextFile(contents, `centralis-text-converter-input.${isRaw ? "txt" : "md"}`);
+  }
+
+  function saveConverterOutput() {
+    const contents = els.output.value;
+    if (!contents.trim()) {
+      setStatus("There is no output to save.", "error");
+      return;
+    }
+
+    downloadTextFile(contents, "centralis-text-converter-output.txt");
+  }
+
   function clearConverterInput() {
     els.rawInput.value = "";
     els.richEditor.innerHTML = "";
@@ -3750,6 +3849,8 @@
 
   els.outputCopyButton?.addEventListener("click", copyOutputText);
   els.clearInputButton?.addEventListener("click", clearConverterInput);
+  els.saveInputButton?.addEventListener("click", saveConverterInput);
+  els.saveOutputButton?.addEventListener("click", saveConverterOutput);
 
   window.addEventListener("resize", scheduleCalculatorResultsFit);
 

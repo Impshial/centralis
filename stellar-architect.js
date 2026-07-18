@@ -59,6 +59,12 @@ function formatNumber(value, suffix = "", digits = 2) {
   return `${rendered}${suffix}`;
 }
 
+function createBlurb(value, maxLength = 160) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text || text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
+}
+
 function setStatus(element, message, type) {
   if (!element) return;
   element.textContent = message || "";
@@ -462,28 +468,67 @@ function planetDots(system) {
   const colors = ["#d28a2e", "#e9b11f", "#8bb957", "#81919f", "#20b8dc", "#42a5f5", "#8b63df", "#ee6aa7"];
   const planets = stellarState.planets.filter((planet) => planet.system_id === system.id);
   const dots = planets.slice(0, 7).map((_, index) => `<span style="background:${colors[index % colors.length]}"></span>`).join("");
-  return `<div class="stellar-planet-dots">${dots}${planets.length > 7 ? `<em>+${planets.length - 7}</em>` : ""}</div>`;
+  return `<span class="stellar-planet-dots">${dots}${planets.length > 7 ? `<em>+${planets.length - 7}</em>` : ""}</span>`;
 }
 
 function renderLanding() {
   const total = stellarState.systems.length;
+  const planetTotal = stellarState.planets.filter((planet) => !isAsteroidBelt(planet)).length;
+  const colonyTotal = stellarState.colonies.length;
   const cards = stellarState.systems.map((system) => {
     const star = stellarState.stars.find((item) => item.system_id === system.id);
+    const planets = stellarState.planets.filter((planet) => planet.system_id === system.id && !isAsteroidBelt(planet));
+    const colonies = stellarState.colonies.filter((colony) => colony.system_id === system.id);
+    const systemSummary = [
+      `${formatValue(star?.spectral_type)} star`,
+      `${planets.length || Number(system.planet_count || 0)} planets`,
+      `${formatNumber(system.age_gyr, " Gyr", 1)} old`,
+      `${colonies.length} colonies`,
+    ].join(" · ");
+    const starDescription = createBlurb(star?.description || system.description || "", 220);
     return `
-      <a class="stellar-system-card" href="#system/${encodeURIComponent(system.id)}">
-        <div class="stellar-card-image">${placeholder()}${planetDots(system)}</div>
-        <div class="stellar-card-body">
-          <h2>${escapeHtml(system.name)}</h2>
-          <p>${formatValue(star?.spectral_type)} · ${Number(system.planet_count || 0)} planets · ${formatNumber(system.age_gyr, " Gyr", 1)}</p>
-          <div class="stellar-badges">${systemBadges(system)}</div>
-        </div>
-      </a>
+      <article class="universe-card-wrap stellar-system-card-wrap">
+        <a class="universe-card stellar-system-card" href="#system/${encodeURIComponent(system.id)}">
+          <span class="card-icon" aria-hidden="true">
+            <ph-star weight="duotone"></ph-star>
+          </span>
+          <span class="universe-card-copy">
+            <span class="stellar-system-title-row">
+              <strong>${escapeHtml(system.name)}</strong>
+              <span class="stellar-badges">${systemBadges(system)}</span>
+            </span>
+            <span class="stellar-system-meta">${escapeHtml(systemSummary)} · Created ${formatShortDate(system.created_at)}</span>
+            ${starDescription ? `<span class="universe-card-description-short">${escapeHtml(starDescription)}</span>` : ""}
+          </span>
+        </a>
+      </article>
     `;
   }).join("");
 
   stellarEls.root.innerHTML = `
     <section class="stellar-landing">
-      <div class="stellar-card-grid">
+      <section class="universe-builder-toolbar stellar-home-toolbar">
+        <div>
+          <p class="universe-builder-eyebrow">Astronomy</p>
+          <h1 id="stellar-architect-title">Stellar Architect</h1>
+          <p>Generate, browse, and expand scientifically plausible star systems.</p>
+        </div>
+        <div class="universe-builder-toolbar-actions">
+          <button class="primary-action" type="button" data-open-generate-system>
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            Generate System
+          </button>
+        </div>
+      </section>
+      <section class="universe-builder-controls stellar-home-controls" aria-label="Stellar Architect summary">
+        <p class="universe-builder-count">${total} ${total === 1 ? "system" : "systems"} in your archive</p>
+        <div class="stellar-home-stats" aria-label="Stellar Architect totals">
+          <span><strong>${planetTotal}</strong> planets</span>
+          <span><strong>${stellarState.moons.length}</strong> moons</span>
+          <span><strong>${colonyTotal}</strong> colonies</span>
+        </div>
+      </section>
+      <div class="universe-grid is-card-view stellar-home-grid">
         ${cards || `
           <div class="stellar-empty-state">
             <ph-star weight="fill"></ph-star>
@@ -1024,6 +1069,7 @@ function renderNotFound() {
 
 function renderRoute() {
   renderTree();
+  document.body?.classList.toggle("stellar-home-route", stellarState.route.name === "systems");
   if (stellarState.route.name === "systems") {
     renderLanding();
     return;

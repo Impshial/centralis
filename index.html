@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=button-padding-2">
+  <link rel="stylesheet" href="styles.css?v=todo-v1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -74,9 +74,9 @@
           <span>World Building</span>
         </button>
         <div class="dropdown-menu" role="menu">
-          <a href="universe-builder.html" role="menuitem">Universe Builder</a>
-          <a href="stellar-architect.html#systems" role="menuitem">Stellar Architect</a>
-          <a href="chronicle.html" role="menuitem">Chronicle</a>
+          <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
+          <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
+          <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
         </div>
       </div>
 
@@ -91,9 +91,10 @@
           <span>Entertainment</span>
         </button>
         <div class="dropdown-menu" role="menu">
-          <a href="movie-tracker.html" role="menuitem">Movie Tracker</a>
-          <a href="chat-repository.html" role="menuitem">Chat Repository</a>
-          <button type="button" role="menuitem">Episode Roulette</button>
+          <a href="movie-tracker.html" role="menuitem"><ph-film-slate weight="duotone" aria-hidden="true"></ph-film-slate><span>Movie Tracker</span></a>
+          <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
+          <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
+          <button type="button" role="menuitem"><ph-dice-five weight="duotone" aria-hidden="true"></ph-dice-five><span>Episode Roulette</span></button>
         </div>
       </div>
 
@@ -105,10 +106,8 @@
           <span>Utilities</span>
         </button>
         <div class="dropdown-menu" role="menu">
-          <a href="calendar.html" role="menuitem">Calendar</a>
-          <a href="useful-things.html" role="menuitem">Useful Things</a>
-          <button type="button" role="menuitem">Tool Two</button>
-          <button type="button" role="menuitem">Tool Three</button>
+          <a href="calendar.html" role="menuitem"><ph-calendar-blank weight="duotone" aria-hidden="true"></ph-calendar-blank><span>Calendar</span></a>
+          <a href="useful-things.html" role="menuitem"><ph-wrench weight="duotone" aria-hidden="true"></ph-wrench><span>Useful Things</span></a>
         </div>
       </div>
 
@@ -121,9 +120,9 @@
           <span>Settings</span>
         </button>
         <div class="dropdown-menu" role="menu">
-          <button type="button" role="menuitem">Preferences</button>
-          <button type="button" role="menuitem">Privacy</button>
-          <button type="button" role="menuitem">Shortcuts</button>
+          <button type="button" role="menuitem"><ph-sliders-horizontal weight="duotone" aria-hidden="true"></ph-sliders-horizontal><span>Preferences</span></button>
+          <button type="button" role="menuitem"><ph-shield-check weight="duotone" aria-hidden="true"></ph-shield-check><span>Privacy</span></button>
+          <button type="button" role="menuitem"><ph-keyboard weight="duotone" aria-hidden="true"></ph-keyboard><span>Shortcuts</span></button>
         </div>
       </div>
     </nav>
@@ -154,10 +153,11 @@
           </svg>
         </button>
         <div class="dropdown-menu align-right" role="menu">
-          <button type="button" role="menuitem">Profile</button>
-          <button type="button" role="menuitem">Account</button>
-          <button type="button" role="menuitem">Notifications</button>
-          <button type="button" role="menuitem" data-sign-out>Sign Out</button>
+          <button type="button" role="menuitem"><ph-user-circle weight="duotone" aria-hidden="true"></ph-user-circle><span>Profile</span></button>
+          <button type="button" role="menuitem"><ph-identification-card weight="duotone" aria-hidden="true"></ph-identification-card><span>Account</span></button>
+          <a href="settings.html" role="menuitem"><ph-gear-six weight="duotone" aria-hidden="true"></ph-gear-six><span>Settings</span></a>
+          <button type="button" role="menuitem"><ph-bell weight="duotone" aria-hidden="true"></ph-bell><span>Notifications</span></button>
+          <button type="button" role="menuitem" data-sign-out><ph-sign-out weight="duotone" aria-hidden="true"></ph-sign-out><span>Sign Out</span></button>
         </div>
       </div>
     </div>
@@ -165,10 +165,116 @@
 
   <main class="page home-dashboard">
     <header class="home-dashboard-header">
-      <h1>Centralis Dashboard</h1>
+      <div>
+        <p class="home-eyebrow">Overview</p>
+        <h1>Centralis Dashboard</h1>
+      </div>
+      <span class="home-refresh-state" data-home-refreshed>Refreshing...</span>
     </header>
 
-    <section class="home-work-grid" aria-label="Recent work">
+    <section class="home-stat-grid" aria-label="Workspace overview">
+      <article class="home-stat-card" data-home-stat="universes">
+        <span class="home-stat-icon" aria-hidden="true"><ph-planet weight="duotone"></ph-planet></span>
+        <span class="home-stat-label">Universes</span>
+        <strong data-home-stat-value>...</strong>
+        <span data-home-stat-detail>Loading...</span>
+      </article>
+      <article class="home-stat-card" data-home-stat="chronicle">
+        <span class="home-stat-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
+        <span class="home-stat-label">Chronicle</span>
+        <strong data-home-stat-value>...</strong>
+        <span data-home-stat-detail>Loading...</span>
+      </article>
+      <article class="home-stat-card" data-home-stat="chat-logs">
+        <span class="home-stat-icon" aria-hidden="true"><ph-chats-circle weight="duotone"></ph-chats-circle></span>
+        <span class="home-stat-label">Chat Logs</span>
+        <strong data-home-stat-value>...</strong>
+        <span data-home-stat-detail>Loading...</span>
+      </article>
+      <article class="home-stat-card" data-home-stat="calendar">
+        <span class="home-stat-icon" aria-hidden="true"><ph-calendar-blank weight="duotone"></ph-calendar-blank></span>
+        <span class="home-stat-label">Calendar</span>
+        <strong data-home-stat-value>...</strong>
+        <span data-home-stat-detail>Loading...</span>
+      </article>
+      <article class="home-stat-card" data-home-stat="movies">
+        <span class="home-stat-icon" aria-hidden="true"><ph-film-slate weight="duotone"></ph-film-slate></span>
+        <span class="home-stat-label">Movies</span>
+        <strong data-home-stat-value>...</strong>
+        <span data-home-stat-detail>Loading...</span>
+      </article>
+      <article class="home-stat-card" data-home-stat="images">
+        <span class="home-stat-icon" aria-hidden="true"><ph-image-square weight="duotone"></ph-image-square></span>
+        <span class="home-stat-label">Image Generation</span>
+        <strong data-home-stat-value>...</strong>
+        <span data-home-stat-detail>Loading...</span>
+      </article>
+    </section>
+
+    <section class="home-overview-grid" aria-label="Dashboard overview">
+      <article class="home-panel home-upcoming-panel">
+        <div class="home-panel-header">
+          <div>
+            <p class="home-eyebrow">Today / Upcoming</p>
+            <h2>Calendar</h2>
+          </div>
+          <div class="home-panel-actions">
+            <span data-home-upcoming-count>Loading...</span>
+            <a href="calendar.html">Open Calendar</a>
+          </div>
+        </div>
+        <div class="home-upcoming-list" data-home-upcoming-events>
+          <p class="empty-state">Loading upcoming events...</p>
+        </div>
+      </article>
+
+      <article class="home-panel home-todo-placeholder">
+        <div class="home-panel-header">
+          <div>
+            <p class="home-eyebrow">Tasks</p>
+            <h2>ToDo</h2>
+          </div>
+          <div class="home-panel-actions">
+            <a href="todo.html">Open ToDo</a>
+          </div>
+        </div>
+        <a class="home-todo-card" href="todo.html">
+          <span class="home-module-icon" aria-hidden="true"><ph-check-square-offset weight="duotone"></ph-check-square-offset></span>
+          <div>
+            <strong>Task planning for Centralis</strong>
+            <p data-home-todo-summary>Loading task summary...</p>
+          </div>
+        </a>
+      </article>
+    </section>
+
+    <section class="home-activity-section" aria-label="Recent activity">
+      <div class="home-section-title">
+        <p class="home-eyebrow">Recent Activity</p>
+        <h2>Latest work across Centralis</h2>
+      </div>
+
+      <div class="home-work-grid">
+      <article class="home-panel">
+        <div class="home-panel-header">
+          <div>
+            <p class="home-eyebrow">Source Material</p>
+            <h2>Recent Documents</h2>
+          </div>
+          <div class="home-panel-actions">
+            <span data-home-source-document-count>Loading...</span>
+            <a href="universe-builder.html">Open Universe Builder</a>
+            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
+              <span class="sr-only">Collapse Recent Documents</span>
+              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
+            </button>
+          </div>
+        </div>
+        <div class="home-section-body home-source-document-list" data-home-section-body data-home-source-document-list>
+          <p class="empty-state">Loading documents...</p>
+        </div>
+      </article>
+
       <article class="home-panel">
         <div class="home-panel-header">
           <div>
@@ -228,6 +334,7 @@
           <p class="empty-state">Loading chat logs...</p>
         </div>
       </article>
+      </div>
     </section>
   </main>
   </div>
@@ -277,6 +384,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=global-ai-settings-1"></script>
+  <script src="script.js?v=todo-v1"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Universe Builder | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=universe-list-compact-1">
+  <link rel="stylesheet" href="styles.css?v=todo-v1">
   <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
   <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
 </head>
@@ -69,8 +69,6 @@
         <div class="dropdown-menu" role="menu">
           <a href="calendar.html" role="menuitem">Calendar</a>
           <a href="useful-things.html" role="menuitem">Useful Things</a>
-          <button type="button" role="menuitem">Tool Two</button>
-          <button type="button" role="menuitem">Tool Three</button>
         </div>
       </div>
 
@@ -217,6 +215,52 @@
     </section>
   </div>
 
+  <div class="modal-backdrop universe-modal-backdrop" id="universe-source-documents-modal" hidden>
+    <section class="modal-dialog universe-source-documents-dialog" role="dialog" aria-modal="true" aria-labelledby="universe-source-documents-title">
+      <div class="modal-header">
+        <div>
+          <p class="modal-subtitle" data-source-documents-universe-name>Universe documents</p>
+          <h2 id="universe-source-documents-title">Documents</h2>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-source-documents-close>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form class="source-documents-form" data-source-documents-form>
+        <label class="form-field">
+          <span>Display name <em>(optional)</em></span>
+          <input type="text" name="displayName" maxlength="200" placeholder="e.g. Season one lore bible">
+        </label>
+
+        <label class="form-field">
+          <span>Document</span>
+          <input type="file" name="file" accept=".pdf,.txt,.md,.markdown,.html,.htm,.rtf,.doc,.docx,.csv,.tsv,.json,.yaml,.yml,.xml,application/pdf,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+        </label>
+
+        <p class="form-status" data-source-documents-status role="status"></p>
+
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-source-documents-close>Close</button>
+          <button class="primary-action" type="submit" data-source-documents-submit>Upload Document</button>
+        </div>
+      </form>
+
+      <section class="source-documents-list-panel" aria-label="Uploaded documents">
+        <div class="source-documents-list-header">
+          <h3>Uploaded documents</h3>
+          <span data-source-documents-count>Loading...</span>
+        </div>
+        <div class="source-documents-list" data-source-documents-list>
+          <p class="empty-state">Loading documents...</p>
+        </div>
+      </section>
+    </section>
+  </div>
+
   <div class="modal-backdrop universe-modal-backdrop" id="universe-ai-review-modal" hidden>
     <section class="modal-dialog universe-ai-review-dialog" role="dialog" aria-modal="true" aria-labelledby="universe-ai-review-title">
       <div class="modal-header">
@@ -293,6 +337,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=global-ai-settings-1"></script>
+  <script src="script.js?v=todo-v1"></script>
 </body>
 </html>

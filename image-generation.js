@@ -41,6 +41,7 @@
     imageViewerImage: document.querySelector("[data-image-viewer-image]"),
     imageViewerOpen: document.querySelector("[data-image-viewer-open]"),
     imageViewerClose: document.querySelector("[data-image-viewer-close]"),
+    deletingSession: document.querySelector("[data-image-deleting-session]"),
   };
 
   const state = { user: null, sessions: [], session: null, messages: [], assets: [], selectedAsset: null, viewerAsset: null, selectedReferences: new Set(), busy: false, activeGeneration: null, modelCatalog: [] };
@@ -257,14 +258,43 @@
     const referenceIds = Array.isArray(message?.reference_asset_ids) ? message.reference_asset_ids : [];
     return referenceIds.map(String).map((id) => state.assets.find((asset) => asset.id === id)).filter(Boolean);
   }
-  function getMessageModelLabel(message) {
-    let settings = message?.settings_snapshot;
+  function normalizeSettingsSnapshot(value) {
+    let settings = value;
     if (typeof settings === "string") {
       try { settings = JSON.parse(settings); } catch { settings = null; }
     }
+    return settings && typeof settings === "object" && Object.keys(settings).length ? settings : null;
+  }
+  function getSettingsModelLabel(settings) {
     if (settings?.modelLabel) return String(settings.modelLabel);
     const modelId = String(settings?.model || "").trim();
     return state.modelCatalog.find((model) => model.id === modelId)?.label || modelId;
+  }
+  function getAssetGenerationSettings(asset, fallbackMessage) {
+    return normalizeSettingsSnapshot(asset?.generation_settings) || normalizeSettingsSnapshot(fallbackMessage?.settings_snapshot);
+  }
+  function formatGenerationSettings(settings) {
+    if (!settings) return "";
+    const rows = [
+      ["Model", getSettingsModelLabel(settings)],
+      ["Provider", settings.provider],
+      ["Endpoint", settings.endpoint],
+      ["Size", settings.size],
+      ["Quality", settings.quality],
+      ["Format", settings.format ? String(settings.format).toUpperCase() : ""],
+      ["Compression", settings.compression !== null && settings.compression !== undefined ? `${settings.compression}%` : ""],
+      ["Background", settings.background],
+      ["Moderation", settings.moderation],
+      ["References", settings.reference_count !== null && settings.reference_count !== undefined ? String(settings.reference_count) : ""],
+    ];
+    return rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim()).map(([label, value]) => `${label}: ${value}`).join("\n");
+  }
+  function renderAssetGenerationSettingsActions(asset, fallbackMessage) {
+    const settings = getAssetGenerationSettings(asset, fallbackMessage);
+    const model = getSettingsModelLabel(settings);
+    const details = formatGenerationSettings(settings);
+    if (!model) return "";
+    return `<span class="image-generation-output-model" title="${html(details || "Model used for this generation")}">${html(model)}</span>${details ? `<button class="image-generation-chat-action image-generation-settings-action" type="button" title="${html(details)}" aria-label="Generation settings for ${html(model)}"><ph-info aria-hidden="true"></ph-info></button>` : ""}`;
   }
   function renderConversation() {
     els.empty.hidden = state.messages.length > 0;
@@ -273,18 +303,18 @@
       const outputAssets = message.role === "assistant"
         ? [...findAssets(message.id), ...(precedingMessage?.role === "user" ? findAssets(precedingMessage.id) : [])]
         : [];
-      const generatedImageModel = message.role === "assistant" && precedingMessage?.status === "completed"
-        ? getMessageModelLabel(precedingMessage)
-        : "";
-      const previews = outputAssets.length ? `<div class="image-generation-message-assets">${outputAssets.map((asset) => `<div class="image-generation-message-asset">
+      const previews = outputAssets.length ? `<div class="image-generation-message-assets">${outputAssets.map((asset) => {
+        const settingsFallbackMessage = message.role === "assistant" ? precedingMessage : message;
+        return `<div class="image-generation-message-asset">
         <button class="image-generation-chat-image" type="button" data-image-open-output-id="${asset.id}" title="Open generated image"><img src="${asset.preview_url}" alt="${html(asset.original_filename || "Generated output")}"></button>
         <div class="image-generation-message-actions" aria-label="Generated image actions">
           <button class="image-generation-chat-action" type="button" data-image-copy-output="${asset.id}" title="Copy image" aria-label="Copy image"><ph-copy aria-hidden="true"></ph-copy></button>
           <button class="image-generation-chat-action" type="button" data-image-download-output="${asset.id}" title="Download image" aria-label="Download image"><ph-download-simple aria-hidden="true"></ph-download-simple></button>
           <button class="image-generation-chat-action" type="button" data-image-include-output="${asset.id}" title="Include in next prompt" aria-label="Include in next prompt"><ph-paperclip aria-hidden="true"></ph-paperclip></button>
-          ${generatedImageModel ? `<span class="image-generation-output-model" title="Model used for this generation">${html(generatedImageModel)}</span>` : ""}
+          ${renderAssetGenerationSettingsActions(asset, settingsFallbackMessage)}
         </div>
-      </div>`).join("")}</div>` : "";
+      </div>`;
+      }).join("")}</div>` : "";
       const references = message.role === "user" ? findMessageReferences(message) : [];
       const referencePreviews = references.length ? `<div class="image-generation-message-references" aria-label="Reference images used">
         ${references.map((asset) => `<img src="${asset.preview_url}" alt="Reference: ${html(asset.original_filename || "uploaded image")}" title="${html(asset.original_filename || "Reference image")}">`).join("")}
@@ -305,12 +335,10 @@
             </button>
           </article>`
         : "";
-      const modelLabel = message.status === "completed" ? getMessageModelLabel(message) : "";
       const promptActions = message.role === "user" && message.status === "completed" ? `<div class="image-generation-message-actions is-user" aria-label="Prompt actions">
         <button class="image-generation-chat-action" type="button" data-image-copy-message="${message.id}" title="Copy prompt" aria-label="Copy prompt"><ph-copy aria-hidden="true"></ph-copy></button>
         <button class="image-generation-chat-action" type="button" data-image-delete-message="${message.id}" title="Remove this chat" aria-label="Remove this chat"><ph-trash aria-hidden="true"></ph-trash></button>
         <button class="image-generation-chat-action" type="button" data-image-new-session-from-message="${message.id}" title="Start a new session with this prompt" aria-label="Start a new session with this prompt"><ph-sign-out aria-hidden="true"></ph-sign-out></button>
-        ${modelLabel ? `<span class="image-generation-message-model" title="Model used for this generation">${html(modelLabel)}</span>` : ""}
       </div>` : "";
       return `<article class="image-generation-message is-${message.role} ${message.status === "failed" ? "is-failed" : ""}">
         <div>${html(message.content)}</div>${referencePreviews}${previews}${stateLabel ? `<p class="image-generation-message-meta">${html(stateLabel)}</p>` : ""}${errorDetails}
@@ -594,6 +622,12 @@
     els.prompt.focus();
   }
 
+  function setDeletingSession(isDeleting) {
+    if (!els.deletingSession) return;
+    els.deletingSession.hidden = !isDeleting;
+    document.body.classList.toggle("is-deleting-image-session", isDeleting);
+  }
+
   function bind() {
     els.newSessionButtons.forEach((button) => button.addEventListener("click", async () => { try { await createSession(); } catch (error) { els.error.textContent = error.message; } }));
     els.sessionList.addEventListener("click", async (event) => {
@@ -614,12 +648,18 @@
           if (error) throw error;
           await refreshSessions(rename.dataset.imageRenameSession);
         } else if (remove) {
-          const session = state.sessions.find((item) => item.id === remove.dataset.imageDeleteSession);
+          const sessionId = remove.dataset.imageDeleteSession;
+          const session = state.sessions.find((item) => item.id === sessionId);
           if (!window.confirm(`Delete “${session?.title || "this session"}” and all of its stored images?`)) return;
-          await invoke("delete-image-generation-session", { sessionId: remove.dataset.imageDeleteSession });
-          state.sessions = state.sessions.filter((item) => item.id !== remove.dataset.imageDeleteSession);
-          if (state.session?.id === remove.dataset.imageDeleteSession) { state.session = null; state.messages = []; state.assets = []; await loadSessions(); }
-          else renderSessions();
+          setDeletingSession(true);
+          try {
+            await invoke("delete-image-generation-session", { sessionId });
+            state.sessions = state.sessions.filter((item) => item.id !== sessionId);
+            if (state.session?.id === sessionId) { state.session = null; state.messages = []; state.assets = []; await loadSessions(); }
+            else renderSessions();
+          } finally {
+            setDeletingSession(false);
+          }
         } else if (button) {
           await openSession(button.dataset.imageSessionId);
         }

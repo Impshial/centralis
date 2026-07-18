@@ -8,6 +8,7 @@ const state = {
   calendars: [],
   categories: [],
   events: [],
+  tasks: [],
   selectedReminderMinutes: new Set()
 };
 
@@ -287,7 +288,7 @@ function renderMonthGrid() {
 
   const { start } = getGridRange(state.visibleMonth);
   const todayKey = dateKey(new Date());
-  const eventsByDate = buildEventsByDate(start, addDays(start, 41));
+  const eventsByDate = buildCalendarItemsByDate(start, addDays(start, 41));
   const cells = [];
 
   for (let index = 0; index < 42; index += 1) {
@@ -305,9 +306,11 @@ function renderMonthGrid() {
     const list = cell.querySelector(".month-event-list");
     (eventsByDate.get(key) || []).slice(0, 4).forEach((event) => {
       const chip = document.createElement("span");
-      chip.className = "month-event-chip";
+      chip.className = event.type === "task" ? "month-event-chip month-task-chip" : "month-event-chip";
       chip.style.setProperty("--event-color", normalizeColor(event.color));
-      chip.textContent = event.is_all_day ? event.title : `${TIME_FORMATTER.format(event.start)} ${event.title}`;
+      chip.textContent = event.type === "task"
+        ? `Task: ${event.title}`
+        : event.is_all_day ? event.title : `${TIME_FORMATTER.format(event.start)} ${event.title}`;
       list.append(chip);
     });
 
@@ -328,14 +331,15 @@ function renderMonthGrid() {
 
 function renderEmptyState() {
   const hasCalendars = state.calendars.length > 0;
+  const hasCalendarContent = hasCalendars || state.tasks.length > 0;
   if (calendarEmpty) {
-    calendarEmpty.hidden = hasCalendars;
+    calendarEmpty.hidden = hasCalendarContent;
   }
   if (monthGrid) {
-    monthGrid.hidden = !hasCalendars;
+    monthGrid.hidden = !hasCalendarContent;
   }
   if (monthWeekdays) {
-    monthWeekdays.hidden = !hasCalendars;
+    monthWeekdays.hidden = !hasCalendarContent;
   }
   if (newEventButton) {
     newEventButton.disabled = !hasCalendars;
@@ -422,6 +426,51 @@ function buildEventsByDate(rangeStart, rangeEnd) {
   });
 
   return eventsByDate;
+}
+
+function getTaskPriorityColor(priority) {
+  const colors = {
+    low: "#74c69d",
+    medium: "#6ccbd2",
+    high: "#f0a33a",
+    urgent: "#ef4444"
+  };
+  return colors[priority] || colors.medium;
+}
+
+function buildCalendarItemsByDate(rangeStart, rangeEnd) {
+  const itemsByDate = buildEventsByDate(rangeStart, rangeEnd);
+  state.tasks.forEach((task) => {
+    if (!task.due_date) return;
+    const due = new Date(`${task.due_date}T00:00:00`);
+    if (due < rangeStart || due > addDays(rangeEnd, 1)) return;
+    const key = dateKey(due);
+    if (!itemsByDate.has(key)) {
+      itemsByDate.set(key, []);
+    }
+    itemsByDate.get(key).push({
+      type: "task",
+      id: task.id,
+      title: task.title || "Untitled Task",
+      start: due,
+      is_all_day: true,
+      color: getTaskPriorityColor(task.priority)
+    });
+  });
+
+  itemsByDate.forEach((items) => {
+    items.sort((first, second) => {
+      if (first.type !== second.type) {
+        return first.type === "task" ? 1 : -1;
+      }
+      if (first.is_all_day !== second.is_all_day) {
+        return first.is_all_day ? -1 : 1;
+      }
+      return first.start - second.start;
+    });
+  });
+
+  return itemsByDate;
 }
 
 function expandEventOccurrences(event, rangeStart, rangeEnd) {
@@ -611,6 +660,29 @@ async function loadEvents() {
   });
 }
 
+async function loadTasks() {
+  if (!state.appUser) {
+    state.tasks = [];
+    return;
+  }
+
+  const { start, end } = getGridRange(state.visibleMonth);
+  const { data, error } = await calendarSupabaseClient
+    .from("todo_tasks")
+    .select("id,title,due_date,status,priority,category")
+    .eq("user_id", state.appUser.id)
+    .not("due_date", "is", null)
+    .gte("due_date", localInputDate(start))
+    .lte("due_date", localInputDate(end))
+    .order("due_date", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  state.tasks = data || [];
+}
+
 async function refreshCalendarData() {
   setStatus("Loading calendar...");
   try {
@@ -618,6 +690,7 @@ async function refreshCalendarData() {
     await loadCalendars();
     await loadCategories();
     await loadEvents();
+    await loadTasks();
     renderAll();
     setStatus("");
   } catch (error) {

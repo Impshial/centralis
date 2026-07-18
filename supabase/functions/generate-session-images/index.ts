@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
       const { data, error } = await supabase.from("image_generation_assets").insert({
         id, session_id: sessionId, message_id: messageId, user_id: appUser.id, asset_kind: "output", storage_key: key,
         original_filename: `${id}.${extension}`, content_type: image.contentType, byte_size: image.bytes.byteLength,
-        sort_order: index,
+        sort_order: index, generation_settings: snapshot,
       }).select("*").single();
       if (error || !data) throw error || new Error("Could not save generated image metadata.");
       assets.push(await serializeImageGenerationAsset(data));

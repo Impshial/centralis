@@ -290,27 +290,30 @@ CREATE TABLE public.reminders (
   CONSTRAINT reminders_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id)
 );
 CREATE TABLE public.todo_tasks (
-  id character varying NOT NULL DEFAULT (gen_random_uuid())::character varying,
-  todo_id character varying NOT NULL,
-  name character varying NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id integer NOT NULL,
+  title text NOT NULL,
   description text,
-  due_date timestamp with time zone,
-  completed boolean NOT NULL DEFAULT false,
+  status text,
+  priority text NOT NULL DEFAULT 'medium'::text,
+  category text,
+  due_date date,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT todo_tasks_pkey PRIMARY KEY (id),
-  CONSTRAINT todo_tasks_todo_id_fkey FOREIGN KEY (todo_id) REFERENCES public.todos(id)
+  CONSTRAINT todo_tasks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
-CREATE TABLE public.todos (
-  id character varying NOT NULL DEFAULT (gen_random_uuid())::character varying,
-  user_id integer NOT NULL,
-  name character varying NOT NULL,
-  description text,
-  due_date timestamp with time zone,
+CREATE TABLE public.todo_subtasks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  title text NOT NULL,
+  is_required boolean NOT NULL DEFAULT false,
+  completed boolean NOT NULL DEFAULT false,
+  sort_order integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT todos_pkey PRIMARY KEY (id),
-  CONSTRAINT todos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+  CONSTRAINT todo_subtasks_pkey PRIMARY KEY (id),
+  CONSTRAINT todo_subtasks_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.todo_tasks(id)
 );
 CREATE TABLE public.universe_custom_fields (
   id character varying NOT NULL DEFAULT (gen_random_uuid())::character varying,

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Episode Roulette | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="styles.css?v=episode-roulette-4">
+  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
+  <script type="module" src="https://unpkg.com/@phosphor-icons/webcomponents@2.1"></script>
+</head>
+<body data-auth-required="true" data-page="episode-roulette">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="episode-roulette-page">
+      <section class="episode-roulette-hero">
+        <p class="section-eyebrow">Entertainment</p>
+        <h1>Episode Roulette</h1>
+        <p>Discover a random episode from your favorite shows.</p>
+      </section>
+
+      <div class="episode-roulette-layout">
+        <div class="episode-roulette-main">
+          <section class="episode-search-panel">
+            <h2>Search for a TV Show</h2>
+            <div class="episode-search-wrap">
+              <ph-magnifying-glass aria-hidden="true"></ph-magnifying-glass>
+              <input data-episode-search type="search" autocomplete="off" placeholder="Type a show name (e.g., Breaking Bad, Friends, The Office...)" aria-label="Search for a TV show" aria-autocomplete="list" aria-controls="episode-search-results" aria-expanded="false">
+              <span class="episode-search-spinner" data-episode-search-spinner hidden aria-label="Searching"></span>
+              <div id="episode-search-results" class="episode-search-results" data-episode-search-results role="listbox" hidden></div>
+            </div>
+            <p class="episode-search-status" data-episode-search-status aria-live="polite"></p>
+          </section>
+
+          <section class="episode-show-card" data-episode-selected-show hidden></section>
+          <section class="episode-result-card" id="section-episode-result" data-episode-result hidden></section>
+        </div>
+
+        <aside class="episode-recent-panel" aria-label="Recent Shows">
+          <div class="episode-recent-heading"><ph-clock-counter-clockwise aria-hidden="true"></ph-clock-counter-clockwise><h2>Recent Shows</h2></div>
+          <div data-episode-recent-shows class="episode-recent-list"><p class="empty-state">Loading recent shows…</p></div>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div class="episode-loading-overlay" data-episode-loading-overlay hidden role="status" aria-live="assertive" aria-label="Loading">
+    <div class="episode-loading-dialog">
+      <span class="episode-loading-spinner" aria-hidden="true"></span>
+      <span>Loading...</span>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=todo-v1"></script>
+  <script src="episode-roulette.js?v=episode-roulette-2"></script>
+</body>
+</html>
