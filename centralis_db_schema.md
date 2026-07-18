@@ -367,6 +367,7 @@ CREATE TABLE public.users (
   id integer NOT NULL DEFAULT nextval('users_id_seq'::regclass),
   clerk_user_id text NOT NULL UNIQUE,
   email text NOT NULL,
+  admin boolean NOT NULL DEFAULT false,
   display_name text,
   avatar_url text,
   timezone text NOT NULL DEFAULT 'UTC'::text,
