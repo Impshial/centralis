@@ -15449,11 +15449,35 @@ body[data-page="useful-things"] {
   max-height: calc(100vh - 72px);
 }
 
+.universe-ai-review-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  width: min(1040px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 72px);
+  overflow: hidden;
+}
+
+.universe-ai-review-card {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--surface) 88%, #000000);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.universe-ai-review-title-row {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .universe-ai-review-dialog textarea {
-  min-height: 320px;
-  font-family: Consolas, "Liberation Mono", Menlo, monospace;
-  font-size: 0.95rem;
-  line-height: 1.45;
+  min-height: min(420px, 45vh);
+  resize: vertical;
 }
 
 .universe-ai-ideas-toolbar {

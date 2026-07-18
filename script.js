@@ -160,7 +160,9 @@ const universeAiCountField = document.querySelector("[data-universe-ai-count-fie
 const universeGenerationOverlay = document.querySelector("[data-universe-generation-overlay]");
 const universeGenerationOverlayLabel = document.querySelector("[data-universe-generation-overlay-label]");
 const universeAiReviewModal = document.getElementById("universe-ai-review-modal");
-const universeAiReviewText = document.querySelector("[data-universe-ai-review-text]");
+const universeAiReviewName = document.querySelector("[data-universe-ai-review-name]");
+const universeAiReviewDescription = document.querySelector("[data-universe-ai-review-description]");
+const universeAiReviewGenre = document.querySelector("[data-universe-ai-review-genre]");
 const universeAiReviewStatus = document.querySelector("[data-universe-ai-review-status]");
 const universeAiReviewCancelButtons = document.querySelectorAll("[data-universe-ai-review-cancel]");
 const universeAiGenerateAgainButton = document.querySelector("[data-universe-ai-generate-again]");
@@ -2472,19 +2474,12 @@ async function refreshAuthView() {
   }
 
   if (data.session) {
-    try {
-      await prepareSignedInUser(data.session.user);
-      await showSignedInApp();
-      cleanAuthUrl();
-    } catch (profileError) {
+    await showSignedInApp();
+    prepareSignedInUser(data.session.user).catch((profileError) => {
       console.error(profileError);
-      if (document.body.dataset.authRequired === "true" && appShell) {
-        await revealHomeElement(appShell);
-      } else {
-        await showSignedOutLanding();
-      }
       setAuthStatus(`Login worked, but loading your profile failed: ${getReadableError(profileError)}`, "error");
-    }
+    });
+    cleanAuthUrl();
     return;
   }
 
@@ -2880,44 +2875,24 @@ function normalizeGeneratedUniverseIdeas(payload) {
   return singleIdea.name && singleIdea.description ? [singleIdea] : [];
 }
 
-function formatUniverseAiReviewText(generatedUniverse) {
-  const name = String(generatedUniverse?.name || "").trim();
-  const description = String(generatedUniverse?.description || "").trim();
-  return [
-    `Name: ${name}`,
-    "",
-    "Description:",
-    description
-  ].join("\n");
-}
-
-function parseUniverseAiReviewText(value) {
-  const text = String(value || "").trim();
-  const match = text.match(/^Name:\s*(.*?)\s*\n+\s*Description:\s*([\s\S]*)$/i);
-  if (!match) {
-    return {
-      name: "",
-      description: text
-    };
-  }
-  return {
-    name: String(match[1] || "").trim(),
-    description: String(match[2] || "").trim()
-  };
-}
-
 function setUniverseAiReviewText(generatedUniverse) {
-  if (!universeAiReviewText) return;
+  if (!universeAiReviewName || !universeAiReviewDescription) return;
+  const genre = String(generatedUniverse?.genre || "AI-selected genre").trim() || "AI-selected genre";
   universeAiReviewDraft = {
     name: String(generatedUniverse?.name || "").trim(),
+    genre,
     description: String(generatedUniverse?.description || "").trim()
   };
-  universeAiReviewText.value = formatUniverseAiReviewText(generatedUniverse);
+  universeAiReviewName.value = universeAiReviewDraft.name;
+  universeAiReviewDescription.value = universeAiReviewDraft.description;
+  if (universeAiReviewGenre) {
+    universeAiReviewGenre.textContent = genre;
+  }
 }
 
 function openUniverseAiReviewDialog(generatedUniverse) {
   const newUniverseModal = document.getElementById("new-universe-modal");
-  if (!universeAiReviewModal || !universeAiReviewText) return;
+  if (!universeAiReviewModal || !universeAiReviewName || !universeAiReviewDescription) return;
 
   setUniverseAiReviewText(generatedUniverse);
   setUniverseAiReviewStatus("");
@@ -2928,7 +2903,7 @@ function openUniverseAiReviewDialog(generatedUniverse) {
   }
   activeModal = universeAiReviewModal;
   universeAiReviewModal.hidden = false;
-  requestAnimationFrame(() => universeAiReviewText.focus({ preventScroll: true }));
+  requestAnimationFrame(() => universeAiReviewName.focus({ preventScroll: true }));
 }
 
 function closeUniverseAiReviewDialog() {
@@ -3124,7 +3099,7 @@ async function regenerateUniverseDraft() {
       count: 1
     });
     setUniverseAiReviewText(generatedUniverse);
-    requestAnimationFrame(() => universeAiReviewText?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => universeAiReviewName?.focus({ preventScroll: true }));
   } catch (error) {
     setUniverseAiReviewStatus(getReadableError(error), "error");
   } finally {
@@ -3197,18 +3172,18 @@ async function createUniverseFromForm(form, submitButton) {
 }
 
 async function finalizeGeneratedUniverse() {
-  if (!universeAiReviewText) return;
+  if (!universeAiReviewName || !universeAiReviewDescription) return;
   const button = universeAiFinalizeButton;
   if (button) {
     button.disabled = true;
   }
 
   try {
-    const parsed = parseUniverseAiReviewText(universeAiReviewText.value);
-    const name = String(parsed?.name || "").trim();
-    const description = String(parsed?.description || "").trim();
+    const name = String(universeAiReviewName.value || "").trim();
+    const description = String(universeAiReviewDescription.value || "").trim();
     if (!name) {
-      setUniverseAiReviewStatus("Generated universe text must include a non-empty Name.", "error");
+      setUniverseAiReviewStatus("Generated universe must include a non-empty name.", "error");
+      universeAiReviewName.focus();
       return;
     }
     universeAiReviewDraft = {

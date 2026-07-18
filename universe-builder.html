@@ -270,10 +270,19 @@
         </div>
       </div>
 
-      <label class="form-field">
-        <span>Generated universe</span>
-        <textarea data-universe-ai-review-text spellcheck="true"></textarea>
-      </label>
+      <div class="universe-ai-review-card">
+        <div class="universe-ai-review-title-row">
+          <span class="universe-ai-idea-genre" data-universe-ai-review-genre>AI-selected genre</span>
+        </div>
+        <label class="form-field">
+          <span>Name</span>
+          <input type="text" data-universe-ai-review-name maxlength="120" spellcheck="true">
+        </label>
+        <label class="form-field">
+          <span>Description</span>
+          <textarea data-universe-ai-review-description spellcheck="true"></textarea>
+        </label>
+      </div>
 
       <p class="form-status" data-universe-ai-review-status role="status"></p>
 
