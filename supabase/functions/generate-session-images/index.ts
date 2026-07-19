@@ -210,6 +210,11 @@ Deno.serve(async (req) => {
     if (references.length && !settings.supportsReferences) return jsonResponse({ error: `${settings.modelLabel} does not support reference images.` }, 400);
     if (references.length > settings.maxReferences) return jsonResponse({ error: `Select no more than ${settings.maxReferences} reference images for ${settings.modelLabel}.` }, 400);
     if (references.length && settings.n !== 1) return jsonResponse({ error: "Reference-image edits return one image per request." }, 400);
+    if (settings.provider === "openai" && settings.quality === "high") {
+      return jsonResponse({
+        error: "High-quality GPT Image 2 outputs run through the Vercel image route. Refresh the page and try again.",
+      }, 400);
+    }
 
     const endpoint = references.length ? "edits" : "generations";
     const snapshot = { ...settings, endpoint, reference_count: references.length };

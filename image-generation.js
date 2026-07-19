@@ -189,6 +189,31 @@
     return data;
   }
 
+  async function invokeHighQualityOpenAi(body) {
+    const session = await supabase.auth.getSession();
+    const accessToken = session.data.session?.access_token;
+    if (!accessToken) throw new Error("Sign in to generate images.");
+    const response = await fetch("/api/generate-high-image", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const requestError = new Error(payload.error || `High-quality image generation returned HTTP ${response.status}.`);
+      requestError.details = payload.error_details || payload.details || payload;
+      throw requestError;
+    }
+    return payload;
+  }
+
+  function shouldUseHighQualityRoute(model, params) {
+    return isGptImage2Model(model) && params.quality === "high";
+  }
+
   function setStatus(message, isError = false) {
     els.status.textContent = message;
     els.status.classList.toggle("is-error", isError);
@@ -198,6 +223,19 @@
     state.busy = busy;
     els.send.disabled = busy || !state.session;
     els.send.querySelector("span").textContent = busy ? "Generating…" : "Send";
+  }
+
+  function clearComposerError() {
+    els.error.textContent = "";
+  }
+
+  function setComposerError(message) {
+    const value = text(message);
+    if (value === "An image generation is already in progress for this session.") {
+      els.error.innerHTML = `<span>${html(value)}</span> <button class="image-generation-inline-error-action" type="button" data-image-cancel-in-progress>Cancel In-progress Generation</button>`;
+      return;
+    }
+    els.error.textContent = value;
   }
 
   function getActivePendingMessage() {
@@ -477,6 +515,7 @@
       els.error.textContent = `${model?.label || "This model"} does not support reference images.`;
       return;
     }
+    const params = getParams();
     const referenceAssetIds = [...state.selectedReferences];
     const useLastGenerated = els.useLast.checked;
     const optimistic = {
@@ -497,9 +536,10 @@
     renderReferenceOptions();
     renderConversation(); setBusy(true); setStatus("Generating images…");
     try {
-      const payload = await invoke("generate-session-images", {
-      sessionId: generation.sessionId, prompt, settings: { provider: getCurrentModel()?.provider || "venice", ...getParams() }, referenceAssetIds, useLastGenerated,
-      });
+      const requestBody = { sessionId: generation.sessionId, prompt, settings: { provider: getCurrentModel()?.provider || "venice", ...params }, referenceAssetIds, useLastGenerated };
+      const payload = shouldUseHighQualityRoute(model, params)
+        ? await invokeHighQualityOpenAi(requestBody)
+        : await invoke("generate-session-images", requestBody);
       if (generation.cancelled) {
         await openSession(generation.sessionId);
         return;
@@ -523,11 +563,44 @@
       optimistic.status = "failed";
       optimistic.error_message = error instanceof Error ? error.message : "Could not generate images.";
       optimistic.error_details = error?.details || null;
-      renderConversation(); els.error.textContent = optimistic.error_message; setStatus("Generation failed", true);
+      if (optimistic.error_message !== "An image generation is already in progress for this session.") {
+        await clearPendingGenerationAfterError(generation.sessionId, optimistic.error_message, optimistic.error_details);
+      }
+      renderConversation(); setComposerError(optimistic.error_message); setStatus("Generation failed", true);
     } finally {
       if (state.activeGeneration === generation) state.activeGeneration = null;
       setBusy(false);
     }
+  }
+
+  async function clearPendingGenerationAfterError(sessionId, errorMessage, errorDetails = null) {
+    if (!sessionId) return;
+    try {
+      await invoke("cancel-image-generation", {
+        sessionId,
+        errorMessage: errorMessage || "Generation failed before completion.",
+        errorDetails: {
+          ...(errorDetails && typeof errorDetails === "object" ? errorDetails : {}),
+          cleanup: true,
+          message: errorMessage || "Generation failed before completion.",
+        },
+      });
+    } catch (cleanupError) {
+      console.warn("Could not clear failed image generation lock.", cleanupError);
+    }
+  }
+
+  async function cancelInProgressGenerationFromError(button) {
+    const sessionId = state.session?.id;
+    if (!sessionId) return;
+    button.disabled = true;
+    button.textContent = "Cancelling...";
+    await clearPendingGenerationAfterError(sessionId, "Generation cancelled by user.", { cancelled: true });
+    state.activeGeneration = null;
+    setBusy(false);
+    clearComposerError();
+    setStatus("Ready");
+    await refreshSessions(sessionId);
   }
 
   async function cancelGeneration() {
@@ -630,6 +703,17 @@
 
   function bind() {
     els.newSessionButtons.forEach((button) => button.addEventListener("click", async () => { try { await createSession(); } catch (error) { els.error.textContent = error.message; } }));
+    els.error.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-image-cancel-in-progress]");
+      if (!button) return;
+      event.preventDefault();
+      try {
+        await cancelInProgressGenerationFromError(button);
+      } catch (error) {
+        setComposerError(error instanceof Error ? error.message : "Could not cancel the in-progress generation.");
+        setStatus("Cancel failed", true);
+      }
+    });
     els.sessionList.addEventListener("click", async (event) => {
       const menuTrigger = event.target.closest("[data-image-session-menu]");
       const rename = event.target.closest("[data-image-rename-session]");

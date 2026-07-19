@@ -38,6 +38,24 @@ After deployment, update Supabase Auth URL configuration:
 
 Google OAuth redirects are generated from the current browser origin, so a Vercel sign-in should return to Vercel as long as the Vercel URL is allowlisted in Supabase.
 
+### High-Quality GPT Image Generation
+
+GPT Image 2 High quality generations use the Node serverless route at `api/generate-high-image.js` instead of Supabase Edge Functions. Configure these Vercel environment variables for Production and Preview:
+
+- `OPENAI_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
+- `IDRIVE_E2_ENDPOINT`
+- `IDRIVE_E2_BUCKET`
+- `IDRIVE_E2_ACCESS_KEY_ID`
+- `IDRIVE_E2_SECRET_ACCESS_KEY`
+
+Optional:
+
+- `IDRIVE_E2_REGION` defaults to `us-east-1`
+- `IDRIVE_E2_PUBLIC_BASE_URL` is not required by the Vercel route
+
 ## Major Modules
 
 ### Centralis Dashboard

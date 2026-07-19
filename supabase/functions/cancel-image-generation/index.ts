@@ -13,16 +13,21 @@ Deno.serve(async (req) => {
   try {
     const authUser = await getAuthUser(req);
     const appUser = await getImageGenerationUser(authUser.id);
-    const sessionId = String((await req.json()).sessionId || "").trim();
+    const body = await req.json();
+    const sessionId = String(body.sessionId || "").trim();
     if (!sessionId) return jsonResponse({ error: "sessionId is required." }, 400);
     await requireImageGenerationSession(sessionId, appUser.id);
+    const errorMessage = String(body.errorMessage || "Generation cancelled by user.").trim() || "Generation cancelled by user.";
+    const errorDetails = body.errorDetails && typeof body.errorDetails === "object"
+      ? body.errorDetails
+      : { cancelled: true, message: errorMessage };
 
     const supabase = createAdminClient();
     const { data: cancelled, error } = await supabase
       .from("image_generation_messages")
       .update({
         status: "failed",
-        error_message: "Generation cancelled by user.",
+        error_message: errorMessage,
       })
       .eq("session_id", sessionId)
       .eq("user_id", appUser.id)
@@ -36,7 +41,7 @@ Deno.serve(async (req) => {
     if (cancelledIds.length) {
       await supabase
         .from("image_generation_messages")
-        .update({ error_details: { cancelled: true, message: "Generation cancelled by user." } })
+        .update({ error_details: errorDetails })
         .in("id", cancelledIds);
     }
     return jsonResponse({ ok: true, cancelledMessageIds: cancelledIds });
