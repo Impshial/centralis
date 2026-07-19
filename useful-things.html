@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=todo-v1">
-  <link rel="stylesheet" href="tailwind.generated.css?v=action-sizing-1">
+  <link rel="stylesheet" href="styles.css?v=header-menu-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=header-menu-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="useful-things">
@@ -172,6 +172,8 @@
               aria-selected="false"
               aria-controls="useful-panel-storage"
               data-useful-tab="storage"
+              data-admin-only
+              hidden
             >
               <span>Storage</span>
             </button>
@@ -467,6 +469,7 @@
             id="useful-panel-storage"
             aria-labelledby="useful-tab-storage"
             data-useful-panel="storage"
+            data-admin-only
             hidden
           >
             <div class="storage-browser" data-storage-browser>
@@ -579,6 +582,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=todo-v1"></script>
-  <script src="useful-things.js?v=resolution-calculator-1"></script>
+  <script src="useful-things.js?v=admin-storage-1"></script>
 </body>
 </html>

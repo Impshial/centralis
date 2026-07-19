@@ -77,7 +77,7 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
+  gap: 54px;
   min-height: var(--header-height);
   padding: 0 24px;
   background: color-mix(in srgb, var(--surface) 94%, transparent);
@@ -184,8 +184,8 @@ textarea::placeholder {
 
 .category-button span {
   display: block;
-  font-size: 0.9rem;
-  font-weight: 720;
+  font-size: 1.08rem;
+  font-weight: 760;
   line-height: 1;
   white-space: nowrap;
 }

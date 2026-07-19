@@ -4,6 +4,7 @@
   const els = {
     tabs: Array.from(document.querySelectorAll("[data-useful-tab]")),
     panels: Array.from(document.querySelectorAll("[data-useful-panel]")),
+    adminOnly: Array.from(document.querySelectorAll("[data-admin-only]")),
     modeSelect: document.querySelector("[data-text-converter-mode]"),
     clearInputButton: document.querySelector("[data-text-clear-input]"),
     saveInputButton: document.querySelector("[data-text-save-input]"),
@@ -83,6 +84,7 @@
   let nextGeneratorId = 1;
   let activeGeneratorId = null;
   const generators = new Map();
+  let storageAccessAllowed = false;
   const storageState = {
     loaded: false,
     loading: false,
@@ -3328,6 +3330,50 @@
     if (els.storageStatus) els.storageStatus.textContent = message;
   }
 
+  function isUsefulAdmin(user = window.centralisCurrentAppUser) {
+    return user?.admin === true;
+  }
+
+  function activateUsefulTab(tabName) {
+    let tab = els.tabs.find((candidate) => candidate.dataset.usefulTab === tabName && !candidate.hidden);
+    if (!tab) {
+      tab = els.tabs.find((candidate) => candidate.dataset.usefulTab === "text-converter") || els.tabs.find((candidate) => !candidate.hidden);
+    }
+    if (!tab) return;
+
+    const activeTabName = tab.dataset.usefulTab;
+    els.tabs.forEach((button) => {
+      const isActive = button === tab;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+    });
+    els.panels.forEach((panel) => {
+      const isActive = panel.dataset.usefulPanel === activeTabName;
+      panel.classList.toggle("is-active", isActive);
+      panel.hidden = !isActive;
+    });
+    if (activeTabName === "calculators") {
+      scheduleCalculatorResultsFit();
+    }
+    if (activeTabName === "storage") {
+      initializeStorageBrowser();
+    }
+  }
+
+  function syncUsefulAdminVisibility(user = window.centralisCurrentAppUser) {
+    storageAccessAllowed = isUsefulAdmin(user);
+    const activePanel = els.panels.find((panel) => panel.classList.contains("is-active"));
+    const nextTab = !storageAccessAllowed && activePanel?.dataset.usefulPanel === "storage"
+      ? "text-converter"
+      : activePanel?.dataset.usefulPanel || "text-converter";
+
+    els.adminOnly.forEach((element) => {
+      element.hidden = !storageAccessAllowed;
+    });
+
+    activateUsefulTab(nextTab);
+  }
+
   function setStorageMigrationBusy(busy) {
     storageMigrationState.busy = busy;
     if (els.storageMigrationCloseButton) els.storageMigrationCloseButton.disabled = busy;
@@ -3590,6 +3636,7 @@
   }
 
   async function initializeStorageBrowser() {
+    if (!storageAccessAllowed) return;
     if (!els.storageBrowser || storageState.loaded || storageState.loading) return;
     storageState.loading = true;
     setStorageStatus("Loading buckets...");
@@ -3683,26 +3730,14 @@
   }
 
   bindStorageBrowser();
+  syncUsefulAdminVisibility();
+  window.addEventListener("centralis:current-user-changed", (event) => {
+    syncUsefulAdminVisibility(event.detail?.user);
+  });
 
   els.tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
-      const tabName = tab.dataset.usefulTab;
-      els.tabs.forEach((button) => {
-        const isActive = button === tab;
-        button.classList.toggle("is-active", isActive);
-        button.setAttribute("aria-selected", String(isActive));
-      });
-      els.panels.forEach((panel) => {
-        const isActive = panel.dataset.usefulPanel === tabName;
-        panel.classList.toggle("is-active", isActive);
-        panel.hidden = !isActive;
-      });
-      if (tabName === "calculators") {
-        scheduleCalculatorResultsFit();
-      }
-      if (tabName === "storage") {
-        initializeStorageBrowser();
-      }
+      activateUsefulTab(tab.dataset.usefulTab);
     });
   });
 
