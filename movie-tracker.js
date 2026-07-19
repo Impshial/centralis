@@ -426,7 +426,7 @@ function renderActionsState() {
   [[downloaded, "Mark Downloaded"], [franchise, "Set Franchise"], [collection, "Set Collection"]].forEach(([button, label]) => {
     if (!button) return;
     button.disabled = count === 0;
-    button.innerHTML = `${button.querySelector("ph-download-simple,ph-clapperboard")?.outerHTML || ""}${label} (${count})`;
+    button.innerHTML = `${button.querySelector("ph-download-simple,ph-film-slate")?.outerHTML || ""}${label} (${count})`;
   });
 }
 

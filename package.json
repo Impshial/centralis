@@ -4,8 +4,8 @@
   "private": true,
   "description": "Centralis web app with Supabase auth, Universe Builder, and React Flow universe canvas.",
   "scripts": {
-    "dev": "python -m http.server 4173 --bind 127.0.0.1",
-    "start": "python -m http.server 4173 --bind 127.0.0.1",
+    "dev": "node .local-static-server.js",
+    "start": "node .local-static-server.js",
     "tailwind:build": "tailwindcss -i ./tailwind.css -o ./tailwind.generated.css --minify",
     "tailwind:watch": "tailwindcss -i ./tailwind.css -o ./tailwind.generated.css --watch"
   },

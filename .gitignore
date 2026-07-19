@@ -1,4 +1,6 @@
 node_modules/
+!assets/vendor/phosphor/node_modules/
+!assets/vendor/phosphor/node_modules/**
 dist/
 .env
 .env.*
@@ -9,6 +11,8 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 supabase/.temp/
-assets/vendor/phosphor/icons/
+assets/vendor/phosphor/icons/*
+!assets/vendor/phosphor/icons/*.mjs
 assets/vendor/phosphor/index.cjs
 assets/vendor/phosphor/*.d.ts
+assets/vendor/phosphor/icons/*.d.ts
