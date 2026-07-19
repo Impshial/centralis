@@ -203,7 +203,10 @@
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const requestError = new Error(payload.error || `High-quality image generation returned HTTP ${response.status}.`);
+      const fallbackMessage = response.status === 404
+        ? "High-quality image generation route was not found. Open /api/generate-high-image on the same site to verify it is deployed, then redeploy Vercel if it still returns 404."
+        : `High-quality image generation returned HTTP ${response.status}.`;
+      const requestError = new Error(payload.error || fallbackMessage);
       requestError.details = payload.error_details || payload.details || payload;
       throw requestError;
     }

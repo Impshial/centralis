@@ -355,6 +355,9 @@ function providerError(error) {
 }
 
 module.exports = async function handler(req, res) {
+  if (req.method === "GET") {
+    return json(res, { ok: true, route: "generate-high-image", runtime: "node" });
+  }
   if (req.method !== "POST") return json(res, { error: "Method not allowed." }, 405);
   let messageId = "";
   try {
