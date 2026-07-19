@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/generate-high-image.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }

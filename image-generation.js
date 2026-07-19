@@ -208,7 +208,9 @@
     if (!response.ok) {
       const fallbackMessage = response.status === 404
         ? "High-quality image generation route was not found. Open /api/generate-high-image on the same site to verify it is deployed, then redeploy Vercel if it still returns 404."
-        : `High-quality image generation returned HTTP ${response.status}.`;
+        : response.status === 504
+          ? "High-quality image generation timed out on Vercel before it could finish. Redeploy with the longer function timeout, then try again."
+          : `High-quality image generation returned HTTP ${response.status}.`;
       const requestError = new Error(payload.error || fallbackMessage);
       requestError.details = payload.error_details || payload.details || payload;
       throw requestError;
