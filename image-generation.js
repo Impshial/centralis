@@ -217,6 +217,25 @@
     return isGptImage2Model(model) && params.quality === "high";
   }
 
+  async function getCurrentImageGenerationUser() {
+    const immediateUser = await window.centralisGetCurrentAppUser?.();
+    if (immediateUser) return immediateUser;
+    if (window.centralisCurrentAppUser) return window.centralisCurrentAppUser;
+    return await new Promise((resolve) => {
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("centralis:current-user-changed", handleUserChange);
+        resolve(null);
+      }, 8000);
+      function handleUserChange(event) {
+        if (!event.detail?.user) return;
+        window.clearTimeout(timeout);
+        window.removeEventListener("centralis:current-user-changed", handleUserChange);
+        resolve(event.detail.user);
+      }
+      window.addEventListener("centralis:current-user-changed", handleUserChange);
+    });
+  }
+
   function setStatus(message, isError = false) {
     els.status.textContent = message;
     els.status.classList.toggle("is-error", isError);
@@ -867,12 +886,13 @@
       window.scrollTo(0, 0);
       bind();
       setStatus("Loading sessions…");
-      state.user = await window.centralisGetCurrentAppUser();
+      state.user = await getCurrentImageGenerationUser();
       if (!state.user) {
         setStatus("Sign in required", true);
         els.error.textContent = "Sign in to use Image Generation.";
         return;
       }
+      clearComposerError();
       await loadSessions(); autoResize();
     } catch (error) { setStatus("Could not load image generation.", true); els.error.textContent = error instanceof Error ? error.message : "Could not load image generation."; }
   }
