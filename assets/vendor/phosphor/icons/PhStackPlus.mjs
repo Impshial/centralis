@@ -1,9 +1,9 @@
-import "../node_modules/.pnpm/@lit_reactive-element@2.0.4/node_modules/@lit/reactive-element/reactive-element.mjs";
-import { svg as t, html as Z } from "../node_modules/.pnpm/lit-html@3.1.4/node_modules/lit-html/lit-html.mjs";
-import { LitElement as A } from "../node_modules/.pnpm/lit-element@4.0.6/node_modules/lit-element/lit-element.mjs";
-import { customElement as v } from "../node_modules/.pnpm/@lit_reactive-element@2.0.4/node_modules/@lit/reactive-element/decorators/custom-element.mjs";
-import { property as h } from "../node_modules/.pnpm/@lit_reactive-element@2.0.4/node_modules/@lit/reactive-element/decorators/property.mjs";
-import { css as n } from "../node_modules/.pnpm/@lit_reactive-element@2.0.4/node_modules/@lit/reactive-element/css-tag.mjs";
+import "../runtime/reactive-element.mjs";
+import { svg as t, html as Z } from "../runtime/lit-html.mjs";
+import { LitElement as A } from "../runtime/lit-element.mjs";
+import { customElement as v } from "../runtime/custom-element.mjs";
+import { property as h } from "../runtime/property.mjs";
+import { css as n } from "../runtime/css-tag.mjs";
 var M = Object.defineProperty, c = Object.getOwnPropertyDescriptor, e = (r, s, p, o) => {
   for (var l = o > 1 ? void 0 : o ? c(s, p) : s, i = r.length - 1, m; i >= 0; i--)
     (m = r[i]) && (l = (o ? m(s, p, l) : m(l)) || l);

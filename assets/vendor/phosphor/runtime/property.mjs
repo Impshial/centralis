@@ -10,7 +10,7 @@ var d = (e, t, r) => t in e ? h(e, t, { enumerable: !0, configurable: !0, writab
       P.call(t, r) && d(e, r, t[r]);
   return e;
 }, u = (e, t) => f(e, y(t));
-import { defaultConverter as m, notEqual as v } from "../reactive-element.mjs";
+import { defaultConverter as m, notEqual as v } from "./reactive-element.mjs";
 /**
  * @license
  * Copyright 2017 Google LLC

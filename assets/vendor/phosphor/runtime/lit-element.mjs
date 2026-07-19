@@ -1,7 +1,7 @@
-import { ReactiveElement as l } from "../../../@lit_reactive-element@2.0.4/node_modules/@lit/reactive-element/reactive-element.mjs";
-import { defaultConverter as C, notEqual as E } from "../../../@lit_reactive-element@2.0.4/node_modules/@lit/reactive-element/reactive-element.mjs";
-import { render as a, noChange as d } from "../../../lit-html@3.1.4/node_modules/lit-html/lit-html.mjs";
-import { html as b, nothing as g, svg as R } from "../../../lit-html@3.1.4/node_modules/lit-html/lit-html.mjs";
+import { ReactiveElement as l } from "./reactive-element.mjs";
+import { defaultConverter as C, notEqual as E } from "./reactive-element.mjs";
+import { render as a, noChange as d } from "./lit-html.mjs";
+import { html as b, nothing as g, svg as R } from "./lit-html.mjs";
 /**
  * @license
  * Copyright 2017 Google LLC
