@@ -64,23 +64,6 @@ const CENTRALIS_HEADER_MARKUP = `
   </nav>
 
   <div class="header-actions">
-    <button class="icon-button theme-toggle" type="button" aria-label="Switch to dark mode">
-      <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="4"></circle>
-        <path d="M12 2v2"></path>
-        <path d="M12 20v2"></path>
-        <path d="m4.93 4.93 1.41 1.41"></path>
-        <path d="m17.66 17.66 1.41 1.41"></path>
-        <path d="M2 12h2"></path>
-        <path d="M20 12h2"></path>
-        <path d="m6.34 17.66-1.41 1.41"></path>
-        <path d="m19.07 4.93-1.41 1.41"></path>
-      </svg>
-      <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z"></path>
-      </svg>
-    </button>
-
     <div class="menu-wrap user-menu">
       <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -89,10 +72,11 @@ const CENTRALIS_HEADER_MARKUP = `
         </svg>
       </button>
       <div class="dropdown-menu align-right" role="menu">
-        <button type="button" role="menuitem"><ph-user-circle weight="duotone" aria-hidden="true"></ph-user-circle><span>Profile</span></button>
+        <div class="user-menu-email"><ph-user-circle weight="duotone" aria-hidden="true"></ph-user-circle><span data-user-menu-email>Loading account...</span></div>
+        <hr>
         <button type="button" role="menuitem"><ph-identification-card weight="duotone" aria-hidden="true"></ph-identification-card><span>Account</span></button>
         <a href="settings.html" role="menuitem"><ph-gear-six weight="duotone" aria-hidden="true"></ph-gear-six><span>Settings</span></a>
-        <button type="button" role="menuitem"><ph-bell weight="duotone" aria-hidden="true"></ph-bell><span>Notifications</span></button>
+        <hr>
         <button type="button" role="menuitem" data-sign-out><ph-sign-out weight="duotone" aria-hidden="true"></ph-sign-out><span>Sign Out</span></button>
       </div>
     </div>
@@ -106,6 +90,12 @@ function renderCentralisHeader() {
 }
 
 renderCentralisHeader();
+
+function syncUserMenuEmail(user = window.centralisCurrentAppUser) {
+  document.querySelectorAll("[data-user-menu-email]").forEach((element) => {
+    element.textContent = user?.email || "Signed in";
+  });
+}
 
 const menuTriggers = document.querySelectorAll(".menu-trigger");
 const themeToggle = document.querySelector(".theme-toggle");
@@ -1700,6 +1690,7 @@ function applyUserSettings(settings) {
 
 function publishCurrentAppUserChange() {
   window.centralisCurrentAppUser = currentAppUser;
+  syncUserMenuEmail(currentAppUser);
   window.dispatchEvent(new CustomEvent("centralis:current-user-changed", {
     detail: { user: currentAppUser }
   }));

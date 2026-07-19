@@ -259,6 +259,9 @@ textarea::placeholder {
 }
 
 .user-button {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: 999px;
 }
 
@@ -290,6 +293,45 @@ body.dark-mode .moon-icon {
   right: 0;
   left: auto;
   transform: none;
+}
+
+.dropdown-menu hr {
+  width: 100%;
+  margin: 5px 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.user-menu .dropdown-menu {
+  min-width: 230px;
+}
+
+.user-menu-email {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 260px;
+  padding: 9px 10px 7px;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-email ph-user-circle {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+
+.user-menu-email span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .category-nav .dropdown-menu {
