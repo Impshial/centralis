@@ -77,12 +77,37 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 54px;
+  gap: 84px;
   min-height: var(--header-height);
   padding: 0 24px;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(18px);
+  isolation: isolate;
+  overflow: visible;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 96%, transparent), color-mix(in srgb, var(--surface) 88%, transparent) 44%, color-mix(in srgb, var(--surface) 94%, transparent)),
+    color-mix(in srgb, var(--page) 82%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  box-shadow:
+    inset 0 -1px 0 rgb(255 255 255 / 3%),
+    0 12px 34px rgb(0 0 0 / 12%);
+  backdrop-filter: blur(18px) saturate(132%);
+}
+
+.site-header::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: 250px;
+  pointer-events: none;
+  content: "";
+  background:
+  radial-gradient(circle 210px at 0% 50%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 100%),
+  linear-gradient(90deg, color-mix(in srgb, #02070b 74%, transparent), color-mix(in srgb, var(--accent) 12%, transparent) 78%, color-mix(in srgb, var(--accent-strong) 12%, transparent) 92%, transparent);
+  opacity: 0.62;
+}
+
+.site-header > * {
+  position: relative;
+  z-index: 1;
 }
 
 .brand {
@@ -90,6 +115,7 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-height: 44px;
   color: var(--ink);
   font-size: 1.5rem;
   font-weight: 820;
@@ -138,7 +164,7 @@ textarea::placeholder {
 .category-nav {
   justify-self: start;
   justify-content: flex-start;
-  gap: 2px;
+  gap: 8px;
 }
 
 .menu-wrap {
@@ -184,15 +210,15 @@ textarea::placeholder {
 
 .category-button span {
   display: block;
-  font-size: 1.08rem;
-  font-weight: 760;
+  font-size: 0.98rem;
+  font-weight: 720;
   line-height: 1;
   white-space: nowrap;
 }
 
 .icon-button {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
 }
 
 .icon-button svg {
@@ -219,7 +245,17 @@ textarea::placeholder {
 
 .header-actions {
   justify-self: end;
-  gap: 6px;
+  gap: 7px;
+  padding-left: 18px;
+}
+
+.header-actions::before {
+  align-self: center;
+  width: 1px;
+  height: 30px;
+  margin-right: 4px;
+  content: "";
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--line) 82%, transparent), transparent);
 }
 
 .user-button {
@@ -1382,8 +1418,17 @@ body.dark-mode .moon-icon {
     padding: 0 12px;
   }
 
+  .site-header::before,
+  .header-actions::before {
+    display: none;
+  }
+
   .brand {
     font-size: 1.1rem;
+  }
+
+  .header-actions {
+    padding-left: 0;
   }
 
   .category-nav {
