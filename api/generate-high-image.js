@@ -82,16 +82,45 @@ async function supabaseFetch(path, options = {}) {
   return payload;
 }
 
-async function getAuthUser(accessToken) {
+async function fetchAuthUser(accessToken, apiKey, label) {
   const response = await fetch(`${getSupabaseUrl()}/auth/v1/user`, {
     headers: {
-      apikey: getSupabasePublishableKey(),
+      apikey: apiKey,
       Authorization: `Bearer ${accessToken}`,
     },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.id) throw new Error("You must be signed in to generate images.");
+  if (!response.ok || !payload?.id) {
+    const error = new Error(payload?.msg || payload?.message || "Supabase rejected the current auth session.");
+    error.status = response.status;
+    error.raw = { source: label, payload };
+    throw error;
+  }
   return payload;
+}
+
+async function getAuthUser(accessToken) {
+  const attempts = [
+    ["publishable", getSupabasePublishableKey()],
+    ["secret", getSupabaseSecretKey()],
+  ];
+  const errors = [];
+  for (const [label, apiKey] of attempts) {
+    try {
+      return await fetchAuthUser(accessToken, apiKey, label);
+    } catch (error) {
+      errors.push({
+        source: label,
+        status: error.status || null,
+        message: error.message,
+        raw: error.raw || null,
+      });
+    }
+  }
+  const authError = new Error("You must be signed in to generate images.");
+  authError.status = 401;
+  authError.raw = { auth_validation_errors: errors };
+  throw authError;
 }
 
 async function getAppUser(authUserId) {

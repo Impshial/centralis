@@ -190,7 +190,10 @@
   }
 
   async function invokeHighQualityOpenAi(body) {
-    const session = await supabase.auth.getSession();
+    let session = await supabase.auth.getSession();
+    if (!session.data.session?.access_token) {
+      session = await supabase.auth.refreshSession();
+    }
     const accessToken = session.data.session?.access_token;
     if (!accessToken) throw new Error("Sign in to generate images.");
     const response = await fetch("/api/generate-high-image", {
