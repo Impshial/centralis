@@ -43,7 +43,7 @@ Google OAuth redirects are generated from the current browser origin, so a Verce
 GPT Image 2 High quality generations use the Node serverless route at `api/generate-high-image.js` instead of Supabase Edge Functions. Configure these Vercel environment variables for Production and Preview:
 
 - `OPENAI_API_KEY`
-- `SUPABASE_URL`
+- `SUPABASE_URL` as the project base URL, for example `https://your-project-ref.supabase.co`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
 - `IDRIVE_E2_ENDPOINT`

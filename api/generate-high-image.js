@@ -20,7 +20,10 @@ function requiredEnv(name, aliases = []) {
 }
 
 function getSupabaseUrl() {
-  return requiredEnv("SUPABASE_URL").replace(/\/+$/, "");
+  return requiredEnv("SUPABASE_URL")
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "")
+    .replace(/\/auth\/v1$/i, "");
 }
 
 function getSupabasePublishableKey() {
