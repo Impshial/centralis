@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Image Generation | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=brand-glow-header-8">
+  <link rel="stylesheet" href="styles.css?v=image-viewer-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=brand-glow-header-6">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -161,7 +161,7 @@
         <h2 id="image-generation-viewer-title" data-image-viewer-title>Generated image</h2>
         <div class="image-generation-viewer-actions">
           <button type="button" class="secondary-action" data-image-viewer-open>
-            <ph-arrow-square-out aria-hidden="true"></ph-arrow-square-out>
+            <ph-arrow-up-right aria-hidden="true"></ph-arrow-up-right>
             Open in New Tab
           </button>
           <button type="button" class="modal-close" aria-label="Close image viewer" data-image-viewer-close>
@@ -170,13 +170,20 @@
         </div>
       </header>
       <div class="image-generation-viewer-stage">
+        <button type="button" class="image-generation-viewer-nav is-prev" data-image-viewer-prev aria-label="Previous generated image">
+          <ph-caret-left aria-hidden="true"></ph-caret-left>
+        </button>
         <img src="" alt="" data-image-viewer-image>
+        <button type="button" class="image-generation-viewer-nav is-next" data-image-viewer-next aria-label="Next generated image">
+          <ph-caret-right aria-hidden="true"></ph-caret-right>
+        </button>
       </div>
+      <footer class="image-generation-viewer-details" data-image-viewer-details></footer>
     </section>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=user-menu-click-2"></script>
-  <script src="image-generation.js?v=high-timeout-1"></script>
+  <script src="image-generation.js?v=viewer-details-1"></script>
 </body>
 </html>

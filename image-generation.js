@@ -41,6 +41,9 @@
     imageViewerImage: document.querySelector("[data-image-viewer-image]"),
     imageViewerOpen: document.querySelector("[data-image-viewer-open]"),
     imageViewerClose: document.querySelector("[data-image-viewer-close]"),
+    imageViewerPrev: document.querySelector("[data-image-viewer-prev]"),
+    imageViewerNext: document.querySelector("[data-image-viewer-next]"),
+    imageViewerDetails: document.querySelector("[data-image-viewer-details]"),
     deletingSession: document.querySelector("[data-image-deleting-session]"),
   };
 
@@ -338,6 +341,16 @@
   function getAssetGenerationSettings(asset, fallbackMessage) {
     return normalizeSettingsSnapshot(asset?.generation_settings) || normalizeSettingsSnapshot(fallbackMessage?.settings_snapshot);
   }
+  function getOutputAssets() {
+    return state.assets.filter((asset) => asset.asset_kind === "output" && asset.preview_url);
+  }
+  function findPromptMessageForAsset(asset) {
+    const linkedMessage = state.messages.find((message) => message.id === asset?.message_id);
+    if (linkedMessage?.role === "user") return linkedMessage;
+    const assetMessageIndex = state.messages.findIndex((message) => message.id === asset?.message_id);
+    const precedingMessage = assetMessageIndex > 0 ? state.messages[assetMessageIndex - 1] : null;
+    return precedingMessage?.role === "user" ? precedingMessage : null;
+  }
   function formatGenerationSettings(settings) {
     if (!settings) return "";
     const rows = [
@@ -353,6 +366,21 @@
       ["References", settings.reference_count !== null && settings.reference_count !== undefined ? String(settings.reference_count) : ""],
     ];
     return rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim()).map(([label, value]) => `${label}: ${value}`).join("\n");
+  }
+  function formatGenerationSettingsInline(settings) {
+    if (!settings) return "No generation parameters saved.";
+    const parts = [
+      getSettingsModelLabel(settings),
+      settings.provider,
+      settings.size,
+      settings.quality,
+      settings.format ? String(settings.format).toUpperCase() : "",
+      settings.compression !== null && settings.compression !== undefined ? `${settings.compression}% compression` : "",
+      settings.background && `background ${settings.background}`,
+      settings.moderation && `moderation ${settings.moderation}`,
+      settings.reference_count !== null && settings.reference_count !== undefined ? `${settings.reference_count} references` : "",
+    ];
+    return parts.filter((value) => value && String(value).trim()).join(" / ") || "No generation parameters saved.";
   }
   function renderAssetGenerationSettingsActions(asset, fallbackMessage) {
     const settings = getAssetGenerationSettings(asset, fallbackMessage);
@@ -439,7 +467,7 @@
   }
 
   function renderSessionThumbnails() {
-    const outputs = state.assets.filter((asset) => asset.asset_kind === "output");
+    const outputs = getOutputAssets();
     if (!outputs.length) {
       els.sessionThumbnails.innerHTML = '<p class="image-generation-thumbnail-empty">Generated images will appear here.</p>';
       els.downloadSelected.disabled = true; els.downloadAll.disabled = true; return;
@@ -449,13 +477,42 @@
     els.downloadSelected.disabled = false; els.downloadAll.disabled = false;
   }
 
+  function renderImageViewerDetails() {
+    if (!els.imageViewerDetails) return;
+    const promptMessage = findPromptMessageForAsset(state.viewerAsset);
+    const settings = getAssetGenerationSettings(state.viewerAsset, promptMessage);
+    const prompt = promptMessage?.content || "Prompt unavailable";
+    const params = formatGenerationSettingsInline(settings);
+    els.imageViewerDetails.innerHTML = `
+      <p title="${html(prompt)}"><strong>Prompt Used:</strong> ${html(prompt)}</p>
+      <p title="${html(formatGenerationSettings(settings) || params)}"><strong>Parameters Used:</strong> ${html(params)}</p>
+    `;
+  }
+  function syncImageViewerNav() {
+    const outputs = getOutputAssets();
+    const index = outputs.findIndex((asset) => asset.id === state.viewerAsset?.id);
+    const hasMultiple = outputs.length > 1 && index >= 0;
+    if (els.imageViewerPrev) els.imageViewerPrev.disabled = !hasMultiple;
+    if (els.imageViewerNext) els.imageViewerNext.disabled = !hasMultiple;
+  }
   function openImageViewer(asset) {
     if (!asset?.preview_url || !els.imageViewerModal) return;
     state.viewerAsset = asset;
+    state.selectedAsset = asset;
     els.imageViewerTitle.textContent = asset.original_filename || "Generated image";
     els.imageViewerImage.src = asset.preview_url;
     els.imageViewerImage.alt = asset.original_filename || "Generated image";
+    renderSessionThumbnails();
+    renderImageViewerDetails();
+    syncImageViewerNav();
     openModal(els.imageViewerModal);
+  }
+  function moveImageViewer(direction) {
+    const outputs = getOutputAssets();
+    const index = outputs.findIndex((asset) => asset.id === state.viewerAsset?.id);
+    if (outputs.length < 2 || index < 0) return;
+    const nextIndex = (index + direction + outputs.length) % outputs.length;
+    openImageViewer(outputs[nextIndex]);
   }
 
   function closeImageViewer() {
@@ -830,9 +887,21 @@
       const url = state.viewerAsset?.preview_url;
       if (url) window.open(url, "_blank", "noopener,noreferrer");
     });
+    els.imageViewerPrev?.addEventListener("click", () => moveImageViewer(-1));
+    els.imageViewerNext?.addEventListener("click", () => moveImageViewer(1));
     els.imageViewerClose?.addEventListener("click", closeImageViewer);
     els.imageViewerModal?.addEventListener("click", (event) => {
       if (event.target === els.imageViewerModal) closeImageViewer();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (!els.imageViewerModal || els.imageViewerModal.hidden) return;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        moveImageViewer(-1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        moveImageViewer(1);
+      }
     });
     els.conversation.addEventListener("click", async (event) => {
       const stopGeneration = event.target.closest("[data-image-stop-generation]");
@@ -879,7 +948,7 @@
       const button = event.target.closest("[data-image-open-output-id]");
       if (!button) return;
       const asset = state.assets.find((item) => item.id === button.dataset.imageOpenOutputId);
-      if (asset?.preview_url) window.open(asset.preview_url, "_blank", "noopener,noreferrer");
+      openImageViewer(asset);
     });
     els.downloadSelected.addEventListener("click", downloadSelected);
     els.downloadAll.addEventListener("click", () => downloadZip([]));
