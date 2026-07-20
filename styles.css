@@ -191,7 +191,7 @@
 }
 
 .settings-database-card-icon ph-shield-check,
-.settings-database-card-icon ph-wrench {
+.settings-database-card-icon ph-trash {
   font-size: 1.35rem;
 }
 
@@ -206,6 +206,192 @@
   margin: 8px 0 0;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.settings-purge-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 14px;
+}
+
+.settings-purge-backdrop {
+  z-index: 70;
+  padding: 18px;
+}
+
+.settings-purge-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 18px;
+  width: min(1040px, calc(100vw - 36px));
+  max-width: none;
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+}
+
+.settings-purge-header,
+.settings-purge-footer,
+.settings-purge-actions,
+.settings-purge-pane-header {
+  display: flex;
+  align-items: center;
+}
+
+.settings-purge-header {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-purge-header h2,
+.settings-purge-pane h3 {
+  margin: 0;
+}
+
+.settings-purge-header p:last-child {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.settings-purge-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, .85fr) minmax(320px, 1.15fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.settings-purge-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.settings-purge-pane-header {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-purge-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.settings-purge-check,
+.settings-purge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.settings-purge-check {
+  font-size: .88rem;
+  white-space: nowrap;
+}
+
+.settings-purge-row {
+  min-height: 46px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings-purge-row input,
+.settings-purge-check input {
+  inline-size: 16px;
+  block-size: 16px;
+  accent-color: var(--accent);
+}
+
+.settings-purge-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-purge-row-main strong,
+.settings-purge-row-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-purge-row-main span {
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.settings-purge-badge {
+  justify-self: start;
+  color: var(--accent);
+  font-size: .72rem;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.settings-purge-row.is-disabled {
+  opacity: .58;
+}
+
+.settings-purge-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.settings-purge-confirm {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.settings-purge-confirm p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.settings-purge-confirm .form-field {
+  max-width: 340px;
+}
+
+.settings-purge-footer {
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.settings-purge-footer .form-status {
+  min-height: 1.2em;
+  margin: 0;
+}
+
+.settings-purge-actions {
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.settings-purge-actions .danger-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 @media (max-width: 720px) {
@@ -256,6 +442,32 @@
 
   .settings-database-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-purge-dialog {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .settings-purge-layout {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .settings-purge-pane {
+    min-height: 260px;
+  }
+
+  .settings-purge-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-purge-actions {
+    width: 100%;
+  }
+
+  .settings-purge-actions > button {
+    flex: 1;
   }
 }
 

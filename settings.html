@@ -134,11 +134,15 @@
 
             <article class="settings-database-card">
               <div class="settings-database-card-icon" aria-hidden="true">
-                <ph-wrench weight="duotone"></ph-wrench>
+                <ph-trash weight="duotone"></ph-trash>
               </div>
               <div>
-                <h3>Database Tools</h3>
-                <p>No database utilities are configured yet.</p>
+                <h3>Purge Data</h3>
+                <p>Delete selected database records for selected users. iDrive files are not touched.</p>
+                <button class="danger-action settings-purge-open" type="button" data-settings-purge-open>
+                  <ph-warning weight="fill" aria-hidden="true"></ph-warning>
+                  Purge
+                </button>
               </div>
             </article>
           </div>
@@ -147,9 +151,71 @@
     </main>
   </div>
 
+  <div class="modal-backdrop settings-purge-backdrop" id="settings-purge-modal" data-strict-modal hidden>
+    <section class="modal-dialog settings-purge-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-purge-title">
+      <header class="settings-purge-header">
+        <div>
+          <p class="settings-panel-eyebrow">Admin Only</p>
+          <h2 id="settings-purge-title">Purge Database Records</h2>
+          <p>Choose users and datasets to delete from the database. iDrive files remain in place.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close purge dialog" data-settings-purge-close>
+          <ph-x aria-hidden="true"></ph-x>
+        </button>
+      </header>
+
+      <div class="settings-purge-layout">
+        <section class="settings-purge-pane" aria-labelledby="settings-purge-users-title">
+          <header class="settings-purge-pane-header">
+            <h3 id="settings-purge-users-title">Users</h3>
+            <label class="settings-purge-check">
+              <input type="checkbox" data-settings-purge-all-users>
+              <span>All Users</span>
+            </label>
+          </header>
+          <div class="settings-purge-list" data-settings-purge-users>
+            <p class="settings-purge-empty">Open this dialog to load users.</p>
+          </div>
+        </section>
+
+        <section class="settings-purge-pane" aria-labelledby="settings-purge-datasets-title">
+          <header class="settings-purge-pane-header">
+            <h3 id="settings-purge-datasets-title">Datasets</h3>
+            <label class="settings-purge-check">
+              <input type="checkbox" data-settings-purge-all-datasets>
+              <span>Select All / None</span>
+            </label>
+          </header>
+          <div class="settings-purge-list" data-settings-purge-datasets></div>
+        </section>
+      </div>
+
+      <section class="settings-purge-confirm" aria-label="Purge confirmation">
+        <p>
+          This action deletes database rows and cannot be undone. Type <strong>PURGE</strong> to enable the final button.
+        </p>
+        <label class="form-field" for="settings-purge-confirm-text">
+          <span>Confirmation</span>
+          <input id="settings-purge-confirm-text" type="text" autocomplete="off" data-settings-purge-confirm placeholder="PURGE">
+        </label>
+      </section>
+
+      <footer class="settings-purge-footer">
+        <p class="form-status" data-settings-purge-status role="status" aria-live="polite"></p>
+        <div class="settings-purge-actions">
+          <button class="secondary-action" type="button" data-settings-purge-close>Cancel</button>
+          <button class="danger-action" type="button" data-settings-purge-submit disabled>
+            <ph-trash weight="fill" aria-hidden="true"></ph-trash>
+            Purge Selected Data
+          </button>
+        </div>
+      </footer>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=user-menu-click-2"></script>
-  <script src="settings.js?v=settings-admin-db-1"></script>
+  <script src="settings.js?v=admin-purge-1"></script>
 </body>
 </html>
