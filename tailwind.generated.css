@@ -7,19 +7,37 @@
 :root {
   color-scheme: dark;
   --header-height: 76px;
-  --ink: #edf4f5;
-  --muted: #a9b7bd;
-  --line: #304149;
-  --surface: #121a1f;
-  --page: #0c1115;
-  --accent: #78d5c8;
-  --accent-strong: #5146b8;
+  --theme-page: #0c1115;
+  --theme-surface: #121a1f;
+  --theme-field: #121212;
+  --theme-text: #edf4f5;
+  --theme-muted: #a9b7bd;
+  --theme-border: #304149;
+  --theme-primary: #78d5c8;
+  --theme-secondary: #5146b8;
+  --theme-success: #4fd18b;
+  --theme-danger: #ff6b6b;
+  --ink: var(--theme-text);
+  --muted: var(--theme-muted);
+  --line: var(--theme-border);
+  --surface: var(--theme-surface);
+  --page: var(--theme-page);
+  --field: var(--theme-field);
+  --accent: var(--theme-primary);
+  --accent-strong: var(--theme-secondary);
+  --success: var(--theme-success);
+  --danger: var(--theme-danger);
   --primary-button-text: #001018;
-  --primary-button-bg: #78d5c8;
-  --primary-button-border: #78d5c8;
-  --primary-button-hover-bg: #91e1d7;
-  --primary-button-hover-border: #a8ebe3;
-  --field: #121212;
+  --primary-button-bg: var(--theme-primary);
+  --primary-button-border: var(--theme-primary);
+  --primary-button-hover-bg: color-mix(in srgb, var(--theme-primary) 82%, var(--theme-text));
+  --primary-button-hover-border: color-mix(in srgb, var(--theme-primary) 72%, var(--theme-text));
+  --field: var(--theme-field);
+  --bg: var(--theme-page);
+  --panel: var(--theme-surface);
+  --panel-bg: var(--theme-surface);
+  --border-color: var(--theme-border);
+  --muted-text: var(--theme-muted);
   --menu-shadow: 0 18px 40px rgb(0 0 0 / 34%);
 }
 
@@ -258,6 +276,34 @@ textarea::placeholder {
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--line) 82%, transparent), transparent);
 }
 
+.header-theme-button {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.header-theme-button ph-palette {
+  font-size: 1.42rem;
+}
+
+.header-theme-menu .dropdown-menu {
+  min-width: 190px;
+}
+
+.theme-menu-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background: linear-gradient(135deg, var(--swatch-primary), var(--swatch-secondary));
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 999px;
+}
+
+.dropdown-menu button.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 .user-button {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
@@ -266,11 +312,11 @@ textarea::placeholder {
 }
 
 .moon-icon,
-body.dark-mode .sun-icon {
+html[data-color-scheme="dark"] .sun-icon {
   display: none;
 }
 
-body.dark-mode .moon-icon {
+html[data-color-scheme="dark"] .moon-icon {
   display: block;
 }
 

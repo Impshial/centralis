@@ -38,6 +38,9 @@
     verbosity: document.querySelector("[data-settings-ai-verbosity]"),
     reset: document.querySelector("[data-settings-ai-reset]"),
     status: document.querySelector("[data-settings-status]"),
+    themeForm: document.querySelector("[data-appearance-settings-form]"),
+    theme: document.querySelector("[data-settings-theme]"),
+    themeStatus: document.querySelector("[data-settings-theme-status]"),
     purgeOpen: document.querySelector("[data-settings-purge-open]"),
     purgeModal: document.getElementById("settings-purge-modal"),
     purgeCloseButtons: Array.from(document.querySelectorAll("[data-settings-purge-close]")),
@@ -56,8 +59,10 @@
 
   let savedSettings = { ...DEFAULT_AI_SETTINGS };
   let saving = false;
+  let savingTheme = false;
   let statusTimer = 0;
-  let activeTab = "ai";
+  let themeStatusTimer = 0;
+  let activeTab = "appearance";
   let purgeUsers = [];
   let purgeLoaded = false;
   let purgeBusy = false;
@@ -90,6 +95,34 @@
     };
   }
 
+  function getThemeOptions() {
+    return Array.isArray(window.centralisThemeOptions) && window.centralisThemeOptions.length
+      ? window.centralisThemeOptions
+      : [{ id: "centralis", label: "Centralis", scheme: "dark" }];
+  }
+
+  function normalizeThemeId(themeId) {
+    if (typeof window.centralisNormalizeThemeId === "function") {
+      return window.centralisNormalizeThemeId(themeId);
+    }
+    return getThemeOptions().some((theme) => theme.id === themeId) ? themeId : "centralis";
+  }
+
+  function renderThemeOptions() {
+    if (!els.theme) return;
+    els.theme.innerHTML = getThemeOptions().map((theme) => `
+      <option value="${escapeHtml(theme.id)}">${escapeHtml(theme.label)}</option>
+    `).join("");
+  }
+
+  function applyThemeSelection(settings = {}) {
+    if (!els.theme) return "centralis";
+    const themeId = normalizeThemeId(settings.theme || localStorage.getItem("centralis-theme") || "centralis");
+    els.theme.value = themeId;
+    window.centralisApplyTheme?.(themeId);
+    return themeId;
+  }
+
   function applySettings(settings) {
     const normalized = normalizeSettings(settings);
     els.model.value = normalized.model;
@@ -116,6 +149,17 @@
     }
   }
 
+  function setThemeStatus(message = "", kind = "") {
+    if (!els.themeStatus) return;
+    window.clearTimeout(themeStatusTimer);
+    els.themeStatus.textContent = message;
+    els.themeStatus.classList.toggle("is-error", kind === "error");
+    els.themeStatus.classList.toggle("is-success", kind === "success");
+    if (kind === "success") {
+      themeStatusTimer = window.setTimeout(() => setThemeStatus(""), 2200);
+    }
+  }
+
   function setPurgeStatus(message = "", kind = "") {
     if (!els.purgeStatus) return;
     els.purgeStatus.textContent = message;
@@ -130,10 +174,17 @@
     });
   }
 
+  function setThemeSaving(isSaving) {
+    savingTheme = isSaving;
+    if (els.theme) {
+      els.theme.disabled = isSaving;
+    }
+  }
+
   function activateTab(tabName) {
     const tab = els.tabs.find((candidate) => candidate.dataset.settingsTab === tabName);
     if (!tab || tab.hidden) {
-      tabName = "ai";
+      tabName = "appearance";
     }
 
     activeTab = tabName;
@@ -387,6 +438,29 @@
     }
   }
 
+  async function saveTheme() {
+    if (savingTheme || !els.theme) return;
+    const nextTheme = normalizeThemeId(els.theme.value);
+    const previousTheme = normalizeThemeId(window.centralisCurrentTheme?.id || localStorage.getItem("centralis-theme") || "centralis");
+    window.centralisApplyTheme?.(nextTheme);
+    setThemeSaving(true);
+    setThemeStatus("Saving theme...");
+
+    try {
+      await window.centralisUpdateUserSettings({
+        theme: nextTheme
+      });
+      applyThemeSelection({ theme: nextTheme });
+      setThemeStatus("Theme saved.", "success");
+    } catch (error) {
+      window.centralisApplyTheme?.(previousTheme);
+      applyThemeSelection({ theme: previousTheme });
+      setThemeStatus(getReadableError(error), "error");
+    } finally {
+      setThemeSaving(false);
+    }
+  }
+
   els.tabs.forEach((tab) => {
     tab.addEventListener("click", () => activateTab(tab.dataset.settingsTab));
   });
@@ -394,6 +468,8 @@
   [els.model, els.effort, els.verbosity].forEach((control) => {
     control.addEventListener("change", saveSettings);
   });
+
+  els.theme?.addEventListener("change", saveTheme);
 
   els.reset.addEventListener("click", () => {
     applySettings(DEFAULT_AI_SETTINGS);
@@ -432,8 +508,13 @@
   els.purgeSubmit?.addEventListener("click", submitPurge);
 
   window.addEventListener("centralis:user-settings-changed", (event) => {
-    if (saving || !event.detail?.settings) return;
-    savedSettings = applySettings(event.detail.settings);
+    if (!event.detail?.settings) return;
+    if (!saving) {
+      savedSettings = applySettings(event.detail.settings);
+    }
+    if (!savingTheme) {
+      applyThemeSelection(event.detail.settings);
+    }
   });
 
   window.addEventListener("centralis:current-user-changed", (event) => {
@@ -442,19 +523,28 @@
 
   (async () => {
     syncAdminVisibility();
+    renderThemeOptions();
+    applyThemeSelection();
     setSaving(true);
+    setThemeSaving(true);
     setStatus("Loading AI settings...");
+    setThemeStatus("Loading theme...");
     try {
       const appUser = await window.centralisGetCurrentAppUser?.();
       syncAdminVisibility(appUser);
       const settings = await window.centralisGetUserSettings();
       savedSettings = applySettings(settings || DEFAULT_AI_SETTINGS);
+      applyThemeSelection(settings || {});
       setStatus("");
+      setThemeStatus("");
     } catch (error) {
       savedSettings = applySettings(DEFAULT_AI_SETTINGS);
+      applyThemeSelection();
       setStatus(getReadableError(error), "error");
+      setThemeStatus(getReadableError(error), "error");
     } finally {
       setSaving(false);
+      setThemeSaving(false);
     }
   })();
 })();

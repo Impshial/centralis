@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   --header-height: 76px;
   --content-max-width: 1368px;
   --content-inline-gutter: clamp(16px, 3vw, 36px);
@@ -7,24 +7,48 @@
   --module-heading-size: clamp(2rem, 4vw, 3.3rem);
   --module-heading-weight: 860;
   --module-heading-line-height: 1;
-  --ink: #172026;
-  --muted: #5d6972;
-  --line: #d9e1e7;
-  --surface: #ffffff;
-  --page: #f6f8fa;
-  --node-surface: 255 255 255;
-  --node-layer-base: #ffffff;
+  --theme-page: #0c1115;
+  --theme-surface: #121a1f;
+  --theme-field: #121212;
+  --theme-text: #edf4f5;
+  --theme-muted: #a9b7bd;
+  --theme-border: #304149;
+  --theme-primary: #78d5c8;
+  --theme-secondary: #5146b8;
+  --theme-success: #4fd18b;
+  --theme-danger: #ff6b6b;
+  --ink: var(--theme-text);
+  --muted: var(--theme-muted);
+  --line: var(--theme-border);
+  --surface: var(--theme-surface);
+  --page: var(--theme-page);
+  --field: var(--theme-field);
+  --accent: var(--theme-primary);
+  --accent-strong: var(--theme-secondary);
+  --success: var(--theme-success);
+  --danger: var(--theme-danger);
+  --info: var(--theme-primary);
+  --warning: color-mix(in srgb, var(--theme-danger) 46%, var(--theme-secondary));
+  --node-surface-rgb: 18 26 31;
+  --node-surface: var(--node-surface-rgb);
+  --node-layer-base: rgb(var(--node-surface-rgb) / var(--node-bg-opacity, 0.96));
   --node-shadow: 0 18px 42px rgb(15 23 42 / 14%);
-  --accent: #23756f;
-  --accent-strong: #4f46b8;
-  --danger: #ff4d5e;
   --primary-button-text: #001018;
-  --primary-button-bg: #78d5c8;
-  --primary-button-border: #78d5c8;
-  --primary-button-hover-bg: #91e1d7;
-  --primary-button-hover-border: #a8ebe3;
-  --field: #ffffff;
-  --menu-shadow: 0 18px 40px rgb(18 31 40 / 14%);
+  --primary-button-bg: var(--theme-primary);
+  --primary-button-border: var(--theme-primary);
+  --primary-button-hover-bg: color-mix(in srgb, var(--theme-primary) 82%, var(--theme-text));
+  --primary-button-hover-border: color-mix(in srgb, var(--theme-primary) 72%, var(--theme-text));
+  --focus-ring: color-mix(in srgb, var(--theme-primary) 38%, transparent);
+  --hover-bg: color-mix(in srgb, var(--theme-primary) 9%, transparent);
+  --active-bg: color-mix(in srgb, var(--theme-primary) 14%, transparent);
+  --panel-overlay: color-mix(in srgb, var(--theme-surface) 88%, transparent);
+  --card-border: color-mix(in srgb, var(--theme-primary) 18%, var(--theme-border));
+  --bg: var(--theme-page);
+  --panel: var(--theme-surface);
+  --panel-bg: var(--theme-surface);
+  --border-color: var(--theme-border);
+  --muted-text: var(--theme-muted);
+  --menu-shadow: 0 18px 40px rgb(0 0 0 / 34%);
 }
 
 /* Global settings */
@@ -102,6 +126,7 @@
   cursor: pointer;
 }
 
+.settings-tab ph-palette,
 .settings-tab ph-sparkle,
 .settings-tab ph-database {
   color: var(--accent);
@@ -139,6 +164,7 @@
   line-height: 1.05;
 }
 
+.settings-appearance-form,
 .settings-ai-form {
   display: grid;
   gap: 18px;
@@ -146,10 +172,23 @@
   padding-top: 26px;
 }
 
+.settings-appearance-form .form-status {
+  min-height: 1.2em;
+  margin: 0;
+}
+
+.settings-theme-note {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: .92rem;
+  line-height: 1.45;
+}
+
 .settings-ai-form .form-field {
   gap: 8px;
 }
 
+.settings-appearance-form select,
 .settings-ai-form select {
   min-height: 42px;
 }
@@ -572,28 +611,6 @@ textarea::placeholder {
   display: none !important;
 }
 
-body.dark-mode {
-  color-scheme: dark;
-  --ink: #edf4f5;
-  --muted: #a9b7bd;
-  --line: #304149;
-  --surface: #121a1f;
-  --page: #0c1115;
-  --node-surface: 15 23 42;
-  --node-layer-base: rgb(15 23 42 / var(--node-bg-opacity, 0.96));
-  --node-shadow: var(--menu-shadow);
-  --accent: #78d5c8;
-  --accent-strong: #5146b8;
-  --danger: #ff6b6b;
-  --primary-button-text: #001018;
-  --primary-button-bg: #78d5c8;
-  --primary-button-border: #78d5c8;
-  --primary-button-hover-bg: #91e1d7;
-  --primary-button-hover-border: #a8ebe3;
-  --field: #121212;
-  --menu-shadow: 0 18px 40px rgb(0 0 0 / 34%);
-}
-
 .auth-landing {
   position: relative;
   isolation: isolate;
@@ -979,6 +996,34 @@ button {
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--line) 82%, transparent), transparent);
 }
 
+.header-theme-button {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.header-theme-button ph-palette {
+  font-size: 1.42rem;
+}
+
+.header-theme-menu .dropdown-menu {
+  min-width: 190px;
+}
+
+.theme-menu-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background: linear-gradient(135deg, var(--swatch-primary), var(--swatch-secondary));
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 999px;
+}
+
+.dropdown-menu button.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 .icon-button {
   width: 42px;
   height: 42px;
@@ -992,11 +1037,11 @@ button {
 }
 
 .moon-icon,
-body.dark-mode .sun-icon {
+html[data-color-scheme="dark"] .sun-icon {
   display: none;
 }
 
-body.dark-mode .moon-icon {
+html[data-color-scheme="dark"] .moon-icon {
   display: block;
 }
 
@@ -1169,8 +1214,8 @@ body.dark-mode .moon-icon {
   justify-self: center;
 }
 
-body.dark-mode .home-panel,
-body.dark-mode .home-stat-card {
+html[data-color-scheme="dark"] .home-panel,
+html[data-color-scheme="dark"] .home-stat-card {
   background: color-mix(in srgb, var(--surface) 90%, transparent);
 }
 
@@ -6199,25 +6244,25 @@ body[data-page="todo"] {
   color: #aeb8c4;
 }
 
-body:not(.dark-mode) .movie-page {
+html[data-color-scheme="light"] .movie-page {
   background: #f7fafc;
   color: #16212a;
 }
 
-body:not(.dark-mode) .movie-side-panel,
-body:not(.dark-mode) .movie-table-shell,
-body:not(.dark-mode) .movie-table th,
-body:not(.dark-mode) .movie-table td,
-body:not(.dark-mode) .movie-actions-menu {
+html[data-color-scheme="light"] .movie-side-panel,
+html[data-color-scheme="light"] .movie-table-shell,
+html[data-color-scheme="light"] .movie-table th,
+html[data-color-scheme="light"] .movie-table td,
+html[data-color-scheme="light"] .movie-actions-menu {
   background: #ffffff;
   color: #16212a;
 }
 
-body:not(.dark-mode) .movie-title-cell,
-body:not(.dark-mode) .movie-filter-field,
-body:not(.dark-mode) .movie-actions-menu button,
-body:not(.dark-mode) .movie-detail-list dd,
-body:not(.dark-mode) .movie-dialog-header h2 {
+html[data-color-scheme="light"] .movie-title-cell,
+html[data-color-scheme="light"] .movie-filter-field,
+html[data-color-scheme="light"] .movie-actions-menu button,
+html[data-color-scheme="light"] .movie-detail-list dd,
+html[data-color-scheme="light"] .movie-dialog-header h2 {
   color: #16212a;
 }
 
@@ -10078,13 +10123,13 @@ body.is-resizing-details {
   color: var(--ink);
 }
 
-body.dark-mode .react-flow__controls-button {
+html[data-color-scheme="dark"] .react-flow__controls-button {
   background: rgba(12, 19, 23, 0.94);
   border-color: rgba(255, 255, 255, 0.22);
   color: #ffffff;
 }
 
-body.dark-mode .react-flow__controls-button svg {
+html[data-color-scheme="dark"] .react-flow__controls-button svg {
   fill: currentColor;
 }
 
@@ -12207,24 +12252,24 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   font-size: 12px;
 }
 
-body:not(.dark-mode) .stellar-page {
+html[data-color-scheme="light"] .stellar-page {
   background: #f7fafc;
   color: #13202b;
 }
 
-body:not(.dark-mode) .stellar-side-panel,
-body:not(.dark-mode) .stellar-detail-toolbar,
-body:not(.dark-mode) .stellar-panel,
-body:not(.dark-mode) .stellar-system-card,
-body:not(.dark-mode) .stellar-body-row,
-body:not(.dark-mode) .stellar-empty-state {
+html[data-color-scheme="light"] .stellar-side-panel,
+html[data-color-scheme="light"] .stellar-detail-toolbar,
+html[data-color-scheme="light"] .stellar-panel,
+html[data-color-scheme="light"] .stellar-system-card,
+html[data-color-scheme="light"] .stellar-body-row,
+html[data-color-scheme="light"] .stellar-empty-state {
   background: #ffffff;
   color: #13202b;
 }
 
-body:not(.dark-mode) .stellar-stat strong,
-body:not(.dark-mode) .stellar-card-body h2,
-body:not(.dark-mode) .stellar-row-title h3 {
+html[data-color-scheme="light"] .stellar-stat strong,
+html[data-color-scheme="light"] .stellar-card-body h2,
+html[data-color-scheme="light"] .stellar-row-title h3 {
   color: #13202b;
 }
 
