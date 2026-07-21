@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=theme-contract-3">
-  <link rel="stylesheet" href="tailwind.generated.css?v=theme-contract-3">
+  <link rel="stylesheet" href="styles.css?v=theme-selector-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=theme-selector-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="settings">
@@ -72,22 +72,9 @@
           <header class="settings-panel-header">
             <div>
               <h2>Appearance</h2>
-              <p>Choose the color theme used across Centralis.</p>
+              <p>Theme controls are available from the header theme menu.</p>
             </div>
           </header>
-
-          <form class="settings-appearance-form" data-appearance-settings-form>
-            <label class="form-field" for="settings-theme">
-              <span>Theme</span>
-              <select id="settings-theme" data-settings-theme></select>
-            </label>
-
-            <p class="settings-theme-note">
-              Themes use a 10-color palette contract so custom theme editing can be added later.
-            </p>
-
-            <p class="form-status" data-settings-theme-status role="status" aria-live="polite"></p>
-          </form>
         </section>
 
         <section
@@ -256,7 +243,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=theme-contract-3"></script>
-  <script src="settings.js?v=theme-contract-3"></script>
+  <script src="script.js?v=theme-selector-1"></script>
+  <script src="settings.js?v=theme-selector-1"></script>
 </body>
 </html>

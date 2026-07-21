@@ -1,7 +1,10 @@
 const THEME_STORAGE_KEY = "centralis-theme";
+const THEME_MENU_STORAGE_KEY = "centralis-theme-menu";
 const DEFAULT_THEME_ID = "centralis";
 const THEME_SOURCE_COLOR_KEYS = ["page", "surface", "field", "text", "muted", "border", "primary", "secondary", "success", "danger"];
-const THEME_REGISTRY = [
+const DEFAULT_HEADER_THEME_IDS = ["centralis", "nebula", "deep-archive", "signal", "palette-7", "palette-28", "palette-64", "palette-103"];
+const MAX_HEADER_THEME_OPTIONS = 8;
+const BUILTIN_THEME_REGISTRY = [
   {
     id: "centralis",
     label: "Centralis",
@@ -71,6 +74,172 @@ const THEME_REGISTRY = [
     }
   }
 ];
+const SEEDED_IMPORTED_THEMES = [
+  { id: "palette-7", label: "Clay Sage", scheme: "dark", paletteColors: ["#c7522a", "#cb6036", "#cf6e41", "#d68a58", "#dea66f", "#e5c185", "#f0daa5", "#fbf2c4", "#dae0b8", "#b8cdab"] },
+  { id: "palette-28", label: "Prairie Haze", scheme: "dark", paletteColors: ["#f1ddbf", "#cabead", "#a29e9a", "#525e75", "#657980", "#78938a", "#85a78e", "#92ba92", "#aeccae", "#c9ddc9"] },
+  { id: "palette-64", label: "Canyon Sage", scheme: "dark", paletteColors: ["#a85633", "#cf6e41", "#d37c4d", "#d68a58", "#dea66f", "#e5c185", "#f0daa5", "#fbf2c4", "#dae0b8", "#b8cdab"] },
+  { id: "palette-103", label: "Velvet Carnival", scheme: "dark", paletteColors: ["#241642", "#a15d6d", "#e28269", "#f1ad79", "#600b5f", "#664c76", "#23348c", "#9527ae", "#c97c73", "#53091e"] }
+];
+let THEME_REGISTRY = [...BUILTIN_THEME_REGISTRY];
+let themeLibraryLoaded = false;
+let themeMenuThemeIds = [...DEFAULT_HEADER_THEME_IDS];
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function hexToRgb(value) {
+  if (!isValidHexColor(value)) return null;
+  const hex = value.trim().slice(1);
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16)
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  return `#${[r, g, b].map((channel) => clampNumber(Math.round(channel), 0, 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function mixHexColors(first, second, amount = 0.5) {
+  const a = hexToRgb(first);
+  const b = hexToRgb(second);
+  if (!a || !b) return first;
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * amount,
+    g: a.g + (b.g - a.g) * amount,
+    b: a.b + (b.b - a.b) * amount
+  });
+}
+
+function getColorProfile(value) {
+  const rgb = hexToRgb(value) || { r: 18, g: 26, b: 31 };
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  let hue = 0;
+  if (delta) {
+    if (max === r) hue = ((g - b) / delta) % 6;
+    if (max === g) hue = (b - r) / delta + 2;
+    if (max === b) hue = (r - g) / delta + 4;
+    hue = Math.round(hue * 60);
+    if (hue < 0) hue += 360;
+  }
+  const lightness = (max + min) / 2;
+  const saturation = delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0;
+  return {
+    value: value.trim().toLowerCase(),
+    hue,
+    saturation,
+    lightness,
+    luminance: getRelativeLuminance(value)
+  };
+}
+
+function hueDistance(hue, target) {
+  const distance = Math.abs(hue - target);
+  return Math.min(distance, 360 - distance);
+}
+
+function pickBestColor(profiles, scoreFn, fallbackIndex = 0) {
+  return [...profiles].sort((a, b) => scoreFn(b) - scoreFn(a))[0]?.value || profiles[fallbackIndex]?.value || "#78d5c8";
+}
+
+function deriveThemeColorsFromPalette(colors = []) {
+  const validColors = colors.filter(isValidHexColor).map((color) => color.trim().toLowerCase());
+  const fallback = BUILTIN_THEME_REGISTRY[0].colors;
+  if (!validColors.length) {
+    return { ...fallback };
+  }
+  while (validColors.length < 10) {
+    validColors.push(validColors[validColors.length - 1] || fallback.primary);
+  }
+  const profiles = validColors.map(getColorProfile).sort((a, b) => a.luminance - b.luminance);
+  const darkest = profiles[0]?.value || fallback.page;
+  const secondDarkest = profiles[1]?.value || darkest;
+  const thirdDarkest = profiles[2]?.value || secondDarkest;
+  const lightest = profiles[profiles.length - 1]?.value || fallback.text;
+  const secondLightest = profiles[profiles.length - 2]?.value || lightest;
+  const border = pickBestColor(
+    profiles,
+    (color) => (1 - Math.abs(color.luminance - 0.18)) * 2 + (1 - color.saturation),
+    2
+  );
+  const muted = pickBestColor(
+    profiles,
+    (color) => (1 - Math.abs(color.luminance - 0.58)) * 1.5 + (1 - color.saturation) * 0.8,
+    profiles.length - 2
+  );
+  const primary = pickBestColor(
+    profiles,
+    (color) => color.saturation * 2 + (1 - Math.abs(color.luminance - 0.42)),
+    Math.floor(profiles.length / 2)
+  );
+  const secondary = pickBestColor(
+    profiles,
+    (color) => color.saturation * 1.6 + hueDistance(color.hue, getColorProfile(primary).hue) / 180 + (1 - Math.abs(color.luminance - 0.34)),
+    Math.floor(profiles.length / 2)
+  );
+  const success = pickBestColor(
+    profiles,
+    (color) => (1 - hueDistance(color.hue, 145) / 180) * 2 + color.saturation + (1 - Math.abs(color.luminance - 0.45)),
+    Math.floor(profiles.length / 2)
+  );
+  const danger = pickBestColor(
+    profiles,
+    (color) => {
+      const warmScore = Math.max(1 - hueDistance(color.hue, 0) / 180, 1 - hueDistance(color.hue, 24) / 180, 1 - hueDistance(color.hue, 335) / 180);
+      return warmScore * 2 + color.saturation + (1 - Math.abs(color.luminance - 0.45));
+    },
+    Math.floor(profiles.length / 2)
+  );
+
+  return {
+    page: darkest,
+    surface: mixHexColors(secondDarkest, thirdDarkest, 0.35),
+    field: secondDarkest,
+    text: lightest,
+    muted: muted || secondLightest,
+    border,
+    primary,
+    secondary,
+    success,
+    danger
+  };
+}
+
+function themeFromPalette({ id, label, scheme = "dark", colors, paletteColors }) {
+  const rawColors = Array.isArray(paletteColors) ? paletteColors : colors;
+  const theme = normalizeTheme({
+    id,
+    label,
+    scheme,
+    colors: Array.isArray(rawColors) ? deriveThemeColorsFromPalette(rawColors) : colors
+  });
+  if (Array.isArray(rawColors)) {
+    theme.paletteColors = rawColors.slice(0, 10).map((color) => color.trim().toLowerCase());
+  }
+  return theme;
+}
+
+function dedupeThemes(themes) {
+  const seen = new Set();
+  return themes.map((theme) => {
+    const normalized = normalizeTheme(theme);
+    if (Array.isArray(theme.paletteColors)) {
+      normalized.paletteColors = theme.paletteColors.slice(0, 10);
+    }
+    return normalized;
+  }).filter((theme) => {
+    if (!theme.id || seen.has(theme.id)) return false;
+    seen.add(theme.id);
+    return true;
+  });
+}
 
 function normalizeThemeId(themeId) {
   if (themeId === "dark" || themeId === "light") {
@@ -111,6 +280,39 @@ function getReadableTextColor(background) {
   return getRelativeLuminance(background) > 0.55 ? "#001018" : "#ffffff";
 }
 
+function getContrastRatio(first, second) {
+  const firstLuminance = getRelativeLuminance(first);
+  const secondLuminance = getRelativeLuminance(second);
+  const lighter = Math.max(firstLuminance, secondLuminance);
+  const darker = Math.min(firstLuminance, secondLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function getReadableColorForBackground(background, preferred, minimumRatio = 4.5) {
+  if (isValidHexColor(preferred) && getContrastRatio(background, preferred) >= minimumRatio) {
+    return preferred.trim();
+  }
+  const darkText = "#001018";
+  const lightText = "#ffffff";
+  return getContrastRatio(background, darkText) > getContrastRatio(background, lightText) ? darkText : lightText;
+}
+
+function ensureThemeReadability(colors) {
+  const safeColors = { ...colors };
+  const surface = safeColors.surface || safeColors.page || "#121a1f";
+  safeColors.text = getReadableColorForBackground(surface, safeColors.text, 4.5);
+  if (!isValidHexColor(safeColors.muted) || getContrastRatio(surface, safeColors.muted) < 3) {
+    safeColors.muted = mixHexColors(surface, safeColors.text, 0.68);
+  }
+  if (!isValidHexColor(safeColors.border) || getContrastRatio(surface, safeColors.border) < 1.35) {
+    safeColors.border = mixHexColors(surface, safeColors.text, 0.22);
+  }
+  if (!isValidHexColor(safeColors.primary) || getContrastRatio(surface, safeColors.primary) < 2.2) {
+    safeColors.primary = getReadableColorForBackground(surface, safeColors.primary, 2.2);
+  }
+  return safeColors;
+}
+
 function normalizeTheme(themeInput) {
   const candidate = typeof themeInput === "object" && themeInput ? themeInput : getThemeById(themeInput);
   const fallback = THEME_REGISTRY[0];
@@ -123,12 +325,17 @@ function normalizeTheme(themeInput) {
     id: String(candidate.id),
     label: String(candidate.label),
     scheme: candidate.scheme,
-    colors: THEME_SOURCE_COLOR_KEYS.reduce((themeColors, key) => {
+    colors: ensureThemeReadability(THEME_SOURCE_COLOR_KEYS.reduce((themeColors, key) => {
       themeColors[key] = colors[key].trim();
       return themeColors;
-    }, {})
+    }, {}))
   };
 }
+
+THEME_REGISTRY = dedupeThemes([
+  ...BUILTIN_THEME_REGISTRY,
+  ...SEEDED_IMPORTED_THEMES.map(themeFromPalette)
+]);
 
 function applyTheme(themeInput, { persist = true } = {}) {
   const theme = normalizeTheme(themeInput || localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME_ID);
@@ -139,8 +346,15 @@ function applyTheme(themeInput, { persist = true } = {}) {
   THEME_SOURCE_COLOR_KEYS.forEach((key) => {
     root.style.setProperty(`--theme-${key}`, theme.colors[key]);
   });
+  const primaryButtonText = getReadableColorForBackground(theme.colors.primary, "", 4.5);
+  const primaryButtonHover = mixHexColors(theme.colors.primary, primaryButtonText, 0.18);
+  const primaryButtonHoverBorder = mixHexColors(theme.colors.primary, primaryButtonText, 0.28);
   root.style.setProperty("--node-surface-rgb", hexToRgbString(theme.colors.surface));
-  root.style.setProperty("--primary-button-text", getReadableTextColor(theme.colors.primary));
+  root.style.setProperty("--theme-primary-hover", primaryButtonHover);
+  root.style.setProperty("--theme-primary-hover-border", primaryButtonHoverBorder);
+  root.style.setProperty("--primary-button-text", primaryButtonText);
+  root.style.setProperty("--primary-button-hover-bg", primaryButtonHover);
+  root.style.setProperty("--primary-button-hover-border", primaryButtonHoverBorder);
   if (persist) {
     localStorage.setItem(THEME_STORAGE_KEY, theme.id);
   }
@@ -225,12 +439,12 @@ const CENTRALIS_HEADER_MARKUP = `
         <ph-palette weight="duotone" aria-hidden="true"></ph-palette>
       </button>
       <div class="dropdown-menu align-right" role="menu" aria-label="Theme">
-        ${THEME_REGISTRY.map((theme) => `
-          <button type="button" role="menuitemradio" aria-checked="false" data-header-theme-option="${theme.id}">
-            <span class="theme-menu-swatch" aria-hidden="true" style="--swatch-primary: ${theme.colors.primary}; --swatch-secondary: ${theme.colors.secondary};"></span>
-            <span>${theme.label}</span>
-          </button>
-        `).join("")}
+        <div data-header-theme-options></div>
+        <hr>
+        <button type="button" role="menuitem" data-open-theme-selector>
+          <ph-sliders-horizontal weight="duotone" aria-hidden="true"></ph-sliders-horizontal>
+          <span>Theme Selector</span>
+        </button>
       </div>
     </div>
     <div class="menu-wrap user-menu">
@@ -259,6 +473,9 @@ function renderCentralisHeader() {
 }
 
 renderCentralisHeader();
+loadThemeMenuFromLocalStorage();
+renderHeaderThemeMenu();
+syncThemeOptionExports();
 syncThemeSelects();
 
 function syncUserMenuEmail(user = window.centralisCurrentAppUser) {
@@ -276,8 +493,480 @@ function syncThemeSelects(themeId = window.centralisCurrentTheme?.id || DEFAULT_
   });
 }
 
+function getThemeMenuThemes() {
+  const validIds = normalizeThemeMenuIds(themeMenuThemeIds);
+  return validIds.map(getThemeById).filter(Boolean);
+}
+
+function normalizeThemeMenuIds(ids, { fillDefaults = false } = {}) {
+  const sourceIds = Array.isArray(ids) ? ids : [];
+  const seen = new Set();
+  const normalized = [];
+  sourceIds.forEach((id) => {
+    const themeId = normalizeThemeId(id);
+    if (!seen.has(themeId) && THEME_REGISTRY.some((theme) => theme.id === themeId)) {
+      seen.add(themeId);
+      normalized.push(themeId);
+    }
+  });
+  if (fillDefaults) {
+    DEFAULT_HEADER_THEME_IDS.forEach((id) => {
+      if (normalized.length >= MAX_HEADER_THEME_OPTIONS) return;
+      if (!seen.has(id) && THEME_REGISTRY.some((theme) => theme.id === id)) {
+        seen.add(id);
+        normalized.push(id);
+      }
+    });
+  }
+  return normalized.slice(0, MAX_HEADER_THEME_OPTIONS);
+}
+
+function saveThemeMenuToLocalStorage(ids = themeMenuThemeIds) {
+  themeMenuThemeIds = normalizeThemeMenuIds(ids);
+  localStorage.setItem(THEME_MENU_STORAGE_KEY, JSON.stringify(themeMenuThemeIds));
+}
+
+function loadThemeMenuFromLocalStorage() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(THEME_MENU_STORAGE_KEY) || "[]");
+    themeMenuThemeIds = normalizeThemeMenuIds(parsed.length ? parsed : DEFAULT_HEADER_THEME_IDS, { fillDefaults: !parsed.length });
+  } catch {
+    themeMenuThemeIds = normalizeThemeMenuIds(DEFAULT_HEADER_THEME_IDS, { fillDefaults: true });
+  }
+}
+
+function syncThemeOptionExports() {
+  window.CENTRALIS_THEME_REGISTRY = THEME_REGISTRY;
+  window.centralisThemeOptions = THEME_REGISTRY.map((theme) => ({ id: theme.id, label: theme.label, scheme: theme.scheme }));
+  window.dispatchEvent(new CustomEvent("centralis:themes-changed", {
+    detail: { themes: window.centralisThemeOptions, menuThemeIds: [...themeMenuThemeIds] }
+  }));
+}
+
+function renderHeaderThemeMenu() {
+  themeMenuThemeIds = normalizeThemeMenuIds(themeMenuThemeIds, { fillDefaults: !themeMenuThemeIds.length });
+  document.querySelectorAll("[data-header-theme-options]").forEach((container) => {
+    container.innerHTML = getThemeMenuThemes().map((theme) => `
+      <button type="button" role="menuitemradio" aria-checked="false" data-header-theme-option="${escapeHtml(theme.id)}">
+        <span class="theme-menu-swatch" aria-hidden="true" style="--swatch-primary: ${escapeHtml(theme.colors.primary)}; --swatch-secondary: ${escapeHtml(theme.colors.secondary)};"></span>
+        <span>${escapeHtml(theme.label)}</span>
+      </button>
+    `).join("");
+  });
+  syncThemeSelects();
+}
+
+function normalizeThemeRow(row) {
+  if (!row) return null;
+  const theme = normalizeTheme({
+    id: row.theme_key || row.id,
+    label: row.name || row.label,
+    scheme: row.scheme || "dark",
+    colors: row.theme_colors || row.colors || deriveThemeColorsFromPalette(row.palette_colors || row.paletteColors || [])
+  });
+  if (Array.isArray(row.palette_colors)) {
+    theme.paletteColors = row.palette_colors.slice(0, 10).map((color) => String(color).trim().toLowerCase());
+  }
+  return theme.id === DEFAULT_THEME_ID && (row.theme_key || row.id) !== DEFAULT_THEME_ID ? null : theme;
+}
+
+function normalizePaletteRecord(record) {
+  if (!record || !Array.isArray(record.colors)) return null;
+  const id = `palette-${record.id}`;
+  return themeFromPalette({
+    id,
+    label: record.name || `Palette ${record.id}`,
+    scheme: "dark",
+    paletteColors: record.colors
+  });
+}
+
+async function loadImportedThemeAsset() {
+  try {
+    const response = await fetch("assets/theme-palettes.json?v=theme-selector-1", { cache: "force-cache" });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return (Array.isArray(data.palettes) ? data.palettes : []).map(normalizePaletteRecord).filter(Boolean);
+  } catch (error) {
+    console.warn("Could not load theme palette asset.", error);
+    return [];
+  }
+}
+
+async function loadThemesFromDatabase() {
+  if (!supabaseClient) return [];
+  try {
+    const { data, error } = await withTimeout(supabaseClient
+      .from("themes")
+      .select("theme_key,name,scheme,palette_colors,theme_colors,source,owner_user_id")
+      .order("source", { ascending: true })
+      .order("name", { ascending: true }), "Loading themes");
+    if (error) throw error;
+    return (data || []).map(normalizeThemeRow).filter(Boolean);
+  } catch (error) {
+    console.warn("Theme table is not available yet.", error);
+    return [];
+  }
+}
+
+async function loadUserThemeMenuFromDatabase() {
+  if (!supabaseClient || !currentAppUser?.id) return false;
+  try {
+    const { data, error } = await withTimeout(supabaseClient
+      .from("user_theme_menu_items")
+      .select("theme_key,position")
+      .eq("user_id", currentAppUser.id)
+      .order("position", { ascending: true }), "Loading theme menu");
+    if (error) throw error;
+    if (Array.isArray(data) && data.length) {
+      themeMenuThemeIds = normalizeThemeMenuIds(data.map((item) => item.theme_key));
+      saveThemeMenuToLocalStorage(themeMenuThemeIds);
+    }
+    return true;
+  } catch (error) {
+    console.warn("Theme menu table is not available yet.", error);
+    return false;
+  }
+}
+
+async function saveUserThemeMenuToDatabase(ids = themeMenuThemeIds) {
+  if (!supabaseClient || !currentAppUser?.id) return;
+  const normalizedIds = normalizeThemeMenuIds(ids);
+  const { error: deleteError } = await withTimeout(supabaseClient
+    .from("user_theme_menu_items")
+    .delete()
+    .eq("user_id", currentAppUser.id), "Clearing theme menu");
+  if (deleteError) throw deleteError;
+  if (!normalizedIds.length) return;
+  const rows = normalizedIds.map((themeKey, index) => ({
+    user_id: currentAppUser.id,
+    theme_key: themeKey,
+    position: index
+  }));
+  const { error: insertError } = await withTimeout(supabaseClient
+    .from("user_theme_menu_items")
+    .insert(rows), "Saving theme menu");
+  if (insertError) throw insertError;
+}
+
+async function loadThemeLibrary({ refresh = false } = {}) {
+  if (themeLibraryLoaded && !refresh) return THEME_REGISTRY;
+  const importedThemes = await loadImportedThemeAsset();
+  const databaseThemes = await loadThemesFromDatabase();
+  THEME_REGISTRY = dedupeThemes([
+    ...BUILTIN_THEME_REGISTRY,
+    ...SEEDED_IMPORTED_THEMES.map(themeFromPalette),
+    ...importedThemes,
+    ...databaseThemes
+  ]);
+  loadThemeMenuFromLocalStorage();
+  await loadUserThemeMenuFromDatabase();
+  renderHeaderThemeMenu();
+  syncThemeOptionExports();
+  themeLibraryLoaded = true;
+  return THEME_REGISTRY;
+}
+
+let themeSelectorState = {
+  isOpen: false,
+  savedThemeId: DEFAULT_THEME_ID,
+  savedMenuIds: [...DEFAULT_HEADER_THEME_IDS],
+  draftMenuIds: [...DEFAULT_HEADER_THEME_IDS],
+  previewThemeId: DEFAULT_THEME_ID,
+  showSelectedOnly: false
+};
+
+function ensureThemeSelectorModals() {
+  if (!document.getElementById("theme-selector-modal")) {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div class="modal-backdrop theme-selector-backdrop" id="theme-selector-modal" hidden>
+        <div class="modal-dialog theme-selector-dialog" role="dialog" aria-modal="true" aria-labelledby="theme-selector-title">
+          <header class="theme-selector-header">
+            <div>
+              <p class="settings-eyebrow">Appearance</p>
+              <h2 id="theme-selector-title">Theme Selector</h2>
+              <p>Choose the palettes shown in the header theme menu.</p>
+            </div>
+            <button class="modal-close" type="button" data-theme-selector-cancel aria-label="Close theme selector">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+          </header>
+          <div class="theme-selector-toolbar">
+            <span data-theme-selector-count>0 / ${MAX_HEADER_THEME_OPTIONS} selected</span>
+            <label class="theme-selector-filter">
+              <input type="checkbox" data-theme-selected-filter>
+              <span class="theme-selector-checkbox-ui" aria-hidden="true"></span>
+              <span>Show selected only</span>
+            </label>
+            <button class="secondary-action" type="button" data-create-custom-theme>
+              <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+              <span>Create Palette</span>
+            </button>
+          </div>
+          <div class="theme-selector-list" data-theme-selector-list></div>
+          <footer class="theme-selector-footer">
+            <p class="form-status" data-theme-selector-status role="status" aria-live="polite"></p>
+            <div class="theme-selector-actions">
+              <button class="secondary-action" type="button" data-theme-selector-cancel>Cancel</button>
+              <button class="primary-action" type="button" data-theme-selector-save>Save</button>
+            </div>
+          </footer>
+        </div>
+      </div>
+      <div class="modal-backdrop theme-selector-backdrop" id="custom-theme-modal" hidden>
+        <div class="modal-dialog custom-theme-dialog" role="dialog" aria-modal="true" aria-labelledby="custom-theme-title">
+          <header class="theme-selector-header">
+            <div>
+              <p class="settings-eyebrow">Appearance</p>
+              <h2 id="custom-theme-title">Create Palette</h2>
+              <p>Save a custom 10-color palette for your account.</p>
+            </div>
+          </header>
+          <div class="custom-theme-body">
+            <label class="form-field" for="custom-theme-name">
+              <span>Palette Name</span>
+              <input id="custom-theme-name" type="text" data-custom-theme-name maxlength="80" placeholder="My Palette">
+            </label>
+            <label class="form-field" for="custom-theme-base">
+              <span>Base Palette</span>
+              <select id="custom-theme-base" data-custom-theme-base></select>
+            </label>
+            <div class="custom-theme-colors" data-custom-theme-colors></div>
+          </div>
+          <footer class="theme-selector-footer">
+            <p class="form-status" data-custom-theme-status role="status" aria-live="polite"></p>
+            <div class="theme-selector-actions">
+              <button class="secondary-action" type="button" data-custom-theme-cancel>Cancel</button>
+              <button class="primary-action" type="button" data-custom-theme-save>Save</button>
+            </div>
+          </footer>
+        </div>
+      </div>
+    `);
+  }
+}
+
+function getPaletteColorsForTheme(theme) {
+  if (Array.isArray(theme.paletteColors)) return theme.paletteColors;
+  return THEME_SOURCE_COLOR_KEYS.map((key) => theme.colors[key]);
+}
+
+function setThemeSelectorStatus(message = "", type = "") {
+  const status = document.querySelector("[data-theme-selector-status]");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("is-error", type === "error");
+  status.classList.toggle("is-success", type === "success");
+}
+
+function renderThemeSelectorList() {
+  const list = document.querySelector("[data-theme-selector-list]");
+  const count = document.querySelector("[data-theme-selector-count]");
+  if (!list || !count) return;
+  const selected = new Set(themeSelectorState.draftMenuIds);
+  const selectedCount = selected.size;
+  const filter = document.querySelector("[data-theme-selected-filter]");
+  if (filter) {
+    filter.checked = themeSelectorState.showSelectedOnly;
+  }
+  count.textContent = `${selectedCount} / ${MAX_HEADER_THEME_OPTIONS} selected`;
+  const visibleThemes = themeSelectorState.showSelectedOnly
+    ? THEME_REGISTRY.filter((theme) => selected.has(theme.id))
+    : THEME_REGISTRY;
+  list.innerHTML = visibleThemes.map((theme) => {
+    const isChecked = selected.has(theme.id);
+    const isPreviewed = normalizeThemeId(themeSelectorState.previewThemeId) === theme.id;
+    const disabled = !isChecked && selectedCount >= MAX_HEADER_THEME_OPTIONS;
+    const paletteColors = getPaletteColorsForTheme(theme);
+    return `
+      <article class="theme-selector-row ${isPreviewed ? "is-previewed" : ""}" data-theme-selector-row="${escapeHtml(theme.id)}">
+        <label class="theme-selector-check">
+          <input type="checkbox" data-theme-menu-checkbox="${escapeHtml(theme.id)}" ${isChecked ? "checked" : ""} ${disabled ? "disabled" : ""}>
+          <span class="theme-selector-checkbox-ui" aria-hidden="true"></span>
+          <span class="theme-selector-check-label">${escapeHtml(theme.label)}</span>
+        </label>
+        <button class="theme-selector-preview" type="button" data-theme-preview="${escapeHtml(theme.id)}">
+          ${paletteColors.map((color) => `
+            <span class="theme-selector-swatch" title="${escapeHtml(color)}" style="--theme-selector-color: ${escapeHtml(color)};"></span>
+          `).join("")}
+        </button>
+      </article>
+    `;
+  }).join("");
+  if (!visibleThemes.length) {
+    list.innerHTML = `
+      <div class="theme-selector-empty">
+        <p>No selected palettes.</p>
+        <span>Uncheck "Show selected only" to choose palettes for the header menu.</span>
+      </div>
+    `;
+  }
+}
+
+function previewTheme(themeId) {
+  const theme = applyTheme(themeId, { persist: false });
+  themeSelectorState.previewThemeId = theme.id;
+  syncThemeSelects(theme.id);
+  renderThemeSelectorList();
+}
+
+async function openThemeSelector() {
+  ensureThemeSelectorModals();
+  await loadThemeLibrary();
+  themeSelectorState = {
+    isOpen: true,
+    savedThemeId: window.centralisCurrentTheme?.id || DEFAULT_THEME_ID,
+    savedMenuIds: normalizeThemeMenuIds(themeMenuThemeIds),
+    draftMenuIds: normalizeThemeMenuIds(themeMenuThemeIds),
+    previewThemeId: window.centralisCurrentTheme?.id || DEFAULT_THEME_ID,
+    showSelectedOnly: false
+  };
+  renderThemeSelectorList();
+  setThemeSelectorStatus("");
+  document.getElementById("theme-selector-modal").hidden = false;
+  document.body.classList.add("centralis-modal-open");
+}
+
+function cancelThemeSelector() {
+  if (!themeSelectorState.isOpen) return;
+  const restoredTheme = applyTheme(themeSelectorState.savedThemeId, { persist: false });
+  themeMenuThemeIds = normalizeThemeMenuIds(themeSelectorState.savedMenuIds);
+  renderHeaderThemeMenu();
+  syncThemeSelects(restoredTheme.id);
+  document.getElementById("theme-selector-modal").hidden = true;
+  document.body.classList.remove("centralis-modal-open");
+  themeSelectorState.isOpen = false;
+}
+
+async function saveThemeSelector() {
+  const saveButton = document.querySelector("[data-theme-selector-save]");
+  const selectedIds = normalizeThemeMenuIds(themeSelectorState.draftMenuIds);
+  if (!selectedIds.length) {
+    setThemeSelectorStatus("Select at least one palette for the header menu.", "error");
+    return;
+  }
+  saveButton.disabled = true;
+  setThemeSelectorStatus("Saving theme selection...");
+  try {
+    const theme = applyTheme(themeSelectorState.previewThemeId);
+    themeMenuThemeIds = selectedIds;
+    saveThemeMenuToLocalStorage(selectedIds);
+    renderHeaderThemeMenu();
+    syncThemeSelects(theme.id);
+    if (supabaseClient && currentAppUser?.id) {
+      await updateCurrentUserSettings({ theme: theme.id });
+      await saveUserThemeMenuToDatabase(selectedIds);
+    }
+    setThemeSelectorStatus("Theme selection saved.", "success");
+    document.getElementById("theme-selector-modal").hidden = true;
+    document.body.classList.remove("centralis-modal-open");
+    themeSelectorState.isOpen = false;
+  } catch (error) {
+    console.error(error);
+    setThemeSelectorStatus(error.message || "Could not save theme selection.", "error");
+  } finally {
+    saveButton.disabled = false;
+  }
+}
+
+function setCustomThemeStatus(message = "", type = "") {
+  const status = document.querySelector("[data-custom-theme-status]");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("is-error", type === "error");
+  status.classList.toggle("is-success", type === "success");
+}
+
+function renderCustomThemeFields(baseThemeId = themeSelectorState.previewThemeId) {
+  const baseSelect = document.querySelector("[data-custom-theme-base]");
+  const colorsContainer = document.querySelector("[data-custom-theme-colors]");
+  if (!baseSelect || !colorsContainer) return;
+  baseSelect.innerHTML = THEME_REGISTRY.map((theme) => `<option value="${escapeHtml(theme.id)}">${escapeHtml(theme.label)}</option>`).join("");
+  baseSelect.value = normalizeThemeId(baseThemeId);
+  const baseTheme = getThemeById(baseSelect.value);
+  const paletteColors = getPaletteColorsForTheme(baseTheme);
+  colorsContainer.innerHTML = paletteColors.slice(0, 10).map((color, index) => `
+    <label class="custom-theme-color">
+      <span>Color ${index + 1}</span>
+      <input type="color" value="${escapeHtml(color)}" data-custom-theme-color="${index}">
+      <code>${escapeHtml(color)}</code>
+    </label>
+  `).join("");
+}
+
+function openCustomThemeModal() {
+  ensureThemeSelectorModals();
+  document.querySelector("[data-custom-theme-name]").value = "";
+  renderCustomThemeFields();
+  setCustomThemeStatus("");
+  document.getElementById("custom-theme-modal").hidden = false;
+  document.body.classList.add("centralis-modal-open");
+}
+
+function closeCustomThemeModal() {
+  const modal = document.getElementById("custom-theme-modal");
+  if (modal) modal.hidden = true;
+  if (themeSelectorState.isOpen) {
+    document.body.classList.add("centralis-modal-open");
+  }
+}
+
+async function saveCustomTheme() {
+  const nameInput = document.querySelector("[data-custom-theme-name]");
+  const saveButton = document.querySelector("[data-custom-theme-save]");
+  const name = nameInput?.value?.trim() || "";
+  const paletteColors = [...document.querySelectorAll("[data-custom-theme-color]")].map((input) => input.value);
+  if (!name) {
+    setCustomThemeStatus("Enter a palette name.", "error");
+    return;
+  }
+  if (paletteColors.length !== 10 || !paletteColors.every(isValidHexColor)) {
+    setCustomThemeStatus("Choose 10 valid colors.", "error");
+    return;
+  }
+  saveButton.disabled = true;
+  setCustomThemeStatus("Saving palette...");
+  try {
+    const themeKey = `custom-${crypto.randomUUID()}`;
+    const theme = themeFromPalette({
+      id: themeKey,
+      label: name,
+      scheme: "dark",
+      paletteColors
+    });
+    if (supabaseClient && currentAppUser?.id) {
+      const { error } = await withTimeout(supabaseClient
+        .from("themes")
+        .insert({
+          theme_key: theme.id,
+          owner_user_id: currentAppUser.id,
+          source: "custom",
+          name: theme.label,
+          scheme: theme.scheme,
+          palette_colors: paletteColors,
+          theme_colors: theme.colors
+        }), "Saving custom palette");
+      if (error) throw error;
+    }
+    THEME_REGISTRY = dedupeThemes([...THEME_REGISTRY, { ...theme, paletteColors }]);
+    if (themeSelectorState.draftMenuIds.length < MAX_HEADER_THEME_OPTIONS) {
+      themeSelectorState.draftMenuIds = normalizeThemeMenuIds([...themeSelectorState.draftMenuIds, theme.id]);
+    }
+    previewTheme(theme.id);
+    renderHeaderThemeMenu();
+    syncThemeOptionExports();
+    closeCustomThemeModal();
+    renderThemeSelectorList();
+    setThemeSelectorStatus("Custom palette added. Save to keep it selected.", "success");
+  } catch (error) {
+    console.error(error);
+    setCustomThemeStatus(error.message || "Could not save custom palette.", "error");
+  } finally {
+    saveButton.disabled = false;
+  }
+}
+
 const menuTriggers = document.querySelectorAll(".menu-trigger");
-const headerThemeOptions = document.querySelectorAll("[data-header-theme-option]");
 const modalOpeners = document.querySelectorAll("[data-open-modal]");
 const modalClosers = document.querySelectorAll("[data-close-modal]");
 const appShell = document.querySelector(".app-shell");
@@ -1881,6 +2570,8 @@ async function prepareSignedInUser(authUser) {
     currentUserSettings = await ensureUserSettings(currentAppUser.id);
     startElementTypeLibrarySeed(currentAppUser.id);
     applyUserSettings(currentUserSettings);
+    await loadThemeLibrary({ refresh: true });
+    applyUserSettings(currentUserSettings);
     const homepageDataPromise = Promise.all([
       loadHomeDashboardOverview(),
       loadRecentSourceDocuments(),
@@ -2222,7 +2913,7 @@ async function getCurrentAppUser() {
 window.centralisGetCurrentAppUser = getCurrentAppUser;
 window.centralisGetUserSettings = getCurrentUserSettings;
 window.centralisUpdateUserSettings = updateCurrentUserSettings;
-window.centralisThemeOptions = THEME_REGISTRY.map((theme) => ({ id: theme.id, label: theme.label, scheme: theme.scheme }));
+syncThemeOptionExports();
 
 function getCatalogTypeId(template) {
   return template.default_element_type_id ?? template.element_type_id ?? template.type_id ?? null;
@@ -3578,9 +4269,10 @@ if (googleAuthButton) {
   });
 }
 
-headerThemeOptions.forEach((button) => {
-  button.addEventListener("click", async () => {
-    const themeId = normalizeThemeId(button.dataset.headerThemeOption);
+document.addEventListener("click", async (event) => {
+  const themeButton = event.target.closest("[data-header-theme-option]");
+  if (themeButton) {
+    const themeId = normalizeThemeId(themeButton.dataset.headerThemeOption);
     const previousThemeId = window.centralisCurrentTheme?.id || DEFAULT_THEME_ID;
     const theme = applyTheme(themeId);
     syncThemeSelects(theme.id);
@@ -3601,7 +4293,85 @@ headerThemeOptions.forEach((button) => {
       const restoredTheme = applyTheme(previousThemeId);
       syncThemeSelects(restoredTheme.id);
     }
-  });
+    return;
+  }
+
+  if (event.target.closest("[data-open-theme-selector]")) {
+    await openThemeSelector();
+    return;
+  }
+
+  if (event.target.closest("[data-theme-selector-cancel]")) {
+    cancelThemeSelector();
+    return;
+  }
+
+  if (event.target.closest("[data-theme-selector-save]")) {
+    await saveThemeSelector();
+    return;
+  }
+
+  if (event.target.closest("[data-create-custom-theme]")) {
+    openCustomThemeModal();
+    return;
+  }
+
+  if (event.target.closest("[data-custom-theme-cancel]")) {
+    closeCustomThemeModal();
+    return;
+  }
+
+  if (event.target.closest("[data-custom-theme-save]")) {
+    await saveCustomTheme();
+    return;
+  }
+
+  const previewButton = event.target.closest("[data-theme-preview]");
+  if (previewButton) {
+    previewTheme(previewButton.dataset.themePreview);
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const selectedFilter = event.target.closest("[data-theme-selected-filter]");
+  if (selectedFilter) {
+    themeSelectorState.showSelectedOnly = selectedFilter.checked;
+    renderThemeSelectorList();
+    return;
+  }
+
+  const checkbox = event.target.closest("[data-theme-menu-checkbox]");
+  if (checkbox) {
+    const themeId = normalizeThemeId(checkbox.dataset.themeMenuCheckbox);
+    const selected = new Set(themeSelectorState.draftMenuIds);
+    if (checkbox.checked && selected.size >= MAX_HEADER_THEME_OPTIONS && !selected.has(themeId)) {
+      checkbox.checked = false;
+      setThemeSelectorStatus(`Choose up to ${MAX_HEADER_THEME_OPTIONS} palettes.`, "error");
+      return;
+    }
+    if (checkbox.checked) {
+      selected.add(themeId);
+    } else {
+      selected.delete(themeId);
+    }
+    themeSelectorState.draftMenuIds = normalizeThemeMenuIds([...selected]);
+    setThemeSelectorStatus("");
+    renderThemeSelectorList();
+    return;
+  }
+
+  const baseSelect = event.target.closest("[data-custom-theme-base]");
+  if (baseSelect) {
+    renderCustomThemeFields(baseSelect.value);
+    return;
+  }
+
+  const colorInput = event.target.closest("[data-custom-theme-color]");
+  if (colorInput) {
+    const label = colorInput.closest(".custom-theme-color");
+    const code = label?.querySelector("code");
+    if (code) code.textContent = colorInput.value;
+  }
 });
 
 signOutButtons.forEach((button) => {

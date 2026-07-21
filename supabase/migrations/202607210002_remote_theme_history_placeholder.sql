@@ -1,0 +1,3 @@
+-- Placeholder for a theme migration version that was applied remotely before
+-- the local branch was reverted. The active theme library schema lives in
+-- 202607210003_add_theme_library.sql.
