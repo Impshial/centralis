@@ -20,6 +20,10 @@
     outputCopyMenuTrigger: document.querySelector("[data-text-output-copy-menu-trigger]"),
     outputCopyMenuPanel: document.querySelector("[data-text-output-copy-menu-panel]"),
     outputCopyOptionButtons: Array.from(document.querySelectorAll("[data-text-copy-option]")),
+    showPromptButton: document.querySelector("[data-text-show-prompt]"),
+    promptModal: document.querySelector("[data-text-converter-prompt-modal]"),
+    promptTextarea: document.querySelector("[data-text-converter-prompt-textarea]"),
+    promptCloseButtons: Array.from(document.querySelectorAll("[data-text-converter-prompt-close]")),
     status: document.querySelector("[data-text-converter-status]"),
     conversionButtons: Array.from(document.querySelectorAll("[data-convert-target]")),
     instructionModal: document.querySelector("[data-text-converter-instructions-modal]"),
@@ -427,6 +431,20 @@
   function copyConverterPrompt() {
     setOutputCopyMenuOpen(false);
     copyTextWithFeedback(lastConverterPrompt, "No Prompt");
+  }
+
+  function openConverterPromptDialog() {
+    if (!els.promptModal || !els.promptTextarea) return;
+    els.promptTextarea.value = lastConverterPrompt.trim()
+      ? lastConverterPrompt
+      : "No prompt has been recorded yet. Run a conversion first.";
+    els.promptModal.hidden = false;
+  }
+
+  function closeConverterPromptDialog() {
+    if (els.promptModal) {
+      els.promptModal.hidden = true;
+    }
   }
 
   function isOutputCopyMenuOpen() {
@@ -2985,6 +3003,14 @@
     ].join("\n\n");
   }
 
+  function buildDisplayedConverterPrompt({ inputMode, targetFormat, input, instructions }) {
+    const promptInstructions = String(instructions || buildConverterInstructions(inputMode, targetFormat));
+    return [
+      "System:\nYou are a precise text conversion engine. Return only the requested converted output with no commentary.",
+      `User:\n${promptInstructions}\n\nSource:\n${input}`,
+    ].join("\n\n");
+  }
+
   function getRichEditorText() {
     return (els.richEditor.textContent || "").replace(/\s+/g, " ").trim();
   }
@@ -3269,15 +3295,22 @@
     }
 
     const inputMode = options.inputMode ?? getCurrentMode();
+    const promptInstructions = Object.prototype.hasOwnProperty.call(options, "instructions")
+      ? String(options.instructions ?? "")
+      : buildConverterInstructions(inputMode, targetFormat);
+    const promptUsed = buildDisplayedConverterPrompt({
+      inputMode,
+      targetFormat,
+      input,
+      instructions: promptInstructions,
+    });
     const requestBody = {
       inputMode,
       targetFormat,
       input,
     };
-    if (Object.prototype.hasOwnProperty.call(options, "instructions")) {
-      const promptInstructions = String(options.instructions ?? "");
+    if (promptInstructions) {
       requestBody.instructions = promptInstructions;
-      lastConverterPrompt = promptInstructions;
     }
 
     setOutputFormat(targetFormat);
@@ -3296,6 +3329,7 @@
 
       const payload = await response.json();
       els.output.value = String(payload.output || "").trim();
+      lastConverterPrompt = promptUsed;
       setStatus("Conversion complete.", "success");
     } catch (error) {
       console.error(error);
@@ -3849,10 +3883,22 @@
       closeConverterInstructionsDialog();
     }
   });
+  els.showPromptButton?.addEventListener("click", openConverterPromptDialog);
+  els.promptCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeConverterPromptDialog);
+  });
+  els.promptModal?.addEventListener("click", (event) => {
+    if (event.target === els.promptModal) {
+      closeConverterPromptDialog();
+    }
+  });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && els.instructionModal && !els.instructionModal.hidden) {
       closeConverterInstructionsDialog();
+    }
+    if (event.key === "Escape" && els.promptModal && !els.promptModal.hidden) {
+      closeConverterPromptDialog();
     }
     if (event.key === "Escape" && isOutputCopyMenuOpen()) {
       setOutputCopyMenuOpen(false);

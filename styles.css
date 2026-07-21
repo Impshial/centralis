@@ -13223,14 +13223,6 @@ body[data-page="useful-things"] {
   height: 100%;
 }
 
-.text-converter-input-editor-area .text-converter-clear-input {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  z-index: 2;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
-}
-
 .text-converter-clear-input ph-eraser {
   width: 15px;
   height: 15px;
@@ -13388,6 +13380,17 @@ body[data-page="useful-things"] {
   place-items: center;
 }
 
+.text-converter-rich-toolbar .text-converter-clear-input {
+  display: inline-flex;
+  width: auto;
+  min-width: 102px;
+  margin-left: auto;
+  padding: 0 10px;
+  gap: 6px;
+  justify-content: center;
+  color: var(--muted);
+}
+
 .text-converter-rich-toolbar button ph-arrow-counter-clockwise,
 .text-converter-rich-toolbar button ph-arrow-clockwise,
 .text-converter-rich-toolbar button ph-text-b,
@@ -13533,6 +13536,7 @@ body[data-page="useful-things"] {
 
 .text-converter-actions {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   gap: 8px;
   min-height: 0;
@@ -13555,6 +13559,7 @@ body[data-page="useful-things"] {
   gap: 7px;
   min-height: 0;
   padding-top: 4px;
+  overflow: auto;
 }
 
 .text-converter-action-group.is-busy button {
@@ -13565,10 +13570,15 @@ body[data-page="useful-things"] {
   cursor: text;
 }
 
-.text-converter-instructions-dialog {
+.text-converter-instructions-dialog,
+.text-converter-prompt-dialog {
   display: grid;
   gap: 16px;
   width: min(760px, calc(100vw - 32px));
+}
+
+.text-converter-prompt-dialog .text-converter-instructions-field textarea {
+  min-height: 380px;
 }
 
 .text-converter-instructions-field {

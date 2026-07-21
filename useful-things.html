@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
-  <link rel="stylesheet" href="styles.css?v=theme-selector-1">
-  <link rel="stylesheet" href="tailwind.generated.css?v=theme-selector-1">
+  <link rel="stylesheet" href="styles.css?v=theme-selector-2">
+  <link rel="stylesheet" href="tailwind.generated.css?v=theme-selector-2">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="useful-things">
@@ -278,6 +278,10 @@
                     <button type="button" data-rich-command="insertHorizontalRule" title="Insert horizontal line" aria-label="Insert horizontal line">
                       <ph-minus weight="bold" aria-hidden="true"></ph-minus>
                     </button>
+                    <button class="text-converter-clear-input" type="button" data-text-clear-input>
+                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                      Clear Text
+                    </button>
                   </div>
                   <div
                     class="text-converter-rich-editor"
@@ -296,10 +300,6 @@
                   aria-label="Raw text input"
                   hidden
                 ></textarea>
-                <button class="text-converter-clear-input" type="button" data-text-clear-input>
-                  <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
-                  Clear Text
-                </button>
                 </div>
               </section>
 
@@ -333,6 +333,10 @@
                     <button class="text-converter-save" type="button" data-text-save-output>
                       <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
                       Save
+                    </button>
+                    <button class="text-converter-save" type="button" data-text-show-prompt>
+                      <ph-file-text weight="bold" aria-hidden="true"></ph-file-text>
+                      Prompt
                     </button>
                   </div>
                   <div class="text-converter-output-copy-menu" data-text-output-copy-menu>
@@ -579,9 +583,42 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" data-text-converter-prompt-modal hidden>
+    <div
+      class="modal-dialog text-converter-prompt-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="text-converter-prompt-title"
+    >
+      <div class="modal-header">
+        <div>
+          <h2 id="text-converter-prompt-title">Prompt Used</h2>
+          <p class="modal-subtitle">The prompt used to generate the current text converter output.</p>
+        </div>
+        <button class="modal-close" type="button" data-text-converter-prompt-close aria-label="Close prompt dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <label class="text-converter-instructions-field">
+        <span>Prompt</span>
+        <textarea
+          data-text-converter-prompt-textarea
+          aria-label="Prompt used for the current output"
+          readonly
+        ></textarea>
+      </label>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-text-converter-prompt-close>Close</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=theme-selector-1"></script>
-  <script src="useful-things.js?v=admin-storage-1"></script>
+  <script src="script.js?v=theme-selector-2"></script>
+  <script src="useful-things.js?v=prompt-dialog-2"></script>
 </body>
 </html>
