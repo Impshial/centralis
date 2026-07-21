@@ -266,7 +266,7 @@
     setPurgeStatus("Loading users...");
     syncPurgeSubmit();
     try {
-      const { data, error } = await settingsSupabase.functions.invoke("list-admin-purge-users", { body: {} });
+      const { data, error } = await settingsSupabase.rpc("list_admin_purge_users");
       if (error) throw error;
       purgeUsers = Array.isArray(data?.users) ? data.users : [];
       purgeLoaded = true;
@@ -322,13 +322,11 @@
     setPurgeStatus("Purging selected database records...");
     syncPurgeSubmit();
     try {
-      const { data, error } = await settingsSupabase.functions.invoke("purge-admin-data", {
-        body: {
-          allUsers,
-          userIds,
-          datasets,
-          confirmation: els.purgeConfirm.value.trim()
-        }
+      const { data, error } = await settingsSupabase.rpc("admin_purge_data_for_current_user", {
+        p_all_users: allUsers,
+        p_user_ids: userIds,
+        p_datasets: datasets,
+        p_confirmation: els.purgeConfirm.value.trim()
       });
       if (error) throw error;
       const counts = data?.counts || {};
