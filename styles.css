@@ -1,6 +1,12 @@
 :root {
   color-scheme: light;
   --header-height: 76px;
+  --content-max-width: 1368px;
+  --content-inline-gutter: clamp(16px, 3vw, 36px);
+  --content-width: min(var(--content-max-width), calc(100% - (var(--content-inline-gutter) * 2)));
+  --module-heading-size: clamp(2rem, 4vw, 3.3rem);
+  --module-heading-weight: 860;
+  --module-heading-line-height: 1;
   --ink: #172026;
   --muted: #5d6972;
   --line: #d9e1e7;
@@ -1153,13 +1159,13 @@ body.dark-mode .moon-icon {
   gap: 20px;
   min-height: 100vh;
   width: 100%;
-  padding: calc(var(--header-height) + 24px) clamp(16px, 3vw, 36px) 40px;
+  padding: calc(var(--header-height) + 24px) var(--content-inline-gutter) 40px;
   color: var(--ink);
   background: var(--page);
 }
 
 .home-dashboard > * {
-  width: min(100%, 1368px);
+  width: min(100%, var(--content-max-width));
   justify-self: center;
 }
 
@@ -1197,10 +1203,10 @@ body.dark-mode .home-stat-card {
 
 .home-dashboard-header h1 {
   color: var(--ink);
-  font-size: clamp(1.45rem, 2.4vw, 2.05rem);
-  font-weight: 860;
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
   letter-spacing: 0;
-  line-height: 0.98;
+  line-height: var(--module-heading-line-height);
 }
 
 .home-dashboard-header p:not(.home-eyebrow) {
@@ -1227,9 +1233,9 @@ body.dark-mode .home-stat-card {
 
 .home-eyebrow {
   color: var(--accent);
-  font-size: 0.74rem;
-  font-weight: 820;
-  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -1911,7 +1917,7 @@ body.dark-mode .home-stat-card {
 
 .chronicle-page {
   min-height: 100vh;
-  padding: calc(var(--header-height) + 24px) 24px 48px;
+  padding: calc(var(--header-height) + 24px) var(--content-inline-gutter) 48px;
   background: var(--page);
 }
 
@@ -1920,24 +1926,26 @@ body.dark-mode .home-stat-card {
   align-items: end;
   justify-content: space-between;
   gap: 24px;
-  max-width: 1240px;
-  margin: 0 auto 18px;
+  max-width: var(--content-max-width);
+  margin: 0 auto 20px;
 }
 
 .chronicle-eyebrow {
   margin: 0 0 6px;
   color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 820;
-  letter-spacing: 0;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .chronicle-hero h1 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(2rem, 3vw, 3rem);
-  line-height: 1;
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
+  letter-spacing: 0;
+  line-height: var(--module-heading-line-height);
 }
 
 .chronicle-hero p:not(.chronicle-eyebrow) {
@@ -1947,7 +1955,7 @@ body.dark-mode .home-stat-card {
 }
 
 .chronicle-panel {
-  max-width: 1240px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 18px;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -1964,7 +1972,7 @@ body.dark-mode .home-stat-card {
 }
 
 .chronicle-editor-shell {
-  max-width: 1240px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
 }
 
@@ -2584,7 +2592,7 @@ body.dark-mode .home-stat-card {
 
 /* Episode Roulette */
 .episode-roulette-page {
-  width: min(calc(100% - 48px), 1480px);
+  width: var(--content-width);
   margin: 0 auto;
   padding: 34px 0 48px;
 }
@@ -2594,21 +2602,25 @@ body.dark-mode .home-stat-card {
   border: 0;
   border-radius: 0;
   background: transparent;
+  margin-bottom: 20px;
 }
 
 .episode-roulette-hero .section-eyebrow {
   margin: 0 0 6px;
   color: var(--accent);
-  font-size: .76rem;
-  font-weight: 800;
-  letter-spacing: .1em;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .episode-roulette-hero h1 {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 3.35rem);
-  letter-spacing: -.045em;
+  color: var(--ink);
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
+  letter-spacing: 0;
+  line-height: var(--module-heading-line-height);
 }
 
 .episode-roulette-hero > p:last-child {
@@ -2622,7 +2634,7 @@ body.dark-mode .home-stat-card {
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 22px;
   align-items: start;
-  margin-top: 24px;
+  margin-top: 0;
 }
 
 .episode-roulette-main {
@@ -2806,10 +2818,10 @@ body[data-page="episode-roulette"] .app-shell {
 }
 
 body[data-page="episode-roulette"] .episode-roulette-page {
-  width: min(calc(100% - 48px), 1480px);
+  width: var(--content-width);
   min-height: calc(100vh - var(--header-height));
   margin: 0 auto;
-  padding: calc(var(--header-height) + 32px) 0 48px;
+  padding: calc(var(--header-height) + 24px) 0 48px;
 }
 
 body[data-page="episode-roulette"] .episode-roulette-hero {
@@ -2986,7 +2998,7 @@ body[data-page="episode-roulette"].is-episode-loading {
 
 @media (max-width: 620px) {
   body[data-page="episode-roulette"] .episode-roulette-page {
-    width: min(calc(100% - 24px), 1480px);
+    width: var(--content-width);
     padding-top: calc(var(--header-height) + 20px);
   }
 
@@ -3871,10 +3883,10 @@ body[data-page="episode-roulette"].is-episode-loading {
   transform: translateX(-50%);
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  width: min(1440px, calc(100% - 48px));
+  width: var(--content-width);
   min-height: 0;
   margin: 0 auto;
-  padding: 48px 0 24px;
+  padding: 24px 0 24px;
   overflow: hidden;
 }
 
@@ -3892,14 +3904,16 @@ body[data-page="universe-builder"] {
 
 .universe-builder-toolbar {
   align-items: end;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .universe-builder-toolbar h1 {
-  margin: 2px 0 8px;
-  font-size: clamp(2rem, 4vw, 3.3rem);
-  letter-spacing: -0.045em;
-  line-height: 1;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
+  letter-spacing: 0;
+  line-height: var(--module-heading-line-height);
 }
 
 .universe-builder-toolbar p,
@@ -3909,10 +3923,11 @@ body[data-page="universe-builder"] {
 }
 
 .universe-builder-eyebrow {
+  margin: 0 0 6px;
   color: var(--accent) !important;
   font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.13em;
+  font-weight: 850;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -4712,10 +4727,10 @@ body[data-page="universe-builder"] {
   transform: translateX(-50%);
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  width: min(1440px, calc(100% - 48px));
+  width: var(--content-width);
   min-height: 0;
   margin: 0 auto;
-  padding: 48px 0 24px;
+  padding: 24px 0 24px;
   overflow: hidden;
 }
 
@@ -4728,25 +4743,25 @@ body[data-page="todo"] {
   align-items: end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .todo-eyebrow {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 840;
-  letter-spacing: 0.12em;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .todo-toolbar h1 {
-  margin: 2px 0 8px;
+  margin: 0;
   color: var(--ink);
-  font-size: clamp(2rem, 4vw, 3.3rem);
-  font-weight: 850;
-  letter-spacing: -0.045em;
-  line-height: 1;
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
+  letter-spacing: 0;
+  line-height: var(--module-heading-line-height);
 }
 
 .todo-toolbar p:not(.todo-eyebrow) {
@@ -5360,8 +5375,8 @@ body[data-page="todo"] {
 
 @media (max-width: 640px) {
   .todo-page {
-    width: min(100% - 28px, 100%);
-    padding-top: 32px;
+    width: var(--content-width);
+    padding-top: 24px;
   }
 
   .todo-card {
@@ -10935,11 +10950,11 @@ body.stellar-home-route .stellar-page {
   transform: translateX(-50%);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  width: min(1440px, calc(100% - 48px));
+  width: var(--content-width);
   height: auto;
   min-height: 0;
   margin: 0 auto;
-  padding: 48px 0 24px;
+  padding: 24px 0 24px;
   overflow: hidden;
   background: transparent;
   color: var(--text);
@@ -11127,10 +11142,12 @@ body.stellar-home-route .stellar-landing {
 }
 
 .stellar-home-toolbar h1 {
-  margin: 2px 0 8px;
-  font-size: clamp(2rem, 4vw, 3.3rem);
-  letter-spacing: -0.045em;
-  line-height: 1;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
+  letter-spacing: 0;
+  line-height: var(--module-heading-line-height);
 }
 
 .stellar-home-toolbar .primary-action {
@@ -12292,8 +12309,8 @@ body:not(.dark-mode) .stellar-row-title h3 {
   }
 
   body.stellar-home-route .stellar-page {
-    width: min(100%, calc(100% - 32px));
-    padding-top: 32px;
+    width: var(--content-width);
+    padding-top: 24px;
   }
 
   .stellar-home-toolbar,
@@ -12329,12 +12346,18 @@ body:not(.dark-mode) .stellar-row-title h3 {
 
 @media (max-width: 680px) {
   body.stellar-home-route .stellar-page {
-    width: min(100%, calc(100% - 24px));
+    width: var(--content-width);
     padding-top: 24px;
   }
 
-  .stellar-home-toolbar h1 {
-    font-size: 2rem;
+  .home-dashboard-header h1,
+  .universe-builder-toolbar h1,
+  .stellar-home-toolbar h1,
+  .chronicle-hero h1,
+  .chat-repository-toolbar h1,
+  .episode-roulette-hero h1,
+  .todo-toolbar h1 {
+    font-size: clamp(1.65rem, 9vw, 2.45rem);
   }
 
   .stellar-home-stats span {
@@ -14260,10 +14283,10 @@ body[data-page="useful-things"] {
 }
 
 .chat-repository-page {
-  width: min(1440px, calc(100% - 48px));
+  width: var(--content-width);
   min-height: calc(100vh - var(--header-height));
   margin: var(--header-height) auto 0;
-  padding: 48px 0 72px;
+  padding: 24px 0 72px;
 }
 
 .chat-repository-toolbar,
@@ -14276,14 +14299,16 @@ body[data-page="useful-things"] {
 
 .chat-repository-toolbar {
   align-items: end;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .chat-repository-toolbar h1 {
-  margin: 2px 0 8px;
-  font-size: clamp(2rem, 4vw, 3.3rem);
-  letter-spacing: -0.045em;
-  line-height: 1;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--module-heading-size);
+  font-weight: var(--module-heading-weight);
+  letter-spacing: 0;
+  line-height: var(--module-heading-line-height);
 }
 
 .chat-repository-toolbar p,
@@ -14293,10 +14318,11 @@ body[data-page="useful-things"] {
 }
 
 .chat-repository-eyebrow {
+  margin: 0 0 6px;
   color: var(--accent) !important;
   font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.13em;
+  font-weight: 850;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -15218,13 +15244,13 @@ body[data-page="useful-things"] {
   }
 
   .chat-repository-page {
-    width: min(100% - 28px, 720px);
-    padding-top: 28px;
+    width: var(--content-width);
+    padding-top: 24px;
   }
 
   .universe-builder-page {
-    width: min(100% - 28px, 720px);
-    padding-top: 28px;
+    width: var(--content-width);
+    padding-top: 24px;
   }
 
   .chat-repository-toolbar {
@@ -16316,7 +16342,7 @@ body[data-page="useful-things"] {
 
   .home-dashboard {
     gap: 14px;
-    padding: 148px 14px 28px;
+    padding: 148px var(--content-inline-gutter) 28px;
   }
 
   .home-stat-grid,

@@ -56,6 +56,7 @@ const els = {
   importInput: document.querySelector("[data-import-file]"),
   importLabel: document.querySelector("[data-import-file-label]"),
   importSubmit: document.querySelector("[data-import-submit]"),
+  importSchema: document.querySelector("[data-download-import-schema]"),
   importStatus: document.querySelector("[data-import-status]"),
   processContent: document.querySelector("[data-process-content]"),
   bulkForm: document.querySelector("[data-bulk-form]"),
@@ -779,6 +780,10 @@ async function importMovies(file) {
 
 function downloadJson(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  downloadBlob(filename, blob);
+}
+
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -787,6 +792,57 @@ function downloadJson(filename, payload) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function escapeCsvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function downloadImportSchema(format) {
+  const normalizedFormat = String(format || "").trim().toLowerCase();
+  const filenameDate = new Date().toISOString().slice(0, 10);
+  if (normalizedFormat === "json") {
+    downloadJson(`centralis-movie-import-schema-${filenameDate}.json`, {
+      movies: [
+        {
+          title: "The Matrix",
+          yearReleased: 1999,
+          downloaded: true,
+          franchise: "The Matrix",
+          collection: "Cyberpunk Favorites"
+        }
+      ],
+      schema: {
+        title: "Required. Movie title. Also accepts: movie title, name.",
+        yearReleased: "Required. Release year. Also accepts: year released, year_released, year, release year.",
+        downloaded: "Optional boolean. Accepts true/false, 1/0, yes/no, y/n, downloaded.",
+        franchise: "Optional franchise or series name. Created if it does not already exist.",
+        collection: "Optional collection or set name. Created if it does not already exist."
+      }
+    });
+    return true;
+  }
+  if (normalizedFormat === "csv") {
+    const rows = [
+      ["title", "yearReleased", "downloaded", "franchise", "collection"],
+      ["The Matrix", "1999", "true", "The Matrix", "Cyberpunk Favorites"]
+    ];
+    const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+    downloadBlob(`centralis-movie-import-schema-${filenameDate}.csv`, new Blob([csv], { type: "text/csv" }));
+    return true;
+  }
+  return false;
+}
+
+function askAndDownloadImportSchema() {
+  const choice = window.prompt("Which schema format do you want to download? Enter JSON or CSV.", "JSON");
+  if (choice === null) return;
+  if (downloadImportSchema(choice)) {
+    setDialogStatus(els.importStatus, `Downloaded ${choice.trim().toUpperCase()} import schema.`, "success");
+  } else {
+    setDialogStatus(els.importStatus, "Enter JSON or CSV to download a schema.", "error");
+  }
 }
 
 async function exportMovies() {
@@ -1365,6 +1421,8 @@ els.importInput?.addEventListener("change", () => {
   if (els.importLabel) els.importLabel.textContent = movieState.importFile?.name || "Click to select CSV or JSON file";
   if (els.importSubmit) els.importSubmit.disabled = !movieState.importFile;
 });
+
+els.importSchema?.addEventListener("click", askAndDownloadImportSchema);
 
 els.importForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

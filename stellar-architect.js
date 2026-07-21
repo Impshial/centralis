@@ -509,9 +509,8 @@ function renderLanding() {
     <section class="stellar-landing">
       <section class="universe-builder-toolbar stellar-home-toolbar">
         <div>
-          <p class="universe-builder-eyebrow">Astronomy</p>
+          <p class="universe-builder-eyebrow">World Building</p>
           <h1 id="stellar-architect-title">Stellar Architect</h1>
-          <p>Generate, browse, and expand scientifically plausible star systems.</p>
         </div>
         <div class="universe-builder-toolbar-actions">
           <button class="primary-action" type="button" data-open-generate-system>

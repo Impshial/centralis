@@ -291,6 +291,10 @@
         </div>
         <p class="dialog-status" data-import-status role="status"></p>
         <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-download-import-schema>
+            <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+            Download Schema
+          </button>
           <button class="secondary-action" type="button" data-close-modal-target="movie-import-modal">Cancel</button>
           <button class="primary-action" type="submit" disabled data-import-submit>Import</button>
         </div>
@@ -315,7 +319,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=user-menu-click-2"></script>
-  <script src="movie-tracker.js?v=movie-tracker-v26"></script>
+  <script src="movie-tracker.js?v=movie-tracker-v27"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {
