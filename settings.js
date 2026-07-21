@@ -20,6 +20,13 @@
     { id: "stellar", label: "Stellar Architect Systems", description: "Systems, stars, planets, moons, lifeforms, colonies, and colonists." },
     { id: "users", label: "Users", description: "Full account purge for selected users. The active admin is excluded from deletion." }
   ];
+  const PURGE_COUNT_GROUPS = [
+    { id: "user_account", label: "User Account" },
+    ...PURGE_DATASETS.filter((dataset) => dataset.id !== "users").map((dataset) => ({
+      id: dataset.id,
+      label: dataset.label
+    }))
+  ];
 
   const els = {
     tabs: Array.from(document.querySelectorAll("[data-settings-tab]")),
@@ -176,8 +183,9 @@
       .map((input) => input.value);
   }
 
-  function isUsersDatasetSelected() {
-    return getSelectedDatasets().includes("users");
+  function formatObjectCount(value) {
+    const count = Number(value) || 0;
+    return `${count.toLocaleString()} ${count === 1 ? "object" : "objects"}`;
   }
 
   function renderPurgeDatasets() {
@@ -195,30 +203,43 @@
 
   function renderPurgeUsers() {
     if (!els.purgeUsers) return;
-    if (!purgeUsers.length) {
+    const visibleUsers = purgeUsers.filter((user) => user.is_current_user !== true);
+    if (!visibleUsers.length) {
       els.purgeUsers.innerHTML = '<p class="settings-purge-empty">No users found.</p>';
       return;
     }
 
-    const disableCurrentAdmin = isUsersDatasetSelected();
-    els.purgeUsers.innerHTML = purgeUsers.map((user) => {
-      const isCurrent = user.is_current_user === true;
-      const disabled = isCurrent && disableCurrentAdmin;
-      const name = user.display_name || user.email || `User ${user.id}`;
+    els.purgeUsers.innerHTML = visibleUsers.map((user) => {
+      const email = user.email || `User ${user.id}`;
+      const total = Number(user.object_total) || 0;
+      const counts = user.object_counts || {};
       const subtitle = [
-        user.email && user.display_name ? user.email : "",
+        user.display_name || "",
         user.admin ? "Admin" : "",
-        isCurrent ? "Current user" : "",
       ].filter(Boolean).join(" / ");
+      const countRows = PURGE_COUNT_GROUPS.map((group) => {
+        const count = Number(counts[group.id]) || 0;
+        return `
+          <div class="settings-purge-user-count-row">
+            <dt>${escapeHtml(group.label)}</dt>
+            <dd>${escapeHtml(formatObjectCount(count))}</dd>
+          </div>
+        `;
+      }).join("");
       return `
-        <label class="settings-purge-row ${disabled ? "is-disabled" : ""}">
-          <input type="checkbox" value="${escapeHtml(user.id)}" data-settings-purge-user ${isCurrent ? 'data-current-user="true"' : ""} ${disabled ? "disabled" : ""}>
-          <span class="settings-purge-row-main">
-            <strong>${escapeHtml(name)}</strong>
-            ${subtitle ? `<span>${escapeHtml(subtitle)}</span>` : ""}
-            ${isCurrent ? '<em class="settings-purge-badge">Protected from user deletion</em>' : ""}
-          </span>
-        </label>
+        <details class="settings-purge-user-row">
+          <summary>
+            <input type="checkbox" value="${escapeHtml(user.id)}" data-settings-purge-user aria-label="Select ${escapeHtml(email)}">
+            <span class="settings-purge-row-main">
+              <strong>${escapeHtml(email)} - ${escapeHtml(formatObjectCount(total))}</strong>
+              ${subtitle ? `<span>${escapeHtml(subtitle)}</span>` : ""}
+            </span>
+            <span class="settings-purge-user-toggle" aria-hidden="true"></span>
+          </summary>
+          <dl class="settings-purge-user-counts">
+            ${countRows}
+          </dl>
+        </details>
       `;
     }).join("");
   }
@@ -248,13 +269,6 @@
   }
 
   function syncPurgeControls() {
-    if (isUsersDatasetSelected()) {
-      const currentUserInput = els.purgeUsers?.querySelector("[data-settings-purge-user][data-current-user='true']");
-      if (currentUserInput) {
-        currentUserInput.checked = false;
-        currentUserInput.disabled = true;
-      }
-    }
     syncPurgeAllDatasets();
     syncPurgeAllUsers();
     syncPurgeSubmit();
@@ -281,7 +295,7 @@
     }
   }
 
-  function resetPurgeForm() {
+  function clearPurgeSelections() {
     els.purgeConfirm && (els.purgeConfirm.value = "");
     els.purgeAllUsers && (els.purgeAllUsers.checked = false, els.purgeAllUsers.indeterminate = false);
     els.purgeAllDatasets && (els.purgeAllDatasets.checked = false, els.purgeAllDatasets.indeterminate = false);
@@ -290,9 +304,13 @@
       input.checked = false;
       input.disabled = false;
     });
-    setPurgeStatus("");
     renderPurgeUsers();
     syncPurgeControls();
+  }
+
+  function resetPurgeForm() {
+    clearPurgeSelections();
+    setPurgeStatus("");
   }
 
   async function openPurgeDialog() {
@@ -334,6 +352,7 @@
       purgeLoaded = false;
       purgeBusy = false;
       await loadPurgeUsers({ force: true });
+      clearPurgeSelections();
       setPurgeStatus(`Purge complete. ${total} database rows deleted.`, "success");
       syncPurgeControls();
     } catch (error) {
@@ -404,6 +423,11 @@
     syncPurgeControls();
   });
   els.purgeUsers?.addEventListener("change", syncPurgeControls);
+  els.purgeUsers?.addEventListener("click", (event) => {
+    if (event.target?.matches("[data-settings-purge-user]")) {
+      event.stopPropagation();
+    }
+  });
   els.purgeConfirm?.addEventListener("input", syncPurgeSubmit);
   els.purgeSubmit?.addEventListener("click", submitPurge);
 
