@@ -6561,9 +6561,7 @@ body[data-page="todo"] {
 }
 
 body[data-page="movie-tracker"] .movie-page {
-  background:
-    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%),
-    var(--page);
+  background: var(--page);
   color: var(--ink);
 }
 
@@ -6598,9 +6596,7 @@ body[data-page="movie-tracker"] .movie-format-help {
 
 body[data-page="movie-tracker"] .movie-side-panel {
   border-left-color: var(--line);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 42%),
-    color-mix(in srgb, var(--surface) 92%, var(--page));
+  background: color-mix(in srgb, var(--surface) 92%, var(--page));
 }
 
 body[data-page="movie-tracker"] .movie-table th {
@@ -11439,7 +11435,7 @@ body.stellar-home-route .stellar-page {
   margin: 0 auto;
   padding: 24px 0 24px;
   overflow: hidden;
-  background: transparent;
+  background: var(--page);
   color: var(--text);
 }
 
@@ -12691,9 +12687,7 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
 }
 
 body[data-page="stellar-architect"] .stellar-page {
-  background:
-    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 26%),
-    var(--page);
+  background: var(--page);
   color: var(--ink);
 }
 
@@ -12715,9 +12709,7 @@ body[data-page="stellar-architect"] .stellar-life-dialog {
 }
 
 body[data-page="stellar-architect"] .stellar-side-panel {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 46%),
-    color-mix(in srgb, var(--surface) 92%, var(--page));
+  background: color-mix(in srgb, var(--surface) 92%, var(--page));
 }
 
 body[data-page="stellar-architect"] .stellar-detail-toolbar {
@@ -12727,9 +12719,7 @@ body[data-page="stellar-architect"] .stellar-detail-toolbar {
 
 body[data-page="stellar-architect"] .stellar-page-title {
   border-bottom-color: var(--line);
-  background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 35%),
-    linear-gradient(90deg, color-mix(in srgb, var(--surface) 96%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--surface) 96%, transparent));
+  background: color-mix(in srgb, var(--surface) 92%, var(--page));
 }
 
 body[data-page="stellar-architect"] .stellar-tree-shell h2,
