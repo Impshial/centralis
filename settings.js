@@ -18,7 +18,7 @@
     { id: "movies", label: "Movies", description: "Movies, franchises, and collections." },
     { id: "episode_roulette", label: "Episode Roulette Saved Shows", description: "Saved recent shows." },
     { id: "stellar", label: "Stellar Architect Systems", description: "Systems, stars, planets, moons, lifeforms, colonies, and colonists." },
-    { id: "users", label: "Users", description: "Full account purge for selected users. The active admin is excluded from deletion." }
+    { id: "users", label: "Users", description: "Full account purge for selected users. Disabled when the active admin is selected." }
   ];
   const PURGE_COUNT_GROUPS = [
     { id: "user_account", label: "User Account" },
@@ -61,6 +61,7 @@
   let purgeUsers = [];
   let purgeLoaded = false;
   let purgeBusy = false;
+  let purgeActingUserId = null;
 
   const settingsSupabase = window.supabase && window.CENTRALIS_SUPABASE_CONFIG
     ? window.supabase.createClient(
@@ -183,6 +184,19 @@
       .map((input) => input.value);
   }
 
+  function getActingPurgeUserId() {
+    const fromList = purgeUsers.find((user) => user.is_current_user === true)?.id;
+    const id = Number(purgeActingUserId || fromList);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
+
+  function isActingPurgeUserSelected() {
+    if (els.purgeAllUsers?.checked) return true;
+    const actingUserId = getActingPurgeUserId();
+    if (!actingUserId) return false;
+    return getSelectedUserIds().includes(actingUserId);
+  }
+
   function formatObjectCount(value) {
     const count = Number(value) || 0;
     return `${count.toLocaleString()} ${count === 1 ? "object" : "objects"}`;
@@ -203,18 +217,18 @@
 
   function renderPurgeUsers() {
     if (!els.purgeUsers) return;
-    const visibleUsers = purgeUsers.filter((user) => user.is_current_user !== true);
-    if (!visibleUsers.length) {
+    if (!purgeUsers.length) {
       els.purgeUsers.innerHTML = '<p class="settings-purge-empty">No users found.</p>';
       return;
     }
 
-    els.purgeUsers.innerHTML = visibleUsers.map((user) => {
+    els.purgeUsers.innerHTML = purgeUsers.map((user) => {
       const email = user.email || `User ${user.id}`;
       const total = Number(user.object_total) || 0;
       const counts = user.object_counts || {};
       const subtitle = [
         user.display_name || "",
+        user.is_current_user ? "Current Admin" : "",
         user.admin ? "Admin" : "",
       ].filter(Boolean).join(" / ");
       const countRows = PURGE_COUNT_GROUPS.map((group) => {
@@ -246,7 +260,7 @@
 
   function syncPurgeAllDatasets() {
     if (!els.purgeAllDatasets || !els.purgeDatasets) return;
-    const datasetInputs = Array.from(els.purgeDatasets.querySelectorAll("[data-settings-purge-dataset]"));
+    const datasetInputs = Array.from(els.purgeDatasets.querySelectorAll("[data-settings-purge-dataset]:not(:disabled)"));
     const checkedCount = datasetInputs.filter((input) => input.checked).length;
     els.purgeAllDatasets.checked = datasetInputs.length > 0 && checkedCount === datasetInputs.length;
     els.purgeAllDatasets.indeterminate = checkedCount > 0 && checkedCount < datasetInputs.length;
@@ -268,7 +282,28 @@
     els.purgeSubmit.disabled = purgeBusy || !hasUsers || !hasDatasets || !confirmed;
   }
 
+  function syncPurgeUsersDatasetGuard() {
+    const usersDataset = els.purgeDatasets?.querySelector('[data-settings-purge-dataset][value="users"]');
+    if (!usersDataset) return;
+
+    const shouldDisable = isActingPurgeUserSelected();
+    usersDataset.disabled = shouldDisable;
+    if (shouldDisable) {
+      usersDataset.checked = false;
+    }
+
+    const row = usersDataset.closest(".settings-purge-row");
+    row?.classList.toggle("is-disabled", shouldDisable);
+    row?.toggleAttribute("aria-disabled", shouldDisable);
+    if (shouldDisable) {
+      row?.setAttribute("title", "The active admin can purge their own data, but cannot delete their own user account.");
+    } else {
+      row?.removeAttribute("title");
+    }
+  }
+
   function syncPurgeControls() {
+    syncPurgeUsersDatasetGuard();
     syncPurgeAllDatasets();
     syncPurgeAllUsers();
     syncPurgeSubmit();
@@ -282,6 +317,7 @@
     try {
       const { data, error } = await settingsSupabase.rpc("list_admin_purge_users");
       if (error) throw error;
+      purgeActingUserId = Number(data?.actingUserId) || null;
       purgeUsers = Array.isArray(data?.users) ? data.users : [];
       purgeLoaded = true;
       setPurgeStatus("");
@@ -405,8 +441,7 @@
   els.purgeCloseButtons.forEach((button) => button.addEventListener("click", closePurgeDialog));
   els.purgeAllDatasets?.addEventListener("change", () => {
     const checked = els.purgeAllDatasets.checked;
-    els.purgeDatasets?.querySelectorAll("[data-settings-purge-dataset]").forEach((input) => { input.checked = checked; });
-    renderPurgeUsers();
+    els.purgeDatasets?.querySelectorAll("[data-settings-purge-dataset]:not(:disabled)").forEach((input) => { input.checked = checked; });
     syncPurgeControls();
   });
   els.purgeAllUsers?.addEventListener("change", () => {
@@ -414,14 +449,7 @@
     els.purgeUsers?.querySelectorAll("[data-settings-purge-user]:not(:disabled)").forEach((input) => { input.checked = checked; });
     syncPurgeControls();
   });
-  els.purgeDatasets?.addEventListener("change", () => {
-    const selectedUserIds = new Set(getSelectedUserIds());
-    renderPurgeUsers();
-    els.purgeUsers?.querySelectorAll("[data-settings-purge-user]").forEach((input) => {
-      input.checked = selectedUserIds.has(Number(input.value)) && !input.disabled;
-    });
-    syncPurgeControls();
-  });
+  els.purgeDatasets?.addEventListener("change", syncPurgeControls);
   els.purgeUsers?.addEventListener("change", syncPurgeControls);
   els.purgeUsers?.addEventListener("click", (event) => {
     if (event.target?.matches("[data-settings-purge-user]")) {
