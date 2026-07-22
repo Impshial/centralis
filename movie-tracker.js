@@ -200,12 +200,30 @@ async function fetchLookups() {
   movieState.collections = collectionResponse.data || [];
 }
 
+function getMovieSearchTerms(search) {
+  return String(search || "")
+    .split(";")
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function escapePostgrestOrSearchTerm(term) {
+  return term
+    .replaceAll("%", "\\%")
+    .replaceAll("_", "\\_")
+    .replaceAll(",", " ");
+}
+
 function applyMovieQueryFilters(query) {
   query = query.eq("user_id", movieState.appUser.id);
-  const search = movieState.filters.search.trim();
-  if (search) {
-    const safe = search.replaceAll("%", "\\%").replaceAll(",", " ");
-    query = query.or(`title.ilike.%${safe}%,director.ilike.%${safe}%,actors.ilike.%${safe}%,genre.ilike.%${safe}%,plot.ilike.%${safe}%`);
+  const searchTerms = getMovieSearchTerms(movieState.filters.search);
+  if (searchTerms.length) {
+    const searchFields = ["title", "director", "actors", "genre"];
+    const conditions = searchTerms.flatMap((term) => {
+      const safe = escapePostgrestOrSearchTerm(term);
+      return searchFields.map((field) => `${field}.ilike.%${safe}%`);
+    });
+    query = query.or(conditions.join(","));
   }
   if (movieState.filters.status === "downloaded") query = query.eq("downloaded", true);
   if (movieState.filters.status === "missing") query = query.eq("downloaded", false);
@@ -995,12 +1013,12 @@ function renderProcessMovieList(container, movies) {
   if (!container) return;
   const candidates = movies.filter(missingMovieDetails);
   container.innerHTML = `
-    <details class="movie-process-movie-details">
-      <summary>Movies to process (${candidates.length})</summary>
+    <details class="movie-process-movie-details" data-process-movie-details>
+      <summary>Movies to process (<span data-process-remaining>${candidates.length}</span>)</summary>
       ${candidates.length ? `
         <ul>
           ${candidates.map((movie) => `
-            <li>
+            <li data-process-movie-id="${escapeHtml(movie.id)}">
               <strong>${escapeHtml(movie.title)}</strong>
               <span>${escapeHtml(movie.year_released || "")}${movie.year_released ? " · " : ""}${escapeHtml(getProcessMovieReasons(movie).join(" + "))}</span>
             </li>
@@ -1009,6 +1027,24 @@ function renderProcessMovieList(container, movies) {
       ` : '<p>No movies on this page currently need missing details.</p>'}
     </details>
   `;
+}
+
+function updateProcessMovieProgress(movieId) {
+  const safeMovieId = window.CSS?.escape ? CSS.escape(String(movieId)) : String(movieId).replace(/"/g, '\\"');
+  const row = document.querySelector(`[data-process-movie-id="${safeMovieId}"]`);
+  if (!row || row.classList.contains("is-processed")) return;
+
+  row.classList.add("is-processed");
+  const meta = row.querySelector("span");
+  if (meta) {
+    meta.textContent = meta.textContent ? `${meta.textContent} / processed` : "Processed";
+  }
+
+  const remaining = document.querySelector("[data-process-remaining]");
+  if (remaining) {
+    const nextCount = Math.max(0, (Number(remaining.textContent) || 0) - 1);
+    remaining.textContent = String(nextCount);
+  }
 }
 
 function openProcessDialog() {
@@ -1034,10 +1070,6 @@ function renderProcessCompleteActions() {
   actions.innerHTML = `
     <button class="primary-action" type="button" data-close-modal-target="movie-process-modal">Close</button>
   `;
-}
-
-function updateProcessMovieList() {
-  renderProcessMovieList(document.querySelector("[data-process-movies]"), movieState.movies);
 }
 
 async function processMissingMovieDetails() {
@@ -1106,6 +1138,7 @@ async function processMissingMovieDetails() {
         const { error } = await movieSupabase.from("movies").update(payload).eq("id", movie.id).eq("user_id", movieState.appUser.id);
         if (error) throw error;
         updated += 1;
+        updateProcessMovieProgress(movie.id);
       } catch (error) {
         console.warn(`Could not save missing details for ${movie.title}`, error);
         failed += 1;
@@ -1120,7 +1153,6 @@ async function processMissingMovieDetails() {
     }
   }
   await refreshMovieTracker();
-  updateProcessMovieList();
   renderProcessFailures(failuresContainer, failures);
   setDialogStatus(
     status,

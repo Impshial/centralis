@@ -6125,6 +6125,16 @@ body[data-page="todo"] {
   color: #d7e2ee;
 }
 
+.movie-process-movie-details li.is-processed {
+  opacity: .58;
+}
+
+.movie-process-movie-details li.is-processed strong,
+.movie-process-movie-details li.is-processed span {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
 .movie-process-movie-details li span,
 .movie-process-failure-details li span {
   display: block;
