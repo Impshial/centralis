@@ -803,7 +803,7 @@ textarea::placeholder {
   top: 0;
   right: 0;
   left: 0;
-  z-index: 10;
+  z-index: 3000;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -1365,7 +1365,7 @@ html[data-color-scheme="dark"] .moon-icon {
   position: absolute;
   top: calc(100% + 2px);
   left: 50%;
-  z-index: 20;
+  z-index: 3010;
   display: none;
   min-width: 176px;
   padding: 6px;
@@ -3319,7 +3319,7 @@ body[data-page="episode-roulette"].is-episode-loading {
 .episode-loading-overlay {
   position: fixed;
   z-index: 1200;
-  inset: 0;
+  inset: var(--header-height) 0 0;
   display: grid;
   place-items: center;
   background: rgba(7, 12, 15, .63);
@@ -3383,7 +3383,7 @@ body[data-page="episode-roulette"].is-episode-loading {
   position: fixed;
   right: 22px;
   bottom: 22px;
-  z-index: 3000;
+  z-index: 2900;
   display: grid;
   gap: 10px;
   width: min(360px, calc(100vw - 32px));
@@ -6558,6 +6558,128 @@ body[data-page="todo"] {
   border-radius: 5px;
   background: #171c23;
   color: #aeb8c4;
+}
+
+body[data-page="movie-tracker"] .movie-page {
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 28%),
+    var(--page);
+  color: var(--ink);
+}
+
+body[data-page="movie-tracker"] .movie-list-header p,
+body[data-page="movie-tracker"] .movie-muted,
+body[data-page="movie-tracker"] .movie-statistics dt,
+body[data-page="movie-tracker"] .movie-detail-list dt,
+body[data-page="movie-tracker"] .movie-empty-row,
+body[data-page="movie-tracker"] .movie-process-movie-details li span,
+body[data-page="movie-tracker"] .movie-process-failure-details li span,
+body[data-page="movie-tracker"] .movie-process-movie-details p,
+body[data-page="movie-tracker"] .movie-manager-row span,
+body[data-page="movie-tracker"] .movie-format-help {
+  color: var(--muted);
+}
+
+body[data-page="movie-tracker"] .movie-status,
+body[data-page="movie-tracker"] .movie-page .dialog-status {
+  color: var(--accent);
+}
+
+body[data-page="movie-tracker"] .movie-table-shell,
+body[data-page="movie-tracker"] .movie-side-panel,
+body[data-page="movie-tracker"] .movie-actions-menu,
+body[data-page="movie-tracker"] .movie-process-movie-details,
+body[data-page="movie-tracker"] .movie-process-failure-details,
+body[data-page="movie-tracker"] .movie-manager-list,
+body[data-page="movie-tracker"] .movie-format-help {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+body[data-page="movie-tracker"] .movie-side-panel {
+  border-left-color: var(--line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 42%),
+    color-mix(in srgb, var(--surface) 92%, var(--page));
+}
+
+body[data-page="movie-tracker"] .movie-table th {
+  background: color-mix(in srgb, var(--surface) 82%, var(--accent) 8%);
+  color: var(--ink);
+}
+
+body[data-page="movie-tracker"] .movie-table td,
+body[data-page="movie-tracker"] .movie-table th,
+body[data-page="movie-tracker"] .movie-dialog-header,
+body[data-page="movie-tracker"] .movie-dialog-footer,
+body[data-page="movie-tracker"] .movie-manager-row {
+  border-color: var(--line);
+}
+
+body[data-page="movie-tracker"] .movie-table td,
+body[data-page="movie-tracker"] .movie-statistics dd,
+body[data-page="movie-tracker"] .movie-process-movie-details li,
+body[data-page="movie-tracker"] .movie-process-failure-details li {
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+
+body[data-page="movie-tracker"] .movie-title-cell,
+body[data-page="movie-tracker"] .movie-filter-field,
+body[data-page="movie-tracker"] .movie-section-toggle,
+body[data-page="movie-tracker"] .movie-detail-list dd,
+body[data-page="movie-tracker"] .movie-dialog-header h2,
+body[data-page="movie-tracker"] .movie-actions-menu button,
+body[data-page="movie-tracker"] .movie-manager-row button,
+body[data-page="movie-tracker"] .movie-icon-button,
+body[data-page="movie-tracker"] .movie-tool-heading button {
+  color: var(--ink);
+}
+
+body[data-page="movie-tracker"] .movie-clickable-row:hover,
+body[data-page="movie-tracker"] .movie-clickable-row:focus-visible,
+body[data-page="movie-tracker"] .movie-actions-menu button:hover:not(:disabled) {
+  background: var(--hover-bg);
+  box-shadow: inset 4px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+body[data-page="movie-tracker"] .movie-table [data-select-movie],
+body[data-page="movie-tracker"] .movie-table [data-select-all-movies],
+body[data-page="movie-tracker"] .movie-filter-field input,
+body[data-page="movie-tracker"] .movie-filter-field select,
+body[data-page="movie-tracker"] .movie-form-grid input,
+body[data-page="movie-tracker"] .movie-form-grid select,
+body[data-page="movie-tracker"] .movie-form-grid textarea,
+body[data-page="movie-tracker"] .movie-manager-add input,
+body[data-page="movie-tracker"] .movie-process-failure-details li code {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--ink);
+}
+
+body[data-page="movie-tracker"] .movie-table [data-select-movie]:checked,
+body[data-page="movie-tracker"] .movie-table [data-select-all-movies]:checked,
+body[data-page="movie-tracker"] .movie-page-number.is-current {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--primary-button-text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+body[data-page="movie-tracker"] .movie-status-badge {
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--ink);
+}
+
+body[data-page="movie-tracker"] .movie-status-badge.is-downloaded {
+  background: var(--success);
+  color: var(--primary-button-text);
+}
+
+body[data-page="movie-tracker"] .movie-poster,
+body[data-page="movie-tracker"] .movie-drop-zone {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--field) 82%, var(--surface));
+  color: var(--muted);
 }
 
 html[data-color-scheme="light"] .movie-page {
@@ -12568,6 +12690,226 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   font-size: 12px;
 }
 
+body[data-page="stellar-architect"] .stellar-page {
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 26%),
+    var(--page);
+  color: var(--ink);
+}
+
+body[data-page="stellar-architect"] .stellar-main {
+  border-right-color: var(--line);
+}
+
+body[data-page="stellar-architect"] .stellar-side-panel,
+body[data-page="stellar-architect"] .stellar-detail-toolbar,
+body[data-page="stellar-architect"] .stellar-panel,
+body[data-page="stellar-architect"] .stellar-system-card,
+body[data-page="stellar-architect"] .stellar-body-row,
+body[data-page="stellar-architect"] .stellar-empty-state,
+body[data-page="stellar-architect"] .stellar-details-dialog,
+body[data-page="stellar-architect"] .stellar-life-dialog {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--ink);
+}
+
+body[data-page="stellar-architect"] .stellar-side-panel {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 46%),
+    color-mix(in srgb, var(--surface) 92%, var(--page));
+}
+
+body[data-page="stellar-architect"] .stellar-detail-toolbar {
+  background: color-mix(in srgb, var(--surface) 82%, var(--page));
+  border-bottom-color: var(--line);
+}
+
+body[data-page="stellar-architect"] .stellar-page-title {
+  border-bottom-color: var(--line);
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 35%),
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 96%, transparent), color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--surface) 96%, transparent));
+}
+
+body[data-page="stellar-architect"] .stellar-tree-shell h2,
+body[data-page="stellar-architect"] .stellar-page-title p,
+body[data-page="stellar-architect"] .stellar-card-body p,
+body[data-page="stellar-architect"] .stellar-muted,
+body[data-page="stellar-architect"] .stellar-stat span,
+body[data-page="stellar-architect"] .stellar-section-heading span,
+body[data-page="stellar-architect"] .stellar-tree-item em,
+body[data-page="stellar-architect"] .stellar-details-header .modal-subtitle,
+body[data-page="stellar-architect"] .stellar-life-header .modal-subtitle,
+body[data-page="stellar-architect"] .stellar-life-note,
+body[data-page="stellar-architect"] .stellar-form-grid label,
+body[data-page="stellar-architect"] .stellar-disabled-option,
+body[data-page="stellar-architect"] .stellar-disabled-option span {
+  color: var(--muted);
+}
+
+body[data-page="stellar-architect"] .stellar-tree-item,
+body[data-page="stellar-architect"] .stellar-tree-folder-label,
+body[data-page="stellar-architect"] .stellar-card-body h2,
+body[data-page="stellar-architect"] .stellar-stat strong,
+body[data-page="stellar-architect"] .stellar-description,
+body[data-page="stellar-architect"] .stellar-row-main p,
+body[data-page="stellar-architect"] .stellar-section-heading span,
+body[data-page="stellar-architect"] .stellar-back-link,
+body[data-page="stellar-architect"] .stellar-detail-toolbar h1,
+body[data-page="stellar-architect"] .stellar-row-title h3,
+body[data-page="stellar-architect"] .stellar-detail-list dd {
+  color: var(--ink);
+}
+
+body[data-page="stellar-architect"] .stellar-tree-toggle {
+  color: var(--muted);
+}
+
+body[data-page="stellar-architect"] .stellar-tree-toggle:hover,
+body[data-page="stellar-architect"] .stellar-tree-toggle:focus-visible,
+body[data-page="stellar-architect"] .stellar-tree-item:hover,
+body[data-page="stellar-architect"] .stellar-tree-item.is-selected,
+body[data-page="stellar-architect"] .stellar-tree-folder-label:hover,
+body[data-page="stellar-architect"] .stellar-tree-folder-label:focus-visible,
+body[data-page="stellar-architect"] .stellar-body-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: var(--hover-bg);
+}
+
+body[data-page="stellar-architect"] .stellar-tree-item ph-star,
+body[data-page="stellar-architect"] .stellar-panel h2 ph-star,
+body[data-page="stellar-architect"] .stellar-empty-state ph-star,
+body[data-page="stellar-architect"] .stellar-tree-item ph-planet,
+body[data-page="stellar-architect"] .stellar-panel h2,
+body[data-page="stellar-architect"] .stellar-section-heading h2,
+body[data-page="stellar-architect"] .stellar-zone strong,
+body[data-page="stellar-architect"] .stellar-row-title h3 a:hover,
+body[data-page="stellar-architect"] .stellar-details-dialog h2 ph-gear-six,
+body[data-page="stellar-architect"] .stellar-generate-dialog h2 ph-star {
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-panel h2.is-green,
+body[data-page="stellar-architect"] .stellar-section-heading .is-green,
+body[data-page="stellar-architect"] .stellar-tree-item ph-users,
+body[data-page="stellar-architect"] .stellar-tree-item ph-dna,
+body[data-page="stellar-architect"] .stellar-life-dialog h2 ph-dna {
+  color: var(--success);
+}
+
+body[data-page="stellar-architect"] .stellar-panel h2.is-red,
+body[data-page="stellar-architect"] .stellar-section-heading .is-red {
+  color: var(--danger);
+}
+
+body[data-page="stellar-architect"] .stellar-placeholder,
+body[data-page="stellar-architect"] .stellar-card-image,
+body[data-page="stellar-architect"] .stellar-body-row .stellar-row-image,
+body[data-page="stellar-architect"] .stellar-lifeform-image,
+body[data-page="stellar-architect"] .stellar-form-grid select {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 28% 18%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 34%),
+    color-mix(in srgb, var(--field) 86%, var(--surface));
+  color: var(--ink);
+}
+
+body[data-page="stellar-architect"] .stellar-badge,
+body[data-page="stellar-architect"] .stellar-habitability-badge {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: var(--ink);
+}
+
+body[data-page="stellar-architect"] .stellar-habitability-badge.is-habitable {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-habitability-badge.is-too-hot,
+body[data-page="stellar-architect"] .stellar-habitability-badge.is-too-cold {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-habitability-badge.is-gas-giant,
+body[data-page="stellar-architect"] .stellar-habitability-badge.is-asteroid-belt {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--accent-strong) 18%, transparent), transparent 28%),
+    radial-gradient(circle at 78% 2%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 30%),
+    color-mix(in srgb, var(--surface) 96%, #000000);
+  border-color: var(--line);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign h2,
+body[data-page="stellar-architect"] .stellar-generate-redesign h3,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign h2,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign h3 {
+  color: var(--ink);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign .modal-subtitle,
+body[data-page="stellar-architect"] .stellar-generate-redesign .stellar-form-grid label span,
+body[data-page="stellar-architect"] .stellar-generate-redesign-option ph-info,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .modal-subtitle,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-form-grid label span,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option ph-info {
+  color: var(--muted);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign h3 ph-sliders-horizontal,
+body[data-page="stellar-architect"] .stellar-generate-redesign h3 ph-cube,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign h3 ph-sliders-horizontal,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign h3 ph-cube {
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign-orb,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-orb {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow:
+    0 0 0 7px color-mix(in srgb, var(--accent) 13%, transparent),
+    0 0 28px color-mix(in srgb, var(--accent-strong) 32%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign-orb > div,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-orb > div {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign-close,
+body[data-page="stellar-architect"] .stellar-generate-redesign-cancel,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-close,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-cancel,
+body[data-page="stellar-architect"] .stellar-generate-redesign .stellar-form-grid select,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-form-grid select,
+body[data-page="stellar-architect"] .stellar-generate-redesign-option,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--field) 82%, transparent);
+  border-color: var(--line);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign-option > span:last-child,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-option > span:last-child {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-generate-redesign-footer,
+body[data-page="stellar-architect"] .modal-dialog.stellar-generate-redesign .stellar-generate-redesign-footer {
+  background: color-mix(in srgb, var(--field) 64%, transparent);
+  border-top-color: var(--line);
+}
+
 html[data-color-scheme="light"] .stellar-page {
   background: #f7fafc;
   color: #13202b;
@@ -12751,9 +13093,11 @@ html[data-color-scheme="light"] .stellar-row-title h3 {
 
 .modal-backdrop {
   position: fixed;
-  inset: 0;
+  inset: var(--header-height) 0 0;
   z-index: 30;
   display: grid;
+  min-height: 0;
+  overflow: auto;
   padding: 24px;
   background: rgb(0 0 0 / 46%);
   place-items: center;
@@ -15200,6 +15544,7 @@ body[data-page="useful-things"] {
 }
 
 .chat-reader-backdrop {
+  min-height: 0;
   padding: 16px;
 }
 
@@ -15208,7 +15553,7 @@ body[data-page="useful-things"] {
   flex-direction: column;
   width: min(85vw, 1600px);
   max-width: none;
-  height: calc(100vh - 32px);
+  height: calc(100vh - var(--header-height) - 32px);
   min-height: 0;
   padding: 0;
   overflow: hidden;
@@ -15779,6 +16124,8 @@ body[data-page="useful-things"] {
 
 .modal-dialog {
   width: min(448px, 100%);
+  max-height: calc(100vh - var(--header-height) - 48px);
+  overflow: auto;
   padding: 22px 24px 24px;
   color: var(--ink);
   background: var(--surface);
@@ -16389,7 +16736,7 @@ body[data-page="useful-things"] {
 
 .universe-generation-overlay {
   position: fixed;
-  inset: 0;
+  inset: var(--header-height) 0 0;
   z-index: 90;
   display: grid;
   padding: 24px;
@@ -16831,7 +17178,7 @@ body.is-deleting-image-session .app-shell {
 
 .image-generation-page-busy {
   position: fixed;
-  inset: 0;
+  inset: var(--header-height) 0 0;
   z-index: 2600;
   display: grid;
   place-items: center;

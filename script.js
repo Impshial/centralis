@@ -1,4 +1,5 @@
 const THEME_STORAGE_KEY = "centralis-theme";
+const THEME_SNAPSHOT_STORAGE_KEY = "centralis-theme-snapshot";
 const THEME_MENU_STORAGE_KEY = "centralis-theme-menu";
 const DEFAULT_THEME_ID = "centralis";
 const THEME_SOURCE_COLOR_KEYS = ["page", "surface", "field", "text", "muted", "border", "primary", "secondary", "success", "danger"];
@@ -336,6 +337,10 @@ THEME_REGISTRY = dedupeThemes([
   ...BUILTIN_THEME_REGISTRY,
   ...SEEDED_IMPORTED_THEMES.map(themeFromPalette)
 ]);
+const PREPAINT_THEME = window.__CENTRALIS_PREPAINT_THEME__;
+if (PREPAINT_THEME) {
+  THEME_REGISTRY = dedupeThemes([...THEME_REGISTRY, PREPAINT_THEME]);
+}
 
 function applyTheme(themeInput, { persist = true } = {}) {
   const theme = normalizeTheme(themeInput || localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME_ID);
@@ -357,12 +362,18 @@ function applyTheme(themeInput, { persist = true } = {}) {
   root.style.setProperty("--primary-button-hover-border", primaryButtonHoverBorder);
   if (persist) {
     localStorage.setItem(THEME_STORAGE_KEY, theme.id);
+    localStorage.setItem(THEME_SNAPSHOT_STORAGE_KEY, JSON.stringify({
+      id: theme.id,
+      label: theme.label,
+      scheme: theme.scheme,
+      colors: theme.colors
+    }));
   }
   window.centralisCurrentTheme = theme;
   return theme;
 }
 
-applyTheme(localStorage.getItem(THEME_STORAGE_KEY), { persist: false });
+applyTheme(PREPAINT_THEME || localStorage.getItem(THEME_STORAGE_KEY), { persist: false });
 
 window.CENTRALIS_THEME_REGISTRY = THEME_REGISTRY;
 window.centralisApplyTheme = applyTheme;
@@ -656,6 +667,7 @@ async function loadThemeLibrary({ refresh = false } = {}) {
   THEME_REGISTRY = dedupeThemes([
     ...BUILTIN_THEME_REGISTRY,
     ...SEEDED_IMPORTED_THEMES.map(themeFromPalette),
+    PREPAINT_THEME,
     ...importedThemes,
     ...databaseThemes
   ]);
@@ -4276,6 +4288,7 @@ document.addEventListener("click", async (event) => {
     const previousThemeId = window.centralisCurrentTheme?.id || DEFAULT_THEME_ID;
     const theme = applyTheme(themeId);
     syncThemeSelects(theme.id);
+    closeMenus();
 
     if (!supabaseClient) {
       return;
