@@ -178,6 +178,7 @@
     let listType = "";
     let listItems = [];
     let codeLines = null;
+    let tableRows = [];
 
     function flushParagraph() {
       const text = paragraphLines.join("\n").trim();
@@ -190,10 +191,45 @@
     function flushList() {
       if (listType && listItems.length) {
         const items = listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("");
-        blocks.push(`<${listType}>${items}</${listType}>`);
+        const previousBlock = blocks[blocks.length - 1] || "";
+        const closeTag = `</${listType}>`;
+        if (previousBlock.endsWith(closeTag)) {
+          blocks[blocks.length - 1] = `${previousBlock.slice(0, -closeTag.length)}${items}${closeTag}`;
+        } else {
+          blocks.push(`<${listType}>${items}</${listType}>`);
+        }
       }
       listType = "";
       listItems = [];
+    }
+
+    function splitMarkdownTableRow(line) {
+      return String(line || "")
+        .trim()
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim());
+    }
+
+    function isMarkdownTableSeparator(line) {
+      const cells = splitMarkdownTableRow(line);
+      return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+    }
+
+    function flushTable() {
+      if (tableRows.length >= 2 && isMarkdownTableSeparator(tableRows[1])) {
+        const headers = splitMarkdownTableRow(tableRows[0]);
+        const bodyRows = tableRows.slice(2).map(splitMarkdownTableRow);
+        const headerHtml = headers.map((header) => `<th>${renderInlineMarkdown(header)}</th>`).join("");
+        const bodyHtml = bodyRows.map((row) => (
+          `<tr>${headers.map((_header, index) => `<td>${renderInlineMarkdown(row[index] || "")}</td>`).join("")}</tr>`
+        )).join("");
+        blocks.push(`<div class="markdown-table-scroll"><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`);
+      } else if (tableRows.length) {
+        paragraphLines.push(...tableRows);
+      }
+      tableRows = [];
     }
 
     function flushCode() {
@@ -203,63 +239,111 @@
       }
     }
 
-    lines.forEach((line) => {
+    function getNextNonEmptyLine(startIndex) {
+      for (let index = startIndex; index < lines.length; index += 1) {
+        const nextLine = lines[index];
+        if (nextLine.trim()) {
+          return nextLine;
+        }
+      }
+      return "";
+    }
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const line = lines[lineIndex];
       if (line.trim().startsWith("```")) {
         if (codeLines) {
           flushCode();
         } else {
           flushParagraph();
           flushList();
+          flushTable();
           codeLines = [];
         }
-        return;
+        continue;
       }
 
       if (codeLines) {
         codeLines.push(line);
-        return;
+        continue;
       }
 
       if (!line.trim()) {
+        if (listType && listItems.length) {
+          const nextLine = getNextNonEmptyLine(lineIndex + 1);
+          const nextUnordered = nextLine.match(/^\s*[-*]\s+(.+)$/);
+          const nextOrdered = nextLine.match(/^\s*\d+\.\s+(.+)$/);
+          const nextListType = nextUnordered ? "ul" : nextOrdered ? "ol" : "";
+          if (nextListType === listType || (/^\s{2,}\S/.test(nextLine) && !nextListType)) {
+            continue;
+          }
+        }
         flushParagraph();
         flushList();
-        return;
+        flushTable();
+        continue;
+      }
+
+      const looksLikeTableRow = /^\s*\|.+\|\s*$/.test(line) || (line.includes("|") && tableRows.length);
+      if (looksLikeTableRow) {
+        flushParagraph();
+        flushList();
+        tableRows.push(line);
+        continue;
+      }
+
+      if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+        flushParagraph();
+        flushList();
+        flushTable();
+        blocks.push("<hr>");
+        continue;
       }
 
       const heading = line.match(/^(#{1,6})\s+(.+)$/);
       if (heading) {
         flushParagraph();
         flushList();
+        flushTable();
         const level = heading[1].length;
         blocks.push(`<h${level}>${renderInlineMarkdown(heading[2].trim())}</h${level}>`);
-        return;
+        continue;
       }
 
       const quote = line.match(/^>\s?(.+)$/);
       if (quote) {
         flushParagraph();
         flushList();
+        flushTable();
         blocks.push(`<blockquote>${renderInlineMarkdown(quote[1].trim())}</blockquote>`);
-        return;
+        continue;
       }
 
       const unordered = line.match(/^\s*[-*]\s+(.+)$/);
       const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
       if (unordered || ordered) {
         flushParagraph();
+        flushTable();
         const nextListType = unordered ? "ul" : "ol";
         if (listType && listType !== nextListType) {
           flushList();
         }
         listType = nextListType;
         listItems.push((unordered || ordered)[1].trim());
-        return;
+        continue;
+      }
+
+      if (listType && listItems.length) {
+        listItems[listItems.length - 1] = `${listItems[listItems.length - 1]}\n${line.trim()}`;
+        continue;
       }
 
       flushList();
+      flushTable();
       paragraphLines.push(line);
-    });
+    }
 
+    flushTable();
     flushParagraph();
     flushList();
     flushCode();
@@ -487,6 +571,96 @@
     }
 
     return data;
+  }
+
+  function parseSseBlock(block) {
+    const event = { type: "message", data: "" };
+    const data = [];
+    String(block || "").split(/\r?\n/).forEach((line) => {
+      if (line.startsWith("event:")) {
+        event.type = line.slice(6).trim() || event.type;
+      } else if (line.startsWith("data:")) {
+        data.push(line.slice(5).trimStart());
+      }
+    });
+    event.data = data.join("\n");
+    return event;
+  }
+
+  async function callStreamingEdgeFunction(name, options = {}) {
+    if (!window.centralisSupabase || !window.CENTRALIS_SUPABASE_CONFIG) {
+      throw new Error("Supabase is not available yet.");
+    }
+
+    const { data: sessionData, error: sessionError } = await window.centralisSupabase.auth.getSession();
+    if (sessionError || !sessionData.session?.access_token) {
+      throw new Error(sessionError?.message || "You must be signed in to use this feature.");
+    }
+
+    const response = await fetch(`${window.CENTRALIS_SUPABASE_CONFIG.url}/functions/v1/${name}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        apikey: window.CENTRALIS_SUPABASE_CONFIG.publishableKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(options.body || {}),
+      signal: options.signal
+    });
+
+    if (!response.ok || !response.body) {
+      const errorText = await response.text().catch(() => "");
+      let payload = null;
+      try {
+        payload = errorText ? JSON.parse(errorText) : null;
+      } catch (_error) {
+        payload = { error: errorText };
+      }
+      const error = new Error(getReadableError(payload) || `Edge Function returned ${response.status}.`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let sawEvent = false;
+
+    const handleBlock = (block) => {
+      const parsed = parseSseBlock(block);
+      if (!parsed.data) return;
+      sawEvent = true;
+      let payload = {};
+      try {
+        payload = JSON.parse(parsed.data);
+      } catch (_error) {
+        payload = { error: parsed.data };
+      }
+      if (parsed.type === "error") {
+        const error = new Error(getReadableError(payload));
+        error.streamStarted = true;
+        throw error;
+      }
+      options.onEvent?.(parsed.type, payload);
+    };
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() || "";
+        blocks.forEach(handleBlock);
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        handleBlock(buffer);
+      }
+    } catch (error) {
+      error.streamStarted = error.streamStarted || sawEvent;
+      throw error;
+    }
   }
 
   let universe = {
@@ -2065,6 +2239,9 @@
   function renderAiMessageContent(message) {
     const content = String(message?.content || "");
     if (message?.role === "assistant") {
+      if (message?.streaming && !content.trim()) {
+        return '<p class="universe-ai-streaming-placeholder">Thinking...</p>';
+      }
       return renderMarkdownDescription(content).replace(
         /class="details-description-text details-description-markdown([^"]*)"/,
         'class="universe-ai-response-text details-description-markdown$1"'
@@ -2147,6 +2324,7 @@
     const isReady = status.key === "ready";
     const isBusy = Boolean(state.loading || state.syncing || state.sending);
     const messages = Array.isArray(state.messages) ? state.messages : [];
+    const hasStreamingAssistant = messages.some((message) => message.role === "assistant" && message.streaming);
     const previousMessagesHost = host.querySelector("[data-ai-messages]");
     const previousScrollTop = previousMessagesHost?.scrollTop || 0;
     const shouldFollowNewest = Boolean(actions.forceScrollToBottom)
@@ -2158,12 +2336,12 @@
         <div class="universe-ai-messages" data-ai-messages>
           ${!state.loading && !messages.length ? '<p class="details-empty">Ask this universe expert about canon, continuity, missing details, or new ideas.</p>' : ""}
           ${messages.map((message) => `
-            <article class="universe-ai-message is-${escapeHtml(message.role || "assistant")}">
+            <article class="universe-ai-message is-${escapeHtml(message.role || "assistant")}${message.streaming ? " is-streaming" : ""}">
               <div class="universe-ai-message-body">
                 ${renderAiMessageContent(message)}
               </div>
               ${message.role === "assistant" && Array.isArray(message.proposals) ? message.proposals.map(renderUniverseAiProposalCard).join("") : ""}
-              ${message.role === "assistant" ? `
+              ${message.role === "assistant" && !message.streaming ? `
                 <div class="universe-ai-response-actions">
                   <button class="subtle-icon-action" type="button" data-ai-copy-response title="Copy response">
                     <ph-copy weight="bold" aria-hidden="true"></ph-copy>
@@ -2173,7 +2351,7 @@
               ` : ""}
             </article>
           `).join("")}
-          ${state.sending ? `
+          ${state.sending && !hasStreamingAssistant ? `
             <article class="universe-ai-message is-assistant is-pending">
               <div class="universe-ai-message-body"><p>Thinking...</p></div>
             </article>
@@ -2183,9 +2361,17 @@
           ${state.error ? `<p class="form-status is-error" data-ai-chat-status role="status">${escapeHtml(state.error)}</p>` : ""}
           <div class="universe-ai-composer-row">
             <textarea name="message" rows="1" placeholder="${isReady ? "Ask about this universe..." : "Sync the universe knowledge before chatting."}"${!isReady || isBusy ? " disabled" : ""}></textarea>
-            <button class="primary-action compact-action universe-ai-send" type="submit"${!isReady || isBusy ? " disabled" : ""}>
-              ${state.sending ? "Sending..." : "Send"}
-            </button>
+            ${state.sending ? `
+              <button class="secondary-action compact-action universe-ai-stop" type="button" data-ai-stop>
+                <ph-stop-circle weight="bold" aria-hidden="true"></ph-stop-circle>
+                <span>Stop Generating</span>
+              </button>
+            ` : ""}
+            ${state.sending ? "" : `
+              <button class="primary-action compact-action universe-ai-send" type="submit"${!isReady || isBusy ? " disabled" : ""}>
+                Send
+              </button>
+            `}
           </div>
         </form>
       </section>
@@ -2245,6 +2431,10 @@
           actions.onDismissProposal?.(proposal);
         }
       });
+    });
+
+    host.querySelector("[data-ai-stop]")?.addEventListener("click", () => {
+      actions.onStop?.();
     });
 
     const textarea = host.querySelector('.universe-ai-composer textarea[name="message"]');
@@ -4181,6 +4371,7 @@
     const [aiChatOpen, setAiChatOpen] = React.useState(false);
     const [aiChatPopoutOpen, setAiChatPopoutOpen] = React.useState(false);
     const aiChatScrollToBottomRef = React.useRef(false);
+    const aiChatStreamAbortRef = React.useRef(null);
     const [aiExpertSettings, setAiExpertSettings] = React.useState(DEFAULT_UNIVERSE_AI_SETTINGS);
     const aiExpertSettingsRef = React.useRef(DEFAULT_UNIVERSE_AI_SETTINGS);
     const [aiExpertSettingsOpen, setAiExpertSettingsOpen] = React.useState(false);
@@ -4940,12 +5131,25 @@
         return;
       }
 
+      aiChatStreamAbortRef.current?.abort();
+      const streamAbortController = new AbortController();
+      aiChatStreamAbortRef.current = streamAbortController;
+      const timestamp = Date.now();
+      const optimisticUserId = `optimistic-user-${timestamp}`;
+      const streamingAssistantId = `streaming-assistant-${timestamp}`;
       const optimisticMessage = {
-        id: `optimistic-user-${Date.now()}`,
+        id: optimisticUserId,
         role: "user",
         content: cleanMessage,
         created_at: new Date().toISOString(),
         optimistic: true
+      };
+      const streamingAssistantMessage = {
+        id: streamingAssistantId,
+        role: "assistant",
+        content: "",
+        created_at: new Date().toISOString(),
+        streaming: true
       };
       aiChatScrollToBottomRef.current = true;
 
@@ -4954,13 +5158,15 @@
         sending: true,
         messages: [
           ...(Array.isArray(current.messages) ? current.messages : []),
-          optimisticMessage
+          optimisticMessage,
+          streamingAssistantMessage
         ],
         error: "",
         statusMessage: ""
       }));
 
-      try {
+      let userPersisted = false;
+      const runFallbackRequest = async () => {
         const payload = await callEdgeFunction("send-universe-ai-message", {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -4978,14 +5184,121 @@
           error: "",
           statusMessage: ""
         }));
-      } catch (error) {
+      };
+
+      try {
+        await callStreamingEdgeFunction("stream-universe-ai-message", {
+          signal: streamAbortController.signal,
+          body: {
+            universeId,
+            message: cleanMessage
+          },
+          onEvent: (eventType, payload) => {
+            if (eventType === "user_message" && payload.message) {
+              userPersisted = true;
+              aiChatScrollToBottomRef.current = true;
+              setAiChatState((current) => ({
+                ...current,
+                source: payload.source || current.source,
+                chat: payload.chat || current.chat,
+                messages: (current.messages || []).map((currentMessage) => (
+                  currentMessage.id === optimisticUserId ? payload.message : currentMessage
+                ))
+              }));
+              return;
+            }
+
+            if (eventType === "delta") {
+              const delta = String(payload.text || "");
+              if (!delta) return;
+              aiChatScrollToBottomRef.current = true;
+              setAiChatState((current) => ({
+                ...current,
+                messages: (current.messages || []).map((currentMessage) => (
+                  currentMessage.id === streamingAssistantId
+                    ? { ...currentMessage, content: `${currentMessage.content || ""}${delta}` }
+                    : currentMessage
+                ))
+              }));
+              return;
+            }
+
+            if (eventType === "assistant_message" && payload.message) {
+              aiChatScrollToBottomRef.current = true;
+              setAiChatState((current) => ({
+                ...current,
+                messages: (current.messages || []).map((currentMessage) => (
+                  currentMessage.id === streamingAssistantId ? payload.message : currentMessage
+                ))
+              }));
+              return;
+            }
+
+            if ((eventType === "proposals" || eventType === "done") && Array.isArray(payload.messages)) {
+              aiChatScrollToBottomRef.current = true;
+              setAiChatState((current) => ({
+                ...current,
+                source: payload.source || current.source,
+                chat: payload.chat || current.chat,
+                messages: payload.messages,
+                sending: eventType === "done" ? false : current.sending,
+                error: "",
+                statusMessage: ""
+              }));
+              return;
+            }
+
+            if (eventType === "chat" && payload.chat) {
+              setAiChatState((current) => ({
+                ...current,
+                chat: payload.chat
+              }));
+            }
+          }
+        });
+        aiChatStreamAbortRef.current = null;
         setAiChatState((current) => ({
           ...current,
           sending: false,
-          error: getReadableError(error),
+          messages: (current.messages || []).filter((currentMessage) => currentMessage.id !== streamingAssistantId),
+          error: "",
+          statusMessage: ""
+        }));
+      } catch (error) {
+        if ((error?.status === 404 || error?.status === 405) && !error.streamStarted && !streamAbortController.signal.aborted) {
+          try {
+            await runFallbackRequest();
+            aiChatStreamAbortRef.current = null;
+            return;
+          } catch (fallbackError) {
+            error = fallbackError;
+          }
+        }
+        aiChatStreamAbortRef.current = null;
+        const wasAborted = streamAbortController.signal.aborted || error?.name === "AbortError";
+        setAiChatState((current) => ({
+          ...current,
+          sending: false,
+          messages: (current.messages || []).filter((currentMessage) => (
+            currentMessage.id !== streamingAssistantId
+              && (userPersisted || currentMessage.id !== optimisticUserId)
+          )),
+          error: wasAborted ? "" : getReadableError(error),
           statusMessage: ""
         }));
       }
+    }, []);
+
+    const stopUniverseAiMessage = React.useCallback(() => {
+      aiChatStreamAbortRef.current?.abort();
+      aiChatStreamAbortRef.current = null;
+      setAiChatState((current) => ({
+        ...current,
+        sending: false,
+        messages: (current.messages || []).filter((message) => !message.streaming),
+        error: "",
+        statusMessage: ""
+      }));
     }, []);
 
     const consumeAiChatScrollRequest = React.useCallback(() => {
@@ -7286,6 +7599,7 @@
       renderUniverseAiChatPane(aiChatState, {
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
+        onStop: stopUniverseAiMessage,
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
         onPopOut: openUniverseAiPopout,
@@ -7298,7 +7612,7 @@
         forceScrollToBottom: aiChatScrollToBottomRef.current,
         onScrollToBottomHandled: consumeAiChatScrollRequest
       });
-    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded, saveAiExpertSettings, consumeAiChatScrollRequest]);
+    }, [aiChatOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, stopUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, openUniverseAiPopout, aiExpertSettings, aiExpertSettingsOpen, aiExpertSettingsExpanded, saveAiExpertSettings, consumeAiChatScrollRequest]);
 
     React.useEffect(() => {
       if (!aiChatPopoutOpen) {
@@ -7308,12 +7622,13 @@
       renderUniverseAiChatContent(document.querySelector("[data-ai-popout-content]"), aiChatState, {
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
+        onStop: stopUniverseAiMessage,
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
         forceScrollToBottom: aiChatScrollToBottomRef.current,
         onScrollToBottomHandled: consumeAiChatScrollRequest
       });
-    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, consumeAiChatScrollRequest]);
+    }, [aiChatPopoutOpen, aiChatState, syncUniverseAiSource, sendUniverseAiMessage, stopUniverseAiMessage, reviewUniverseAiProposal, dismissUniverseAiProposal, consumeAiChatScrollRequest]);
 
     React.useEffect(() => {
       if (!aiChatPopoutOpen) {

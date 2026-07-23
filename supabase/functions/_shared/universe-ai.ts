@@ -1120,3 +1120,152 @@ export async function sendUniverseExpertRequest(options: {
     citations: extractOpenAiCitations(response),
   };
 }
+
+function parseOpenAiStreamEvent(block: string) {
+  let eventType = "message";
+  const dataLines: string[] = [];
+
+  block.split(/\r?\n/).forEach((line) => {
+    if (line.startsWith("event:")) {
+      eventType = line.slice(6).trim() || eventType;
+      return;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  });
+
+  const data = dataLines.join("\n").trim();
+  if (!data || data === "[DONE]") {
+    return null;
+  }
+
+  try {
+    return {
+      eventType,
+      payload: JSON.parse(data) as Record<string, unknown>,
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+export async function streamUniverseExpertRequest(options: {
+  universeName: string;
+  vectorStoreId: string;
+  messages: Array<{ role: string; content: string }>;
+  settings: UniverseAiSettings;
+  signal?: AbortSignal;
+  onDelta: (delta: string) => Promise<void> | void;
+}) {
+  const input = options.messages
+    .filter((message) => ["user", "assistant"].includes(String(message.role)) && String(message.content || "").trim())
+    .map((message) => ({
+      role: message.role,
+      content: String(message.content),
+    }));
+
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${getEnv("OPENAI_API_KEY")}`);
+  headers.set("Content-Type", "application/json");
+
+  const response = await fetch(`${OPENAI_API_BASE}/responses`, {
+    method: "POST",
+    headers,
+    signal: options.signal,
+    body: JSON.stringify({
+      model: getUniverseAiModel(options.settings.model),
+      instructions: buildUniverseExpertInstructions(options.universeName),
+      input,
+      tools: [{
+        type: "file_search",
+        vector_store_ids: [options.vectorStoreId],
+        max_num_results: 10,
+      }],
+      include: ["file_search_call.results"],
+      text: {
+        verbosity: options.settings.verbosity,
+      },
+      reasoning: {
+        effort: getResponsesReasoningEffort(options.settings.reasoningEffort),
+      },
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    let payload: unknown = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch (_error) {
+      payload = { error: text };
+    }
+    const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+    const nestedError = record.error && typeof record.error === "object" ? record.error as Record<string, unknown> : null;
+    throw new Error(String(nestedError?.message || record.error || record.message || `OpenAI request failed with ${response.status}.`));
+  }
+
+  if (!response.body) {
+    throw new Error("OpenAI did not return a streaming response.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let finalResponse: Record<string, unknown> | null = null;
+
+  const handleBlock = async (block: string) => {
+    const parsed = parseOpenAiStreamEvent(block);
+    if (!parsed) return;
+    const type = String(parsed.payload.type || parsed.eventType || "");
+
+    if (type === "response.output_text.delta" && typeof parsed.payload.delta === "string") {
+      text += parsed.payload.delta;
+      await options.onDelta(parsed.payload.delta);
+      return;
+    }
+
+    if (type === "response.output_text.done" && typeof parsed.payload.text === "string") {
+      text = parsed.payload.text;
+      return;
+    }
+
+    if (type === "response.completed" && parsed.payload.response && typeof parsed.payload.response === "object") {
+      finalResponse = parsed.payload.response as Record<string, unknown>;
+      return;
+    }
+
+    if (type === "error") {
+      throw new Error(String(parsed.payload.message || parsed.payload.error || "OpenAI stream failed."));
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+    for (const block of blocks) {
+      await handleBlock(block);
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    await handleBlock(buffer);
+  }
+
+  const cleanText = text.trim();
+  if (!cleanText) {
+    throw new Error("OpenAI did not return a response.");
+  }
+
+  return {
+    response: finalResponse || {},
+    text: cleanText,
+    citations: finalResponse ? extractOpenAiCitations(finalResponse) : [],
+  };
+}
