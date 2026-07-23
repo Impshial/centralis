@@ -17420,7 +17420,7 @@ body.is-deleting-image-session .app-shell {
 .image-generation-session-heading,
 .image-generation-composer-row {
   display: flex;
-  align-items: center;
+  align-items: left;
   justify-content: space-between;
   gap: 16px;
 }
