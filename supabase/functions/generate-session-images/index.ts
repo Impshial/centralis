@@ -156,16 +156,21 @@ function buildVeniceGeneratePayload(settings: ReturnType<typeof normalizeVeniceI
     format: settings.format,
     variants: settings.n,
     return_binary: false,
+    hide_watermark: true,
     // Venice safe mode is enabled by default. "Low" is the requested lower
     // moderation setting and maps to the provider's explicit false value.
     safe_mode: settings.moderation !== "low",
   };
   if (settings.aspectRatio) payload.aspect_ratio = settings.aspectRatio;
   if (settings.resolution) payload.resolution = settings.resolution;
+  if (settings.width) payload.width = settings.width;
+  if (settings.height) payload.height = settings.height;
   if (settings.stylePreset) payload.style_preset = settings.stylePreset;
   if (settings.negativePrompt) payload.negative_prompt = settings.negativePrompt;
   if (settings.seed !== null && settings.seed !== undefined) payload.seed = settings.seed;
   if (settings.cfgScale !== null && settings.cfgScale !== undefined) payload.cfg_scale = settings.cfgScale;
+  if (settings.steps !== null && settings.steps !== undefined) payload.steps = settings.steps;
+  if (settings.enableWebSearch) payload.enable_web_search = true;
   return payload;
 }
 

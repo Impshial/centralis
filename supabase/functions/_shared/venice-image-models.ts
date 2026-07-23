@@ -1,5 +1,5 @@
 export type VeniceImageFormat = "png" | "jpeg" | "webp";
-export type VeniceSizeProfile = "tier" | "aspect" | "none" | "openai";
+export type VeniceSizeProfile = "tier" | "aspect" | "pixel" | "none" | "openai";
 export type ImageGenerationProvider = "openai" | "venice";
 
 export type VeniceImageModel = {
@@ -21,18 +21,25 @@ export type VeniceImageModel = {
   supportsNegativePrompt: boolean;
   supportsSeed: boolean;
   supportsCfgScale: boolean;
+  supportsSteps: boolean;
+  stepsDefault: number | null;
+  stepsMax: number | null;
+  widthHeightDivisor: number | null;
+  supportsWebSearch: boolean;
 };
 
 // Keep this list intentionally explicit. It is the single server-side allowlist
 // for Venice image generation. Adding a future provider model starts here.
 export const VENICE_IMAGE_MODELS: readonly VeniceImageModel[] = [
-  { id: "gpt-image-2", label: "GPT Image 2", provider: "openai", maxPromptCharacters: 32000, maxOutputs: 10, supportsReferences: true, maxReferences: 16, sizeProfile: "openai", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: true, supportsCompression: true, supportsBackground: true, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false },
-  { id: "flux-2-pro", label: "Flux 2 Pro", provider: "venice", maxPromptCharacters: 3000, maxOutputs: 4, supportsReferences: false, maxReferences: 0, sizeProfile: "none", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false },
-  { id: "qwen-image-2", label: "Qwen Image 2", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, editModelId: "qwen-image-2-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true },
-  { id: "z-image-turbo", label: "Z-Image Turbo", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, supportsReferences: false, maxReferences: 0, sizeProfile: "none", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false },
-  { id: "nano-banana-pro", label: "Nano Banana Pro", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, editModelId: "nano-banana-pro-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "tier", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false },
-  { id: "wan-2-7-pro-text-to-image", label: "Wan 2.7 Pro", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, editModelId: "wan-2-7-pro-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false },
-  { id: "seedream-v4", label: "Seedream V4.5", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, editModelId: "seedream-v4-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false },
+  { id: "gpt-image-2", label: "GPT Image 2", provider: "openai", maxPromptCharacters: 32000, maxOutputs: 10, supportsReferences: true, maxReferences: 16, sizeProfile: "openai", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: true, supportsCompression: true, supportsBackground: true, supportsStylePreset: false, supportsNegativePrompt: false, supportsSeed: false, supportsCfgScale: false, supportsSteps: false, stepsDefault: null, stepsMax: null, widthHeightDivisor: 16, supportsWebSearch: false },
+  { id: "flux-2-pro", label: "Flux 2 Pro", provider: "venice", maxPromptCharacters: 3000, maxOutputs: 4, supportsReferences: false, maxReferences: 0, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: true, stepsDefault: 20, stepsMax: 50, widthHeightDivisor: 1, supportsWebSearch: false },
+  { id: "qwen-image-2", label: "Qwen Image 2", provider: "venice", maxPromptCharacters: 10000, maxOutputs: 4, editModelId: "qwen-image-2-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: true, stepsDefault: 20, stepsMax: 50, widthHeightDivisor: 1, supportsWebSearch: false },
+  { id: "z-image-turbo", label: "Z-Image Turbo", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, supportsReferences: false, maxReferences: 0, sizeProfile: "pixel", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: false, stepsDefault: 8, stepsMax: 8, widthHeightDivisor: 8, supportsWebSearch: false },
+  { id: "nano-banana-pro", label: "Nano Banana Pro", provider: "venice", maxPromptCharacters: 32768, maxOutputs: 4, editModelId: "nano-banana-pro-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "tier", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: true, stepsDefault: 20, stepsMax: 50, widthHeightDivisor: 1, supportsWebSearch: true },
+  { id: "wan-2-7-pro-text-to-image", label: "Wan 2.7 Pro", provider: "venice", maxPromptCharacters: 3000, maxOutputs: 4, editModelId: "wan-2-7-pro-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: true, stepsDefault: 20, stepsMax: 50, widthHeightDivisor: 1, supportsWebSearch: false },
+  { id: "seedream-v4", label: "Seedream V4.5", provider: "venice", maxPromptCharacters: 10000, maxOutputs: 4, editModelId: "seedream-v4-edit", supportsReferences: true, maxReferences: 3, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: true, stepsDefault: 20, stepsMax: 50, widthHeightDivisor: 1, supportsWebSearch: false },
+  { id: "chroma", label: "Chroma", provider: "venice", maxPromptCharacters: 7500, maxOutputs: 4, supportsReferences: false, maxReferences: 0, sizeProfile: "pixel", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: false, stepsDefault: 10, stepsMax: 10, widthHeightDivisor: 8, supportsWebSearch: false },
+  { id: "recraft-v4-pro", label: "Recraft V4 Pro", provider: "venice", maxPromptCharacters: 10000, maxOutputs: 4, supportsReferences: false, maxReferences: 0, sizeProfile: "aspect", formats: ["png", "jpeg", "webp"], defaultFormat: "png", supportsQuality: false, supportsCompression: false, supportsBackground: false, supportsStylePreset: true, supportsNegativePrompt: true, supportsSeed: true, supportsCfgScale: true, supportsSteps: true, stepsDefault: 20, stepsMax: 50, widthHeightDivisor: 1, supportsWebSearch: false },
 ];
 
 export const DEFAULT_VENICE_IMAGE_SETTINGS = {
@@ -91,6 +98,11 @@ export function getPublicVeniceImageModels() {
     supportsNegativePrompt: model.supportsNegativePrompt,
     supportsSeed: model.supportsSeed,
     supportsCfgScale: model.supportsCfgScale,
+    supportsSteps: model.supportsSteps,
+    stepsDefault: model.stepsDefault,
+    stepsMax: model.stepsMax,
+    widthHeightDivisor: model.widthHeightDivisor,
+    supportsWebSearch: model.supportsWebSearch,
   }));
 }
 
@@ -103,10 +115,20 @@ export function normalizeVeniceImageSettings(raw: Record<string, unknown>) {
   const moderation = String(raw.moderation || DEFAULT_VENICE_IMAGE_SETTINGS.moderation).toLowerCase();
   if (!['auto', 'low'].includes(moderation)) throw new Error("Moderation must be Auto or Low.");
   let size = String(raw.size || "auto").toLowerCase();
+  let width: number | null = null;
+  let height: number | null = null;
   if (model.sizeProfile === "none") size = "auto";
-  if (model.sizeProfile === "openai" && size === "custom") {
-    const width = Number(raw.width);
-    const height = Number(raw.height);
+  if (model.sizeProfile === "pixel") {
+    width = Number(raw.width || 1024);
+    height = Number(raw.height || 1024);
+    const divisor = model.widthHeightDivisor || 1;
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 1280 || height > 1280 || width % divisor || height % divisor) {
+      throw new Error(`${model.label} dimensions must be whole numbers from 1 to 1280 and divisible by ${divisor}.`);
+    }
+    size = `${width}x${height}`;
+  } else if (model.sizeProfile === "openai" && size === "custom") {
+    width = Number(raw.width);
+    height = Number(raw.height);
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < 16 || height < 16 || width > 3840 || height > 3840 || width % 16 || height % 16 || (width * height) < 655360 || (width * height) > 8294400 || Math.max(width, height) / Math.min(width, height) > 3) {
       throw new Error("Custom GPT Image 2 dimensions must be multiples of 16, within 16–3840 pixels, use a maximum 3:1 aspect ratio, and contain 655,360–8,294,400 pixels.");
     }
@@ -133,6 +155,14 @@ export function normalizeVeniceImageSettings(raw: Record<string, unknown>) {
   const cfgScale = cfgScaleText ? Number(cfgScaleText) : null;
   if (cfgScaleText && (!Number.isFinite(cfgScale) || cfgScale <= 0 || cfgScale > 20)) throw new Error("CFG scale must be greater than 0 and no more than 20.");
   if (cfgScale !== null && !model.supportsCfgScale) throw new Error(`${model.label} does not support CFG scale.`);
+  const stepsText = model.supportsSteps ? String(raw.steps ?? "").trim() : "";
+  const steps = model.supportsSteps ? (stepsText ? Number(stepsText) : model.stepsDefault) : null;
+  if (steps !== null && steps !== undefined && (!Number.isInteger(steps) || steps < 1 || (model.stepsMax !== null && steps > model.stepsMax))) {
+    throw new Error(`Steps for ${model.label} must be a whole number from 1 to ${model.stepsMax || "the model maximum"}.`);
+  }
+  if (stepsText && !model.supportsSteps) throw new Error(`${model.label} does not support user-adjustable steps.`);
+  const enableWebSearch = raw.enable_web_search === true || String(raw.enable_web_search || "").toLowerCase() === "true";
+  if (enableWebSearch && !model.supportsWebSearch) throw new Error(`${model.label} does not support web search.`);
   return {
     provider: model.provider,
     model: model.id,
@@ -150,9 +180,14 @@ export function normalizeVeniceImageSettings(raw: Record<string, unknown>) {
     editModelId: model.editModelId || null,
     aspectRatio: size === "auto" ? null : aspectRatios[size] || null,
     resolution: model.sizeProfile === "tier" && size !== "auto" ? resolutionTiers[size] || null : null,
+    width: model.sizeProfile === "pixel" ? width : null,
+    height: model.sizeProfile === "pixel" ? height : null,
     stylePreset: model.supportsStylePreset && stylePreset ? stylePreset : null,
     negativePrompt: model.supportsNegativePrompt && negativePrompt ? negativePrompt : null,
     seed: model.supportsSeed ? seed : null,
     cfgScale: model.supportsCfgScale ? cfgScale : null,
+  steps: model.supportsSteps ? steps : null,
+    enableWebSearch: model.supportsWebSearch ? enableWebSearch : false,
+    hideWatermark: model.provider === "venice",
   };
 }
