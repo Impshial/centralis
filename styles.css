@@ -1026,6 +1026,7 @@ button {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: min(980px, calc(100vw - 36px));
+  height: min(720px, calc(100vh - 36px));
   max-height: min(820px, calc(100vh - 36px));
   padding: 0;
   overflow: hidden;
@@ -1033,6 +1034,7 @@ button {
 
 .modal-dialog.custom-theme-dialog {
   width: min(720px, calc(100vw - 36px));
+  height: min(760px, calc(100vh - 36px));
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
@@ -1078,12 +1080,40 @@ button {
   font-weight: 760;
 }
 
+.theme-selector-search {
+  display: inline-flex;
+  align-items: center;
+  min-width: 220px;
+  margin-left: auto;
+}
+
+.theme-selector-search input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--control-text);
+  background: var(--field);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.theme-selector-search input::placeholder {
+  color: color-mix(in srgb, var(--muted) 78%, transparent);
+}
+
+.theme-selector-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .theme-selector-filter {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  margin-left: auto;
   color: var(--ink);
   cursor: pointer;
   font-size: 0.86rem;
@@ -1317,6 +1347,7 @@ button {
   .modal-dialog.theme-selector-dialog,
   .modal-dialog.custom-theme-dialog {
     width: calc(100vw - 20px);
+    height: calc(100vh - 20px);
     max-height: calc(100vh - 20px);
   }
 

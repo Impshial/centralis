@@ -685,7 +685,8 @@ let themeSelectorState = {
   savedMenuIds: [...DEFAULT_HEADER_THEME_IDS],
   draftMenuIds: [...DEFAULT_HEADER_THEME_IDS],
   previewThemeId: DEFAULT_THEME_ID,
-  showSelectedOnly: false
+  showSelectedOnly: false,
+  searchTerm: ""
 };
 
 function ensureThemeSelectorModals() {
@@ -705,6 +706,10 @@ function ensureThemeSelectorModals() {
           </header>
           <div class="theme-selector-toolbar">
             <span data-theme-selector-count>0 / ${MAX_HEADER_THEME_OPTIONS} selected</span>
+            <label class="theme-selector-search" for="theme-selector-search-input">
+              <span class="sr-only">Search themes</span>
+              <input id="theme-selector-search-input" type="search" placeholder="Search themes..." data-theme-selector-search autocomplete="off">
+            </label>
             <label class="theme-selector-filter">
               <input type="checkbox" data-theme-selected-filter>
               <span class="theme-selector-checkbox-ui" aria-hidden="true"></span>
@@ -781,10 +786,18 @@ function renderThemeSelectorList() {
   if (filter) {
     filter.checked = themeSelectorState.showSelectedOnly;
   }
+  const searchInput = document.querySelector("[data-theme-selector-search]");
+  if (searchInput) {
+    searchInput.value = themeSelectorState.searchTerm;
+  }
   count.textContent = `${selectedCount} / ${MAX_HEADER_THEME_OPTIONS} selected`;
-  const visibleThemes = themeSelectorState.showSelectedOnly
+  const searchTerm = themeSelectorState.searchTerm.trim().toLowerCase();
+  const baseThemes = themeSelectorState.showSelectedOnly
     ? THEME_REGISTRY.filter((theme) => selected.has(theme.id))
     : THEME_REGISTRY;
+  const visibleThemes = searchTerm
+    ? baseThemes.filter((theme) => theme.label.toLowerCase().includes(searchTerm))
+    : baseThemes;
   list.innerHTML = visibleThemes.map((theme) => {
     const isChecked = selected.has(theme.id);
     const isPreviewed = normalizeThemeId(themeSelectorState.previewThemeId) === theme.id;
@@ -808,8 +821,8 @@ function renderThemeSelectorList() {
   if (!visibleThemes.length) {
     list.innerHTML = `
       <div class="theme-selector-empty">
-        <p>No selected palettes.</p>
-        <span>Uncheck "Show selected only" to choose palettes for the header menu.</span>
+        <p>No matching palettes.</p>
+        <span>${themeSelectorState.showSelectedOnly ? "Adjust the search or uncheck \"Show selected only\"." : "Adjust the search to find another palette."}</span>
       </div>
     `;
   }
@@ -831,7 +844,8 @@ async function openThemeSelector() {
     savedMenuIds: normalizeThemeMenuIds(themeMenuThemeIds),
     draftMenuIds: normalizeThemeMenuIds(themeMenuThemeIds),
     previewThemeId: window.centralisCurrentTheme?.id || DEFAULT_THEME_ID,
-    showSelectedOnly: false
+    showSelectedOnly: false,
+    searchTerm: ""
   };
   renderThemeSelectorList();
   setThemeSelectorStatus("");
@@ -4384,6 +4398,14 @@ document.addEventListener("change", (event) => {
     const label = colorInput.closest(".custom-theme-color");
     const code = label?.querySelector("code");
     if (code) code.textContent = colorInput.value;
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const themeSearch = event.target.closest("[data-theme-selector-search]");
+  if (themeSearch) {
+    themeSelectorState.searchTerm = themeSearch.value;
+    renderThemeSelectorList();
   }
 });
 
