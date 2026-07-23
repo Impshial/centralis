@@ -162,6 +162,10 @@ function buildVeniceGeneratePayload(settings: ReturnType<typeof normalizeVeniceI
   };
   if (settings.aspectRatio) payload.aspect_ratio = settings.aspectRatio;
   if (settings.resolution) payload.resolution = settings.resolution;
+  if (settings.stylePreset) payload.style_preset = settings.stylePreset;
+  if (settings.negativePrompt) payload.negative_prompt = settings.negativePrompt;
+  if (settings.seed !== null && settings.seed !== undefined) payload.seed = settings.seed;
+  if (settings.cfgScale !== null && settings.cfgScale !== undefined) payload.cfg_scale = settings.cfgScale;
   return payload;
 }
 

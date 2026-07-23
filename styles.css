@@ -17596,7 +17596,7 @@ body.is-deleting-image-session .app-shell {
 .image-generation-parameters-panel { min-height: 0; overflow: auto; }
 .image-generation-parameter-grid { display: grid; gap: 12px; margin-top: 13px; }
 .image-generation-parameter-grid label { display: grid; gap: 5px; color: var(--muted-text, #aebbc2); font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.image-generation-page :is(.image-generation-parameter-grid input, .image-generation-parameter-grid select, .image-generation-composer textarea) {
+.image-generation-page :is(.image-generation-parameter-grid input, .image-generation-parameter-grid select, .image-generation-parameter-grid textarea, .image-generation-composer textarea) {
   width: 100%;
   color: var(--text, #eef5f7);
   background-color: #0b1418;
@@ -17605,7 +17605,7 @@ body.is-deleting-image-session .app-shell {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
   font: inherit;
 }
-.image-generation-page :is(.image-generation-parameter-grid input, .image-generation-parameter-grid select) {
+.image-generation-page :is(.image-generation-parameter-grid input, .image-generation-parameter-grid select, .image-generation-parameter-grid textarea) {
   min-height: 40px;
   padding: 8px 10px;
   text-transform: none;
@@ -17620,7 +17620,114 @@ body.is-deleting-image-session .app-shell {
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
-.image-generation-page :is(.image-generation-parameter-grid input, .image-generation-parameter-grid select, .image-generation-composer textarea):focus {
+.image-generation-page .image-generation-parameter-grid textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.image-generation-style-picker {
+  position: relative;
+  z-index: 10;
+}
+.image-generation-style-trigger {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 10px 6px 6px;
+  color: var(--text, #eef5f7);
+  background: #0b1418;
+  border: 1px solid var(--border-color, #2d444e);
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+}
+.image-generation-style-trigger:hover,
+.image-generation-style-trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 60%, var(--border-color, #2d444e));
+  background: color-mix(in srgb, var(--accent, #78d5c8) 8%, #0b1418);
+}
+.image-generation-style-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent, #78d5c8);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #78d5c8) 18%, transparent);
+}
+.image-generation-style-trigger img,
+.image-generation-style-option img {
+  display: block;
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+.image-generation-style-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-generation-style-trigger ph-caret-down {
+  width: 16px;
+  height: 16px;
+  color: var(--accent, #78d5c8);
+}
+.image-generation-style-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 120;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: min(372px, 55vh);
+  padding: 8px;
+  overflow: auto;
+  background: #0b1418;
+  border: 1px solid color-mix(in srgb, var(--accent, #78d5c8) 45%, var(--border-color, #2d444e));
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgb(0 0 0 / 42%);
+}
+.image-generation-style-option {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 5px;
+  color: var(--text, #eef5f7);
+  background: color-mix(in srgb, var(--surface, #121a1f) 72%, transparent);
+  border: 1px solid var(--border-color, #2d444e);
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+}
+.image-generation-style-option:hover,
+.image-generation-style-option:focus-visible {
+  outline: none;
+  border-color: var(--accent, #78d5c8);
+  background: color-mix(in srgb, var(--accent, #78d5c8) 12%, transparent);
+}
+.image-generation-style-option.is-selected {
+  border-color: var(--accent, #78d5c8);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #78d5c8) 45%, transparent);
+}
+.image-generation-style-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-generation-page :is(.image-generation-parameter-grid input, .image-generation-parameter-grid select, .image-generation-parameter-grid textarea, .image-generation-composer textarea):focus {
   outline: none;
   border-color: var(--accent, #78d5c8);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #78d5c8) 18%, transparent);

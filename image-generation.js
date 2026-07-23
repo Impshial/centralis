@@ -31,6 +31,16 @@
     sizeField: document.querySelector("[data-image-size-field]"),
     qualityField: document.querySelector("[data-image-quality-field]"),
     backgroundField: document.querySelector("[data-image-background-field]"),
+    styleField: document.querySelector("[data-image-style-field]"),
+    styleInput: document.querySelector("[data-image-style-input]"),
+    stylePicker: document.querySelector("[data-image-style-picker]"),
+    styleTrigger: document.querySelector("[data-image-style-trigger]"),
+    styleMenu: document.querySelector("[data-image-style-menu]"),
+    styleSelectedImage: document.querySelector("[data-image-style-selected-image]"),
+    styleSelectedLabel: document.querySelector("[data-image-style-selected-label]"),
+    negativePromptField: document.querySelector("[data-image-negative-prompt-field]"),
+    seedField: document.querySelector("[data-image-seed-field]"),
+    cfgScaleField: document.querySelector("[data-image-cfg-scale-field]"),
     modelSupportNote: document.querySelector("[data-image-model-support-note]"),
     referencePicker: document.querySelector("[data-image-reference-picker]"),
     sessionThumbnails: document.querySelector("[data-image-session-thumbnails]"),
@@ -49,7 +59,23 @@
 
   const state = { user: null, sessions: [], session: null, messages: [], assets: [], selectedAsset: null, viewerAsset: null, selectedReferences: new Set(), busy: false, activeGeneration: null, modelCatalog: [] };
   const ACTIVE_GENERATION_WINDOW_MS = 20 * 60 * 1000;
-  const DEFAULT_MODEL_SETTINGS = { provider: "openai", model: "gpt-image-2", n: 1, size: "auto", quality: "auto", format: "png", compression: 90, background: "auto", moderation: "low" };
+  const DEFAULT_MODEL_SETTINGS = { provider: "openai", model: "gpt-image-2", n: 1, size: "auto", quality: "auto", format: "png", compression: 90, background: "auto", style_preset: "", negative_prompt: "", seed: "", cfg_scale: "", moderation: "low" };
+  const VENICE_STYLE_SLUGS = [
+    "none", "3d-model", "abstract", "advertising", "alien", "analog-film", "anime", "architectural", "cinematic", "collage", "comic-book",
+    "craft-clay", "cubist", "digital-art", "disco", "dreamscape", "dystopian", "enhance", "fairy-tale", "fantasy-art", "fighting-game",
+    "film-noir", "flat-papercut", "food-photography", "gothic", "graffiti", "grunge", "gta", "hdr", "horror", "hyperrealism",
+    "impressionist", "isometric-style", "kirigami", "legend-of-zelda", "line-art", "long-exposure", "lowpoly", "minecraft", "minimalist",
+    "monochrome", "nautical", "neon-noir", "neon-punk", "origami", "paper-mache", "paper-quilling", "papercut-collage",
+    "papercut-shadow-box", "photographic", "pixel-art", "pointillism", "pokemon", "pop-art", "psychedelic", "real-estate", "renaissance",
+    "retro-arcade", "retro-game", "rpg-fantasy-game", "silhouette", "space", "stacked-papercut", "stained-glass", "steampunk",
+    "strategy-game", "street-fighter", "super-mario", "surrealist", "techwear-fashion", "texture", "thick-layered-papercut",
+    "tilt-shift", "tribal", "typography", "watercolor", "zentangle",
+  ];
+  const STYLE_WORD_OVERRIDES = { "3d": "3D", gta: "GTA", hdr: "HDR", rpg: "RPG" };
+  const VENICE_STYLE_OPTIONS = VENICE_STYLE_SLUGS.map((slug) => {
+    const label = slug.split("-").map((word) => STYLE_WORD_OVERRIDES[word] || `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join(" ");
+    return { slug, label, value: slug === "none" ? "" : label, src: `assets/venice-styles/${slug}.jpg` };
+  });
   const text = (value) => String(value ?? "");
   const html = (value) => text(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
   const getParams = () => Object.fromEntries([...document.querySelectorAll("[data-image-param]")].map((input) => [input.dataset.imageParam, input.value]));
@@ -62,12 +88,69 @@
     return model?.id === "gpt-image-2" || model?.provider === "openai";
   }
 
+  function getStyleOption(value) {
+    const normalized = text(value).trim().toLowerCase();
+    return VENICE_STYLE_OPTIONS.find((option) => option.value.toLowerCase() === normalized) || VENICE_STYLE_OPTIONS[0];
+  }
+
+  function renderStylePickerOptions() {
+    if (!els.styleMenu) return;
+    const current = els.styleInput?.value || "";
+    els.styleMenu.innerHTML = VENICE_STYLE_OPTIONS.map((option) => `
+      <button class="image-generation-style-option${option.value === current ? " is-selected" : ""}" type="button" role="option" aria-selected="${option.value === current}" data-image-style-value="${html(option.value)}">
+        <img src="${html(option.src)}" alt="">
+        <span>${html(option.label)}</span>
+      </button>`).join("");
+  }
+
+  function syncStylePicker() {
+    const option = getStyleOption(els.styleInput?.value || "");
+    if (els.styleInput) els.styleInput.value = option.value;
+    if (els.styleSelectedImage) els.styleSelectedImage.src = option.src;
+    if (els.styleSelectedLabel) els.styleSelectedLabel.textContent = option.label;
+    renderStylePickerOptions();
+  }
+
+  function setStylePickerOpen(open) {
+    if (!els.styleTrigger || !els.styleMenu) return;
+    els.styleTrigger.setAttribute("aria-expanded", String(open));
+    els.styleMenu.hidden = !open;
+    if (open) requestAnimationFrame(() => focusSelectedStyleOption());
+  }
+
+  function focusSelectedStyleOption() {
+    const selected = els.styleMenu?.querySelector(".image-generation-style-option.is-selected");
+    const first = els.styleMenu?.querySelector(".image-generation-style-option");
+    (selected || first)?.focus();
+  }
+
+  function moveStyleFocus(delta) {
+    const options = [...(els.styleMenu?.querySelectorAll(".image-generation-style-option") || [])];
+    if (!options.length) return;
+    const currentIndex = Math.max(0, options.indexOf(document.activeElement));
+    options[(currentIndex + delta + options.length) % options.length].focus();
+  }
+
+  async function setStylePreset(value) {
+    if (!els.styleInput) return;
+    els.styleInput.value = getStyleOption(value).value;
+    syncStylePicker();
+    setStylePickerOpen(false);
+    try {
+      await saveActiveSettings();
+      renderSessions();
+    } catch (error) {
+      els.error.textContent = error instanceof Error ? error.message : "Could not save the selected style.";
+    }
+  }
+
   function applySettings(settings = {}) {
     const values = { ...DEFAULT_MODEL_SETTINGS, ...(settings || {}) };
     for (const [name, value] of Object.entries(values)) {
       const control = document.querySelector(`[data-image-param="${name}"]`);
       if (control && value !== undefined && value !== null) control.value = String(value);
     }
+    syncStylePicker();
   }
 
   function syncOutputCountForReferences() {
@@ -89,7 +172,7 @@
     const openAiModel = isGptImage2Model(model);
     const defaults = {
       n: "1", size: "auto", width: "", height: "", quality: openAiModel ? "auto" : "",
-      format: model.defaultFormat || "png", compression: "90", background: "auto", moderation: "low",
+      format: model.defaultFormat || "png", compression: "90", background: "auto", style_preset: "", negative_prompt: "", seed: "", cfg_scale: "", moderation: "low",
     };
     for (const [name, value] of Object.entries(defaults)) {
       const control = document.querySelector(`[data-image-param="${name}"]`);
@@ -113,6 +196,10 @@
     const supportsQuality = openAiModel || Boolean(model.supportsQuality);
     const supportsCompression = openAiModel || Boolean(model.supportsCompression);
     const supportsBackground = openAiModel || Boolean(model.supportsBackground);
+    const supportsStylePreset = Boolean(model.supportsStylePreset);
+    const supportsNegativePrompt = Boolean(model.supportsNegativePrompt);
+    const supportsSeed = Boolean(model.supportsSeed);
+    const supportsCfgScale = Boolean(model.supportsCfgScale);
     const count = document.querySelector('[data-image-param="n"]');
     if (count) {
       const maxOutputs = Number(model.maxOutputs || 4);
@@ -141,6 +228,17 @@
     }
     if (els.qualityField) els.qualityField.hidden = !supportsQuality;
     if (els.backgroundField) els.backgroundField.hidden = !supportsBackground;
+    [
+      [els.styleField, "style_preset", supportsStylePreset],
+      [els.negativePromptField, "negative_prompt", supportsNegativePrompt],
+      [els.seedField, "seed", supportsSeed],
+      [els.cfgScaleField, "cfg_scale", supportsCfgScale],
+    ].forEach(([field, param, supported]) => {
+      if (field) field.hidden = !supported;
+      const control = document.querySelector(`[data-image-param="${param}"]`);
+      if (!supported && control) control.value = "";
+    });
+    syncStylePicker();
     const formatValue = document.querySelector('[data-image-param="format"]')?.value;
     if (els.compressionField) els.compressionField.hidden = !supportsCompression || !["jpeg", "webp"].includes(formatValue);
     const referencesEnabled = Boolean(model.supportsReferences);
@@ -353,6 +451,9 @@
   }
   function formatGenerationSettings(settings) {
     if (!settings) return "";
+    const stylePreset = settings.stylePreset || settings.style_preset;
+    const negativePrompt = settings.negativePrompt || settings.negative_prompt;
+    const cfgScale = settings.cfgScale ?? settings.cfg_scale;
     const rows = [
       ["Model", getSettingsModelLabel(settings)],
       ["Provider", settings.provider],
@@ -362,6 +463,10 @@
       ["Format", settings.format ? String(settings.format).toUpperCase() : ""],
       ["Compression", settings.compression !== null && settings.compression !== undefined ? `${settings.compression}%` : ""],
       ["Background", settings.background],
+      ["Style", stylePreset],
+      ["Negative Prompt", negativePrompt],
+      ["Seed", settings.seed],
+      ["CFG Scale", cfgScale],
       ["Moderation", settings.moderation],
       ["References", settings.reference_count !== null && settings.reference_count !== undefined ? String(settings.reference_count) : ""],
     ];
@@ -369,6 +474,8 @@
   }
   function formatGenerationSettingsInline(settings) {
     if (!settings) return "No generation parameters saved.";
+    const stylePreset = settings.stylePreset || settings.style_preset;
+    const cfgScale = settings.cfgScale ?? settings.cfg_scale;
     const parts = [
       getSettingsModelLabel(settings),
       settings.provider,
@@ -377,6 +484,9 @@
       settings.format ? String(settings.format).toUpperCase() : "",
       settings.compression !== null && settings.compression !== undefined ? `${settings.compression}% compression` : "",
       settings.background && `background ${settings.background}`,
+      stylePreset && `style ${stylePreset}`,
+      settings.seed !== null && settings.seed !== undefined && settings.seed !== "" ? `seed ${settings.seed}` : "",
+      cfgScale !== null && cfgScale !== undefined && cfgScale !== "" ? `CFG ${cfgScale}` : "",
       settings.moderation && `moderation ${settings.moderation}`,
       settings.reference_count !== null && settings.reference_count !== undefined ? `${settings.reference_count} references` : "",
     ];
@@ -837,9 +947,51 @@
       if (!event.target.closest(".image-generation-session-menu")) {
         els.sessionList.querySelectorAll("[data-image-session-menu]").forEach((trigger) => trigger.setAttribute("aria-expanded", "false"));
       }
+      if (els.stylePicker && !event.target.closest("[data-image-style-picker]")) setStylePickerOpen(false);
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") els.sessionList.querySelectorAll("[data-image-session-menu]").forEach((trigger) => trigger.setAttribute("aria-expanded", "false"));
+      if (event.key === "Escape") {
+        els.sessionList.querySelectorAll("[data-image-session-menu]").forEach((trigger) => trigger.setAttribute("aria-expanded", "false"));
+        setStylePickerOpen(false);
+      }
+    });
+    renderStylePickerOptions();
+    els.styleTrigger?.addEventListener("click", () => {
+      const isOpen = els.styleTrigger.getAttribute("aria-expanded") === "true";
+      setStylePickerOpen(!isOpen);
+    });
+    els.styleTrigger?.addEventListener("keydown", (event) => {
+      if (["Enter", " ", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        setStylePickerOpen(true);
+      }
+    });
+    els.styleMenu?.addEventListener("click", async (event) => {
+      const option = event.target.closest("[data-image-style-value]");
+      if (option) await setStylePreset(option.dataset.imageStyleValue || "");
+    });
+    els.styleMenu?.addEventListener("keydown", async (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setStylePickerOpen(false);
+        els.styleTrigger?.focus();
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        moveStyleFocus(1);
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        moveStyleFocus(-1);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        els.styleMenu.querySelector(".image-generation-style-option")?.focus();
+      } else if (event.key === "End") {
+        event.preventDefault();
+        [...els.styleMenu.querySelectorAll(".image-generation-style-option")].at(-1)?.focus();
+      } else if (["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        const option = event.target.closest("[data-image-style-value]");
+        if (option) await setStylePreset(option.dataset.imageStyleValue || "");
+      }
     });
     els.composer.addEventListener("submit", sendPrompt);
     els.prompt.addEventListener("input", autoResize);
