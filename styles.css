@@ -1134,7 +1134,7 @@ button {
 
 .theme-selector-row {
   display: grid;
-  grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 0.34fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1232,6 +1232,32 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.theme-selector-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--control-text);
+  background: color-mix(in srgb, var(--field) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.theme-selector-edit:hover,
+.theme-selector-edit:focus-visible {
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border-color: var(--primary-button-border);
+}
+
+.theme-selector-row:not(:has(.theme-selector-edit)) .theme-selector-preview {
+  grid-column: 2 / 4;
 }
 
 .theme-selector-empty {
@@ -1364,6 +1390,16 @@ button {
 
   .theme-selector-row {
     grid-template-columns: 1fr;
+  }
+
+  .theme-selector-row:not(:has(.theme-selector-edit)) .theme-selector-preview,
+  .theme-selector-preview {
+    grid-column: auto;
+  }
+
+  .theme-selector-edit {
+    justify-content: center;
+    width: 100%;
   }
 
   .custom-theme-colors {

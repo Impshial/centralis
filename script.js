@@ -234,6 +234,12 @@ function dedupeThemes(themes) {
     if (Array.isArray(theme.paletteColors)) {
       normalized.paletteColors = theme.paletteColors.slice(0, 10);
     }
+    if (theme.source) {
+      normalized.source = theme.source;
+    }
+    if (theme.ownerUserId || theme.owner_user_id) {
+      normalized.ownerUserId = theme.ownerUserId || theme.owner_user_id;
+    }
     return normalized;
   }).filter((theme) => {
     if (!theme.id || seen.has(theme.id)) return false;
@@ -578,6 +584,8 @@ function normalizeThemeRow(row) {
   if (Array.isArray(row.palette_colors)) {
     theme.paletteColors = row.palette_colors.slice(0, 10).map((color) => String(color).trim().toLowerCase());
   }
+  theme.source = row.source || "custom";
+  theme.ownerUserId = row.owner_user_id || row.ownerUserId || null;
   return theme.id === DEFAULT_THEME_ID && (row.theme_key || row.id) !== DEFAULT_THEME_ID ? null : theme;
 }
 
@@ -686,7 +694,8 @@ let themeSelectorState = {
   draftMenuIds: [...DEFAULT_HEADER_THEME_IDS],
   previewThemeId: DEFAULT_THEME_ID,
   showSelectedOnly: false,
-  searchTerm: ""
+  searchTerm: "",
+  editingThemeId: null
 };
 
 function ensureThemeSelectorModals() {
@@ -735,8 +744,8 @@ function ensureThemeSelectorModals() {
           <header class="theme-selector-header">
             <div>
               <p class="settings-eyebrow">Appearance</p>
-              <h2 id="custom-theme-title">Create Palette</h2>
-              <p>Save a custom 10-color palette for your account.</p>
+              <h2 id="custom-theme-title" data-custom-theme-title>Create Palette</h2>
+              <p data-custom-theme-subtitle>Save a custom 10-color palette for your account.</p>
             </div>
           </header>
           <div class="custom-theme-body">
@@ -803,6 +812,7 @@ function renderThemeSelectorList() {
     const isPreviewed = normalizeThemeId(themeSelectorState.previewThemeId) === theme.id;
     const disabled = !isChecked && selectedCount >= MAX_HEADER_THEME_OPTIONS;
     const paletteColors = getPaletteColorsForTheme(theme);
+    const canEdit = theme.source === "custom" && currentAppUser?.id && String(theme.ownerUserId) === String(currentAppUser.id);
     return `
       <article class="theme-selector-row ${isPreviewed ? "is-previewed" : ""}" data-theme-selector-row="${escapeHtml(theme.id)}">
         <label class="theme-selector-check">
@@ -810,6 +820,12 @@ function renderThemeSelectorList() {
           <span class="theme-selector-checkbox-ui" aria-hidden="true"></span>
           <span class="theme-selector-check-label">${escapeHtml(theme.label)}</span>
         </label>
+        ${canEdit ? `
+          <button class="theme-selector-edit" type="button" data-edit-custom-theme="${escapeHtml(theme.id)}" aria-label="Edit ${escapeHtml(theme.label)}">
+            <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
+            <span>Edit</span>
+          </button>
+        ` : ""}
         <button class="theme-selector-preview" type="button" data-theme-preview="${escapeHtml(theme.id)}">
           ${paletteColors.map((color) => `
             <span class="theme-selector-swatch" title="${escapeHtml(color)}" style="--theme-selector-color: ${escapeHtml(color)};"></span>
@@ -845,7 +861,8 @@ async function openThemeSelector() {
     draftMenuIds: normalizeThemeMenuIds(themeMenuThemeIds),
     previewThemeId: window.centralisCurrentTheme?.id || DEFAULT_THEME_ID,
     showSelectedOnly: false,
-    searchTerm: ""
+    searchTerm: "",
+    editingThemeId: null
   };
   renderThemeSelectorList();
   setThemeSelectorStatus("");
@@ -903,14 +920,14 @@ function setCustomThemeStatus(message = "", type = "") {
   status.classList.toggle("is-success", type === "success");
 }
 
-function renderCustomThemeFields(baseThemeId = themeSelectorState.previewThemeId) {
+function renderCustomThemeFields(baseThemeId = themeSelectorState.previewThemeId, paletteOverride = null) {
   const baseSelect = document.querySelector("[data-custom-theme-base]");
   const colorsContainer = document.querySelector("[data-custom-theme-colors]");
   if (!baseSelect || !colorsContainer) return;
   baseSelect.innerHTML = THEME_REGISTRY.map((theme) => `<option value="${escapeHtml(theme.id)}">${escapeHtml(theme.label)}</option>`).join("");
   baseSelect.value = normalizeThemeId(baseThemeId);
   const baseTheme = getThemeById(baseSelect.value);
-  const paletteColors = getPaletteColorsForTheme(baseTheme);
+  const paletteColors = Array.isArray(paletteOverride) ? paletteOverride : getPaletteColorsForTheme(baseTheme);
   colorsContainer.innerHTML = paletteColors.slice(0, 10).map((color, index) => `
     <label class="custom-theme-color">
       <span>Color ${index + 1}</span>
@@ -922,6 +939,13 @@ function renderCustomThemeFields(baseThemeId = themeSelectorState.previewThemeId
 
 function openCustomThemeModal() {
   ensureThemeSelectorModals();
+  themeSelectorState.editingThemeId = null;
+  const title = document.querySelector("[data-custom-theme-title]");
+  const subtitle = document.querySelector("[data-custom-theme-subtitle]");
+  const saveButton = document.querySelector("[data-custom-theme-save]");
+  if (title) title.textContent = "Create Palette";
+  if (subtitle) subtitle.textContent = "Save a custom 10-color palette for your account.";
+  if (saveButton) saveButton.textContent = "Save";
   document.querySelector("[data-custom-theme-name]").value = "";
   renderCustomThemeFields();
   setCustomThemeStatus("");
@@ -932,9 +956,32 @@ function openCustomThemeModal() {
 function closeCustomThemeModal() {
   const modal = document.getElementById("custom-theme-modal");
   if (modal) modal.hidden = true;
+  themeSelectorState.editingThemeId = null;
   if (themeSelectorState.isOpen) {
     document.body.classList.add("centralis-modal-open");
   }
+}
+
+function openEditCustomThemeModal(themeId) {
+  ensureThemeSelectorModals();
+  const theme = THEME_REGISTRY.find((candidate) => candidate.id === themeId);
+  if (!theme || theme.source !== "custom" || String(theme.ownerUserId) !== String(currentAppUser?.id)) {
+    setThemeSelectorStatus("You can only edit your own custom palettes.", "error");
+    return;
+  }
+
+  themeSelectorState.editingThemeId = theme.id;
+  const title = document.querySelector("[data-custom-theme-title]");
+  const subtitle = document.querySelector("[data-custom-theme-subtitle]");
+  const saveButton = document.querySelector("[data-custom-theme-save]");
+  if (title) title.textContent = "Edit Palette";
+  if (subtitle) subtitle.textContent = "Update this custom 10-color palette.";
+  if (saveButton) saveButton.textContent = "Update";
+  document.querySelector("[data-custom-theme-name]").value = theme.label;
+  renderCustomThemeFields(theme.id, getPaletteColorsForTheme(theme));
+  setCustomThemeStatus("");
+  document.getElementById("custom-theme-modal").hidden = false;
+  document.body.classList.add("centralis-modal-open");
 }
 
 async function saveCustomTheme() {
@@ -942,6 +989,7 @@ async function saveCustomTheme() {
   const saveButton = document.querySelector("[data-custom-theme-save]");
   const name = nameInput?.value?.trim() || "";
   const paletteColors = [...document.querySelectorAll("[data-custom-theme-color]")].map((input) => input.value);
+  const editingThemeId = themeSelectorState.editingThemeId;
   if (!name) {
     setCustomThemeStatus("Enter a palette name.", "error");
     return;
@@ -951,19 +999,19 @@ async function saveCustomTheme() {
     return;
   }
   saveButton.disabled = true;
-  setCustomThemeStatus("Saving palette...");
+  setCustomThemeStatus(editingThemeId ? "Updating palette..." : "Saving palette...");
   try {
-    const themeKey = `custom-${crypto.randomUUID()}`;
+    const themeKey = editingThemeId || `custom-${crypto.randomUUID()}`;
     const theme = themeFromPalette({
       id: themeKey,
       label: name,
       scheme: "dark",
       paletteColors
     });
+    theme.source = "custom";
+    theme.ownerUserId = currentAppUser?.id || null;
     if (supabaseClient && currentAppUser?.id) {
-      const { error } = await withTimeout(supabaseClient
-        .from("themes")
-        .insert({
+      const row = {
           theme_key: theme.id,
           owner_user_id: currentAppUser.id,
           source: "custom",
@@ -971,11 +1019,18 @@ async function saveCustomTheme() {
           scheme: theme.scheme,
           palette_colors: paletteColors,
           theme_colors: theme.colors
-        }), "Saving custom palette");
+        };
+      const query = editingThemeId
+        ? supabaseClient.from("themes").update(row).eq("theme_key", editingThemeId).eq("owner_user_id", currentAppUser.id)
+        : supabaseClient.from("themes").insert(row);
+      const { error } = await withTimeout(query, editingThemeId ? "Updating custom palette" : "Saving custom palette");
       if (error) throw error;
     }
-    THEME_REGISTRY = dedupeThemes([...THEME_REGISTRY, { ...theme, paletteColors }]);
-    if (themeSelectorState.draftMenuIds.length < MAX_HEADER_THEME_OPTIONS) {
+    THEME_REGISTRY = dedupeThemes([
+      ...THEME_REGISTRY.filter((candidate) => candidate.id !== theme.id),
+      { ...theme, paletteColors }
+    ]);
+    if (!editingThemeId && themeSelectorState.draftMenuIds.length < MAX_HEADER_THEME_OPTIONS) {
       themeSelectorState.draftMenuIds = normalizeThemeMenuIds([...themeSelectorState.draftMenuIds, theme.id]);
     }
     previewTheme(theme.id);
@@ -983,10 +1038,10 @@ async function saveCustomTheme() {
     syncThemeOptionExports();
     closeCustomThemeModal();
     renderThemeSelectorList();
-    setThemeSelectorStatus("Custom palette added. Save to keep it selected.", "success");
+    setThemeSelectorStatus(editingThemeId ? "Custom palette updated. Save to keep this selection." : "Custom palette added. Save to keep it selected.", "success");
   } catch (error) {
     console.error(error);
-    setCustomThemeStatus(error.message || "Could not save custom palette.", "error");
+    setCustomThemeStatus(error.message || (editingThemeId ? "Could not update custom palette." : "Could not save custom palette."), "error");
   } finally {
     saveButton.disabled = false;
   }
@@ -4340,6 +4395,12 @@ document.addEventListener("click", async (event) => {
 
   if (event.target.closest("[data-create-custom-theme]")) {
     openCustomThemeModal();
+    return;
+  }
+
+  const editCustomThemeButton = event.target.closest("[data-edit-custom-theme]");
+  if (editCustomThemeButton) {
+    openEditCustomThemeModal(editCustomThemeButton.dataset.editCustomTheme);
     return;
   }
 
