@@ -17,14 +17,26 @@ const TARGET_FORMATS: Record<string, string> = {
   xml: "XML",
   csv: "CSV",
   tsv: "TSV",
-  "json-lines": "JSON Lines",
   "sql-inserts": "SQL Inserts",
   "sql-schema": "SQL Schema",
   outline: "Outline",
   "bullet-list": "Bullet List",
   "numbered-list": "Numbered List",
   summary: "Summary",
+  custom: "Custom",
 };
+
+const CUSTOM_CONVERTER_INSTRUCTIONS = [
+  "Convert the provided source using the following instructions:",
+  "",
+  "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts.",
+  "",
+  "Return a concise plain-text summary only.",
+  "",
+  "Return only the converted output. Do not explain the conversion. Do not add markdown fences unless the requested output format itself is Markdown.",
+  "",
+  "If the source is ambiguous, make the smallest reasonable inference needed to produce the requested format.",
+].join("\n");
 
 function normalizeInputMode(value: unknown) {
   return value === "raw" ? "raw" : "wysiwyg";
@@ -63,8 +75,6 @@ function targetInstructions(targetFormat: string) {
       return "Return CSV only. Include a header row when tabular fields can be inferred. Quote fields when needed.";
     case "tsv":
       return "Return tab-separated values only. Include a header row when tabular fields can be inferred.";
-    case "json-lines":
-      return "Return JSON Lines only: one valid JSON object per line, no wrapping array and no commentary.";
     case "sql-inserts":
       return "Return SQL INSERT statements only. Use the table name converted_items. Infer sensible snake_case columns. Quote strings safely and use NULL when needed.";
     case "sql-schema":
@@ -77,6 +87,8 @@ function targetInstructions(targetFormat: string) {
       return "Return a concise numbered list only.";
     case "summary":
       return "Return a concise plain-text summary only.";
+    case "custom":
+      return "Return only the converted output.";
     default:
       return "Return only the converted output.";
   }
@@ -87,6 +99,10 @@ function buildDefaultInstructions(input: {
   targetFormat: string;
   targetLabel: string;
 }) {
+  if (input.targetFormat === "custom") {
+    return CUSTOM_CONVERTER_INSTRUCTIONS;
+  }
+
   const sourceDescription = input.inputMode === "wysiwyg"
     ? "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts."
     : "The source is raw text. Preserve the meaning and useful structure.";

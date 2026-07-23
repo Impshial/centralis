@@ -6672,13 +6672,15 @@ body[data-page="movie-tracker"] .movie-page-number.is-current {
 }
 
 body[data-page="movie-tracker"] .movie-status-badge {
-  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 86%, var(--muted) 10%);
   color: var(--ink);
 }
 
 body[data-page="movie-tracker"] .movie-status-badge.is-downloaded {
-  background: var(--success);
-  color: var(--primary-button-text);
+  border-color: color-mix(in srgb, var(--success) 54%, var(--line));
+  background: color-mix(in srgb, var(--success) 26%, var(--surface) 74%);
+  color: var(--ink);
 }
 
 body[data-page="movie-tracker"] .movie-poster,
@@ -12004,9 +12006,9 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 5px;
-  color: #fff;
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid transparent;
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--surface, #151a21) 82%, var(--muted, #94a3b8) 14%);
+  border: 1px solid color-mix(in srgb, var(--line, #334155) 82%, transparent);
   font-size: 12px;
   font-weight: 800;
 }
@@ -12018,34 +12020,40 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
 }
 
 .stellar-habitability-badge.is-habitable {
-  color: #4ade80;
-  background: rgba(22, 163, 74, 0.2);
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--success, #4ade80) 24%, var(--surface, #151a21) 76%);
+  border-color: color-mix(in srgb, var(--success, #4ade80) 55%, var(--line, #334155));
 }
 
 .stellar-habitability-badge.is-too-hot {
-  color: #f87171;
-  background: rgba(220, 38, 38, 0.2);
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--danger, #f87171) 24%, var(--surface, #151a21) 76%);
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--line, #334155));
 }
 
 .stellar-habitability-badge.is-too-cold {
-  color: #60a5fa;
-  background: rgba(37, 99, 235, 0.2);
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--secondary, #60a5fa) 24%, var(--surface, #151a21) 76%);
+  border-color: color-mix(in srgb, var(--secondary, #60a5fa) 55%, var(--line, #334155));
 }
 
 .stellar-habitability-badge.is-gas-giant {
-  color: #c084fc;
-  background: rgba(147, 51, 234, 0.2);
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--secondary, #c084fc) 24%, var(--surface, #151a21) 76%);
+  border-color: color-mix(in srgb, var(--secondary, #c084fc) 55%, var(--line, #334155));
 }
 
 .stellar-habitability-badge.is-no-atmosphere,
 .stellar-habitability-badge.is-unknown {
-  color: #9ca3af;
-  background: rgba(75, 85, 99, 0.2);
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--muted, #9ca3af) 22%, var(--surface, #151a21) 78%);
+  border-color: color-mix(in srgb, var(--muted, #9ca3af) 46%, var(--line, #334155));
 }
 
 .stellar-habitability-badge.is-asteroid-belt {
-  color: #fbbf24;
-  background: rgba(217, 119, 6, 0.2);
+  color: var(--ink, #f8fafc);
+  background: color-mix(in srgb, var(--accent, #fbbf24) 24%, var(--surface, #151a21) 76%);
+  border-color: color-mix(in srgb, var(--accent, #fbbf24) 55%, var(--line, #334155));
 }
 
 .stellar-type-badge.is-asteroid-type {
@@ -12928,26 +12936,29 @@ body[data-page="stellar-architect"] .stellar-form-grid select {
 
 body[data-page="stellar-architect"] .stellar-badge,
 body[data-page="stellar-architect"] .stellar-habitability-badge {
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface) 82%);
   color: var(--ink);
 }
 
 body[data-page="stellar-architect"] .stellar-habitability-badge.is-habitable {
-  color: var(--success);
-  background: color-mix(in srgb, var(--success) 16%, transparent);
+  border-color: color-mix(in srgb, var(--success) 55%, var(--line));
+  background: color-mix(in srgb, var(--success) 24%, var(--surface) 76%);
+  color: var(--ink);
 }
 
 body[data-page="stellar-architect"] .stellar-habitability-badge.is-too-hot,
 body[data-page="stellar-architect"] .stellar-habitability-badge.is-too-cold {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  background: color-mix(in srgb, var(--danger) 22%, var(--surface) 78%);
+  color: var(--ink);
 }
 
 body[data-page="stellar-architect"] .stellar-habitability-badge.is-gas-giant,
 body[data-page="stellar-architect"] .stellar-habitability-badge.is-asteroid-belt {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface) 78%);
+  color: var(--ink);
 }
 
 body[data-page="stellar-architect"] .stellar-generate-redesign,
