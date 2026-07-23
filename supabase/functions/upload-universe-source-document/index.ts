@@ -1,5 +1,6 @@
 import {
   createAdminClient,
+  createCentralisStorageMetadata,
   describeError,
   getAuthUser,
   handleCors,
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     const supabase = createAdminClient();
     const { data: universe, error: universeError } = await supabase
       .from("universes")
-      .select("id,user_id")
+      .select("id,user_id,name")
       .eq("id", universeId)
       .eq("user_id", appUser.id)
       .single();
@@ -83,6 +84,11 @@ Deno.serve(async (req) => {
       bytes,
       key: uploadedKey,
       contentType: file.type || "application/octet-stream",
+      metadata: createCentralisStorageMetadata({
+        module: "Source Material",
+        context: `Source Material: ${displayName || file.name}`,
+        note: universe.name ? `Universe: ${universe.name}` : "Universe source document",
+      }),
     });
 
     const { data, error } = await supabase

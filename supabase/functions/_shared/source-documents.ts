@@ -5,6 +5,8 @@ import {
 import {
   createS3Client,
   getEnv,
+  normalizeStorageMetadata,
+  type CentralisObjectMetadata,
 } from "./image-storage.ts";
 
 export const MAX_UNIVERSE_SOURCE_DOCUMENT_BYTES = 25 * 1024 * 1024;
@@ -61,12 +63,14 @@ export async function uploadUniverseSourceDocumentObject(options: {
   bytes: Uint8Array;
   key: string;
   contentType: string;
+  metadata?: CentralisObjectMetadata;
 }) {
   await createS3Client().send(new PutObjectCommand({
     Bucket: getEnv("IDRIVE_E2_BUCKET"),
     Key: options.key,
     Body: options.bytes,
     ContentType: options.contentType || "application/octet-stream",
+    Metadata: normalizeStorageMetadata(options.metadata),
   }));
 }
 

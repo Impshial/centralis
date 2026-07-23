@@ -156,10 +156,50 @@ export function createS3Client() {
   });
 }
 
+export type CentralisObjectMetadata = Record<string, string | number | boolean | null | undefined>;
+
+function cleanStorageMetadataValue(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 240);
+}
+
+export function normalizeStorageMetadata(metadata?: CentralisObjectMetadata) {
+  if (!metadata) return undefined;
+  const normalized: Record<string, string> = {};
+
+  for (const [rawKey, rawValue] of Object.entries(metadata)) {
+    const key = rawKey
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 64);
+    const value = cleanStorageMetadataValue(rawValue);
+    if (key && value) normalized[key] = value;
+  }
+
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+export function createCentralisStorageMetadata(input: {
+  module: string;
+  context?: string;
+  note?: string;
+}) {
+  return normalizeStorageMetadata({
+    "centralis-module": input.module,
+    "centralis-context": input.context,
+    "centralis-note": input.note,
+  });
+}
+
 export async function uploadImageBytes(options: {
   bytes: Uint8Array;
   key: string;
   contentType: string;
+  metadata?: CentralisObjectMetadata;
 }) {
   const bucket = getEnv("IDRIVE_E2_BUCKET");
   const client = createS3Client();
@@ -169,6 +209,7 @@ export async function uploadImageBytes(options: {
     Key: options.key,
     Body: options.bytes,
     ContentType: options.contentType,
+    Metadata: normalizeStorageMetadata(options.metadata),
   }));
 
   return buildPublicUrl(options.key);

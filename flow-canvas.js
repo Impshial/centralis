@@ -8343,6 +8343,9 @@
         const body = new FormData();
         body.append("objectId", node.data.recordId);
         body.append("storageModule", "universe-builder");
+        body.append("objectName", node.data.name || "");
+        body.append("objectKind", node.data.kind || "");
+        body.append("elementType", node.data.elementType?.name || "");
         body.append("file", file);
 
         try {

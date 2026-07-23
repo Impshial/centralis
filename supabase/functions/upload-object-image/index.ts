@@ -1,5 +1,6 @@
 import {
   createImageKey,
+  createCentralisStorageMetadata,
   createSignedImageUrl,
   describeError,
   getAuthUser,
@@ -8,6 +9,31 @@ import {
   jsonResponse,
   uploadImageBytes,
 } from "../_shared/image-storage.ts";
+
+function createUploadImageMetadata(input: {
+  storageModule: string;
+  objectId: string;
+  objectName?: string;
+  objectKind?: string;
+  elementType?: string;
+}) {
+  const name = String(input.objectName || input.elementType || input.objectKind || input.objectId).trim();
+  if (input.storageModule === "stellar-architect") {
+    return createCentralisStorageMetadata({
+      module: "Stellar Architect",
+      context: `Stellar Architect: ${name}`,
+      note: "Uploaded image",
+    });
+  }
+
+  const typeText = `${input.objectKind || ""} ${input.elementType || ""}`;
+  const label = /universe/i.test(typeText) ? "Universe" : "Element";
+  return createCentralisStorageMetadata({
+    module: "Universe Builder",
+    context: `${label}: ${name}`,
+    note: "Uploaded image",
+  });
+}
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -20,6 +46,9 @@ Deno.serve(async (req) => {
     const formData = await req.formData();
     const objectId = String(formData.get("objectId") || "").trim();
     const storageModule = String(formData.get("storageModule") || "universe-builder").trim();
+    const objectName = String(formData.get("objectName") || "").trim();
+    const objectKind = String(formData.get("objectKind") || "").trim();
+    const elementType = String(formData.get("elementType") || "").trim();
     const file = formData.get("file");
 
     if (!objectId) {
@@ -40,6 +69,13 @@ Deno.serve(async (req) => {
       bytes,
       key,
       contentType: file.type || "application/octet-stream",
+      metadata: createUploadImageMetadata({
+        storageModule,
+        objectId,
+        objectName,
+        objectKind,
+        elementType,
+      }),
     });
     const image = await insertImageRow({
       id: imageId,

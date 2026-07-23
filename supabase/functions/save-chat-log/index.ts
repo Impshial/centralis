@@ -1,5 +1,6 @@
 import {
   createAdminClient,
+  createCentralisStorageMetadata,
   describeError,
   getAuthUser,
   handleCors,
@@ -68,6 +69,11 @@ Deno.serve(async (req) => {
     await uploadChatLogObject({
       bytes,
       key: chatLog.storage_key,
+      metadata: createCentralisStorageMetadata({
+        module: "Chat Repository",
+        context: `Chat Repository: ${title}`,
+        note: "HTML chat log",
+      }),
     });
 
     const { data, error: updateError } = await supabase

@@ -1,5 +1,6 @@
 import {
   createAdminClient,
+  createCentralisStorageMetadata,
   createImageGenerationKey,
   createSignedStorageUrl,
   describeError,
@@ -280,7 +281,16 @@ Deno.serve(async (req) => {
       const id = crypto.randomUUID();
       const extension = image.contentType === "image/jpeg" ? "jpg" : image.contentType === "image/webp" ? "webp" : "png";
       const key = createImageGenerationKey("output", id, extension);
-      await uploadImageBytes({ bytes: image.bytes, key, contentType: image.contentType });
+      await uploadImageBytes({
+        bytes: image.bytes,
+        key,
+        contentType: image.contentType,
+        metadata: createCentralisStorageMetadata({
+          module: "Image Generation",
+          context: `ImageGen: ${compiledPrompt}`,
+          note: `Generated image ${index + 1} of ${generated.length}`,
+        }),
+      });
       const { data, error } = await supabase.from("image_generation_assets").insert({
         id, session_id: sessionId, message_id: messageId, user_id: appUser.id, asset_kind: "output", storage_key: key,
         original_filename: `${id}.${extension}`, content_type: image.contentType, byte_size: image.bytes.byteLength,

@@ -1,5 +1,6 @@
 import {
   createAdminClient,
+  createCentralisStorageMetadata,
   describeError,
   getAuthUser,
   handleCors,
@@ -62,7 +63,15 @@ Deno.serve(async (req) => {
 
     const chatLogId = crypto.randomUUID();
     uploadedKey = createChatLogKey(authUser.id, chatLogId);
-    await uploadChatLogObject({ bytes, key: uploadedKey });
+    await uploadChatLogObject({
+      bytes,
+      key: uploadedKey,
+      metadata: createCentralisStorageMetadata({
+        module: "Chat Repository",
+        context: `Chat Repository: ${title}`,
+        note: "HTML chat log",
+      }),
+    });
 
     const { data, error } = await createAdminClient()
       .from("chat_logs")

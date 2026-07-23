@@ -100,6 +100,8 @@
     nextContinuationToken: null,
     selected: null,
     view: "grid",
+    sortKey: "name",
+    sortDirection: "asc",
     imageUrls: new Map(),
     leftWidth: 250,
     rightWidth: 300,
@@ -3368,6 +3370,35 @@
     return prefix.replace(/\/+$/, "").split("/").filter(Boolean).pop() || prefix;
   }
 
+  function getStorageTreeKey(bucket, prefix = "") {
+    return `${bucket}/${prefix}`;
+  }
+
+  function isStorageFolderInActivePath(bucket, folder) {
+    return storageState.bucket === bucket
+      && Boolean(storageState.prefix)
+      && storageState.prefix.startsWith(folder);
+  }
+
+  function renderStorageFolderTree(bucket, folder, depth = 1) {
+    const childFolders = storageState.foldersByPath.get(getStorageTreeKey(bucket, folder)) || [];
+    const isActive = storageState.bucket === bucket && storageState.prefix === folder;
+    const isAncestor = isStorageFolderInActivePath(bucket, folder) && !isActive;
+    const childMarkup = childFolders.length
+      ? `<div class="storage-tree-children" role="group">${childFolders.map((childFolder) => renderStorageFolderTree(bucket, childFolder, depth + 1)).join("")}</div>`
+      : "";
+
+    return `
+      <div class="storage-tree-node storage-tree-folder-node${isAncestor ? " is-ancestor" : ""}" role="treeitem" aria-expanded="${childFolders.length ? "true" : "false"}">
+        <button type="button" class="storage-tree-folder${isActive ? " is-active" : ""}" style="--storage-indent: ${Math.min(12 + depth * 18, 120)}px" data-storage-folder="${escapeHtml(folder)}">
+          <span class="storage-tree-caret" aria-hidden="true">${childFolders.length ? '<ph-caret-down weight="bold"></ph-caret-down>' : ""}</span>
+          <ph-folder weight="fill" aria-hidden="true"></ph-folder>
+          <span>${escapeHtml(getStorageFolderName(folder))}</span>
+        </button>
+        ${childMarkup}
+      </div>`;
+  }
+
   function formatStorageBytes(value) {
     const bytes = Number(value || 0);
     if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -3375,6 +3406,46 @@
     const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
     const amount = bytes / 1024 ** index;
     return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
+  }
+
+  function getStorageObjectType(object) {
+    const contentType = String(object?.contentType || "").trim();
+    if (contentType) return contentType;
+    const filename = getStorageFileName(object?.key || "");
+    const parts = filename.split(".");
+    return parts.length > 1 ? parts.pop().toUpperCase() : "File";
+  }
+
+  function getStorageModifiedLabel(value) {
+    return value ? new Date(value).toLocaleString() : "-";
+  }
+
+  function getStorageSortValue(item, sortKey) {
+    if (sortKey === "modified") return item.kind === "object" ? Date.parse(item.object.lastModified || "") || 0 : 0;
+    if (sortKey === "size") return item.kind === "object" ? Number(item.object.size || 0) : -1;
+    if (sortKey === "type") return item.kind === "folder" ? "Folder" : getStorageObjectType(item.object);
+    return item.kind === "folder" ? getStorageFolderName(item.folder) : getStorageFileName(item.object.key);
+  }
+
+  function sortStorageItems(items) {
+    const direction = storageState.sortDirection === "desc" ? -1 : 1;
+    return [...items].sort((left, right) => {
+      if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
+      const leftValue = getStorageSortValue(left, storageState.sortKey);
+      const rightValue = getStorageSortValue(right, storageState.sortKey);
+      if (typeof leftValue === "number" && typeof rightValue === "number") return (leftValue - rightValue) * direction;
+      return String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: "base" }) * direction;
+    });
+  }
+
+  function renderStorageSortButton(key, label) {
+    const isActive = storageState.sortKey === key;
+    const icon = isActive
+      ? storageState.sortDirection === "asc"
+        ? '<ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>'
+        : '<ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>'
+      : "";
+    return `<button type="button" class="${isActive ? "is-active" : ""}" data-storage-sort="${escapeHtml(key)}">${escapeHtml(label)}${icon}</button>`;
   }
 
   function setStorageStatus(message = "") {
@@ -3522,19 +3593,21 @@
 
   function renderStorageTree() {
     if (!els.storageTree) return;
-    const activePath = `${storageState.bucket}/${storageState.prefix}`;
     const markup = storageState.buckets.map((bucket) => {
       const isActiveBucket = bucket === storageState.bucket;
-      const treeKey = `${bucket}/`;
-      const folders = storageState.foldersByPath.get(treeKey) || [];
-      const childButtons = isActiveBucket ? folders.map((folder) => `
-        <button type="button" class="storage-tree-folder${`${bucket}/${folder}` === activePath ? " is-active" : ""}" style="--storage-indent: 26px" data-storage-folder="${escapeHtml(folder)}">
-          <ph-folder weight="fill" aria-hidden="true"></ph-folder><span>${escapeHtml(getStorageFolderName(folder))}</span>
-        </button>`).join("") : "";
+      const folders = storageState.foldersByPath.get(getStorageTreeKey(bucket)) || [];
+      const childButtons = isActiveBucket && folders.length
+        ? `<div class="storage-tree-children" role="group">${folders.map((folder) => renderStorageFolderTree(bucket, folder)).join("")}</div>`
+        : "";
       return `
-        <button type="button" class="storage-tree-bucket${isActiveBucket && !storageState.prefix ? " is-active" : ""}" data-storage-bucket="${escapeHtml(bucket)}">
-          <ph-database weight="bold" aria-hidden="true"></ph-database><span>${escapeHtml(bucket)}</span>
-        </button>${childButtons}`;
+        <div class="storage-tree-node storage-tree-bucket-node" role="treeitem" aria-expanded="${isActiveBucket && folders.length ? "true" : "false"}">
+          <button type="button" class="storage-tree-bucket${isActiveBucket && !storageState.prefix ? " is-active" : ""}" data-storage-bucket="${escapeHtml(bucket)}">
+            <span class="storage-tree-caret" aria-hidden="true">${isActiveBucket && folders.length ? '<ph-caret-down weight="bold"></ph-caret-down>' : ""}</span>
+            <ph-database weight="bold" aria-hidden="true"></ph-database>
+            <span>${escapeHtml(bucket)}</span>
+          </button>
+          ${childButtons}
+        </div>`;
     }).join("");
     els.storageTree.innerHTML = markup || '<p class="storage-status">No accessible buckets were found.</p>';
   }
@@ -3560,22 +3633,44 @@
     els.storageItems.classList.toggle("is-grid", storageState.view === "grid");
     els.storageItems.classList.toggle("is-list", storageState.view === "list");
     const folders = storageState.foldersByPath.get(`${storageState.bucket}/${storageState.prefix}`) || [];
-    const foldersMarkup = folders.map((folder) => `
-      <button type="button" class="storage-item storage-folder-item" data-storage-folder="${escapeHtml(folder)}">
-        <span class="storage-item-thumb"><ph-folder weight="fill" aria-hidden="true"></ph-folder></span>
-        <span class="storage-item-name">${escapeHtml(getStorageFolderName(folder))}</span>
-        <span class="storage-item-meta">Folder</span>
-      </button>`).join("");
-    const objectMarkup = storageState.objects.map((object) => {
+    const items = sortStorageItems([
+      ...folders.map((folder) => ({ kind: "folder", folder })),
+      ...storageState.objects.map((object) => ({ kind: "object", object })),
+    ]);
+    const headerMarkup = storageState.view === "list" ? `
+      <div class="storage-list-header" role="row">
+        <span></span>
+        ${renderStorageSortButton("name", "Name")}
+        ${renderStorageSortButton("modified", "Modified Date")}
+        ${renderStorageSortButton("size", "Size")}
+        ${renderStorageSortButton("type", "Type")}
+      </div>` : "";
+    const itemMarkup = items.map((item) => {
+      if (item.kind === "folder") {
+        const folderName = getStorageFolderName(item.folder);
+        return `
+          <button type="button" class="storage-item storage-folder-item" data-storage-folder="${escapeHtml(item.folder)}">
+            <span class="storage-item-thumb"><ph-folder weight="fill" aria-hidden="true"></ph-folder></span>
+            <span class="storage-item-name">${escapeHtml(folderName)}</span>
+            <span class="storage-item-modified">-</span>
+            <span class="storage-item-size">-</span>
+            <span class="storage-item-type">Folder</span>
+            <span class="storage-item-meta">Folder</span>
+          </button>`;
+      }
+      const object = item.object;
       const isImage = isImageStorageObject(object.key, object.contentType);
       return `
         <button type="button" class="storage-item${storageState.selected?.key === object.key ? " is-selected" : ""}" data-storage-object="${escapeHtml(object.key)}">
           <span class="storage-item-thumb" data-storage-thumbnail="${escapeHtml(object.key)}">${isImage ? '<ph-image weight="duotone" aria-hidden="true"></ph-image>' : '<ph-file weight="duotone" aria-hidden="true"></ph-file>'}</span>
           <span class="storage-item-name">${escapeHtml(getStorageFileName(object.key))}</span>
+          <span class="storage-item-modified">${escapeHtml(getStorageModifiedLabel(object.lastModified))}</span>
+          <span class="storage-item-size">${escapeHtml(formatStorageBytes(object.size))}</span>
+          <span class="storage-item-type">${escapeHtml(getStorageObjectType(object))}</span>
           <span class="storage-item-meta">${escapeHtml(formatStorageBytes(object.size))}</span>
         </button>`;
     }).join("");
-    els.storageItems.innerHTML = foldersMarkup + objectMarkup || '<p class="storage-status">This folder is empty.</p>';
+    els.storageItems.innerHTML = itemMarkup ? headerMarkup + itemMarkup : '<p class="storage-status">This folder is empty.</p>';
     if (els.storageLoadMore) els.storageLoadMore.hidden = !storageState.nextContinuationToken;
     hydrateStorageThumbnails();
   }
@@ -3625,11 +3720,19 @@
       els.storagePreviewImage.alt = getStorageFileName(object.key);
     }
     const modified = object.lastModified ? new Date(object.lastModified).toLocaleString() : "Unknown";
+    const objectMetadata = object.metadata && typeof object.metadata === "object" ? object.metadata : {};
+    const origin = objectMetadata["centralis-context"] || objectMetadata["centralis-module"] || "";
+    const note = objectMetadata["centralis-note"] || "";
+    const originMarkup = [
+      origin ? `<div><dt>Origin</dt><dd>${escapeHtml(origin)}</dd></div>` : "",
+      note ? `<div><dt>Note</dt><dd>${escapeHtml(note)}</dd></div>` : "",
+    ].filter(Boolean).join("");
     els.storageFileMetadata.innerHTML = `
       <div><dt>Filename</dt><dd>${escapeHtml(getStorageFileName(object.key))}</dd></div>
       <div><dt>Path</dt><dd>${escapeHtml(object.key)}</dd></div>
       <div><dt>Size</dt><dd>${escapeHtml(formatStorageBytes(object.size))}</dd></div>
       <div><dt>Type</dt><dd>${escapeHtml(object.contentType || "Unknown")}</dd></div>
+      ${originMarkup}
       <div><dt>Modified</dt><dd>${escapeHtml(modified)}</dd></div>`;
     if (els.storageOpenButton) els.storageOpenButton.hidden = !isImage;
   }
@@ -3725,6 +3828,18 @@
       if (button) loadStoragePath(storageState.bucket, button.dataset.storagePath || "");
     });
     els.storageItems?.addEventListener("click", (event) => {
+      const sortButton = event.target.closest("[data-storage-sort]");
+      if (sortButton) {
+        const nextSortKey = sortButton.dataset.storageSort || "name";
+        if (storageState.sortKey === nextSortKey) {
+          storageState.sortDirection = storageState.sortDirection === "asc" ? "desc" : "asc";
+        } else {
+          storageState.sortKey = nextSortKey;
+          storageState.sortDirection = nextSortKey === "modified" || nextSortKey === "size" ? "desc" : "asc";
+        }
+        renderStorageItems();
+        return;
+      }
       const button = event.target.closest("[data-storage-folder], [data-storage-object]");
       if (!button) return;
       if (button.dataset.storageFolder) loadStoragePath(storageState.bucket, button.dataset.storageFolder);

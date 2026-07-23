@@ -7,6 +7,8 @@ import {
   createAdminClient,
   createS3Client,
   getEnv,
+  normalizeStorageMetadata,
+  type CentralisObjectMetadata,
 } from "./image-storage.ts";
 
 export const MAX_CHAT_LOG_BYTES = 10 * 1024 * 1024;
@@ -33,12 +35,14 @@ export function createChatLogKey(authUserId: string, chatLogId: string) {
 export async function uploadChatLogObject(options: {
   bytes: Uint8Array;
   key: string;
+  metadata?: CentralisObjectMetadata;
 }) {
   await createS3Client().send(new PutObjectCommand({
     Bucket: getEnv("IDRIVE_E2_BUCKET"),
     Key: options.key,
     Body: options.bytes,
     ContentType: "text/html; charset=utf-8",
+    Metadata: normalizeStorageMetadata(options.metadata),
   }));
 }
 

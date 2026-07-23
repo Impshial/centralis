@@ -2,6 +2,7 @@ import OpenAI from "npm:openai@^6.1.0";
 import { getImageBase64, IMAGE_MODEL, IMAGE_QUALITY, IMAGE_SIZE } from "../_shared/openai-config.ts";
 import {
   createImageKey,
+  createCentralisStorageMetadata,
   createSignedImageUrl,
   getAuthUser,
   getEnv,
@@ -11,6 +12,31 @@ import {
   describeError,
   uploadImageBytes,
 } from "../_shared/image-storage.ts";
+
+function createObjectImageMetadata(input: {
+  storageModule: string;
+  objectId: string;
+  objectKind?: string;
+  elementType?: string;
+  name?: string;
+}) {
+  const name = String(input.name || input.elementType || input.objectKind || input.objectId).trim();
+  if (input.storageModule === "stellar-architect") {
+    return createCentralisStorageMetadata({
+      module: "Stellar Architect",
+      context: `Stellar Architect: ${name}`,
+      note: "Generated image",
+    });
+  }
+
+  const typeText = `${input.objectKind || ""} ${input.elementType || ""}`;
+  const label = /universe/i.test(typeText) ? "Universe" : "Element";
+  return createCentralisStorageMetadata({
+    module: "Universe Builder",
+    context: `${label}: ${name}`,
+    note: "Generated image",
+  });
+}
 
 function createPrompt(input: {
   objectKind?: string;
@@ -86,6 +112,13 @@ Deno.serve(async (req) => {
       bytes: base64ToBytes(imageBase64),
       key,
       contentType: "image/png",
+      metadata: createObjectImageMetadata({
+        storageModule,
+        objectId,
+        objectKind: body.objectKind,
+        elementType: body.elementType,
+        name: body.name,
+      }),
     });
     const image = await insertImageRow({
       id: imageId,

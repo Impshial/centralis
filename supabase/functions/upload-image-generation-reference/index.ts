@@ -1,5 +1,6 @@
 import {
   createAdminClient,
+  createCentralisStorageMetadata,
   createImageGenerationKey,
   describeError,
   getAuthUser,
@@ -36,7 +37,16 @@ Deno.serve(async (req) => {
       if (!file.size || file.size > MAX_UPLOAD_BYTES) throw new Error(`${file.name || "This file"} must be smaller than 50 MB.`);
       const id = crypto.randomUUID();
       const key = createImageGenerationKey("uploaded", id, extensionFromContentType(file.type));
-      await uploadImageBytes({ bytes: new Uint8Array(await file.arrayBuffer()), key, contentType: file.type });
+      await uploadImageBytes({
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        key,
+        contentType: file.type,
+        metadata: createCentralisStorageMetadata({
+          module: "Image Generation",
+          context: `ImageGen reference: ${file.name || id}`,
+          note: "Uploaded reference image",
+        }),
+      });
       const { data, error } = await supabase.from("image_generation_assets").insert({
         id, session_id: sessionId, user_id: appUser.id, asset_kind: "uploaded", storage_key: key,
         original_filename: file.name || `${id}.${extensionFromContentType(file.type)}`,
