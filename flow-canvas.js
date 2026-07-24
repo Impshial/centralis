@@ -2196,7 +2196,7 @@
       return {
         key: "syncing",
         label: "Syncing",
-        description: "Building and syncing this universe's canon knowledge source."
+        description: "Building the canon knowledge document, indexing current universe details, and preparing the AI Expert to answer with up-to-date context."
       };
     }
     if (state.error || state.source?.sync_status === "error") {
@@ -2324,6 +2324,7 @@
     const isReady = status.key === "ready";
     const isBusy = Boolean(state.loading || state.syncing || state.sending);
     const messages = Array.isArray(state.messages) ? state.messages : [];
+    const draftMessage = String(state.draftMessage || "");
     const hasStreamingAssistant = messages.some((message) => message.role === "assistant" && message.streaming);
     const previousMessagesHost = host.querySelector("[data-ai-messages]");
     const previousScrollTop = previousMessagesHost?.scrollTop || 0;
@@ -2332,7 +2333,7 @@
       || previousScrollTop + previousMessagesHost.clientHeight >= previousMessagesHost.scrollHeight - 20;
 
     host.innerHTML = `
-      <section class="universe-ai-panel">
+      <section class="universe-ai-panel${state.syncing ? " is-syncing" : ""}">
         <div class="universe-ai-messages" data-ai-messages>
           ${!state.loading && !messages.length ? '<p class="details-empty">Ask this universe expert about canon, continuity, missing details, or new ideas.</p>' : ""}
           ${messages.map((message) => `
@@ -2357,10 +2358,19 @@
             </article>
           ` : ""}
         </div>
+        ${state.syncing ? `
+          <div class="universe-ai-sync-overlay" role="status" aria-live="polite">
+            <div>
+              <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+              <strong>Syncing New Changes...</strong>
+              <p>The AI Expert is creating the canon document, indexing universe details, and preparing a fresh knowledge source before answering.</p>
+            </div>
+          </div>
+        ` : ""}
         <form class="universe-ai-composer" data-ai-chat-form>
           ${state.error ? `<p class="form-status is-error" data-ai-chat-status role="status">${escapeHtml(state.error)}</p>` : ""}
           <div class="universe-ai-composer-row">
-            <textarea name="message" rows="1" placeholder="${isReady ? "Ask about this universe..." : "Sync the universe knowledge before chatting."}"${!isReady || isBusy ? " disabled" : ""}></textarea>
+            <textarea name="message" rows="1" placeholder="${isReady ? "Ask about this universe..." : "Sync the universe knowledge before chatting."}"${!isReady || isBusy ? " disabled" : ""}>${escapeHtml(draftMessage)}</textarea>
             ${state.sending ? `
               <button class="secondary-action compact-action universe-ai-stop" type="button" data-ai-stop>
                 <ph-stop-circle weight="bold" aria-hidden="true"></ph-stop-circle>
@@ -2450,7 +2460,10 @@
       textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
     };
     resizeComposer();
-    textarea?.addEventListener("input", resizeComposer);
+    textarea?.addEventListener("input", () => {
+      resizeComposer();
+      actions.onDraftChange?.(textarea.value);
+    });
     textarea?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -2463,6 +2476,7 @@
       const form = event.currentTarget;
       const message = String(new FormData(form).get("message") || "").trim();
       if (message) {
+        actions.onDraftChange?.("");
         actions.onSend?.(message);
       }
     });
@@ -4370,8 +4384,15 @@
     const [detailsMode, setDetailsMode] = React.useState("view");
     const [aiChatOpen, setAiChatOpen] = React.useState(false);
     const [aiChatPopoutOpen, setAiChatPopoutOpen] = React.useState(false);
+    const [aiChatPopoutFrame, setAiChatPopoutFrame] = React.useState(() => ({
+      left: Math.max(18, window.innerWidth - 1238),
+      top: 92,
+      width: 760,
+      height: Math.max(420, window.innerHeight - 164)
+    }));
     const aiChatScrollToBottomRef = React.useRef(false);
     const aiChatStreamAbortRef = React.useRef(null);
+    const aiChatPopoutDragRef = React.useRef(null);
     const [aiExpertSettings, setAiExpertSettings] = React.useState(DEFAULT_UNIVERSE_AI_SETTINGS);
     const aiExpertSettingsRef = React.useRef(DEFAULT_UNIVERSE_AI_SETTINGS);
     const [aiExpertSettingsOpen, setAiExpertSettingsOpen] = React.useState(false);
@@ -4383,6 +4404,7 @@
       source: null,
       chat: null,
       messages: [],
+      draftMessage: "",
       error: "",
       statusMessage: ""
     });
@@ -4421,6 +4443,17 @@
       return () => {
         active = false;
         window.removeEventListener("centralis:user-settings-changed", handleSettingsChanged);
+      };
+    }, []);
+
+    React.useEffect(() => {
+      const handleResize = () => {
+        setAiChatPopoutFrame((current) => clampAiPopoutFrame(current));
+      };
+      window.addEventListener("resize", handleResize);
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        document.body.classList.remove("is-dragging-ai-popout");
       };
     }, []);
     const nodesRef = React.useRef(nodes);
@@ -5156,6 +5189,7 @@
       setAiChatState((current) => ({
         ...current,
         sending: true,
+        draftMessage: "",
         messages: [
           ...(Array.isArray(current.messages) ? current.messages : []),
           optimisticMessage,
@@ -5276,6 +5310,8 @@
         }
         aiChatStreamAbortRef.current = null;
         const wasAborted = streamAbortController.signal.aborted || error?.name === "AbortError";
+        const readableError = getReadableError(error);
+        const shouldRestoreDraft = !wasAborted && /sync|synced|knowledge source|canon/i.test(readableError);
         setAiChatState((current) => ({
           ...current,
           sending: false,
@@ -5283,7 +5319,8 @@
             currentMessage.id !== streamingAssistantId
               && (userPersisted || currentMessage.id !== optimisticUserId)
           )),
-          error: wasAborted ? "" : getReadableError(error),
+          draftMessage: shouldRestoreDraft ? cleanMessage : current.draftMessage || "",
+          error: wasAborted ? "" : readableError,
           statusMessage: ""
         }));
       }
@@ -5304,6 +5341,65 @@
     const consumeAiChatScrollRequest = React.useCallback(() => {
       aiChatScrollToBottomRef.current = false;
     }, []);
+
+    function clampAiPopoutFrame(frame) {
+      const minTop = Math.max(18, Math.ceil(document.querySelector(".site-header")?.getBoundingClientRect().bottom || 74) + 14);
+      const width = Math.min(Math.max(Number(frame.width) || 760, 420), Math.max(420, window.innerWidth - 36));
+      const height = Math.min(Math.max(Number(frame.height) || 520, 320), Math.max(320, window.innerHeight - minTop - 18));
+      return {
+        width,
+        height,
+        left: Math.min(Math.max(18, Number(frame.left) || 18), Math.max(18, window.innerWidth - width - 18)),
+        top: Math.min(Math.max(minTop, Number(frame.top) || minTop), Math.max(minTop, window.innerHeight - height - 18))
+      };
+    }
+
+    function startAiPopoutDrag(event) {
+      if (event.button !== 0 || event.target.closest("button, input, select, textarea, [data-ai-settings]")) {
+        return;
+      }
+      event.preventDefault();
+      const popoutRect = event.currentTarget.closest(".universe-ai-popout")?.getBoundingClientRect();
+      const currentFrame = popoutRect
+        ? {
+          left: popoutRect.left,
+          top: popoutRect.top,
+          width: popoutRect.width,
+          height: popoutRect.height
+        }
+        : aiChatPopoutFrame;
+      aiChatPopoutDragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        frame: currentFrame
+      };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      document.body.classList.add("is-dragging-ai-popout");
+    }
+
+    function moveAiPopoutDrag(event) {
+      const drag = aiChatPopoutDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      const nextFrame = clampAiPopoutFrame({
+        ...drag.frame,
+        left: drag.frame.left + event.clientX - drag.startX,
+        top: drag.frame.top + event.clientY - drag.startY
+      });
+      setAiChatPopoutFrame(nextFrame);
+    }
+
+    function stopAiPopoutDrag(event) {
+      const drag = aiChatPopoutDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      aiChatPopoutDragRef.current = null;
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      document.body.classList.remove("is-dragging-ai-popout");
+    }
 
     const updateAiProposalStatusInState = React.useCallback((proposalId, status) => {
       const cleanProposalId = String(proposalId || "");
@@ -7600,6 +7696,7 @@
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
         onStop: stopUniverseAiMessage,
+        onDraftChange: (draftMessage) => setAiChatState((current) => ({ ...current, draftMessage })),
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
         onPopOut: openUniverseAiPopout,
@@ -7623,6 +7720,7 @@
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
         onStop: stopUniverseAiMessage,
+        onDraftChange: (draftMessage) => setAiChatState((current) => ({ ...current, draftMessage })),
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
         forceScrollToBottom: aiChatScrollToBottomRef.current,
@@ -8630,6 +8728,7 @@
       const form = document.querySelector("[data-element-form]");
       const status = document.querySelector("[data-element-status]");
       const aiCheckbox = document.querySelector("[data-generate-element-ai]");
+      const aiOptionalLabels = document.querySelectorAll("[data-ai-optional-label]");
       const submitButton = document.querySelector("[data-element-submit]");
       const addElementModal = document.getElementById("add-element-modal");
       const reviewModal = document.getElementById("review-element-modal");
@@ -8678,7 +8777,11 @@
 
       function updateSubmitLabel() {
         if (!submitButton) return;
-        submitButton.textContent = aiCheckbox?.checked ? "Generate" : "Add Element";
+        const isAiMode = Boolean(aiCheckbox?.checked);
+        submitButton.textContent = isAiMode ? "Generate" : "Add Element";
+        aiOptionalLabels.forEach((label) => {
+          label.hidden = !isAiMode;
+        });
       }
 
       function validateElementInput(input) {
@@ -13173,11 +13276,21 @@
           className: "universe-ai-popout",
           role: "dialog",
           "aria-modal": "false",
-          "aria-labelledby": "universe-ai-popout-title"
+          "aria-labelledby": "universe-ai-popout-title",
+          style: {
+            left: `${aiChatPopoutFrame.left}px`,
+            top: `${aiChatPopoutFrame.top}px`
+          }
         },
         React.createElement(
           "header",
-          { className: "universe-ai-popout-header" },
+          {
+            className: "universe-ai-popout-header",
+            onPointerDown: startAiPopoutDrag,
+            onPointerMove: moveAiPopoutDrag,
+            onPointerUp: stopAiPopoutDrag,
+            onPointerCancel: stopAiPopoutDrag
+          },
           React.createElement(
             "div",
             { className: "universe-ai-popout-title-block" },
