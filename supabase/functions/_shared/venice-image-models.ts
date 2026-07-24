@@ -142,25 +142,20 @@ export function normalizeVeniceImageSettings(raw: Record<string, unknown>) {
   if (model.supportsBackground && !["auto", "opaque"].includes(background)) throw new Error("Background must be Auto or Opaque.");
   const compression = Number(raw.compression ?? 90);
   if (model.supportsCompression && (!Number.isInteger(compression) || compression < 0 || compression > 100)) throw new Error("Compression must be a whole number between 0 and 100.");
-  const stylePreset = String(raw.style_preset || "").trim();
-  if (stylePreset && !model.supportsStylePreset) throw new Error(`${model.label} does not support style presets.`);
-  const negativePrompt = String(raw.negative_prompt || "").trim();
-  if (negativePrompt && !model.supportsNegativePrompt) throw new Error(`${model.label} does not support negative prompts.`);
+  const stylePreset = model.supportsStylePreset ? String(raw.style_preset || "").trim() : "";
+  const negativePrompt = model.supportsNegativePrompt ? String(raw.negative_prompt || "").trim() : "";
   if (negativePrompt.length > 7500) throw new Error("Negative prompts may not exceed 7,500 characters.");
-  const seedText = String(raw.seed ?? "").trim();
+  const seedText = model.supportsSeed ? String(raw.seed ?? "").trim() : "";
   const seed = seedText ? Number(seedText) : null;
   if (seedText && (!Number.isInteger(seed) || seed < -999999999 || seed > 999999999)) throw new Error("Seed must be a whole number between -999,999,999 and 999,999,999.");
-  if (seed !== null && !model.supportsSeed) throw new Error(`${model.label} does not support seeds.`);
-  const cfgScaleText = String(raw.cfg_scale ?? "").trim();
+  const cfgScaleText = model.supportsCfgScale ? String(raw.cfg_scale ?? "").trim() : "";
   const cfgScale = cfgScaleText ? Number(cfgScaleText) : null;
   if (cfgScaleText && (!Number.isFinite(cfgScale) || cfgScale <= 0 || cfgScale > 20)) throw new Error("CFG scale must be greater than 0 and no more than 20.");
-  if (cfgScale !== null && !model.supportsCfgScale) throw new Error(`${model.label} does not support CFG scale.`);
   const stepsText = model.supportsSteps ? String(raw.steps ?? "").trim() : "";
   const steps = model.supportsSteps ? (stepsText ? Number(stepsText) : model.stepsDefault) : null;
   if (steps !== null && steps !== undefined && (!Number.isInteger(steps) || steps < 1 || (model.stepsMax !== null && steps > model.stepsMax))) {
     throw new Error(`Steps for ${model.label} must be a whole number from 1 to ${model.stepsMax || "the model maximum"}.`);
   }
-  if (stepsText && !model.supportsSteps) throw new Error(`${model.label} does not support user-adjustable steps.`);
   const enableWebSearch = raw.enable_web_search === true || String(raw.enable_web_search || "").toLowerCase() === "true";
   if (enableWebSearch && !model.supportsWebSearch) throw new Error(`${model.label} does not support web search.`);
   return {

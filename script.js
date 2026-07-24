@@ -464,6 +464,10 @@ const CENTRALIS_HEADER_MARKUP = `
         </button>
       </div>
     </div>
+    <button class="icon-button generation-activity-button" type="button" aria-label="Generation activity" data-open-generation-activity>
+      <ph-hourglass-medium weight="duotone" aria-hidden="true"></ph-hourglass-medium>
+      <span class="generation-activity-badge" data-generation-activity-count hidden>0</span>
+    </button>
     <div class="menu-wrap user-menu">
       <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -494,6 +498,217 @@ loadThemeMenuFromLocalStorage();
 renderHeaderThemeMenu();
 syncThemeOptionExports();
 syncThemeSelects();
+
+const GENERATION_ACTIVITY_POLL_MS = 5000;
+const GENERATION_ACTIVE_STATUSES = new Set(["queued", "running"]);
+let generationActivityModal = null;
+let generationActivityList = null;
+let generationActivityStatus = null;
+let generationActivityPoll = null;
+let generationActivityJobs = [];
+let generationActivityLoading = false;
+let generationActivityExpandedJobIds = new Set();
+
+function ensureGenerationActivityModal() {
+  if (generationActivityModal) return generationActivityModal;
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <div class="modal-backdrop generation-activity-backdrop" id="generation-activity-modal" hidden>
+      <div class="modal-dialog generation-activity-dialog" role="dialog" aria-modal="true" aria-labelledby="generation-activity-title">
+        <header class="generation-activity-header">
+          <div>
+            <p class="settings-eyebrow">Activity</p>
+            <h2 id="generation-activity-title">Generation Activity</h2>
+            <p>Track active and recent image generations across Centralis.</p>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close generation activity" data-close-generation-activity>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </header>
+        <div class="generation-activity-list" data-generation-activity-list></div>
+        <footer class="generation-activity-footer">
+          <p class="form-status" data-generation-activity-status role="status" aria-live="polite"></p>
+          <div class="generation-activity-actions">
+            <button class="secondary-action" type="button" data-refresh-generation-activity>
+              <ph-arrows-clockwise weight="duotone" aria-hidden="true"></ph-arrows-clockwise>
+              <span>Refresh</span>
+            </button>
+            <button class="primary-action" type="button" data-close-generation-activity>Close</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  `;
+  generationActivityModal = wrapper.firstElementChild;
+  document.body.append(generationActivityModal);
+  generationActivityList = generationActivityModal.querySelector("[data-generation-activity-list]");
+  generationActivityStatus = generationActivityModal.querySelector("[data-generation-activity-status]");
+  return generationActivityModal;
+}
+
+function formatGenerationModule(moduleName) {
+  return ({
+    image_generation: "Image Generation",
+    universe_builder: "Universe Builder",
+    stellar_architect: "Stellar Architect",
+  })[moduleName] || "Centralis";
+}
+
+function formatGenerationStatus(status) {
+  return String(status || "queued").replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatGenerationElapsed(job) {
+  const start = new Date(job.started_at || job.created_at || Date.now()).getTime();
+  const end = GENERATION_ACTIVE_STATUSES.has(job.status) ? Date.now() : new Date(job.completed_at || job.updated_at || Date.now()).getTime();
+  const seconds = Math.max(0, Math.round((end - start) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
+}
+
+function getGenerationJobLink(job) {
+  if (job.module === "image_generation") {
+    return job.source_id ? `image-generation.html?session_id=${encodeURIComponent(job.source_id)}` : "image-generation.html";
+  }
+  return "";
+}
+
+function renderGenerationActivityJobs() {
+  if (!generationActivityList) return;
+  const activeJobs = generationActivityJobs.filter((job) => GENERATION_ACTIVE_STATUSES.has(job.status));
+  const recentJobs = generationActivityJobs.filter((job) => !GENERATION_ACTIVE_STATUSES.has(job.status));
+  const renderJobDetails = (job, link, canCancel) => `
+    <div class="generation-job-main">
+      <div class="generation-job-topline">
+        <span>${escapeHtml(formatGenerationModule(job.module))}</span>
+        <span class="generation-job-status">${escapeHtml(formatGenerationStatus(job.status))}</span>
+      </div>
+      <h3>${escapeHtml(job.source_label || "Untitled generation")}</h3>
+      <p>${escapeHtml(job.prompt || "No prompt saved.")}</p>
+      <div class="generation-job-meta">
+        ${job.model ? `<span>${escapeHtml(job.model)}</span>` : ""}
+        ${job.progress_label ? `<span>${escapeHtml(job.progress_label)}</span>` : ""}
+        <span>${escapeHtml(formatGenerationElapsed(job))}</span>
+        ${job.possibly_stalled ? '<span class="is-warning">Possibly stalled</span>' : ""}
+      </div>
+      ${job.error_message ? `<p class="generation-job-error">${escapeHtml(job.error_message)}</p>` : ""}
+    </div>
+    <div class="generation-job-actions">
+      ${link ? `<a class="secondary-action" href="${link}">Open</a>` : ""}
+      ${canCancel ? `<button class="secondary-action danger-action" type="button" data-cancel-generation-job="${escapeHtml(job.id)}">Cancel</button>` : ""}
+    </div>
+  `;
+  const renderRecentJobDetails = (job, link) => `
+    <div class="generation-job-expanded-content">
+      <p>${escapeHtml(job.prompt || "No prompt saved.")}</p>
+      <div class="generation-job-meta">
+        ${job.model ? `<span>${escapeHtml(job.model)}</span>` : ""}
+        ${job.progress_label ? `<span>${escapeHtml(job.progress_label)}</span>` : ""}
+        <span>${escapeHtml(formatGenerationElapsed(job))}</span>
+        ${job.possibly_stalled ? '<span class="is-warning">Possibly stalled</span>' : ""}
+      </div>
+      ${job.error_message ? `<p class="generation-job-error">${escapeHtml(job.error_message)}</p>` : ""}
+    </div>
+    <div class="generation-job-actions">
+      ${link ? `<a class="secondary-action" href="${link}">Open</a>` : ""}
+    </div>
+  `;
+  const renderRecentJob = (job) => {
+    const link = getGenerationJobLink(job);
+    const isExpanded = generationActivityExpandedJobIds.has(String(job.id));
+    return `
+      <article class="generation-job-card generation-job-collapsible is-${escapeHtml(job.status || "queued")} ${isExpanded ? "is-expanded" : ""}">
+        <button class="generation-job-summary" type="button" data-toggle-generation-job="${escapeHtml(job.id)}" aria-expanded="${isExpanded ? "true" : "false"}">
+          <span class="generation-job-summary-caret" aria-hidden="true">&gt;</span>
+          <span class="generation-job-summary-copy">
+            <span class="generation-job-topline">
+              <span>${escapeHtml(formatGenerationModule(job.module))}</span>
+              <span>${escapeHtml(formatGenerationElapsed(job))}</span>
+            </span>
+            <strong>${escapeHtml(job.source_label || "Untitled generation")}</strong>
+          </span>
+          <span class="generation-job-status generation-job-status-pill">${escapeHtml(formatGenerationStatus(job.status))}</span>
+        </button>
+        <div class="generation-job-collapsible-body" ${isExpanded ? "" : "hidden"}>
+          ${renderRecentJobDetails(job, link)}
+        </div>
+      </article>
+    `;
+  };
+  const renderActiveJob = (job) => {
+    const link = getGenerationJobLink(job);
+    const canCancel = GENERATION_ACTIVE_STATUSES.has(job.status);
+    return `
+      <article class="generation-job-card is-${escapeHtml(job.status || "queued")}">
+        ${renderJobDetails(job, link, canCancel)}
+      </article>
+    `;
+  };
+  if (!activeJobs.length && !recentJobs.length) {
+    generationActivityList.innerHTML = `
+      <div class="generation-activity-empty">
+        <ph-hourglass-medium weight="duotone" aria-hidden="true"></ph-hourglass-medium>
+        <p>No image generations are running right now.</p>
+      </div>
+    `;
+    return;
+  }
+  generationActivityList.innerHTML = `
+    ${activeJobs.length ? `<section><h3>Active</h3>${activeJobs.map(renderActiveJob).join("")}</section>` : ""}
+    ${recentJobs.length ? `<section><h3>Recent</h3>${recentJobs.map(renderRecentJob).join("")}</section>` : ""}
+  `;
+}
+
+function syncGenerationActivityCount(activeCount = 0) {
+  document.querySelectorAll("[data-generation-activity-count]").forEach((badge) => {
+    badge.hidden = activeCount <= 0;
+    badge.textContent = activeCount > 99 ? "99+" : String(activeCount);
+  });
+}
+
+async function refreshGenerationActivity({ quiet = false } = {}) {
+  if (!supabaseClient || generationActivityLoading) return;
+  generationActivityLoading = true;
+  if (generationActivityStatus && !quiet) generationActivityStatus.textContent = "Loading activity...";
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("list-generation-jobs", {
+      body: { includeRecent: true },
+    });
+    if (error) throw error;
+    generationActivityJobs = data?.jobs || [];
+    syncGenerationActivityCount(Number(data?.activeCount || 0));
+    renderGenerationActivityJobs();
+    if (generationActivityStatus) generationActivityStatus.textContent = "";
+  } catch (error) {
+    if (generationActivityStatus) generationActivityStatus.textContent = `Could not load activity: ${getReadableError(error)}`;
+  } finally {
+    generationActivityLoading = false;
+  }
+}
+
+function startGenerationActivityPolling() {
+  if (generationActivityPoll || !supabaseClient) return;
+  refreshGenerationActivity({ quiet: true });
+  generationActivityPoll = window.setInterval(() => refreshGenerationActivity({ quiet: true }), GENERATION_ACTIVITY_POLL_MS);
+}
+
+function stopGenerationActivityPolling() {
+  if (!generationActivityPoll) return;
+  window.clearInterval(generationActivityPoll);
+  generationActivityPoll = null;
+}
+
+async function openGenerationActivity() {
+  ensureGenerationActivityModal();
+  generationActivityModal.hidden = false;
+  await refreshGenerationActivity();
+}
+
+function closeGenerationActivity() {
+  if (generationActivityModal) generationActivityModal.hidden = true;
+}
 
 function syncUserMenuEmail(user = window.centralisCurrentAppUser) {
   document.querySelectorAll("[data-user-menu-email]").forEach((element) => {
@@ -2668,6 +2883,7 @@ async function prepareSignedInUser(authUser) {
       await homepageDataPromise;
     }
     openRequestedSourceDocumentsFromUrl();
+    startGenerationActivityPolling();
     return currentAppUser;
   })();
 
@@ -4351,6 +4567,52 @@ if (googleAuthButton) {
 }
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-open-generation-activity]")) {
+    await openGenerationActivity();
+    return;
+  }
+
+  if (event.target.closest("[data-close-generation-activity]")) {
+    closeGenerationActivity();
+    return;
+  }
+
+  if (event.target.closest("[data-refresh-generation-activity]")) {
+    await refreshGenerationActivity();
+    return;
+  }
+
+  const toggleGenerationJobButton = event.target.closest("[data-toggle-generation-job]");
+  if (toggleGenerationJobButton) {
+    const jobId = String(toggleGenerationJobButton.dataset.toggleGenerationJob || "");
+    if (jobId) {
+      if (generationActivityExpandedJobIds.has(jobId)) {
+        generationActivityExpandedJobIds.delete(jobId);
+      } else {
+        generationActivityExpandedJobIds.add(jobId);
+      }
+      renderGenerationActivityJobs();
+    }
+    return;
+  }
+
+  const cancelGenerationJobButton = event.target.closest("[data-cancel-generation-job]");
+  if (cancelGenerationJobButton) {
+    const jobId = cancelGenerationJobButton.dataset.cancelGenerationJob;
+    cancelGenerationJobButton.disabled = true;
+    cancelGenerationJobButton.textContent = "Cancelling...";
+    try {
+      const { error } = await supabaseClient.functions.invoke("cancel-generation-job", { body: { jobId } });
+      if (error) throw error;
+      await refreshGenerationActivity();
+    } catch (error) {
+      if (generationActivityStatus) generationActivityStatus.textContent = `Could not cancel generation: ${getReadableError(error)}`;
+      cancelGenerationJobButton.disabled = false;
+      cancelGenerationJobButton.textContent = "Cancel";
+    }
+    return;
+  }
+
   const themeButton = event.target.closest("[data-header-theme-option]");
   if (themeButton) {
     const themeId = normalizeThemeId(themeButton.dataset.headerThemeOption);
@@ -4478,6 +4740,8 @@ signOutButtons.forEach((button) => {
 
     currentAppUser = null;
     currentUserSettings = null;
+    stopGenerationActivityPolling();
+    syncGenerationActivityCount(0);
     publishCurrentAppUserChange();
     window.location.href = "index.html";
   });
@@ -4506,6 +4770,8 @@ if (supabaseClient) {
       return;
     }
 
+    stopGenerationActivityPolling();
+    syncGenerationActivityCount(0);
     await showSignedOutLanding();
   });
 }

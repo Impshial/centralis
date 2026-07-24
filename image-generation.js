@@ -91,7 +91,20 @@
   });
   const text = (value) => String(value ?? "");
   const html = (value) => text(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-  const getParams = () => Object.fromEntries([...document.querySelectorAll("[data-image-param]")].map((input) => [input.dataset.imageParam, input.type === "checkbox" ? input.checked : input.value]));
+  function getParams() {
+    const model = getCurrentModel();
+    const params = Object.fromEntries([...document.querySelectorAll("[data-image-param]")].map((input) => [input.dataset.imageParam, input.type === "checkbox" ? input.checked : input.value]));
+    if (!model?.supportsStylePreset) params.style_preset = "";
+    if (!model?.supportsNegativePrompt) params.negative_prompt = "";
+    if (!model?.supportsSeed) params.seed = "";
+    if (!model?.supportsCfgScale) params.cfg_scale = "";
+    if (!model?.supportsSteps) params.steps = "";
+    if (!model?.supportsWebSearch) params.enable_web_search = false;
+    if (!model?.supportsQuality && !isGptImage2Model(model)) params.quality = "";
+    if (!model?.supportsBackground && !isGptImage2Model(model)) params.background = "";
+    if (!model?.supportsCompression && !isGptImage2Model(model)) params.compression = "";
+    return params;
+  }
 
   function mergeImageModelCatalog(remoteCatalog = []) {
     const merged = new Map(CLIENT_IMAGE_MODEL_CATALOG.map((model) => [model.id, { ...model }]));
@@ -819,7 +832,9 @@
     if (error) throw error;
     state.sessions = data || [];
     if (!state.sessions.length && createIfNone) return createSession();
-    if (state.sessions.length) await openSession(state.sessions[0].id);
+    const requestedSessionId = new URLSearchParams(window.location.search).get("session_id");
+    const initialSession = state.sessions.find((session) => session.id === requestedSessionId) || state.sessions[0];
+    if (initialSession) await openSession(initialSession.id);
     else renderAll();
   }
 

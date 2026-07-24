@@ -162,6 +162,7 @@ function cleanStorageMetadataValue(value: unknown) {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ")
+    .replace(/[^\x20-\x7E]/g, "")
     .slice(0, 240);
 }
 

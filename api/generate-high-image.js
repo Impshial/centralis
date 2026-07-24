@@ -6,6 +6,7 @@ const ACTIVE_GENERATION_WINDOW_MS = 20 * 60 * 1000;
 const MAX_PROMPT_CHARACTERS = 32000;
 const MAX_REFERENCES = 16;
 const MAX_OUTPUTS = 10;
+const GPT_IMAGE_2_PROMPT_SUFFIX = "Reduce amount of noise in image.";
 
 function json(res, body, status = 200) {
   res.statusCode = status;
@@ -46,6 +47,24 @@ function safeTitle(prompt) {
   const truncated = normalized.slice(0, 63);
   const lastWord = truncated.lastIndexOf(" ");
   return `${(lastWord > 24 ? truncated.slice(0, lastWord) : truncated).trim()}...`;
+}
+
+function safeMultipartFilename(filename, fallback = "reference.png") {
+  const clean = String(filename || "")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  return clean || fallback;
+}
+
+function withGptImage2PromptInstructions(prompt) {
+  const normalized = String(prompt || "").trim();
+  return /\breduce amount of noise in image\.?$/i.test(normalized)
+    ? normalized
+    : `${normalized}\n\n${GPT_IMAGE_2_PROMPT_SUFFIX}`;
 }
 
 function parseAuthorization(req) {
@@ -187,7 +206,7 @@ function normalizeSettings(raw = {}) {
 function buildOpenAiPayload(settings, prompt) {
   const payload = {
     model: OPENAI_IMAGE_MODEL,
-    prompt,
+    prompt: withGptImage2PromptInstructions(prompt),
     n: settings.n,
     size: settings.size,
     quality: settings.quality,
@@ -324,7 +343,7 @@ async function loadReferenceFiles(references) {
     return {
       bytes,
       contentType: asset.content_type || response.headers.get("content-type") || "image/png",
-      filename: asset.original_filename || `reference-${index + 1}.png`,
+      filename: safeMultipartFilename(asset.original_filename, `reference-${index + 1}.png`),
     };
   }));
 }
@@ -392,6 +411,7 @@ module.exports = async function handler(req, res) {
   }
   if (req.method !== "POST") return json(res, { error: "Method not allowed." }, 405);
   let messageId = "";
+  let jobId = "";
   try {
     const token = parseAuthorization(req);
     const authUser = await getAuthUser(token);
@@ -435,6 +455,22 @@ module.exports = async function handler(req, res) {
     });
     if (!pendingMessage?.id) throw new Error("Could not save the prompt.");
     messageId = pendingMessage.id;
+    const job = await insertRow("generation_jobs", {
+      user_id: appUser.id,
+      module: "image_generation",
+      job_type: "image",
+      source_type: "session",
+      source_id: sessionId,
+      source_label: session.title || safeTitle(prompt),
+      prompt,
+      model: settings.modelLabel || settings.model,
+      parameters: snapshot,
+      source_message_id: messageId,
+      status: "running",
+      progress_label: "Generating high-quality image",
+      started_at: new Date().toISOString(),
+    });
+    jobId = job?.id || "";
 
     const sessionPatch = { active_settings: snapshot, updated_at: new Date().toISOString() };
     if (String(session.title || "").trim().toLowerCase() === "new generation") sessionPatch.title = safeTitle(prompt);
@@ -443,7 +479,15 @@ module.exports = async function handler(req, res) {
     const result = await callOpenAi(settings, prompt, references);
     const generated = parseOpenAiImages(result, settings);
     const stillPending = await supabaseFetch(`/rest/v1/image_generation_messages?select=status&id=eq.${encodeURIComponent(messageId)}&user_id=eq.${appUser.id}&limit=1`);
-    if (stillPending?.[0]?.status !== "pending") return json(res, { error: "This image generation was cancelled." }, 409);
+    if (stillPending?.[0]?.status !== "pending") {
+      if (jobId) await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {
+        status: "cancelled",
+        progress_label: "Cancelled",
+        error_message: "This image generation was cancelled.",
+        completed_at: new Date().toISOString(),
+      });
+      return json(res, { error: "This image generation was cancelled." }, 409);
+    }
 
     const assets = [];
     for (let index = 0; index < generated.length; index += 1) {
@@ -465,6 +509,11 @@ module.exports = async function handler(req, res) {
         sort_order: index,
         generation_settings: snapshot,
       });
+      if (index === 0 && jobId) {
+        await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {
+          result_asset_id: asset.id,
+        });
+      }
       assets.push(serializeAsset(asset));
     }
 
@@ -478,6 +527,12 @@ module.exports = async function handler(req, res) {
       settings_snapshot: snapshot,
     });
     await updateRows("image_generation_messages", `?id=eq.${encodeURIComponent(messageId)}&status=eq.pending`, { status: "completed" });
+    if (jobId) await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {
+      status: "completed",
+      progress_label: "Completed",
+      result_asset_id: assets[0]?.id || null,
+      completed_at: new Date().toISOString(),
+    });
     const finalSession = (await supabaseFetch(`/rest/v1/image_generation_sessions?select=*&id=eq.${encodeURIComponent(sessionId)}&limit=1`))?.[0] || session;
     return json(res, { session: finalSession, userMessage: { ...pendingMessage, status: "completed" }, assistantMessage, assets });
   } catch (error) {
@@ -488,6 +543,15 @@ module.exports = async function handler(req, res) {
         status: "failed",
         error_message: error instanceof Error ? error.message : "Generation failed.",
         error_details: details,
+      }).catch((updateError) => console.error(updateError));
+    }
+    if (jobId) {
+      await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {
+        status: "failed",
+        progress_label: "Failed",
+        error_message: error instanceof Error ? error.message : "Generation failed.",
+        error_details: details,
+        completed_at: new Date().toISOString(),
       }).catch((updateError) => console.error(updateError));
     }
     return json(res, { error: error.message || "Could not generate high-quality images.", error_details: details }, error.status && error.status >= 400 && error.status < 500 ? error.status : 500);

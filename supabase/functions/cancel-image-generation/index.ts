@@ -43,6 +43,18 @@ Deno.serve(async (req) => {
         .from("image_generation_messages")
         .update({ error_details: errorDetails })
         .in("id", cancelledIds);
+      await supabase
+        .from("generation_jobs")
+        .update({
+          status: "cancelled",
+          progress_label: "Cancelled",
+          error_message: errorMessage,
+          error_details: errorDetails,
+          completed_at: new Date().toISOString(),
+        })
+        .in("source_message_id", cancelledIds)
+        .eq("user_id", appUser.id)
+        .in("status", ["queued", "running"]);
     }
     return jsonResponse({ ok: true, cancelledMessageIds: cancelledIds });
   } catch (error) {

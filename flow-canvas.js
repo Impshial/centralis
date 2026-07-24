@@ -2324,7 +2324,7 @@
     const isReady = status.key === "ready";
     const isBusy = Boolean(state.loading || state.syncing || state.sending);
     const messages = Array.isArray(state.messages) ? state.messages : [];
-    const draftMessage = String(state.draftMessage || "");
+    const draftMessage = String(actions.getDraftMessage?.() ?? state.draftMessage ?? "");
     const hasStreamingAssistant = messages.some((message) => message.role === "assistant" && message.streaming);
     const previousMessagesHost = host.querySelector("[data-ai-messages]");
     const previousScrollTop = previousMessagesHost?.scrollTop || 0;
@@ -4393,6 +4393,7 @@
     const aiChatScrollToBottomRef = React.useRef(false);
     const aiChatStreamAbortRef = React.useRef(null);
     const aiChatPopoutDragRef = React.useRef(null);
+    const aiChatDraftRef = React.useRef("");
     const [aiExpertSettings, setAiExpertSettings] = React.useState(DEFAULT_UNIVERSE_AI_SETTINGS);
     const aiExpertSettingsRef = React.useRef(DEFAULT_UNIVERSE_AI_SETTINGS);
     const [aiExpertSettingsOpen, setAiExpertSettingsOpen] = React.useState(false);
@@ -5163,6 +5164,7 @@
       if (!cleanMessage) {
         return;
       }
+      aiChatDraftRef.current = "";
 
       aiChatStreamAbortRef.current?.abort();
       const streamAbortController = new AbortController();
@@ -5312,6 +5314,9 @@
         const wasAborted = streamAbortController.signal.aborted || error?.name === "AbortError";
         const readableError = getReadableError(error);
         const shouldRestoreDraft = !wasAborted && /sync|synced|knowledge source|canon/i.test(readableError);
+        if (shouldRestoreDraft) {
+          aiChatDraftRef.current = cleanMessage;
+        }
         setAiChatState((current) => ({
           ...current,
           sending: false,
@@ -7696,7 +7701,8 @@
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
         onStop: stopUniverseAiMessage,
-        onDraftChange: (draftMessage) => setAiChatState((current) => ({ ...current, draftMessage })),
+        getDraftMessage: () => aiChatDraftRef.current || aiChatState.draftMessage,
+        onDraftChange: (draftMessage) => { aiChatDraftRef.current = draftMessage; },
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
         onPopOut: openUniverseAiPopout,
@@ -7720,7 +7726,8 @@
         onSync: syncUniverseAiSource,
         onSend: sendUniverseAiMessage,
         onStop: stopUniverseAiMessage,
-        onDraftChange: (draftMessage) => setAiChatState((current) => ({ ...current, draftMessage })),
+        getDraftMessage: () => aiChatDraftRef.current || aiChatState.draftMessage,
+        onDraftChange: (draftMessage) => { aiChatDraftRef.current = draftMessage; },
         onReviewProposal: reviewUniverseAiProposal,
         onDismissProposal: dismissUniverseAiProposal,
         forceScrollToBottom: aiChatScrollToBottomRef.current,
@@ -8551,6 +8558,7 @@
               objectKind: node.data.kind,
               elementType: isRichDetailsGeneration ? "" : meta.label,
               name: isRichDetailsGeneration ? "" : node.data.name,
+              sourceLabel: node.data.name,
               description: isRichDetailsGeneration ? "" : node.data.description,
               extraPrompt
             })

@@ -18,8 +18,10 @@ import {
   serializeImageGenerationAsset,
 } from "../_shared/image-generation.ts";
 import { normalizeVeniceImageSettings } from "../_shared/venice-image-models.ts";
+import { createGenerationJob, updateGenerationJob } from "../_shared/generation-jobs.ts";
 
 const VENICE_BASE_URL = "https://api.venice.ai/api/v1/image";
+const GPT_IMAGE_2_PROMPT_SUFFIX = "Reduce amount of noise in image.";
 
 function titleFromPrompt(prompt: string) {
   const normalized = prompt.replace(/\s+/g, " ").trim();
@@ -40,6 +42,13 @@ function serializeProviderError(error: unknown) {
     status: typeof source.status === "number" ? source.status : undefined,
     raw: source.raw ?? source.body ?? source.error ?? null,
   };
+}
+
+function withGptImage2PromptInstructions(prompt: string) {
+  const normalized = String(prompt || "").trim();
+  return /\breduce amount of noise in image\.?$/i.test(normalized)
+    ? normalized
+    : `${normalized}\n\n${GPT_IMAGE_2_PROMPT_SUFFIX}`;
 }
 
 async function loadReferenceBase64(assets: Array<Record<string, unknown>>) {
@@ -120,7 +129,7 @@ async function openAiRequest(path: string, body: BodyInit, isMultipart = false) 
 function buildOpenAiPayload(settings: ReturnType<typeof normalizeVeniceImageSettings>, prompt: string) {
   const payload: Record<string, unknown> = {
     model: "gpt-image-2",
-    prompt,
+    prompt: withGptImage2PromptInstructions(prompt),
     n: settings.n,
     size: settings.size,
     quality: settings.quality || "auto",
@@ -179,6 +188,7 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
   let messageId = "";
+  let jobId = "";
   let supabase: ReturnType<typeof createAdminClient> | null = null;
   try {
     const authUser = await getAuthUser(req);
@@ -234,6 +244,20 @@ Deno.serve(async (req) => {
     }).select("*").single();
     if (pendingError || !pendingMessage) throw pendingError || new Error("Could not save the prompt.");
     messageId = pendingMessage.id;
+    const job = await createGenerationJob({
+      userId: appUser.id,
+      module: "image_generation",
+      sourceType: "session",
+      sourceId: sessionId,
+      sourceLabel: session.title || titleFromPrompt(prompt),
+      prompt,
+      model: settings.modelLabel || settings.model,
+      parameters: snapshot,
+      sourceMessageId: messageId,
+      progressLabel: "Queued",
+    });
+    jobId = job.id;
+    await updateGenerationJob(jobId, { status: "running", progressLabel: "Generating images" });
 
     if (String(session.title || "").trim().toLowerCase() === "new generation") {
       const { error: titleError } = await supabase.from("image_generation_sessions")
@@ -273,7 +297,10 @@ Deno.serve(async (req) => {
     const { data: stillPending, error: stillPendingError } = await supabase.from("image_generation_messages")
       .select("status").eq("id", messageId).eq("user_id", appUser.id).maybeSingle();
     if (stillPendingError) throw stillPendingError;
-    if (stillPending?.status !== "pending") return jsonResponse({ error: "This image generation was cancelled." }, 409);
+    if (stillPending?.status !== "pending") {
+      await updateGenerationJob(jobId, { status: "cancelled", progressLabel: "Cancelled", errorMessage: "This image generation was cancelled." });
+      return jsonResponse({ error: "This image generation was cancelled." }, 409);
+    }
 
     const assets = [];
     for (let index = 0; index < generated.length; index += 1) {
@@ -297,6 +324,9 @@ Deno.serve(async (req) => {
         sort_order: index, generation_settings: snapshot,
       }).select("*").single();
       if (error || !data) throw error || new Error("Could not save generated image metadata.");
+      if (index === 0) {
+        await updateGenerationJob(jobId, { resultAssetId: data.id });
+      }
       assets.push(await serializeImageGenerationAsset(data));
     }
     const { data: assistantMessage, error: assistantError } = await supabase.from("image_generation_messages").insert({
@@ -305,6 +335,7 @@ Deno.serve(async (req) => {
     }).select("*").single();
     if (assistantError) throw assistantError;
     await supabase.from("image_generation_messages").update({ status: "completed" }).eq("id", messageId).eq("status", "pending");
+    await updateGenerationJob(jobId, { status: "completed", progressLabel: "Completed", resultAssetId: assets[0]?.id || null });
     const { data: finalSession } = await supabase.from("image_generation_sessions").select("*").eq("id", sessionId).single();
     return jsonResponse({ session: finalSession, userMessage: { ...pendingMessage, status: "completed" }, assistantMessage, assets });
   } catch (error) {
@@ -313,6 +344,12 @@ Deno.serve(async (req) => {
     if (supabase && messageId) await supabase.from("image_generation_messages").update({
       status: "failed", error_message: error instanceof Error ? error.message : "Generation failed.", error_details: errorDetails,
     }).eq("id", messageId).eq("status", "pending");
+    if (jobId) await updateGenerationJob(jobId, {
+      status: "failed",
+      progressLabel: "Failed",
+      errorMessage: error instanceof Error ? error.message : "Generation failed.",
+      errorDetails,
+    }).catch((jobError) => console.error(jobError));
     return jsonResponse({ ...describeError(error, "Could not generate session images."), error_details: errorDetails }, 500);
   }
 });
