@@ -48,6 +48,7 @@
     generatorTypeButtons: Array.from(document.querySelectorAll("[data-add-generator-type]")),
     storageBrowser: document.querySelector("[data-storage-browser]"),
     storageTree: document.querySelector("[data-storage-tree]"),
+    storageRefreshButton: document.querySelector("[data-storage-refresh]"),
     storageBreadcrumbs: document.querySelector("[data-storage-breadcrumbs]"),
     storageStatus: document.querySelector("[data-storage-status]"),
     storageItems: document.querySelector("[data-storage-items]"),
@@ -78,9 +79,10 @@
   }
 
   let isConverting = false;
-  let activeInputMode = "wysiwyg";
+  let activeInputMode = "raw";
   let pendingConversion = null;
   let lastConverterPrompt = "";
+  let lastOutputTargetFormat = "plain-text";
   let outputCopyResetTimer = null;
   let nextCalculatorId = 1;
   let activeCalculatorId = null;
@@ -102,6 +104,7 @@
     view: "grid",
     sortKey: "name",
     sortDirection: "asc",
+    collapsedTreeKeys: new Set(),
     imageUrls: new Map(),
     leftWidth: 250,
     rightWidth: 300,
@@ -130,12 +133,28 @@
     custom: "Custom",
   };
 
+  const converterOutputExtensions = {
+    markdown: "md",
+    html: "html",
+    "plain-text": "txt",
+    json: "json",
+    yaml: "yaml",
+    xml: "xml",
+    csv: "csv",
+    tsv: "tsv",
+    "sql-inserts": "sql",
+    "sql-schema": "sql",
+    outline: "txt",
+    "bullet-list": "txt",
+    "numbered-list": "txt",
+    summary: "txt",
+    custom: "txt",
+  };
+
   const customConverterInstructions = [
-    "Convert the provided source using the following instructions:",
+    "Convert the provided source using the following custom instructions:",
     "",
-    "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts.",
-    "",
-    "Return a concise plain-text summary only.",
+    "The source is raw text. Preserve the meaning and useful structure.",
     "",
     "Return only the converted output. Do not explain the conversion. Do not add markdown fences unless the requested output format itself is Markdown.",
     "",
@@ -2984,7 +3003,7 @@
       case "tsv":
         return "Return tab-separated values only. Include a header row when tabular fields can be inferred.";
       case "sql-inserts":
-        return "Return SQL INSERT statements only. Use the table name converted_items. Infer sensible snake_case columns. Quote strings safely and use NULL when needed.";
+        return "Return SQL INSERT statements only. Infer a sensible snake_case table name and columns from the source. Quote strings safely and use NULL when needed.";
       case "sql-schema":
         return "Return SQL DDL only. Infer sensible snake_case table and column names, practical SQL data types, and CREATE TABLE statements from the source. Include a primary key only when clearly appropriate. Do not include INSERT statements, markdown fences, or commentary.";
       case "outline":
@@ -3008,9 +3027,7 @@
     }
 
     const targetLabel = converterTargetLabels[targetFormat] || targetFormat;
-    const sourceDescription = inputMode === "wysiwyg"
-      ? "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts."
-      : "The source is raw text. Preserve the meaning and useful structure.";
+    const sourceDescription = "The source is raw text. Preserve the meaning and useful structure.";
 
     return [
       `Convert the provided source into ${targetLabel}.`,
@@ -3140,7 +3157,8 @@
       return;
     }
 
-    downloadTextFile(contents, "centralis-text-converter-output.txt");
+    const extension = converterOutputExtensions[lastOutputTargetFormat] || "txt";
+    downloadTextFile(contents, `centralis-text-converter-output.${extension}`);
   }
 
   function clearConverterInput() {
@@ -3349,6 +3367,7 @@
       const payload = await response.json();
       els.output.value = String(payload.output || "").trim();
       lastConverterPrompt = promptUsed;
+      lastOutputTargetFormat = targetFormat;
       setStatus("Conversion complete.", "success");
     } catch (error) {
       console.error(error);
@@ -3380,18 +3399,35 @@
       && storageState.prefix.startsWith(folder);
   }
 
+  function expandStoragePath(bucket, prefix = "") {
+    storageState.collapsedTreeKeys.delete(getStorageTreeKey(bucket));
+    let current = "";
+    prefix.split("/").filter(Boolean).forEach((segment) => {
+      current += `${segment}/`;
+      storageState.collapsedTreeKeys.delete(getStorageTreeKey(bucket, current));
+    });
+  }
+
   function renderStorageFolderTree(bucket, folder, depth = 1) {
     const childFolders = storageState.foldersByPath.get(getStorageTreeKey(bucket, folder)) || [];
+    const treeKey = getStorageTreeKey(bucket, folder);
+    const hasChildren = childFolders.length > 0;
+    const isCollapsed = hasChildren && storageState.collapsedTreeKeys.has(treeKey);
     const isActive = storageState.bucket === bucket && storageState.prefix === folder;
     const isAncestor = isStorageFolderInActivePath(bucket, folder) && !isActive;
-    const childMarkup = childFolders.length
+    const childMarkup = hasChildren && !isCollapsed
       ? `<div class="storage-tree-children" role="group">${childFolders.map((childFolder) => renderStorageFolderTree(bucket, childFolder, depth + 1)).join("")}</div>`
+      : "";
+    const caretIcon = hasChildren
+      ? isCollapsed
+        ? '<ph-caret-right weight="bold"></ph-caret-right>'
+        : '<ph-caret-down weight="bold"></ph-caret-down>'
       : "";
 
     return `
-      <div class="storage-tree-node storage-tree-folder-node${isAncestor ? " is-ancestor" : ""}" role="treeitem" aria-expanded="${childFolders.length ? "true" : "false"}">
+      <div class="storage-tree-node storage-tree-folder-node${isAncestor ? " is-ancestor" : ""}" role="treeitem" aria-expanded="${hasChildren ? String(!isCollapsed) : "false"}">
         <button type="button" class="storage-tree-folder${isActive ? " is-active" : ""}" style="--storage-indent: ${Math.min(12 + depth * 18, 120)}px" data-storage-folder="${escapeHtml(folder)}">
-          <span class="storage-tree-caret" aria-hidden="true">${childFolders.length ? '<ph-caret-down weight="bold"></ph-caret-down>' : ""}</span>
+          <span class="storage-tree-caret" aria-hidden="true" data-storage-toggle-key="${escapeHtml(treeKey)}">${caretIcon}</span>
           <ph-folder weight="fill" aria-hidden="true"></ph-folder>
           <span>${escapeHtml(getStorageFolderName(folder))}</span>
         </button>
@@ -3596,13 +3632,21 @@
     const markup = storageState.buckets.map((bucket) => {
       const isActiveBucket = bucket === storageState.bucket;
       const folders = storageState.foldersByPath.get(getStorageTreeKey(bucket)) || [];
-      const childButtons = isActiveBucket && folders.length
+      const treeKey = getStorageTreeKey(bucket);
+      const hasChildren = isActiveBucket && folders.length > 0;
+      const isCollapsed = hasChildren && storageState.collapsedTreeKeys.has(treeKey);
+      const childButtons = hasChildren && !isCollapsed
         ? `<div class="storage-tree-children" role="group">${folders.map((folder) => renderStorageFolderTree(bucket, folder)).join("")}</div>`
         : "";
+      const caretIcon = hasChildren
+        ? isCollapsed
+          ? '<ph-caret-right weight="bold"></ph-caret-right>'
+          : '<ph-caret-down weight="bold"></ph-caret-down>'
+        : "";
       return `
-        <div class="storage-tree-node storage-tree-bucket-node" role="treeitem" aria-expanded="${isActiveBucket && folders.length ? "true" : "false"}">
+        <div class="storage-tree-node storage-tree-bucket-node" role="treeitem" aria-expanded="${hasChildren ? String(!isCollapsed) : "false"}">
           <button type="button" class="storage-tree-bucket${isActiveBucket && !storageState.prefix ? " is-active" : ""}" data-storage-bucket="${escapeHtml(bucket)}">
-            <span class="storage-tree-caret" aria-hidden="true">${isActiveBucket && folders.length ? '<ph-caret-down weight="bold"></ph-caret-down>' : ""}</span>
+            <span class="storage-tree-caret" aria-hidden="true" data-storage-toggle-key="${escapeHtml(treeKey)}">${caretIcon}</span>
             <ph-database weight="bold" aria-hidden="true"></ph-database>
             <span>${escapeHtml(bucket)}</span>
           </button>
@@ -3680,6 +3724,9 @@
       bucket: storageState.bucket,
       key: object.key,
       download,
+      size: object.size,
+      contentType: object.contentType,
+      lastModified: object.lastModified,
     });
     return payload;
   }
@@ -3777,6 +3824,7 @@
       storageState.objects = options.append ? [...storageState.objects, ...(payload.objects || [])] : (payload.objects || []);
       storageState.nextContinuationToken = payload.nextContinuationToken || null;
       storageState.selected = null;
+      expandStoragePath(bucket, prefix);
       renderStorageTree();
       renderStorageBreadcrumbs();
       renderStorageItems();
@@ -3789,9 +3837,20 @@
     }
   }
 
-  async function initializeStorageBrowser() {
+  async function refreshStorageBrowser() {
+    if (storageState.loading) return;
+    storageState.imageUrls.clear();
+    if (storageState.bucket) {
+      await loadStoragePath(storageState.bucket, storageState.prefix);
+      return;
+    }
+    storageState.loaded = false;
+    await initializeStorageBrowser({ force: true });
+  }
+
+  async function initializeStorageBrowser(options = {}) {
     if (!storageAccessAllowed) return;
-    if (!els.storageBrowser || storageState.loaded || storageState.loading) return;
+    if (!els.storageBrowser || (!options.force && storageState.loaded) || storageState.loading) return;
     storageState.loading = true;
     setStorageStatus("Loading buckets...");
     try {
@@ -3817,7 +3876,18 @@
     els.storageMigrationModal?.addEventListener("click", (event) => {
       if (event.target === els.storageMigrationModal) closeStorageMigrationDialog();
     });
+    els.storageRefreshButton?.addEventListener("click", refreshStorageBrowser);
     els.storageTree?.addEventListener("click", (event) => {
+      const toggle = event.target.closest("[data-storage-toggle-key]");
+      if (toggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        const key = toggle.dataset.storageToggleKey;
+        if (storageState.collapsedTreeKeys.has(key)) storageState.collapsedTreeKeys.delete(key);
+        else storageState.collapsedTreeKeys.add(key);
+        renderStorageTree();
+        return;
+      }
       const button = event.target.closest("[data-storage-bucket], [data-storage-folder]");
       if (!button) return;
       if (button.dataset.storageBucket) loadStoragePath(button.dataset.storageBucket, "");
@@ -4002,6 +4072,8 @@
     els.richInlineCodeButton.addEventListener("click", insertInlineCode);
   }
 
+  switchInputMode("raw");
+
   els.conversionButtons.forEach((button) => {
     button.addEventListener("click", () => {
       openConverterInstructionsDialog(button.dataset.convertTarget);
@@ -4010,19 +4082,9 @@
 
   els.instructionCancelButton?.addEventListener("click", closeConverterInstructionsDialog);
   els.instructionConfirmButton?.addEventListener("click", confirmConverterInstructionsDialog);
-  els.instructionModal?.addEventListener("click", (event) => {
-    if (event.target === els.instructionModal) {
-      closeConverterInstructionsDialog();
-    }
-  });
   els.showPromptButton?.addEventListener("click", openConverterPromptDialog);
   els.promptCloseButtons.forEach((button) => {
     button.addEventListener("click", closeConverterPromptDialog);
-  });
-  els.promptModal?.addEventListener("click", (event) => {
-    if (event.target === els.promptModal) {
-      closeConverterPromptDialog();
-    }
   });
 
   document.addEventListener("keydown", (event) => {
@@ -4067,5 +4129,5 @@
 
   window.addEventListener("resize", scheduleCalculatorResultsFit);
 
-  switchInputMode("wysiwyg");
+  switchInputMode("raw");
 })();

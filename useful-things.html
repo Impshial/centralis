@@ -202,18 +202,21 @@
                     </button>
                   </div>
                   <div class="text-converter-input-controls">
-                    <label class="text-converter-mode-field" for="text-converter-mode">
+                    <label class="text-converter-mode-field" for="text-converter-mode" hidden>
                       <span>Input mode</span>
                       <select id="text-converter-mode" data-text-converter-mode>
-                        <option value="wysiwyg">WYSIWYG</option>
-                        <option value="raw">Raw Text</option>
+                        <option value="raw" selected>Raw Text</option>
                       </select>
                     </label>
+                    <button class="text-converter-clear-input" type="button" data-text-clear-input>
+                      <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                      Clear Text
+                    </button>
                   </div>
                 </div>
 
                 <div class="text-converter-input-editor-area">
-                <div class="text-converter-rich-wrap" data-rich-input-wrap>
+                <div class="text-converter-rich-wrap" data-rich-input-wrap hidden>
                   <div class="text-converter-rich-toolbar" role="toolbar" aria-label="WYSIWYG formatting controls">
                     <button type="button" data-rich-command="removeFormat" title="Clear formatting" aria-label="Clear formatting">
                       <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
@@ -279,7 +282,7 @@
                     <button type="button" data-rich-command="insertHorizontalRule" title="Insert horizontal line" aria-label="Insert horizontal line">
                       <ph-minus weight="bold" aria-hidden="true"></ph-minus>
                     </button>
-                    <button class="text-converter-clear-input" type="button" data-text-clear-input>
+                    <button class="text-converter-clear-input" type="button">
                       <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
                       Clear Text
                     </button>
@@ -299,7 +302,6 @@
                   rows="20"
                   data-text-raw-input
                   aria-label="Raw text input"
-                  hidden
                 ></textarea>
                 </div>
               </section>
@@ -481,6 +483,9 @@
               <aside class="storage-pane storage-tree-pane" data-storage-tree-pane>
                 <div class="storage-pane-heading">
                   <h2>Storage</h2>
+                  <button type="button" class="icon-button storage-refresh-button" data-storage-refresh aria-label="Refresh storage">
+                    <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+                  </button>
                 </div>
                 <div class="storage-tree" data-storage-tree role="tree" aria-label="Storage buckets and folders"></div>
               </aside>

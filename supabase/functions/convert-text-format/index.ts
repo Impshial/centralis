@@ -27,11 +27,9 @@ const TARGET_FORMATS: Record<string, string> = {
 };
 
 const CUSTOM_CONVERTER_INSTRUCTIONS = [
-  "Convert the provided source using the following instructions:",
+  "Convert the provided source using the following custom instructions:",
   "",
-  "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts.",
-  "",
-  "Return a concise plain-text summary only.",
+  "The source is raw text. Preserve the meaning and useful structure.",
   "",
   "Return only the converted output. Do not explain the conversion. Do not add markdown fences unless the requested output format itself is Markdown.",
   "",
@@ -76,7 +74,7 @@ function targetInstructions(targetFormat: string) {
     case "tsv":
       return "Return tab-separated values only. Include a header row when tabular fields can be inferred.";
     case "sql-inserts":
-      return "Return SQL INSERT statements only. Use the table name converted_items. Infer sensible snake_case columns. Quote strings safely and use NULL when needed.";
+      return "Return SQL INSERT statements only. Infer a sensible snake_case table name and columns from the source. Quote strings safely and use NULL when needed.";
     case "sql-schema":
       return "Return SQL DDL only. Infer sensible snake_case table and column names, practical SQL data types, and CREATE TABLE statements from the source. Include a primary key only when clearly appropriate. Do not include INSERT statements, markdown fences, or commentary.";
     case "outline":
@@ -103,9 +101,7 @@ function buildDefaultInstructions(input: {
     return CUSTOM_CONVERTER_INSTRUCTIONS;
   }
 
-  const sourceDescription = input.inputMode === "wysiwyg"
-    ? "The source is a sanitized WYSIWYG HTML fragment. Preserve the meaning and useful structure, not irrelevant editor artifacts."
-    : "The source is raw text. Preserve the meaning and useful structure.";
+  const sourceDescription = "The source is raw text. Preserve the meaning and useful structure.";
 
   return [
     `Convert the provided source into ${input.targetLabel}.`,

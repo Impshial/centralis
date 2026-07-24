@@ -13476,8 +13476,16 @@ body[data-page="useful-things"] {
   border-bottom: 1px solid var(--line);
 }
 
-.storage-pane-heading { padding: 0 14px; }
-.storage-pane-heading h2 { margin: 0; font-size: 1rem; }
+.storage-pane-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 14px;
+}
+.storage-pane-heading h2 { flex: 1 1 auto; margin: 0; font-size: 1rem; }
+.storage-refresh-button { flex: 0 0 auto; width: 32px; height: 32px; margin-left: auto; }
 
 .storage-tree {
   min-height: 0;
@@ -13537,6 +13545,7 @@ body[data-page="useful-things"] {
   flex: 0 0 14px;
   place-items: center;
   color: var(--muted);
+  cursor: pointer;
   font-size: 0.72rem;
 }
 
