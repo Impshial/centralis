@@ -334,7 +334,7 @@ const GENERATED_CHAT_LOG_CSS = `
   --user: #4bd8b7;
   --user-soft: rgba(75, 216, 183, 0.13);
   --shadow: 0 16px 45px rgba(0, 0, 0, 0.26);
-  --radius: 16px;
+  --radius: 6px;
 }
 
 * { box-sizing: border-box; }
@@ -358,7 +358,7 @@ body {
 .hero {
   padding: 36px 38px 32px;
   border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 24px;
+  border-radius: 6px;
   background: linear-gradient(135deg, rgba(28, 36, 52, 0.96), rgba(17, 22, 32, 0.94));
   box-shadow: var(--shadow);
 }
@@ -452,7 +452,7 @@ h1 {
   overflow: clip;
   padding: 28px 22px 16px;
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 24px;
+  border-radius: 6px;
   background: rgba(13, 17, 25, 0.86);
   box-shadow: var(--shadow);
 }
@@ -483,7 +483,7 @@ h1 {
   margin: 47px 0 28px;
   padding: 20px 22px;
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 15px;
+  border-radius: 6px;
   background: linear-gradient(90deg, rgba(92, 111, 170, 0.14), rgba(30, 43, 60, 0.44));
 }
 .phase:first-child { margin-top: 2px; }
@@ -588,10 +588,10 @@ h1 {
     width: min(100% - 24px, 720px);
     padding: 18px 0 42px;
   }
-  .hero { padding: 26px 22px 24px; border-radius: 18px; }
+  .hero { padding: 26px 22px 24px; border-radius: 6px; }
   h1 { font-size: clamp(2.3rem, 12vw, 3.5rem); }
   .key { grid-template-columns: 1fr; }
-  .reader { padding: 22px 12px 12px; border-radius: 18px; }
+  .reader { padding: 22px 12px 12px; border-radius: 6px; }
   .story-grid::before {
     left: 19px;
     transform: none;
@@ -1027,7 +1027,7 @@ function createReaderHtml(html, chatLog) {
       color: #fff !important;
       background: rgb(0 0 0 / 42%) !important;
       border: 1px solid rgb(255 255 255 / 26%) !important;
-      border-radius: 0.65rem !important;
+      border-radius: 6px !important;
       box-shadow: 0 12px 30px rgb(0 0 0 / 28%) !important;
       font: 700 0.9rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
       text-decoration: none !important;

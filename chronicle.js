@@ -693,7 +693,7 @@
 
     return `
       <a class="secondary-action compact-action chronicle-nav-button" href="universe-canvas.html?universe_id=${encodeURIComponent(universeId)}">
-        Back to Canvas
+        Back to the Builder
       </a>
     `;
   }

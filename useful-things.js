@@ -3408,10 +3408,36 @@
     });
   }
 
+  function hasKnownStorageDescendants(bucket, folder) {
+    const childFolders = storageState.foldersByPath.get(getStorageTreeKey(bucket, folder)) || [];
+    if (childFolders.length > 0) return true;
+    const normalized = folder.endsWith("/") ? folder : `${folder}/`;
+    for (const key of storageState.foldersByPath.keys()) {
+      if (key.startsWith(`${bucket}/${normalized}`) && key !== getStorageTreeKey(bucket, folder)) return true;
+    }
+    return false;
+  }
+
+  async function preloadStorageFolderChildren(bucket, folders = []) {
+    const unloadedFolders = folders.filter((folder) => !storageState.foldersByPath.has(getStorageTreeKey(bucket, folder)));
+    if (!unloadedFolders.length) return;
+    const results = await Promise.allSettled(unloadedFolders.map((folder) => getStorageResponse("browse-storage", {
+      action: "objects",
+      bucket,
+      prefix: folder,
+    }).then((payload) => {
+      storageState.foldersByPath.set(getStorageTreeKey(bucket, folder), payload.folders || []);
+      if ((payload.folders || []).length > 0) storageState.collapsedTreeKeys.add(getStorageTreeKey(bucket, folder));
+    })));
+    results.forEach((result) => {
+      if (result.status === "rejected") console.warn("Could not preload storage folder children:", result.reason);
+    });
+  }
+
   function renderStorageFolderTree(bucket, folder, depth = 1) {
     const childFolders = storageState.foldersByPath.get(getStorageTreeKey(bucket, folder)) || [];
     const treeKey = getStorageTreeKey(bucket, folder);
-    const hasChildren = childFolders.length > 0;
+    const hasChildren = hasKnownStorageDescendants(bucket, folder);
     const isCollapsed = hasChildren && storageState.collapsedTreeKeys.has(treeKey);
     const isActive = storageState.bucket === bucket && storageState.prefix === folder;
     const isAncestor = isStorageFolderInActivePath(bucket, folder) && !isActive;
@@ -3633,7 +3659,7 @@
       const isActiveBucket = bucket === storageState.bucket;
       const folders = storageState.foldersByPath.get(getStorageTreeKey(bucket)) || [];
       const treeKey = getStorageTreeKey(bucket);
-      const hasChildren = isActiveBucket && folders.length > 0;
+    const hasChildren = folders.length > 0;
       const isCollapsed = hasChildren && storageState.collapsedTreeKeys.has(treeKey);
       const childButtons = hasChildren && !isCollapsed
         ? `<div class="storage-tree-children" role="group">${folders.map((folder) => renderStorageFolderTree(bucket, folder)).join("")}</div>`
@@ -3821,6 +3847,7 @@
       storageState.bucket = bucket;
       storageState.prefix = prefix;
       storageState.foldersByPath.set(`${bucket}/${prefix}`, payload.folders || []);
+      await preloadStorageFolderChildren(bucket, payload.folders || []);
       storageState.objects = options.append ? [...storageState.objects, ...(payload.objects || [])] : (payload.objects || []);
       storageState.nextContinuationToken = payload.nextContinuationToken || null;
       storageState.selected = null;

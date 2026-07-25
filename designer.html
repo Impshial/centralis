@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Designer | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=designer-viewer-14">
+  <link rel="stylesheet" href="tailwind.generated.css?v=designer-viewer-14">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="designer">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="designer-page" aria-labelledby="designer-title" data-designer-page hidden>
+      <header class="designer-page-header">
+        <p class="settings-eyebrow">Utilities</p>
+        <h1 id="designer-title">Designer</h1>
+      </header>
+
+      <section class="designer-layout" aria-label="Image viewer designer">
+        <div class="designer-intro-panel">
+          <div>
+            <p class="settings-eyebrow">Image Viewer</p>
+            <h2>Reusable Viewer Prototype</h2>
+            <p>Use these scenarios to compare shared controls, optional actions, image navigation, and the contextual details drawer.</p>
+          </div>
+          <div class="designer-summary" data-designer-scenario-summary>
+            <span>Select a scenario to inspect its enabled capabilities.</span>
+          </div>
+        </div>
+
+        <div class="designer-scenario-grid" data-designer-scenarios></div>
+      </section>
+
+      <div class="modal-backdrop centralis-image-viewer-backdrop" data-centralis-image-viewer hidden>
+        <section class="modal-dialog centralis-image-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="centralis-image-viewer-title">
+          <header class="centralis-image-viewer-header">
+            <div class="centralis-image-viewer-title-block">
+              <p class="settings-eyebrow" data-centralis-image-viewer-kicker>Image Viewer</p>
+              <h2 id="centralis-image-viewer-title" data-centralis-image-viewer-title>Image</h2>
+            </div>
+            <div class="centralis-image-viewer-actions">
+              <label class="centralis-image-viewer-primary" data-centralis-image-viewer-primary-wrap hidden>
+                <input type="checkbox" data-centralis-image-viewer-primary>
+                <span>Set as Primary Image</span>
+              </label>
+              <button class="secondary-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-open>
+                <ph-arrow-square-out aria-hidden="true"></ph-arrow-square-out>
+                <span>Open in New Tab</span>
+              </button>
+              <button class="secondary-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-download>
+                <ph-download-simple aria-hidden="true"></ph-download-simple>
+                <span>Download</span>
+              </button>
+              <button class="danger-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-delete>
+                <ph-trash aria-hidden="true"></ph-trash>
+                <span>Delete</span>
+              </button>
+              <button class="modal-close" type="button" aria-label="Close image viewer" data-centralis-image-viewer-close>
+                <ph-x aria-hidden="true"></ph-x>
+              </button>
+            </div>
+          </header>
+
+          <div class="centralis-image-viewer-stage" data-centralis-image-viewer-stage>
+            <button class="centralis-image-viewer-nav is-prev" type="button" aria-label="Previous image" data-centralis-image-viewer-prev>
+              <ph-caret-left aria-hidden="true"></ph-caret-left>
+            </button>
+            <div class="centralis-image-viewer-zoom-controls" aria-label="Image zoom controls">
+              <button class="icon-button" type="button" aria-label="Actual size" title="Actual Size" data-centralis-image-viewer-actual-size>
+                <ph-arrows-out-simple aria-hidden="true"></ph-arrows-out-simple>
+              </button>
+              <button class="icon-button" type="button" aria-label="Fit to view" title="Fit to View" data-centralis-image-viewer-fit-view>
+                <ph-frame-corners aria-hidden="true"></ph-frame-corners>
+              </button>
+            </div>
+            <div class="centralis-image-viewer-frame" data-centralis-image-viewer-frame>
+              <img data-centralis-image-viewer-image alt="" draggable="false">
+            </div>
+            <button class="centralis-image-viewer-nav is-next" type="button" aria-label="Next image" data-centralis-image-viewer-next>
+              <ph-caret-right aria-hidden="true"></ph-caret-right>
+            </button>
+          </div>
+
+          <section class="centralis-image-viewer-drawer is-collapsed" data-centralis-image-viewer-drawer>
+            <button class="centralis-image-viewer-drawer-toggle" type="button" data-centralis-image-viewer-drawer-toggle aria-expanded="false">
+              <span>Details</span>
+              <span class="centralis-image-viewer-drawer-control" aria-hidden="true">
+                <ph-caret-up class="centralis-image-viewer-drawer-icon is-open-icon"></ph-caret-up>
+                <ph-caret-down class="centralis-image-viewer-drawer-icon is-close-icon"></ph-caret-down>
+              </span>
+            </button>
+            <div class="centralis-image-viewer-details" data-centralis-image-viewer-details></div>
+          </section>
+
+          <div class="centralis-image-viewer-loading" data-centralis-image-viewer-loading hidden>
+            <span>Loading...</span>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=generation-activity-1"></script>
+  <script src="designer.js?v=designer-viewer-14"></script>
+</body>
+</html>

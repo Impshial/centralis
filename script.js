@@ -445,6 +445,7 @@ const CENTRALIS_HEADER_MARKUP = `
         <a href="calendar.html" role="menuitem"><ph-calendar-blank weight="duotone" aria-hidden="true"></ph-calendar-blank><span>Calendar</span></a>
         <a href="todo.html" role="menuitem"><ph-check-square-offset weight="duotone" aria-hidden="true"></ph-check-square-offset><span>ToDo</span></a>
         <a href="useful-things.html" role="menuitem"><ph-wrench weight="duotone" aria-hidden="true"></ph-wrench><span>Useful Things</span></a>
+        <a href="designer.html" role="menuitem" data-admin-only-nav hidden><ph-pencil-ruler weight="duotone" aria-hidden="true"></ph-pencil-ruler><span>Designer</span></a>
       </div>
     </div>
 
@@ -452,7 +453,7 @@ const CENTRALIS_HEADER_MARKUP = `
 
   <div class="header-actions">
     <div class="menu-wrap header-theme-menu">
-      <button class="icon-button header-theme-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Theme">
+      <button class="icon-button header-theme-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="Theme" title="Theme">
         <ph-palette weight="duotone" aria-hidden="true"></ph-palette>
       </button>
       <div class="dropdown-menu align-right" role="menu" aria-label="Theme">
@@ -464,12 +465,12 @@ const CENTRALIS_HEADER_MARKUP = `
         </button>
       </div>
     </div>
-    <button class="icon-button generation-activity-button" type="button" aria-label="Generation activity" data-open-generation-activity>
+    <button class="icon-button generation-activity-button" type="button" aria-label="Generation activity" title="Generation activity" data-open-generation-activity>
       <ph-hourglass-medium weight="duotone" aria-hidden="true"></ph-hourglass-medium>
       <span class="generation-activity-badge" data-generation-activity-count hidden>0</span>
     </button>
     <div class="menu-wrap user-menu">
-      <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile">
+      <button class="icon-button user-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="User profile" title="User profile">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="8" r="4"></circle>
           <path d="M4 21a8 8 0 0 1 16 0"></path>
@@ -494,6 +495,7 @@ function renderCentralisHeader() {
 }
 
 renderCentralisHeader();
+syncAdminNavigation();
 loadThemeMenuFromLocalStorage();
 renderHeaderThemeMenu();
 syncThemeOptionExports();
@@ -713,6 +715,13 @@ function closeGenerationActivity() {
 function syncUserMenuEmail(user = window.centralisCurrentAppUser) {
   document.querySelectorAll("[data-user-menu-email]").forEach((element) => {
     element.textContent = user?.email || "Signed in";
+  });
+}
+
+function syncAdminNavigation(user = window.centralisCurrentAppUser) {
+  const isAdmin = user?.admin === true;
+  document.querySelectorAll("[data-admin-only-nav]").forEach((element) => {
+    element.hidden = !isAdmin;
   });
 }
 
@@ -2850,6 +2859,7 @@ function applyUserSettings(settings) {
 function publishCurrentAppUserChange() {
   window.centralisCurrentAppUser = currentAppUser;
   syncUserMenuEmail(currentAppUser);
+  syncAdminNavigation(currentAppUser);
   window.dispatchEvent(new CustomEvent("centralis:current-user-changed", {
     detail: { user: currentAppUser }
   }));
