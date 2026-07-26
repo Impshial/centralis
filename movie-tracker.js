@@ -31,6 +31,8 @@ const movieState = {
 
 window.centralisMovieTrackerLoaded = true;
 
+const MOVIE_IMPORT_LOOKUP_DELAY_MS = 1200;
+
 const els = {
   rows: document.querySelector("[data-movie-rows]"),
   count: document.querySelector("[data-movie-count]"),
@@ -58,6 +60,7 @@ const els = {
   importSubmit: document.querySelector("[data-import-submit]"),
   importSchema: document.querySelector("[data-download-import-schema]"),
   importStatus: document.querySelector("[data-import-status]"),
+  importFailures: document.querySelector("[data-import-failures]"),
   processContent: document.querySelector("[data-process-content]"),
   bulkForm: document.querySelector("[data-bulk-form]"),
 };
@@ -96,6 +99,10 @@ function setDialogStatus(element, message, type) {
 
 function getReadableError(error) {
   return error?.message || error?.error || String(error || "Unknown error");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function escapeHtml(value) {
@@ -460,7 +467,7 @@ function renderStats() {
   `;
 }
 
-async function refreshMovieTracker(message = "") {
+async function refreshMovieTracker(message = "", type = "") {
   setStatus(message || "Loading movies...");
   try {
     await fetchLookups();
@@ -468,7 +475,7 @@ async function refreshMovieTracker(message = "") {
     await fetchMovies();
     renderLookups();
     renderMovies();
-    setStatus("");
+    setStatus(message ? message : "", type);
   } catch (error) {
     console.error(error);
     setStatus(`Could not load movies: ${getReadableError(error)}`, "error");
@@ -559,14 +566,15 @@ async function createMovie(formData) {
   const title = normalizeMovieTitleForSort(formData.get("title"));
   const year = Number(formData.get("year_released"));
   if (!title || !Number.isFinite(year)) throw new Error("Title and year are required.");
-  const { error } = await movieSupabase.from("movies").insert({
+  const { data, error } = await movieSupabase.from("movies").insert({
     user_id: movieState.appUser.id,
     title,
     year_released: year,
     franchise_id: normalizeId(formData.get("franchise_id")),
     downloaded: formData.get("downloaded") === "on",
-  });
+  }).select("*").single();
   if (error) throw error;
+  return data;
 }
 
 async function saveMovie(formData) {
@@ -771,29 +779,69 @@ function parseImportBoolean(value) {
   return ["true", "1", "yes", "y", "downloaded"].includes(normalized);
 }
 
-async function importMovies(file) {
+function cleanImportText(value) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function getImportLookupName(item, aliases) {
+  const value = getImportValue(item, aliases);
+  if (!value) return "";
+  if (typeof value === "object") return cleanImportText(value.name) || "";
+  return cleanImportText(value) || "";
+}
+
+function getImportItems(records) {
+  const items = Array.isArray(records) ? records : records?.movies;
+  if (!Array.isArray(items)) throw new Error("Import file must contain an array of movies.");
+  return items;
+}
+
+async function buildBareMovieImportRow(item) {
+  const title = normalizeMovieTitleForSort(getImportValue(item, ["title", "movie title", "name"]));
+  const year = Number(getImportValue(item, ["yearReleased", "year released", "year_released", "year", "release year"]));
+  if (!title || !Number.isFinite(year)) return null;
+  return {
+    user_id: movieState.appUser.id,
+    title,
+    year_released: year,
+    downloaded: parseImportBoolean(getImportValue(item, ["downloaded", "already downloaded", "is downloaded"])),
+    franchise_id: await ensureLookup("franchise", getImportLookupName(item, ["franchise", "series"])),
+    collection_id: await ensureLookup("collection", getImportLookupName(item, ["collection", "set"])),
+  };
+}
+
+async function buildFullMovieImportRow(item) {
+  const row = await buildBareMovieImportRow(item);
+  if (!row) return null;
+  return {
+    ...row,
+    rated: cleanImportText(getImportValue(item, ["rated", "rating"])),
+    director: cleanImportText(getImportValue(item, ["director", "directors"])),
+    date_released: cleanImportText(getImportValue(item, ["dateReleased", "date released", "date_released", "release date", "released"])),
+    runtime: cleanImportText(getImportValue(item, ["runtime", "run time"])),
+    genre: cleanImportText(getImportValue(item, ["genre", "genres"])),
+    writers: cleanImportText(getImportValue(item, ["writers", "writer"])),
+    actors: cleanImportText(getImportValue(item, ["actors", "cast"])),
+    plot: cleanImportText(getImportValue(item, ["plot", "description", "summary"])),
+    poster_url: cleanImportText(getImportValue(item, ["posterUrl", "poster URL", "poster_url", "poster"])),
+  };
+}
+
+async function importMovies(file, mode = "full") {
   const text = await file.text();
   const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsv(text);
-  const items = Array.isArray(records) ? records : records.movies;
-  if (!Array.isArray(items)) throw new Error("Import file must contain an array of movies.");
+  const items = getImportItems(records);
+  const fullData = mode !== "bare";
   const rows = [];
   for (const item of items) {
-    const title = normalizeMovieTitleForSort(getImportValue(item, ["title", "movie title", "name"]));
-    const year = Number(getImportValue(item, ["yearReleased", "year released", "year_released", "year", "release year"]));
-    if (!title || !Number.isFinite(year)) continue;
-    rows.push({
-      user_id: movieState.appUser.id,
-      title,
-      year_released: year,
-      downloaded: parseImportBoolean(getImportValue(item, ["downloaded", "already downloaded", "is downloaded"])),
-      franchise_id: await ensureLookup("franchise", getImportValue(item, ["franchise", "series"])),
-      collection_id: await ensureLookup("collection", getImportValue(item, ["collection", "set"])),
-    });
+    const row = fullData ? await buildFullMovieImportRow(item) : await buildBareMovieImportRow(item);
+    if (row) rows.push(row);
   }
   if (!rows.length) throw new Error("No valid movies were found.");
-  const { error } = await movieSupabase.from("movies").insert(rows);
+  const { data, error } = await movieSupabase.from("movies").insert(rows).select("*");
   if (error) throw error;
-  return rows.length;
+  return data || [];
 }
 
 function downloadJson(filename, payload) {
@@ -825,10 +873,19 @@ function downloadImportSchema(format) {
       movies: [
         {
           title: "The Matrix",
-          yearReleased: 1999,
+          year_released: 1999,
           downloaded: true,
           franchise: "The Matrix",
-          collection: "Cyberpunk Favorites"
+          collection: "Cyberpunk Favorites",
+          rated: "R",
+          director: "The Wachowskis",
+          date_released: "1999-03-31",
+          runtime: "136 min",
+          genre: "Action, Sci-Fi",
+          writers: "Lilly Wachowski, Lana Wachowski",
+          actors: "Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss",
+          plot: "A programmer discovers reality is not what it seems.",
+          poster_url: "https://image.tmdb.org/t/p/w500/example.jpg"
         }
       ],
       schema: {
@@ -836,7 +893,8 @@ function downloadImportSchema(format) {
         yearReleased: "Required. Release year. Also accepts: year released, year_released, year, release year.",
         downloaded: "Optional boolean. Accepts true/false, 1/0, yes/no, y/n, downloaded.",
         franchise: "Optional franchise or series name. Created if it does not already exist.",
-        collection: "Optional collection or set name. Created if it does not already exist."
+        collection: "Optional collection or set name. Created if it does not already exist.",
+        fullDataFields: "Optional for full-data imports: rated, director, date_released, runtime, genre, writers, actors, plot, poster_url."
       }
     });
     return true;
@@ -908,7 +966,14 @@ async function exportMovies() {
 }
 
 function missingOmdb(movie) {
-  return !movie.director || !movie.plot || !movie.actors || !movie.date_released;
+  return !movie.rated
+    || !movie.director
+    || !movie.date_released
+    || !movie.runtime
+    || !movie.genre
+    || !movie.writers
+    || !movie.actors
+    || !movie.plot;
 }
 
 function missingMovieDetails(movie) {
@@ -1047,6 +1112,149 @@ function updateProcessMovieProgress(movieId) {
   }
 }
 
+async function fetchMovieMissingDetails(movie) {
+  const payload = {};
+  const failures = [];
+  const needsOmdb = missingOmdb(movie);
+  const needsPoster = !movie.poster_url;
+
+  if (!needsOmdb && !needsPoster) {
+    return { payload, failures, skipped: true, omdbFailed: false, tmdbFailed: false };
+  }
+
+  if (needsOmdb) {
+    try {
+      const data = await invokeFunction("lookup-movie-omdb", {
+        title: normalizeMovieTitleForLookup(movie.title),
+        year: movie.year_released,
+      });
+      Object.assign(payload, data.movie || {});
+    } catch (error) {
+      console.warn(`Could not process OMDb details for ${movie.title}`, error);
+      failures.push({
+        title: movie.title,
+        source: "OMDb",
+        message: getReadableError(error),
+        requestUrl: error.requestUrl || "",
+      });
+    }
+  }
+
+  if (needsPoster) {
+    try {
+      const data = await invokeFunction("lookup-movie-poster-tmdb", {
+        title: normalizeMovieTitleForLookup(movie.title),
+        year: movie.year_released,
+      });
+      payload.poster_url = data.poster_url;
+    } catch (error) {
+      console.warn(`Could not process TMDb poster for ${movie.title}`, error);
+      failures.push({
+        title: movie.title,
+        source: "TMDb",
+        message: getReadableError(error),
+      });
+    }
+  }
+
+  return {
+    payload,
+    failures,
+    skipped: false,
+    omdbFailed: failures.some((failure) => failure.source === "OMDb"),
+    tmdbFailed: failures.some((failure) => failure.source === "TMDb"),
+  };
+}
+
+async function saveMovieMissingDetails(movie, payload) {
+  if (!Object.keys(payload).length) return false;
+  payload.updated_at = new Date().toISOString();
+  const { error } = await movieSupabase
+    .from("movies")
+    .update(payload)
+    .eq("id", movie.id)
+    .eq("user_id", movieState.appUser.id);
+  if (error) throw error;
+  return true;
+}
+
+async function enrichNewMovieDetails(movie) {
+  if (!movie || !missingMovieDetails(movie)) return { updated: false, failures: [] };
+  setStatus(`Movie added. Getting missing details for ${movie.title}...`);
+  const result = await fetchMovieMissingDetails(movie);
+  if (result.skipped) return { updated: false, failures: [] };
+  try {
+    const updated = await saveMovieMissingDetails(movie, result.payload);
+    return { updated, failures: result.failures };
+  } catch (error) {
+    console.warn(`Could not save missing details for ${movie.title}`, error);
+    return {
+      updated: false,
+      failures: [
+        ...result.failures,
+        {
+          title: movie.title,
+          source: "Database",
+          message: getReadableError(error),
+        },
+      ],
+    };
+  }
+}
+
+async function enrichImportedMovieDetails(movies, status, failuresContainer) {
+  const importedMovies = movies || [];
+  const candidates = importedMovies.filter(missingMovieDetails);
+  let updated = 0;
+  let skipped = importedMovies.length - candidates.length;
+  let failed = 0;
+  let omdbFailures = 0;
+  let tmdbFailures = 0;
+  const failures = [];
+
+  renderProcessFailures(failuresContainer, failures);
+  if (!candidates.length) {
+    return { updated, skipped, failed, omdbFailures, tmdbFailures, failures };
+  }
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const movie = candidates[index];
+    setDialogStatus(status, `Imported ${importedMovies.length} movies. Getting missing details ${index + 1}/${candidates.length}: ${movie.title}...`);
+    const result = await fetchMovieMissingDetails(movie);
+    if (result.skipped) {
+      skipped += 1;
+      continue;
+    }
+    if (result.omdbFailed) omdbFailures += 1;
+    if (result.tmdbFailed) tmdbFailures += 1;
+    failures.push(...result.failures);
+
+    if (Object.keys(result.payload).length) {
+      try {
+        await saveMovieMissingDetails(movie, result.payload);
+        updated += 1;
+      } catch (error) {
+        console.warn(`Could not save missing details for ${movie.title}`, error);
+        failed += 1;
+        failures.push({
+          title: movie.title,
+          source: "Database",
+          message: getReadableError(error),
+        });
+      }
+    } else {
+      failed += 1;
+    }
+
+    if (index < candidates.length - 1) {
+      await sleep(MOVIE_IMPORT_LOOKUP_DELAY_MS);
+    }
+  }
+
+  renderProcessFailures(failuresContainer, failures);
+  return { updated, skipped, failed, omdbFailures, tmdbFailures, failures };
+}
+
 function openProcessDialog() {
   const candidates = movieState.movies.filter(missingMovieDetails);
   els.processContent.innerHTML = `
@@ -1086,57 +1294,18 @@ async function processMissingMovieDetails() {
   renderProcessFailures(failuresContainer, failures);
   for (const movie of candidates) {
     setDialogStatus(status, `Processing ${movie.title}...`);
-    const payload = {};
-    const needsOmdb = missingOmdb(movie);
-    const needsPoster = !movie.poster_url;
-
-    if (!needsOmdb && !needsPoster) {
+    const result = await fetchMovieMissingDetails(movie);
+    if (result.skipped) {
       skipped += 1;
       continue;
     }
+    if (result.omdbFailed) omdbFailures += 1;
+    if (result.tmdbFailed) tmdbFailures += 1;
+    failures.push(...result.failures);
 
-    if (needsOmdb) {
+    if (Object.keys(result.payload).length) {
       try {
-        const data = await invokeFunction("lookup-movie-omdb", {
-          title: normalizeMovieTitleForLookup(movie.title),
-          year: movie.year_released,
-        });
-        Object.assign(payload, data.movie || {});
-      } catch (error) {
-        console.warn(`Could not process OMDb details for ${movie.title}`, error);
-        omdbFailures += 1;
-        failures.push({
-          title: movie.title,
-          source: "OMDb",
-          message: getReadableError(error),
-          requestUrl: error.requestUrl || "",
-        });
-      }
-    }
-
-    if (needsPoster) {
-      try {
-        const data = await invokeFunction("lookup-movie-poster-tmdb", {
-          title: normalizeMovieTitleForLookup(movie.title),
-          year: movie.year_released,
-        });
-        payload.poster_url = data.poster_url;
-      } catch (error) {
-        console.warn(`Could not process TMDb poster for ${movie.title}`, error);
-        tmdbFailures += 1;
-        failures.push({
-          title: movie.title,
-          source: "TMDb",
-          message: getReadableError(error),
-        });
-      }
-    }
-
-    if (Object.keys(payload).length) {
-      try {
-        payload.updated_at = new Date().toISOString();
-        const { error } = await movieSupabase.from("movies").update(payload).eq("id", movie.id).eq("user_id", movieState.appUser.id);
-        if (error) throw error;
+        await saveMovieMissingDetails(movie, result.payload);
         updated += 1;
         updateProcessMovieProgress(movie.id);
       } catch (error) {
@@ -1255,12 +1424,25 @@ document.addEventListener("click", (event) => {
 
 els.addForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const submit = els.addForm.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
   try {
-    await createMovie(new FormData(els.addForm));
+    const movie = await createMovie(new FormData(els.addForm));
     closeModal("add-movie-modal");
-    await refreshMovieTracker("Movie added.");
+    const enrichment = await enrichNewMovieDetails(movie);
+    const failedLookups = enrichment.failures.length;
+    await refreshMovieTracker(
+      failedLookups
+        ? `Movie added. Missing details had ${failedLookups} lookup issue${failedLookups === 1 ? "" : "s"}.`
+        : enrichment.updated
+          ? "Movie added and missing details fetched."
+          : "Movie added.",
+      failedLookups ? "error" : "success",
+    );
   } catch (error) {
     setDialogStatus(els.addStatus, getReadableError(error), "error");
+  } finally {
+    if (submit) submit.disabled = false;
   }
 });
 
@@ -1331,7 +1513,11 @@ els.pagination.forEach((pagination) => pagination.addEventListener("click", (eve
 document.querySelector("[data-refresh-movies]")?.addEventListener("click", () => refreshMovieTracker());
 document.querySelector("[data-open-franchises]")?.addEventListener("click", () => openManager("franchise"));
 document.querySelector("[data-open-collections]")?.addEventListener("click", () => openManager("collection"));
-document.querySelector("[data-open-import]")?.addEventListener("click", () => openModal("movie-import-modal"));
+document.querySelector("[data-open-import]")?.addEventListener("click", () => {
+  setDialogStatus(els.importStatus, "");
+  renderProcessFailures(els.importFailures, []);
+  openModal("movie-import-modal");
+});
 document.querySelector("[data-open-missing-details]")?.addEventListener("click", () => openProcessDialog());
 document.querySelector("[data-export-movies]")?.addEventListener("click", async () => {
   try {
@@ -1458,14 +1644,27 @@ els.importSchema?.addEventListener("click", askAndDownloadImportSchema);
 
 els.importForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const submit = els.importSubmit;
+  if (submit) submit.disabled = true;
   try {
-    const count = await importMovies(movieState.importFile);
-    closeModal("movie-import-modal");
+    renderProcessFailures(els.importFailures, []);
+    setDialogStatus(els.importStatus, "Importing movies...");
+    const importMode = new FormData(els.importForm).get("import_mode") || "full";
+    const importedMovies = await importMovies(movieState.importFile, importMode);
+    const enrichment = await enrichImportedMovieDetails(importedMovies, els.importStatus, els.importFailures);
     movieState.importFile = null;
     els.importForm.reset();
-    await refreshMovieTracker(`Imported ${count} movies.`);
+    if (els.importLabel) els.importLabel.textContent = "Click to select CSV or JSON file";
+    await refreshMovieTracker();
+    setDialogStatus(
+      els.importStatus,
+      `Imported ${importedMovies.length} movies. Missing details updated ${enrichment.updated}, skipped ${enrichment.skipped}, failed ${enrichment.failed}. OMDb failures ${enrichment.omdbFailures}, TMDb failures ${enrichment.tmdbFailures}.`,
+      enrichment.failures.length ? "error" : "success",
+    );
   } catch (error) {
     setDialogStatus(els.importStatus, getReadableError(error), "error");
+  } finally {
+    if (submit) submit.disabled = !movieState.importFile;
   }
 });
 

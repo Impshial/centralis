@@ -1765,10 +1765,13 @@
     try {
       const response = await window.centralisSupabase.functions.invoke("upload-object-image", { body });
       throwIfError(response);
+      const uploadedImage = response.data?.image || null;
       await refreshWorkspaceImages();
       setWorkspaceStatus("Image uploaded.", "success");
+      return uploadedImage;
     } catch (error) {
       setWorkspaceStatus(`Could not upload image: ${getReadableError(error)}`, "error");
+      throw error;
     }
   }
 
@@ -1779,6 +1782,71 @@
   function getActiveWorkspaceViewerImage() {
     const images = getWorkspaceViewerImages();
     return images.find((image) => image.id === state.activeImageViewerId) || images[0] || null;
+  }
+
+  function getChronicleViewerImageName(image, index, total) {
+    const baseName = state.workspace?.element?.name || image?.id || "Chronicle image";
+    return total > 1 ? `${baseName} Image (${index + 1} of ${total})` : `${baseName} Image`;
+  }
+
+  function getChronicleViewerDownloadName(image) {
+    const elementName = state.workspace?.element?.name || "chronicle-image";
+    const safeName = elementName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      || "chronicle-image";
+    return `${safeName}-${image?.id || Date.now()}.png`;
+  }
+
+  function getChronicleViewerImages() {
+    const images = getWorkspaceViewerImages();
+    const total = images.length;
+    return images.map((image, index) => ({
+      id: image.id,
+      src: image.image_url || "",
+      name: getChronicleViewerImageName(image, index, total),
+      downloadName: getChronicleViewerDownloadName(image),
+      alt: state.workspace?.element?.name || "Chronicle image",
+      isPrimary: Boolean(image.is_primary),
+      metadata: image
+    }));
+  }
+
+  async function uploadChronicleViewerImage(file) {
+    const uploadedImage = await uploadWorkspaceImage(file);
+    const images = getChronicleViewerImages();
+    return {
+      images,
+      activeImageId: uploadedImage?.id || images.at(-1)?.id || state.activeImageViewerId || ""
+    };
+  }
+
+  function getChronicleViewerDetails(image, index) {
+    const element = state.workspace?.element || {};
+    const universeName = state.workspace?.universe?.name || "Standalone Chronicle element";
+    const elementType = getType(element.element_type_id)?.name || "Element";
+    const total = getWorkspaceViewerImages().length;
+    return {
+      imageInfo: {
+        title: "Image Information",
+        rows: [
+          ["Source", "Chronicle element image"],
+          ["Selected Image", image?.id || "Unknown"],
+          ["Images in Set", String(total)],
+          ["Image Role", image?.isPrimary ? "Primary" : `Image ${index + 1}`]
+        ]
+      },
+      objectDetails: {
+        title: "Object Details",
+        rows: [
+          ["Element", element.name || "Untitled element"],
+          ["Element Type", elementType],
+          ["Universe", universeName]
+        ],
+        body: element.description || ""
+      }
+    };
   }
 
   function setChronicleImageViewerStatus(message, tone = "") {
@@ -1829,13 +1897,44 @@
 
   function openChronicleImageViewer(imageId = "") {
     const images = getWorkspaceViewerImages();
-    if (!images.length || !dom.imageViewerModal) {
+    if (!images.length) {
       return;
     }
     state.activeImageViewerId = images.some((image) => image.id === imageId) ? imageId : images[0].id;
-    dom.imageViewerModal.hidden = false;
-    document.body.classList.add("centralis-modal-open");
-    renderChronicleImageViewer();
+    if (typeof window.openCentralisImageViewer === "function") {
+      window.openCentralisImageViewer({
+        title: state.workspace?.element?.name || "Chronicle Image",
+        kicker: "Chronicle Image Viewer",
+        images: getChronicleViewerImages(),
+        activeImageId: state.activeImageViewerId,
+        details: getChronicleViewerDetails,
+        capabilities: {
+          canNavigate: true,
+          canShowThumbnails: images.length > 1,
+          canSetPrimary: true,
+          canOpen: true,
+          canDownload: true,
+          canDelete: true,
+          canUpload: true,
+          uploadMode: "add",
+          uploadLabel: "Upload"
+        },
+        actions: {
+          changeImage: (image) => {
+            state.activeImageViewerId = image?.id || "";
+          },
+          upload: uploadChronicleViewerImage,
+          setPrimary: setChronicleViewerPrimaryImage,
+          delete: deleteChronicleViewerImage
+        }
+      });
+      return;
+    }
+    if (dom.imageViewerModal) {
+      dom.imageViewerModal.hidden = false;
+      document.body.classList.add("centralis-modal-open");
+      renderChronicleImageViewer();
+    }
   }
 
   function closeChronicleImageViewer() {
@@ -1857,13 +1956,14 @@
     renderChronicleImageViewer();
   }
 
-  async function setChronicleViewerPrimaryImage() {
-    const image = getActiveWorkspaceViewerImage();
-    if (!image || image.is_primary || !dom.imageViewerPrimary) {
+  async function setChronicleViewerPrimaryImage(viewerImage = null) {
+    const isSharedViewerImage = Boolean(viewerImage?.metadata);
+    const image = viewerImage?.metadata || getActiveWorkspaceViewerImage();
+    if (!image || image.is_primary) {
       return;
     }
 
-    dom.imageViewerPrimary.disabled = true;
+    if (dom.imageViewerPrimary) dom.imageViewerPrimary.disabled = true;
     setChronicleImageViewerStatus("Setting primary image...");
     try {
       const response = await window.centralisSupabase.functions.invoke("set-primary-image", {
@@ -1871,19 +1971,28 @@
       });
       throwIfError(response);
       await refreshWorkspaceImages();
-      renderChronicleImageViewer();
+      state.activeImageViewerId = image.id;
+      if (!isSharedViewerImage) renderChronicleImageViewer();
       setChronicleImageViewerStatus("Primary image updated.", "success");
+      return {
+        images: getChronicleViewerImages(),
+        activeImageId: image.id
+      };
     } catch (error) {
       setChronicleImageViewerStatus(`Could not set primary image: ${getReadableError(error)}`, "error");
-      dom.imageViewerPrimary.checked = false;
-      dom.imageViewerPrimary.disabled = false;
+      if (dom.imageViewerPrimary) {
+        dom.imageViewerPrimary.checked = false;
+        dom.imageViewerPrimary.disabled = false;
+      }
+      throw error;
     }
   }
 
-  async function deleteChronicleViewerImage() {
-    const image = getActiveWorkspaceViewerImage();
+  async function deleteChronicleViewerImage(viewerImage = null) {
+    const isSharedViewerImage = Boolean(viewerImage?.metadata);
+    const image = viewerImage?.metadata || getActiveWorkspaceViewerImage();
     if (!image || !window.confirm("Delete this image?")) {
-      return;
+      return false;
     }
 
     const deleteButton = dom.imageViewerModal?.querySelector("[data-chronicle-image-viewer-delete]");
@@ -1898,13 +2007,19 @@
       state.activeImageViewerId = remainingImages[0]?.id || "";
       await refreshWorkspaceImages();
       if (!state.activeImageViewerId) {
-        closeChronicleImageViewer();
+        if (!isSharedViewerImage) closeChronicleImageViewer();
+        return { close: true };
       } else {
-        renderChronicleImageViewer();
+        if (!isSharedViewerImage) renderChronicleImageViewer();
         setChronicleImageViewerStatus("Image deleted.", "success");
+        return {
+          images: getChronicleViewerImages(),
+          activeImageId: state.activeImageViewerId
+        };
       }
     } catch (error) {
       setChronicleImageViewerStatus(`Could not delete image: ${getReadableError(error)}`, "error");
+      throw error;
     } finally {
       if (deleteButton) deleteButton.disabled = false;
     }

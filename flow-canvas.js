@@ -5552,324 +5552,170 @@
       setNodeImages(node.id, data.images || [], {
         autoLayoutAfter: universeFormatRef.current.nodeImagePlacement === "top"
       });
+      return data.images || [];
     }, [setNodeImages]);
 
     React.useEffect(() => {
-      const modal = document.getElementById("image-viewer-modal");
-      const title = document.querySelector("[data-image-viewer-title], #image-viewer-title");
-      const frame = document.querySelector("[data-image-viewer-frame]");
-      const image = document.querySelector("[data-image-viewer-img]");
-      const thumbs = document.querySelector("[data-image-viewer-thumbs]");
-      const status = document.querySelector("[data-image-viewer-status]");
-      const prevButton = document.querySelector("[data-image-viewer-prev]");
-      const nextButton = document.querySelector("[data-image-viewer-next]");
-      const openButton = document.querySelector("[data-image-viewer-open]");
-      const downloadButton = document.querySelector("[data-image-viewer-download]");
-      const deleteButton = document.querySelector("[data-image-viewer-delete]");
-      const primaryInput = document.querySelector("[data-image-viewer-primary]");
-      const closeButtons = document.querySelectorAll("[data-image-viewer-close]");
-      if (!modal || !frame || !image || !thumbs) {
-        return undefined;
+      function getViewerDownloadName(node, image) {
+        const nodeName = node?.data?.name || universe.name || "universe-image";
+        const safeName = safeFileSlug(nodeName);
+        return `${safeName}-${image?.id || Date.now()}.png`;
       }
 
-      let viewerNodeId = null;
-      let viewerImages = [];
-      let viewerIndex = 0;
-      let scale = 1;
-      let translateX = 0;
-      let translateY = 0;
-      let dragStart = null;
-
-      function currentImage() {
-        return viewerImages[viewerIndex] || null;
+      function getViewerImageName(node, image, index, total) {
+        const baseName = node?.data?.name || image?.id || "Universe image";
+        return total > 1 ? `${baseName} Image (${index + 1} of ${total})` : `${baseName} Image`;
       }
 
-      function applyTransform() {
-        image.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-        image.classList.add("is-pannable");
+      function mapViewerImages(node, images) {
+        const normalizedImages = normalizeImages(images || []);
+        const total = normalizedImages.length;
+        return normalizedImages.map((image, index) => ({
+          id: image.id,
+          src: image.image_url || "",
+          name: getViewerImageName(node, image, index, total),
+          downloadName: getViewerDownloadName(node, image),
+          alt: node?.data?.name || "Universe Builder image",
+          isPrimary: Boolean(image.is_primary),
+          metadata: {
+            ...image,
+            viewerTotal: total
+          }
+        }));
       }
 
-      function resetTransform() {
-        scale = 1;
-        translateX = 0;
-        translateY = 0;
-        applyTransform();
-      }
+      function getViewerDetails(node, image, index) {
+        const rawImage = image?.metadata || image || {};
+        const nodeKind = node?.data?.kind === "universe" ? "Universe" : "Element";
+        const elementType = node?.data?.elementType?.name || (nodeKind === "Universe" ? "Universe" : "Element");
+        const group = node?.data?.groupId
+          ? elementGroups.find((item) => item.id === node.data.groupId)
+          : null;
+        const imageCount = Number(rawImage.viewerTotal) || normalizeImages(node?.data?.images || []).length;
+        const objectRows = [
+          ["Object", node?.data?.name || "Untitled"],
+          ["Object Type", elementType],
+          ["Universe", universe.name || "Untitled Universe"]
+        ];
+        if (group?.name) objectRows.push(["Group", group.name]);
 
-      function renderViewer() {
-        const activeImage = currentImage();
-        if (!activeImage) {
-          modal.hidden = true;
-          return;
-        }
-
-        const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
-        if (title) {
-          title.textContent = `${node?.data?.name || "Image"} Image (${viewerIndex + 1} of ${viewerImages.length})`;
-        }
-        image.src = activeImage.image_url;
-        image.alt = "";
-        thumbs.innerHTML = viewerImages.map((viewerImage, index) => `
-          <button class="image-thumb${index === viewerIndex ? " is-active" : ""}" type="button" data-viewer-thumb="${index}" aria-label="Show image ${index + 1}">
-            <img src="${escapeHtml(viewerImage.image_url)}" alt="">
-          </button>
-        `).join("");
-        thumbs.querySelectorAll("[data-viewer-thumb]").forEach((thumb) => {
-          thumb.addEventListener("click", () => {
-            viewerIndex = Number(thumb.dataset.viewerThumb || 0);
-            resetTransform();
-            renderViewer();
-          });
-        });
-        if (prevButton) {
-          prevButton.disabled = viewerImages.length < 2;
-        }
-        if (nextButton) {
-          nextButton.disabled = viewerImages.length < 2;
-        }
-        if (primaryInput) {
-          primaryInput.checked = Boolean(activeImage.is_primary);
-          primaryInput.disabled = Boolean(activeImage.is_primary);
-        }
-        if (status) {
-          status.textContent = "";
-          status.classList.remove("is-error", "is-success");
-        }
-        resetTransform();
-      }
-
-      function closeViewer() {
-        modal.hidden = true;
-        viewerNodeId = null;
-        viewerImages = [];
-        viewerIndex = 0;
-        resetTransform();
-      }
-
-      function moveViewer(direction) {
-        if (!viewerImages.length) {
-          return;
-        }
-
-        viewerIndex = (viewerIndex + direction + viewerImages.length) % viewerImages.length;
-        renderViewer();
-      }
-
-      function handlePrevious() {
-        moveViewer(-1);
-      }
-
-      function handleNext() {
-        moveViewer(1);
+        return {
+          imageInfo: {
+            title: "Image Information",
+            rows: [
+              ["Source", "Universe Builder object image"],
+              ["Selected Image", rawImage.id || "Unknown"],
+              ["Images in Set", String(imageCount)],
+              ["Image Role", rawImage.is_primary ? "Primary" : `Image ${index + 1}`]
+            ]
+          },
+          objectDetails: {
+            title: "Object Details",
+            rows: objectRows,
+            body: node?.data?.description || ""
+          }
+        };
       }
 
       function handleOpenViewer(event) {
         const { nodeId, imageId } = event.detail || {};
         const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
         const images = normalizeImages(node?.data?.images || []);
-        if (!node || !images.length) {
+        if (!node || !images.length || typeof window.openCentralisImageViewer !== "function") {
           return;
         }
 
-        viewerNodeId = nodeId;
-        viewerImages = images;
-        const requestedIndex = images.findIndex((viewerImage) => viewerImage.id === imageId);
-        viewerIndex = requestedIndex >= 0 ? requestedIndex : 0;
-        modal.hidden = false;
-        renderViewer();
-      }
-
-      function handleWheel(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        const nextScale = Math.min(4, Math.max(1, scale + (event.deltaY < 0 ? 0.16 : -0.16)));
-        if (nextScale === 1) {
-          translateX = 0;
-          translateY = 0;
-        }
-        scale = nextScale;
-        applyTransform();
-      }
-
-      function handlePointerDown(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        image.setPointerCapture(event.pointerId);
-        dragStart = {
-          pointerId: event.pointerId,
-          x: event.clientX,
-          y: event.clientY,
-          translateX,
-          translateY
-        };
-      }
-
-      function handlePointerMove(event) {
-        if (!dragStart || dragStart.pointerId !== event.pointerId) {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        translateX = dragStart.translateX + event.clientX - dragStart.x;
-        translateY = dragStart.translateY + event.clientY - dragStart.y;
-        applyTransform();
-      }
-
-      function handlePointerUp(event) {
-        if (dragStart?.pointerId === event.pointerId) {
-          event.preventDefault();
-          event.stopPropagation();
-          dragStart = null;
-        }
-      }
-
-      function preventImageDrag(event) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-
-      function handleDownload() {
-        const activeImage = currentImage();
-        if (!activeImage) {
-          return;
-        }
-
-        const link = document.createElement("a");
-        link.href = activeImage.image_url;
-        link.download = `centralis-image-${activeImage.id || Date.now()}.png`;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.click();
-      }
-
-      function handleOpenImage() {
-        const activeImage = currentImage();
-        if (!activeImage?.image_url) {
-          return;
-        }
-
-        window.open(activeImage.image_url, "_blank", "noopener,noreferrer");
-      }
-
-      async function handleSetPrimaryImage() {
-        const activeImage = currentImage();
-        const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
-        if (!activeImage || !node || activeImage.is_primary) {
-          return;
-        }
-
-        if (primaryInput) {
-          primaryInput.disabled = true;
-        }
-        if (status) {
-          status.textContent = "Setting primary image...";
-          status.classList.remove("is-error", "is-success");
-        }
-
-        try {
-          await callEdgeFunction("set-primary-image", {
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageId: activeImage.id })
-          });
-          viewerImages = normalizeImages(viewerImages.map((viewerImage) => ({
-            ...viewerImage,
-            is_primary: viewerImage.id === activeImage.id
-          })));
-          viewerIndex = Math.max(0, viewerImages.findIndex((viewerImage) => viewerImage.id === activeImage.id));
-          setNodeImages(node.id, viewerImages);
-          if (status) {
-            status.textContent = "Primary image updated.";
-            status.classList.add("is-success");
+        window.openCentralisImageViewer({
+          title: node.data?.name || "Universe Builder Image",
+          kicker: "Universe Builder Image Viewer",
+          images: mapViewerImages(node, images),
+          activeImageId: imageId,
+          details: (image, index) => getViewerDetails(node, image, index),
+          capabilities: {
+            canNavigate: true,
+            canShowThumbnails: images.length > 1,
+            canSetPrimary: true,
+            canOpen: true,
+            canDownload: true,
+            canDelete: true,
+            canUpload: true,
+            uploadMode: "add",
+            uploadLabel: "Upload"
+          },
+          actions: {
+            upload: async (file) => {
+              if (!file?.type?.startsWith("image/")) {
+                throw new Error("Choose an image file to upload.");
+              }
+              const body = new FormData();
+              body.append("objectId", node.data.recordId);
+              body.append("storageModule", "universe-builder");
+              body.append("objectName", node.data.name || "");
+              body.append("objectKind", node.data.kind || "");
+              body.append("elementType", node.data.elementType?.name || "");
+              body.append("file", file);
+              const uploaded = await callEdgeFunction("upload-object-image", { body });
+              const latestImages = await refreshNodeImages(node);
+              const currentNode = nodesRef.current.find((item) => item.id === node.id) || node;
+              return {
+                images: mapViewerImages(currentNode, latestImages || currentNode?.data?.images || []),
+                activeImageId: uploaded?.image?.id || latestImages?.at(-1)?.id || ""
+              };
+            },
+            setPrimary: async (viewerImage) => {
+              const activeImage = viewerImage?.metadata;
+              if (!activeImage || activeImage.is_primary) {
+                return;
+              }
+              await callEdgeFunction("set-primary-image", {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageId: activeImage.id })
+              });
+              const currentNode = nodesRef.current.find((item) => item.id === node.id) || node;
+              const currentImages = normalizeImages(currentNode?.data?.images || []);
+              const nextImages = normalizeImages(currentImages.map((image) => ({
+                ...image,
+                is_primary: image.id === activeImage.id
+              })));
+              setNodeImages(node.id, nextImages);
+              return {
+                images: mapViewerImages(currentNode, nextImages),
+                activeImageId: activeImage.id
+              };
+            },
+            delete: async (viewerImage) => {
+              const activeImage = viewerImage?.metadata;
+              if (!activeImage || !window.confirm("Delete this image?")) {
+                return false;
+              }
+              await callEdgeFunction("delete-object-image", {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageId: activeImage.id })
+              });
+              const currentNode = nodesRef.current.find((item) => item.id === node.id) || node;
+              const currentImages = normalizeImages(currentNode?.data?.images || []);
+              const nextImages = normalizeImages(currentImages
+                .filter((image) => image.id !== activeImage.id)
+                .map((image, index, remainingImages) => ({
+                  ...image,
+                  is_primary: remainingImages.length === 1 ? true : image.is_primary
+                })));
+              setNodeImages(node.id, nextImages);
+              if (!nextImages.length) {
+                return { close: true };
+              }
+              return {
+                images: mapViewerImages(currentNode, nextImages),
+                activeImageId: nextImages[0]?.id || ""
+              };
+            }
           }
-          renderViewer();
-        } catch (error) {
-          if (status) {
-            status.textContent = `Could not set primary image: ${getReadableError(error)}`;
-            status.classList.add("is-error");
-          }
-          if (primaryInput) {
-            primaryInput.checked = false;
-            primaryInput.disabled = false;
-          }
-        }
-      }
-
-      async function handleDelete() {
-        const activeImage = currentImage();
-        const node = nodesRef.current.find((currentNode) => currentNode.id === viewerNodeId);
-        if (!activeImage || !node || !window.confirm("Delete this image?")) {
-          return;
-        }
-
-        if (deleteButton) {
-          deleteButton.disabled = true;
-        }
-        if (status) {
-          status.textContent = "Deleting image...";
-          status.classList.remove("is-error", "is-success");
-        }
-
-        try {
-          await callEdgeFunction("delete-object-image", {
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageId: activeImage.id })
-          });
-          const nextImages = normalizeImages(viewerImages
-            .filter((viewerImage) => viewerImage.id !== activeImage.id)
-            .map((viewerImage, index, remainingImages) => ({
-              ...viewerImage,
-              is_primary: remainingImages.length === 1 ? true : viewerImage.is_primary
-            })));
-          viewerImages = nextImages;
-          viewerIndex = Math.min(viewerIndex, Math.max(0, nextImages.length - 1));
-          setNodeImages(node.id, nextImages);
-          if (!nextImages.length) {
-            closeViewer();
-          } else {
-            renderViewer();
-          }
-        } catch (error) {
-          if (status) {
-            status.textContent = `Could not delete image: ${getReadableError(error)}`;
-            status.classList.add("is-error");
-          }
-        }
-
-        if (deleteButton) {
-          deleteButton.disabled = false;
-        }
+        });
       }
 
       window.addEventListener("centralis:open-image-viewer", handleOpenViewer);
-      closeButtons.forEach((button) => button.addEventListener("click", closeViewer));
-      prevButton?.addEventListener("click", handlePrevious);
-      nextButton?.addEventListener("click", handleNext);
-      openButton?.addEventListener("click", handleOpenImage);
-      downloadButton?.addEventListener("click", handleDownload);
-      deleteButton?.addEventListener("click", handleDelete);
-      primaryInput?.addEventListener("change", handleSetPrimaryImage);
-      frame.addEventListener("wheel", handleWheel, { passive: false });
-      image.addEventListener("pointerdown", handlePointerDown);
-      image.addEventListener("pointermove", handlePointerMove);
-      image.addEventListener("pointerup", handlePointerUp);
-      image.addEventListener("pointercancel", handlePointerUp);
-      image.addEventListener("dragstart", preventImageDrag);
       return () => {
         window.removeEventListener("centralis:open-image-viewer", handleOpenViewer);
-        closeButtons.forEach((button) => button.removeEventListener("click", closeViewer));
-        prevButton?.removeEventListener("click", handlePrevious);
-        nextButton?.removeEventListener("click", handleNext);
-        openButton?.removeEventListener("click", handleOpenImage);
-        downloadButton?.removeEventListener("click", handleDownload);
-        deleteButton?.removeEventListener("click", handleDelete);
-        primaryInput?.removeEventListener("change", handleSetPrimaryImage);
-        frame.removeEventListener("wheel", handleWheel);
-        image.removeEventListener("pointerdown", handlePointerDown);
-        image.removeEventListener("pointermove", handlePointerMove);
-        image.removeEventListener("pointerup", handlePointerUp);
-        image.removeEventListener("pointercancel", handlePointerUp);
-        image.removeEventListener("dragstart", preventImageDrag);
       };
     }, [setNodeImages]);
 

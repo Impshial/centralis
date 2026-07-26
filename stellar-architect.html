@@ -6,8 +6,8 @@
   <title>Stellar Architect | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
-  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=stellar-image-prompt-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=stellar-image-prompt-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body class="stellar-home-route" data-auth-required="true" data-page="stellar-architect">
@@ -264,10 +264,38 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="stellar-image-prompt-modal" hidden>
+    <section class="modal-dialog stellar-image-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="stellar-image-prompt-title">
+      <form data-stellar-image-prompt-form>
+        <header class="stellar-image-prompt-header">
+          <p class="settings-kicker">Image Prompt</p>
+          <h2 id="stellar-image-prompt-title">Generate Image</h2>
+          <p class="modal-subtitle" data-stellar-image-prompt-subtitle>Review the generated prompt and add any overriding instructions before generation starts.</p>
+        </header>
+        <div class="stellar-image-prompt-grid">
+          <label class="stellar-image-prompt-field">
+            <span>Generated Prompt</span>
+            <textarea data-stellar-image-prompt-base readonly></textarea>
+          </label>
+          <label class="stellar-image-prompt-field">
+            <span>Additional Overriding Instructions</span>
+            <textarea data-stellar-image-prompt-extra placeholder="Example: make the image more scientific, avoid text in the image, use a wide cinematic crop..."></textarea>
+          </label>
+        </div>
+        <p class="dialog-status" data-stellar-image-prompt-status role="status"></p>
+        <div class="dialog-actions stellar-image-prompt-actions">
+          <button class="secondary-action" type="button" data-cancel-stellar-image-prompt>Cancel</button>
+          <button class="primary-action" type="submit">Generate Image</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=generation-activity-1"></script>
-  <script src="stellar-architect.js?v=module-header-home-match-2"></script>
+  <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
+  <script src="stellar-architect.js?v=stellar-image-prompt-1"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisStellarLoaded) {

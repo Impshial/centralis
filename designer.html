@@ -47,6 +47,11 @@
                 <input type="checkbox" data-centralis-image-viewer-primary>
                 <span>Set as Primary Image</span>
               </label>
+              <button class="secondary-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-upload hidden>
+                <ph-upload-simple aria-hidden="true"></ph-upload-simple>
+                <span>Upload</span>
+              </button>
+              <input type="file" accept="image/*" data-centralis-image-viewer-upload-input hidden>
               <button class="secondary-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-open>
                 <ph-arrow-square-out aria-hidden="true"></ph-arrow-square-out>
                 <span>Open in New Tab</span>
@@ -66,6 +71,9 @@
           </header>
 
           <div class="centralis-image-viewer-stage" data-centralis-image-viewer-stage>
+            <aside class="centralis-image-viewer-thumb-rail" data-centralis-image-viewer-thumb-rail hidden>
+              <div class="centralis-image-viewer-thumb-list" data-centralis-image-viewer-thumbs></div>
+            </aside>
             <button class="centralis-image-viewer-nav is-prev" type="button" aria-label="Previous image" data-centralis-image-viewer-prev>
               <ph-caret-left aria-hidden="true"></ph-caret-left>
             </button>
@@ -107,6 +115,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=generation-activity-1"></script>
-  <script src="designer.js?v=designer-viewer-14"></script>
+  <script src="designer.js?v=designer-viewer-thumbnails-1"></script>
 </body>
 </html>

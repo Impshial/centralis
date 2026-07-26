@@ -26,7 +26,7 @@ function createObjectImageMetadata(input: {
   name?: string;
 }) {
   const name = String(input.name || input.elementType || input.objectKind || input.objectId).trim();
-  if (input.storageModule === "stellar-architect") {
+  if (input.storageModule === "stellar-architect" || input.storageModule.startsWith("stellar-architect/")) {
     return createCentralisStorageMetadata({
       module: "Stellar Architect",
       context: `Stellar Architect: ${name}`,
@@ -104,7 +104,9 @@ Deno.serve(async (req) => {
     }
 
     const prompt = createPrompt(body);
-    const jobModule = storageModule === "stellar-architect" ? "stellar_architect" : "universe_builder";
+    const jobModule = storageModule === "stellar-architect" || storageModule.startsWith("stellar-architect/")
+      ? "stellar_architect"
+      : "universe_builder";
     const job = await createGenerationJob({
       userId: appUser.id,
       module: jobModule,

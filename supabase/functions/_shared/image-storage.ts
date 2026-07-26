@@ -111,7 +111,12 @@ export async function getAuthUser(req: Request) {
 }
 
 export function createImageKey(moduleName: string, imageId: string, extension = "png") {
-  const cleanModuleName = moduleName.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "legacy";
+  const cleanModuleName = moduleName
+    .toLowerCase()
+    .split("/")
+    .map((segment) => segment.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""))
+    .filter(Boolean)
+    .join("/") || "legacy";
   const cleanExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
   // The iDrive bucket is already named "centralis". Keep the object key
   // relative to that bucket so objects do not end up under centralis/centralis.

@@ -18,7 +18,7 @@ function createUploadImageMetadata(input: {
   elementType?: string;
 }) {
   const name = String(input.objectName || input.elementType || input.objectKind || input.objectId).trim();
-  if (input.storageModule === "stellar-architect") {
+  if (input.storageModule === "stellar-architect" || input.storageModule.startsWith("stellar-architect/")) {
     return createCentralisStorageMetadata({
       module: "Stellar Architect",
       context: `Stellar Architect: ${name}`,

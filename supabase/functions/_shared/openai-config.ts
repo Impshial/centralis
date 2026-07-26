@@ -1,6 +1,6 @@
 export const TEXT_MODEL = "gpt-5.5";
 export const IMAGE_MODEL = "gpt-image-2";
-export const IMAGE_SIZE = "1024x1024";
+export const IMAGE_SIZE = "2048x2048";
 export const IMAGE_QUALITY = "medium";
 
 type ResponseInputMessage = {

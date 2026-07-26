@@ -279,8 +279,19 @@
     <section class="modal-dialog movie-small-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-import-title">
       <button class="modal-close movie-floating-close" type="button" data-close-modal-target="movie-import-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
       <h2 id="movie-import-title">Import Movies</h2>
-      <p class="modal-subtitle">Upload a CSV or JSON file with your movie list.</p>
+      <p class="modal-subtitle">Upload a Centralis export JSON or a bare-bones CSV/JSON movie list.</p>
       <form data-import-form>
+        <div class="movie-format-help">
+          <strong>Import type:</strong>
+          <label class="checkbox-field">
+            <input type="radio" name="import_mode" value="full" checked>
+            Full Data File
+          </label>
+          <label class="checkbox-field">
+            <input type="radio" name="import_mode" value="bare">
+            Bare Bones File
+          </label>
+        </div>
         <label class="movie-drop-zone">
           <input type="file" accept=".csv,.json,application/json,text/csv" data-import-file hidden>
           <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
@@ -288,9 +299,10 @@
         </label>
         <div class="movie-format-help">
           <strong>Expected format:</strong>
-          <p>CSV columns or JSON fields: title, yearReleased, downloaded, franchise, collection</p>
+          <p>Full data accepts Centralis movie exports. Bare bones accepts title, yearReleased, downloaded, franchise, collection.</p>
         </div>
         <p class="dialog-status" data-import-status role="status"></p>
+        <div data-import-failures hidden></div>
         <div class="dialog-actions">
           <button class="secondary-action" type="button" data-download-import-schema>
             <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
@@ -320,7 +332,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=generation-activity-1"></script>
-  <script src="movie-tracker.js?v=movie-tracker-v27"></script>
+  <script src="movie-tracker.js?v=movie-tracker-v29"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {

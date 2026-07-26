@@ -14,6 +14,7 @@ const stellarState = {
   selectedSystemId: null,
   expandedTree: new Set(),
   collapsedTree: new Set(),
+  sidePanelCollapsed: readStellarSidePanelPreference(),
   lifeformModal: { planetId: null, moonId: null, isGenerating: false },
   loading: false,
 };
@@ -21,8 +22,10 @@ const stellarState = {
 window.centralisStellarLoaded = true;
 
 const stellarEls = {
+  page: document.querySelector(".stellar-page"),
   root: document.querySelector("[data-stellar-root]"),
   tree: document.querySelector("[data-stellar-tree]"),
+  sidePanel: document.querySelector(".stellar-side-panel"),
   sideGenerateButton: document.querySelector("[data-stellar-side-generate]"),
   generateButtons: document.querySelectorAll("[data-open-generate-system]"),
   generateModal: document.getElementById("stellar-generate-modal"),
@@ -36,7 +39,68 @@ const stellarEls = {
   lifeTitle: document.querySelector("[data-stellar-life-title]"),
   lifeStatus: document.querySelector("[data-stellar-life-status]"),
   lifeConfirm: document.querySelector("[data-confirm-stellar-life]"),
+  imagePromptModal: document.getElementById("stellar-image-prompt-modal"),
+  imagePromptForm: document.querySelector("[data-stellar-image-prompt-form]"),
+  imagePromptTitle: document.getElementById("stellar-image-prompt-title"),
+  imagePromptSubtitle: document.querySelector("[data-stellar-image-prompt-subtitle]"),
+  imagePromptBase: document.querySelector("[data-stellar-image-prompt-base]"),
+  imagePromptExtra: document.querySelector("[data-stellar-image-prompt-extra]"),
+  imagePromptStatus: document.querySelector("[data-stellar-image-prompt-status]"),
 };
+
+let stellarImagePromptResolver = null;
+
+function readStellarSidePanelPreference() {
+  try {
+    return localStorage.getItem("centralis.stellarSidePanelCollapsed") === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setStellarSidePanelCollapsed(isCollapsed) {
+  stellarState.sidePanelCollapsed = Boolean(isCollapsed);
+  try {
+    localStorage.setItem("centralis.stellarSidePanelCollapsed", String(stellarState.sidePanelCollapsed));
+  } catch {
+    // Ignore storage failures; the current page state still updates.
+  }
+  applyStellarSidePanelState();
+  renderTree();
+}
+
+function applyStellarSidePanelState() {
+  stellarEls.page?.classList.toggle("is-stellar-side-collapsed", stellarState.sidePanelCollapsed);
+  stellarEls.sidePanel?.classList.toggle("is-collapsed", stellarState.sidePanelCollapsed);
+}
+
+function showStellarToast(message, tone = "") {
+  const container = getStellarToastContainer();
+  const toast = document.createElement("div");
+  toast.className = "chronicle-toast";
+  toast.classList.toggle("is-error", tone === "error");
+  toast.classList.toggle("is-success", tone === "success");
+  toast.setAttribute("role", tone === "error" ? "alert" : "status");
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add("is-hiding");
+    toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+  }, tone === "error" ? 5200 : 3200);
+}
+
+function getStellarToastContainer() {
+  let container = document.querySelector("[data-stellar-toast-stack]");
+  if (container) return container;
+  container = document.createElement("div");
+  container.className = "chronicle-toast-stack";
+  container.dataset.stellarToastStack = "true";
+  container.setAttribute("aria-live", "polite");
+  container.setAttribute("aria-atomic", "true");
+  document.body.appendChild(container);
+  return container;
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -180,6 +244,45 @@ function closeLifeModal(force = false) {
   stellarState.lifeformModal = { planetId: null, moonId: null, isGenerating: false };
 }
 
+function openStellarImagePromptDialog({ config, record, basePrompt }) {
+  if (!stellarEls.imagePromptModal) return Promise.resolve("");
+  if (stellarImagePromptResolver) {
+    stellarImagePromptResolver(null);
+    stellarImagePromptResolver = null;
+  }
+
+  const objectName = stellarObjectDisplayName(record, config.label);
+  if (stellarEls.imagePromptTitle) {
+    stellarEls.imagePromptTitle.textContent = `Generate ${config.label} Image`;
+  }
+  if (stellarEls.imagePromptSubtitle) {
+    stellarEls.imagePromptSubtitle.textContent = `Add optional overriding instructions for ${objectName}. Leave this blank to use the generated prompt as-is.`;
+  }
+  if (stellarEls.imagePromptBase) stellarEls.imagePromptBase.value = basePrompt || "";
+  if (stellarEls.imagePromptExtra) stellarEls.imagePromptExtra.value = "";
+  setStatus(stellarEls.imagePromptStatus, "");
+  stellarEls.imagePromptModal.hidden = false;
+  window.setTimeout(() => stellarEls.imagePromptExtra?.focus(), 0);
+
+  return new Promise((resolve) => {
+    stellarImagePromptResolver = resolve;
+  });
+}
+
+function closeStellarImagePromptDialog(value = null) {
+  if (stellarEls.imagePromptModal) stellarEls.imagePromptModal.hidden = true;
+  const resolve = stellarImagePromptResolver;
+  stellarImagePromptResolver = null;
+  if (resolve) resolve(value);
+}
+
+function buildStellarImageExtraPrompt(basePrompt, userInstructions) {
+  const prompt = String(basePrompt || "").trim();
+  const instructions = String(userInstructions || "").trim();
+  if (!instructions) return prompt;
+  return `${prompt}\n\nAdditional overriding instructions from the user:\n${instructions}`;
+}
+
 function parseRoute() {
   const hash = window.location.hash || "#systems";
   const [name, id] = hash.slice(1).replace(/=$/, "").split("/");
@@ -232,6 +335,132 @@ function currentSystem() {
   return null;
 }
 
+function stellarBreadcrumbLink(label, href, isCurrent = false) {
+  const content = escapeHtml(label || "Untitled");
+  if (isCurrent || !href) {
+    return `<span class="stellar-breadcrumb-current" aria-current="page">${content}</span>`;
+  }
+  return `<a href="${escapeHtml(href)}">${content}</a>`;
+}
+
+function renderStellarBreadcrumbs(items) {
+  return `
+    <nav class="stellar-breadcrumbs" aria-label="Stellar Architect breadcrumbs">
+      ${items.map((item, index) => `
+        ${index ? '<ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>' : ""}
+        ${stellarBreadcrumbLink(item.label, item.href, index === items.length - 1)}
+      `).join("")}
+    </nav>
+  `;
+}
+
+function stellarSystemBreadcrumbs(system, isCurrent = false) {
+  return [
+    { label: "Systems Home", href: "#systems" },
+    {
+      label: system?.name ? `Star System - ${system.name}` : "Star System",
+      href: system?.id ? `#system/${encodeURIComponent(system.id)}` : "",
+      current: isCurrent,
+    },
+  ];
+}
+
+function stellarObjectBreadcrumbs(kind, record) {
+  const system = systemForId(record?.system_id) || currentSystem();
+  const planet = kind === "planet"
+    ? record
+    : record?.planet_id
+      ? planetForId(record.planet_id)
+      : null;
+  const moon = kind === "moon"
+    ? record
+    : record?.moon_id
+      ? moonForId(record.moon_id)
+      : null;
+  const parentPlanet = planet || (moon?.planet_id ? planetForId(moon.planet_id) : null);
+  const colony = kind === "colony"
+    ? record
+    : record?.colony_id
+      ? colonyForId(record.colony_id)
+      : null;
+  const items = stellarSystemBreadcrumbs(system);
+  if (parentPlanet) {
+    items.push({
+      label: parentPlanet.name ? `Planet - ${parentPlanet.name}` : "Planet",
+      href: `#planet/${encodeURIComponent(parentPlanet.id)}`,
+    });
+  }
+  if (moon) {
+    items.push({
+      label: moon.name ? `Moon - ${moon.name}` : "Moon",
+      href: `#moon/${encodeURIComponent(moon.id)}`,
+    });
+  }
+  if (colony) {
+    items.push({
+      label: colony.name ? `Colony - ${colony.name}` : "Colony",
+      href: `#colony/${encodeURIComponent(colony.id)}`,
+    });
+  }
+  const currentLabels = {
+    planet: record?.name ? `Planet - ${record.name}` : "Planet",
+    moon: record?.name ? `Moon - ${record.name}` : "Moon",
+    lifeform: record?.designation || record?.name ? `Lifeform - ${record.designation || record.name}` : "Lifeform",
+    colony: record?.name ? `Colony - ${record.name}` : "Colony",
+    colonist: record?.name ? `Colonist - ${record.name}` : "Colonist",
+  };
+  const currentHrefByKind = {
+    planet: record?.id ? `#planet/${encodeURIComponent(record.id)}` : "",
+    moon: record?.id ? `#moon/${encodeURIComponent(record.id)}` : "",
+    colony: record?.id ? `#colony/${encodeURIComponent(record.id)}` : "",
+  };
+  const lastItem = items[items.length - 1];
+  if (lastItem?.href && lastItem.href === currentHrefByKind[kind]) {
+    lastItem.label = currentLabels[kind];
+  } else {
+    items.push({ label: currentLabels[kind], href: "" });
+  }
+  return items;
+}
+
+function stellarRouteLoadingName(route) {
+  if (!route?.id) return "";
+  if (route.name === "system") return systemForId(route.id)?.name || "";
+  if (route.name === "planet") return planetForId(route.id)?.name || "";
+  if (route.name === "moon") return moonForId(route.id)?.name || "";
+  if (route.name === "lifeform") return lifeformForId(route.id)?.name || "";
+  if (route.name === "colony") return colonyForId(route.id)?.name || "";
+  if (route.name === "colonist") return colonistForId(route.id)?.name || "";
+  return "";
+}
+
+async function fetchStellarRouteLoadingName(route) {
+  const cachedName = stellarRouteLoadingName(route);
+  if (cachedName || !route?.id || !stellarState.appUser) return cachedName;
+  const tableByRoute = {
+    system: "stellar_systems",
+    planet: "stellar_planets",
+    moon: "stellar_moons",
+    lifeform: "stellar_lifeforms",
+    colony: "stellar_colonies",
+    colonist: "stellar_colonists",
+  };
+  const table = tableByRoute[route.name];
+  if (!table) return "";
+  const { data, error } = await stellarSupabase
+    .from(table)
+    .select("name")
+    .eq("id", route.id)
+    .eq("user_id", stellarState.appUser.id)
+    .maybeSingle();
+  if (error) return "";
+  return data?.name || "";
+}
+
+function renderStellarLoading(name = "") {
+  stellarEls.root.innerHTML = `<div class="stellar-loading">Loading ${escapeHtml(name || "Stellar Architect")}...</div>`;
+}
+
 async function fetchSystems() {
   const { data, error } = await stellarSupabase
     .from("stellar_systems")
@@ -246,7 +475,7 @@ async function fetchLandingChildren() {
   const [stars, planets, colonies] = await Promise.all([
     stellarSupabase
       .from("stellar_stars")
-      .select("id,system_id,spectral_type")
+      .select("id,system_id,spectral_type,description")
       .eq("user_id", stellarState.appUser.id),
     stellarSupabase
       .from("stellar_planets")
@@ -266,8 +495,8 @@ async function fetchLandingChildren() {
   stellarState.colonies = colonies.data || [];
   stellarState.moons = [];
   stellarState.lifeforms = [];
-  stellarState.images = [];
   stellarState.colonists = [];
+  await fetchStellarImages();
 }
 
 async function fetchSystemGraph(systemId) {
@@ -301,11 +530,16 @@ async function fetchSystemGraph(systemId) {
   stellarState.lifeforms = lifeforms.data || [];
   stellarState.colonies = colonies.data || [];
   stellarState.colonists = colonists.data || [];
-  await fetchLifeformImages();
+  await fetchStellarImages();
 }
 
-async function fetchLifeformImages() {
-  const objectIds = stellarState.lifeforms.map((lifeform) => lifeform.id).filter(Boolean);
+async function fetchStellarImages() {
+  const objectIds = [
+    ...stellarState.stars.map((star) => star.id),
+    ...stellarState.planets.map((planet) => planet.id),
+    ...stellarState.moons.map((moon) => moon.id),
+    ...stellarState.lifeforms.map((lifeform) => lifeform.id),
+  ].filter(Boolean);
   if (!objectIds.length) {
     stellarState.images = [];
     return;
@@ -372,6 +606,245 @@ function primaryObjectImage(objectId) {
   return sortedObjectImages(objectId)[0] || null;
 }
 
+function stellarImageConfigForKind(kind) {
+  const configs = {
+    planet: {
+      label: "Planet",
+      kicker: "Stellar Planet Viewer",
+      source: "Stellar Architect planet image",
+      objectKind: "stellar planet",
+      elementType(record) {
+        return record?.type || "Planet";
+      },
+      prompt: buildPlanetImagePrompt,
+    },
+    star: {
+      label: "Star",
+      kicker: "Stellar Star Viewer",
+      source: "Stellar Architect star image",
+      objectKind: "stellar star",
+      elementType(record) {
+        return record?.spectral_type ? `${record.spectral_type} star` : "Star";
+      },
+      prompt: buildStarImagePrompt,
+    },
+    moon: {
+      label: "Moon",
+      kicker: "Stellar Moon Viewer",
+      source: "Stellar Architect moon image",
+      objectKind: "stellar moon",
+      elementType(record) {
+        return record?.type || "Moon";
+      },
+      prompt: buildMoonImagePrompt,
+    },
+    lifeform: {
+      label: "Lifeform",
+      kicker: "Stellar Object Viewer",
+      source: "Stellar Architect lifeform image",
+      objectKind: "stellar lifeform",
+      elementType(record) {
+        return record?.kingdom || "Alien lifeform";
+      },
+      prompt: buildLifeformImagePrompt,
+    },
+  };
+  return configs[kind] || configs.lifeform;
+}
+
+function stellarObjectForKind(kind, id) {
+  if (kind === "star") return stellarState.stars.find((star) => star.id === id) || null;
+  if (kind === "planet") return planetForId(id);
+  if (kind === "moon") return moonForId(id);
+  return lifeformForId(id);
+}
+
+function stellarObjectDisplayName(record, fallback = "Stellar object") {
+  return record?.name || record?.designation || fallback;
+}
+
+function stellarImageName(image, record, kind) {
+  const config = stellarImageConfigForKind(kind);
+  const baseName = stellarObjectDisplayName(record, config.label);
+  const filename = image?.stored_image_url ? String(image.stored_image_url).split("/").pop() : "";
+  return image?.is_primary ? `${baseName} Primary Image` : filename || `${baseName} Image`;
+}
+
+function stellarImageDownloadName(image, record) {
+  const filename = image?.stored_image_url ? String(image.stored_image_url).split("/").pop() : "";
+  if (filename) return filename;
+  const slug = String(stellarObjectDisplayName(record, "stellar-image"))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${slug || "stellar-image"}.png`;
+}
+
+function stellarViewerImagesForObject(record, kind) {
+  const config = stellarImageConfigForKind(kind);
+  return sortedObjectImages(record?.id).map((image) => ({
+    id: image.id,
+    src: image.image_url,
+    name: stellarImageName(image, record, kind),
+    downloadName: stellarImageDownloadName(image, record),
+    alt: `${stellarObjectDisplayName(record, config.label)} image`,
+    isPrimary: Boolean(image.is_primary),
+    metadata: {
+      objectId: record?.id,
+      storagePath: image.stored_image_url || "",
+      role: image.is_primary ? "Primary" : "Supporting",
+    },
+  })).filter((image) => image.src);
+}
+
+function stellarObjectContext(record, kind) {
+  const system = systemForId(record?.system_id) || currentSystem();
+  const planet = kind === "planet" ? record : record?.planet_id ? planetForId(record.planet_id) : null;
+  const moon = kind === "moon" ? record : record?.moon_id ? moonForId(record.moon_id) : null;
+  return { system, planet, moon };
+}
+
+function stellarViewerDetailsForObject(record, kind) {
+  const config = stellarImageConfigForKind(kind);
+  const { system, planet, moon } = stellarObjectContext(record, kind);
+  const objectRows = kind === "planet"
+    ? [
+      ["Planet", stellarObjectDisplayName(record, "Planet")],
+      ["Type", record?.type || "--"],
+      ["System", system?.name || "--"],
+      ["Habitability", displayHabitability(record) || "--"],
+      ["Atmosphere", record?.atmosphere || "--"],
+      ["Water", record?.water_presence || "--"],
+      ["Surface Temp", record?.surface_temperature_k ? `${record.surface_temperature_k} K` : "--"],
+    ]
+    : kind === "moon"
+      ? [
+        ["Moon", stellarObjectDisplayName(record, "Moon")],
+        ["Type", record?.type || "--"],
+        ["System", system?.name || "--"],
+        ["Parent Planet", planet?.name || "--"],
+        ["Atmosphere", record?.atmosphere || "--"],
+        ["Water", record?.water_presence || "--"],
+        ["Geological Activity", record?.geological_activity || "--"],
+      ]
+      : kind === "star"
+        ? [
+          ["Star", stellarObjectDisplayName(record, "Star")],
+          ["Spectral Type", record?.spectral_type || "--"],
+          ["System", system?.name || "--"],
+          ["Mass", record?.mass_solar ? `${record.mass_solar} solar masses` : "--"],
+          ["Radius", record?.radius_solar ? `${record.radius_solar} solar radii` : "--"],
+          ["Luminosity", record?.luminosity_solar ? `${record.luminosity_solar} solar luminosities` : "--"],
+          ["Temperature", record?.temperature_k ? `${record.temperature_k} K` : "--"],
+          ["Evolutionary Stage", record?.evolutionary_stage || "--"],
+        ]
+      : [
+        ["Lifeform", stellarObjectDisplayName(record, "Lifeform")],
+        ["Species", record?.species_name || "--"],
+        ["System", system?.name || "--"],
+        ["Planet", planet?.name || "--"],
+        ["Moon", moon?.name || "--"],
+        ["Biome", record?.biome || record?.habitat || "--"],
+        ["Body Type", record?.body_type || "--"],
+        ["Scale", record?.scale || "--"],
+      ];
+  return (image) => ({
+    imageInfo: {
+      title: "Image Information",
+      rows: [
+        ["Source", config.source],
+        ["Selected Image", image?.metadata?.storagePath || image?.id || "--"],
+        ["Images In Set", String(stellarViewerImagesForObject(record, kind).length || 1)],
+        ["Image Role", image?.metadata?.role || "--"],
+      ],
+    },
+    objectDetails: {
+      title: `${config.label} Details`,
+      rows: objectRows,
+      body: record?.description || record?.visual_appearance || "",
+    },
+  });
+}
+
+async function refreshStellarImagesForViewer(record, kind, activeImageId) {
+  await fetchStellarImages();
+  renderRoute();
+  return {
+    images: stellarViewerImagesForObject(record, kind),
+    activeImageId,
+  };
+}
+
+async function uploadStellarViewerImage(record, kind, file) {
+  if (!file?.type?.startsWith("image/")) {
+    throw new Error("Choose an image file to upload.");
+  }
+  const config = stellarImageConfigForKind(kind);
+  const body = new FormData();
+  body.append("objectId", record.id);
+  body.append("storageModule", stellarImageStorageModule(kind));
+  body.append("objectName", stellarObjectDisplayName(record, config.label));
+  body.append("objectKind", config.objectKind);
+  body.append("elementType", config.elementType(record));
+  body.append("file", file);
+  const uploaded = await callEdgeFunction("upload-object-image", { body });
+  return refreshStellarImagesForViewer(record, kind, uploaded?.image?.id);
+}
+
+function openStellarImageViewer(kind, objectId, activeImageId) {
+  const record = stellarObjectForKind(kind, objectId);
+  if (!record || typeof window.openCentralisImageViewer !== "function") return;
+  const config = stellarImageConfigForKind(kind);
+  const images = stellarViewerImagesForObject(record, kind);
+  if (!images.length) return;
+  window.openCentralisImageViewer({
+    title: `${stellarObjectDisplayName(record, config.label)} Image`,
+    kicker: config.kicker,
+    images,
+    activeImageId: activeImageId || images[0]?.id,
+    details: stellarViewerDetailsForObject(record, kind),
+    capabilities: {
+      canNavigate: images.length > 1,
+      canShowThumbnails: images.length > 1,
+      canSetPrimary: true,
+      canOpen: true,
+      canDownload: true,
+      canDelete: true,
+      canUpload: true,
+      uploadMode: "add",
+      uploadLabel: "Upload",
+    },
+    actions: {
+      upload(file) {
+        return uploadStellarViewerImage(record, kind, file);
+      },
+      async setPrimary(image) {
+        await callEdgeFunction("set-primary-image", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageId: image.id }),
+        });
+        return refreshStellarImagesForViewer(record, kind, image.id);
+      },
+      async delete(image, index) {
+        await callEdgeFunction("delete-object-image", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageId: image.id }),
+        });
+        const previousImages = stellarViewerImagesForObject(record, kind);
+        await fetchStellarImages();
+        renderRoute();
+        const nextImages = stellarViewerImagesForObject(record, kind);
+        if (!nextImages.length) return { close: true };
+        const nextIndex = Math.min(index, Math.max(0, previousImages.length - 2));
+        return {
+          images: nextImages,
+          activeImageId: nextImages[nextIndex]?.id || nextImages[0]?.id,
+        };
+      },
+    },
+  });
+}
+
 function truncatePromptText(value, maxLength) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (text.length <= maxLength) return text;
@@ -396,6 +869,65 @@ function buildLifeformImagePrompt(lifeform) {
     source ? `Native world conditions: ${source.name}; atmosphere ${source.atmosphere || "unknown"}; water ${source.water_presence || "unknown"}; gravity ${source.gravity_ms2 || "unknown"} m/s2; surface temperature ${source.surface_temperature_k || "unknown"} K.` : "",
     lifeform.description ? `Description: ${truncatePromptText(lifeform.description, 1300)}` : "",
     "Show the organism clearly in its environment. No labels, captions, diagrams, UI, logos, or watermarks.",
+  ].filter(Boolean);
+  return truncatePromptText(lines.join("\n"), 3800);
+}
+
+function buildStarImagePrompt(star) {
+  const system = systemForId(star?.system_id) || currentSystem();
+  const lines = [
+    "Scientifically plausible stellar astronomy concept art.",
+    `Star: ${star?.name || system?.name || "Unnamed star"}.`,
+    star?.spectral_type ? `Spectral type: ${star.spectral_type}.` : "",
+    star?.mass_solar ? `Mass: ${star.mass_solar} solar masses.` : "",
+    star?.radius_solar ? `Radius: ${star.radius_solar} solar radii.` : "",
+    star?.luminosity_solar ? `Luminosity: ${star.luminosity_solar} solar luminosities.` : "",
+    star?.temperature_k ? `Surface temperature: ${star.temperature_k} K.` : "",
+    star?.magnetic_activity ? `Magnetic activity: ${star.magnetic_activity}.` : "",
+    star?.evolutionary_stage ? `Evolutionary stage: ${star.evolutionary_stage}.` : "",
+    star?.description ? `Description: ${truncatePromptText(star.description, 1200)}` : "",
+    "Show the star as the central subject with surrounding space, light, corona, and any visible stellar activity. No labels, captions, diagrams, UI, logos, or watermarks.",
+  ].filter(Boolean);
+  return truncatePromptText(lines.join("\n"), 3800);
+}
+
+function buildPlanetImagePrompt(planet) {
+  const system = systemForId(planet?.system_id) || currentSystem();
+  const lines = [
+    "Scientifically plausible exoplanet concept art.",
+    `Planet: ${planet?.name || planet?.designation || "Unnamed planet"}.`,
+    system ? `Star system: ${system.name}.` : "",
+    planet?.type ? `Planet type: ${planet.type}.` : "",
+    planet ? `Habitability: ${displayHabitability(planet) || "unknown"}.` : "",
+    planet?.atmosphere ? `Atmosphere: ${planet.atmosphere}.` : "",
+    planet?.water_presence ? `Water: ${planet.water_presence}.` : "",
+    planet?.climate ? `Climate: ${planet.climate}.` : "",
+    planet?.surface_temperature_k ? `Surface temperature: ${planet.surface_temperature_k} K.` : "",
+    planet?.gravity_ms2 ? `Gravity: ${planet.gravity_ms2} m/s2.` : "",
+    planet?.rings ? "The planet has rings." : "",
+    planet?.visual_appearance ? `Visual appearance: ${truncatePromptText(planet.visual_appearance, 900)}` : "",
+    planet?.description ? `Description: ${truncatePromptText(planet.description, 1200)}` : "",
+    "Show the planet clearly as a cinematic space vista, with scientifically plausible atmosphere, surface, clouds, rings, or terrain where relevant. No labels, captions, diagrams, UI, logos, or watermarks.",
+  ].filter(Boolean);
+  return truncatePromptText(lines.join("\n"), 3800);
+}
+
+function buildMoonImagePrompt(moon) {
+  const planet = moon?.planet_id ? planetForId(moon.planet_id) : null;
+  const system = systemForId(moon?.system_id) || currentSystem();
+  const lines = [
+    "Scientifically plausible moon concept art.",
+    `Moon: ${moon?.name || moon?.designation || "Unnamed moon"}.`,
+    system ? `Star system: ${system.name}.` : "",
+    planet ? `Parent planet: ${planet.name}.` : "",
+    moon?.type ? `Moon type: ${moon.type}.` : "",
+    moon?.atmosphere ? `Atmosphere: ${moon.atmosphere}.` : "",
+    moon?.water_presence ? `Water: ${moon.water_presence}.` : "",
+    moon?.geological_activity ? `Geological activity: ${moon.geological_activity}.` : "",
+    moon?.surface_temperature_k ? `Surface temperature: ${moon.surface_temperature_k} K.` : "",
+    moon?.visual_appearance ? `Visual appearance: ${truncatePromptText(moon.visual_appearance, 900)}` : "",
+    moon?.description ? `Description: ${truncatePromptText(moon.description, 1200)}` : "",
+    "Show the moon clearly as a cinematic planetary scene, with its surface and parent planet or local sky visible where appropriate. No labels, captions, diagrams, UI, logos, or watermarks.",
   ].filter(Boolean);
   return truncatePromptText(lines.join("\n"), 3800);
 }
@@ -471,14 +1003,22 @@ function planetDots(system) {
   return `<span class="stellar-planet-dots">${dots}${planets.length > 7 ? `<em>+${planets.length - 7}</em>` : ""}</span>`;
 }
 
+function landingImageForSystem(star, planets) {
+  const orderedObjects = [star, ...planets].filter(Boolean);
+  for (const object of orderedObjects) {
+    const image = primaryObjectImage(object.id);
+    if (image?.image_url) return image;
+  }
+  return null;
+}
+
 function renderLanding() {
   const total = stellarState.systems.length;
-  const planetTotal = stellarState.planets.filter((planet) => !isAsteroidBelt(planet)).length;
-  const colonyTotal = stellarState.colonies.length;
   const cards = stellarState.systems.map((system) => {
     const star = stellarState.stars.find((item) => item.system_id === system.id);
     const planets = stellarState.planets.filter((planet) => planet.system_id === system.id && !isAsteroidBelt(planet));
     const colonies = stellarState.colonies.filter((colony) => colony.system_id === system.id);
+    const landingImage = landingImageForSystem(star, planets);
     const systemSummary = [
       `${formatValue(star?.spectral_type)} star`,
       `${planets.length || Number(system.planet_count || 0)} planets`,
@@ -488,7 +1028,8 @@ function renderLanding() {
     const starDescription = createBlurb(star?.description || system.description || "", 220);
     return `
       <article class="universe-card-wrap stellar-system-card-wrap">
-        <a class="universe-card stellar-system-card" href="#system/${encodeURIComponent(system.id)}">
+        <a class="universe-card stellar-system-card ${landingImage ? "has-background-image" : ""}" href="#system/${encodeURIComponent(system.id)}">
+          ${landingImage ? `<img class="stellar-system-card-background" src="${escapeHtml(landingImage.image_url)}" alt="" aria-hidden="true" loading="lazy">` : ""}
           <span class="card-icon" aria-hidden="true">
             <ph-star weight="duotone"></ph-star>
           </span>
@@ -521,11 +1062,6 @@ function renderLanding() {
       </section>
       <section class="universe-builder-controls stellar-home-controls" aria-label="Stellar Architect summary">
         <p class="universe-builder-count">${total} ${total === 1 ? "system" : "systems"} in your archive</p>
-        <div class="stellar-home-stats" aria-label="Stellar Architect totals">
-          <span><strong>${planetTotal}</strong> planets</span>
-          <span><strong>${stellarState.moons.length}</strong> moons</span>
-          <span><strong>${colonyTotal}</strong> colonies</span>
-        </div>
       </section>
       <div class="universe-grid is-card-view stellar-home-grid">
         ${cards || `
@@ -545,23 +1081,101 @@ function renderStat(label, value) {
   return `<div class="stellar-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`;
 }
 
+function stellarImagePlaceholderIcon(kind) {
+  if (kind === "star") return '<ph-star weight="fill"></ph-star>';
+  if (kind === "moon") return '<ph-moon weight="duotone"></ph-moon>';
+  if (kind === "lifeform") return '<ph-dna weight="duotone"></ph-dna>';
+  return '<ph-planet weight="duotone"></ph-planet>';
+}
+
+function renderStellarImageBlock(kind, record, sizeClass = "") {
+  const image = primaryObjectImage(record?.id);
+  const config = stellarImageConfigForKind(kind);
+  const actionLabel = image ? "Regenerate" : "Generate";
+  const objectName = stellarObjectDisplayName(record, config.label);
+  return `
+    <div class="stellar-lifeform-image-block ${sizeClass}">
+      ${image?.image_url
+        ? `<button class="stellar-lifeform-image" type="button" data-open-stellar-image-kind="${escapeHtml(kind)}" data-open-stellar-image-id="${escapeHtml(record.id)}" data-stellar-image-id="${escapeHtml(image.id)}" aria-label="View ${escapeHtml(objectName)} image">
+          <img src="${escapeHtml(image.image_url)}" alt="">
+        </button>`
+        : `<div class="stellar-lifeform-image stellar-object-image-placeholder" aria-label="${escapeHtml(objectName)} has no image">
+          ${stellarImagePlaceholderIcon(kind)}
+          <span>No Image</span>
+        </div>`}
+      <button class="stellar-lifeform-image-action" type="button" data-generate-stellar-image-kind="${escapeHtml(kind)}" data-generate-stellar-image-id="${escapeHtml(record.id)}">
+        <ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>
+        ${actionLabel}
+      </button>
+    </div>
+  `;
+}
+
+function renderStellarRowImage(kind, record, fallbackIcon) {
+  const image = primaryObjectImage(record?.id);
+  const objectName = stellarObjectDisplayName(record, stellarImageConfigForKind(kind).label);
+  if (!image?.image_url) {
+    return `<div class="stellar-row-image">${fallbackIcon}</div>`;
+  }
+  return `
+    <div class="stellar-row-image has-image">
+      <img src="${escapeHtml(image.image_url)}" alt="${escapeHtml(objectName)} image">
+    </div>
+  `;
+}
+
+function planetDescriptionText(planet) {
+  const parts = [planet.visual_appearance, planet.description]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  return [...new Set(parts)].join("\n\n");
+}
+
+function renderStellarDetailImageHeader(kind, record, fallbackLabel) {
+  const image = primaryObjectImage(record?.id);
+  const actionLabel = image ? "Regenerate" : "Generate";
+  const objectName = stellarObjectDisplayName(record, fallbackLabel);
+  const imageLayer = image?.image_url
+    ? `<button class="stellar-planet-image-viewer" type="button" data-open-stellar-image-kind="${escapeHtml(kind)}" data-open-stellar-image-id="${escapeHtml(record.id)}" data-stellar-image-id="${escapeHtml(image.id)}" aria-label="View ${escapeHtml(objectName)} image">
+        <img src="${escapeHtml(image.image_url)}" alt="">
+      </button>`
+    : `<div class="stellar-planet-image-placeholder" aria-label="${escapeHtml(objectName)} has no image">
+        ${stellarImagePlaceholderIcon(kind)}
+        <span>No Image</span>
+      </div>`;
+
+  return `
+    <section class="stellar-planet-image-header" aria-label="${escapeHtml(objectName)} image">
+      ${imageLayer}
+      <button class="stellar-planet-image-action" type="button" data-generate-stellar-image-kind="${escapeHtml(kind)}" data-generate-stellar-image-id="${escapeHtml(record.id)}">
+        <ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>
+        ${actionLabel}
+      </button>
+    </section>
+  `;
+}
+
+function renderPlanetImageHeader(planet) {
+  return renderStellarDetailImageHeader("planet", planet, "Planet");
+}
+
 function renderSystemPage(system) {
   const star = starForSystem(system.id);
   const planets = stellarState.planets.filter((planet) => planet.system_id === system.id);
   const planetCount = planets.filter((planet) => !isAsteroidBelt(planet)).length;
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
-      <a class="stellar-back-link" href="#systems"><ph-arrow-left></ph-arrow-left> Back to Systems</a>
-      <h1>Star System: ${escapeHtml(system.name)}</h1>
+      ${renderStellarBreadcrumbs(stellarSystemBreadcrumbs(system, true))}
       <div class="stellar-page-actions">
         <button class="secondary-action" type="button" data-export-system><ph-download-simple weight="bold"></ph-download-simple> Export</button>
       </div>
     </header>
     <section class="stellar-detail-scroll">
-      <article class="stellar-panel stellar-star-panel">
-        <h2><ph-star weight="fill"></ph-star> Primary Star: ${escapeHtml(star?.name || system.name)}</h2>
-        <div class="stellar-split-card">
-          ${placeholder()}
+      <h1 class="stellar-planet-page-title">Star - ${escapeHtml(star?.name || system.name)}</h1>
+      ${star ? renderStellarDetailImageHeader("star", star, "Star") : ""}
+      <article class="stellar-panel stellar-star-panel stellar-planet-properties-panel">
+        <h2><ph-star weight="fill"></ph-star> Star Properties</h2>
+        <div class="stellar-star-properties-body">
           <div class="stellar-stat-grid">
             ${renderStat("Spectral Type", formatValue(star?.spectral_type))}
             ${renderStat("Mass", formatNumber(star?.mass_solar, " M☉"))}
@@ -599,9 +1213,10 @@ function renderSystemPage(system) {
 
 function renderPlanetSummary(planet) {
   const isBelt = isAsteroidBelt(planet);
+  const fallbackIcon = isBelt ? '<ph-meteor weight="duotone"></ph-meteor>' : '<ph-planet weight="duotone"></ph-planet>';
   return `
     <a class="stellar-body-row" href="#planet/${encodeURIComponent(planet.id)}">
-      <div class="stellar-row-image">${isBelt ? '<ph-meteor weight="duotone"></ph-meteor>' : '<ph-planet weight="duotone"></ph-planet>'}</div>
+      ${renderStellarRowImage("planet", planet, fallbackIcon)}
       <div class="stellar-row-main">
         <div class="stellar-row-title">
           <h3>${escapeHtml(planet.name)}</h3>
@@ -628,25 +1243,24 @@ function renderPlanetPage(planet) {
   const moons = stellarState.moons.filter((moon) => moon.planet_id === planet.id);
   const lifeforms = stellarState.lifeforms.filter((lifeform) => lifeform.planet_id === planet.id);
   const colonies = stellarState.colonies.filter((colony) => colony.planet_id === planet.id);
+  const descriptionText = planetDescriptionText(planet);
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
-      <a class="stellar-back-link" href="#system/${encodeURIComponent(planet.system_id)}"><ph-arrow-left></ph-arrow-left> Back to System</a>
-      <h1>Planet - ${escapeHtml(planet.name)}</h1>
+      ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("planet", planet))}
       <div class="stellar-page-actions">
         <button class="primary-action is-orange" type="button" data-generate-moons="${escapeHtml(planet.id)}"><ph-moon weight="bold"></ph-moon> Generate Details</button>
       </div>
     </header>
     <section class="stellar-detail-scroll">
-      <div class="stellar-planet-hero">
-        ${placeholder()}
-        <div>
+      <h1 class="stellar-planet-page-title">Planet - ${escapeHtml(planet.name)}</h1>
+      ${renderPlanetImageHeader(planet)}
+      <article class="stellar-panel stellar-planet-properties-panel">
+        <h2><ph-globe-hemisphere-west></ph-globe-hemisphere-west> Planet Properties</h2>
+        <div class="stellar-planet-property-badges">
           ${planetTypeBadge(planet)}
           ${planetHabitabilityBadge(planet)}
-          <p>${escapeHtml(planet.visual_appearance || "")}</p>
         </div>
-      </div>
-      <article class="stellar-panel">
-        <h2><ph-globe-hemisphere-west></ph-globe-hemisphere-west> Planet Properties</h2>
+        ${descriptionText ? `<p class="stellar-description stellar-planet-description">${escapeHtml(descriptionText)}</p>` : ""}
         <div class="stellar-stat-grid">
           ${renderStat("Mass", formatNumber(planet.mass_earth, " M⊕"))}
           ${renderStat("Radius", formatNumber(planet.radius_earth, " R⊕"))}
@@ -661,7 +1275,6 @@ function renderPlanetPage(planet) {
           ${renderStat("Water Presence", formatValue(planet.water_presence))}
           ${renderStat("Magnetosphere", formatValue(planet.magnetosphere))}
         </div>
-        <p class="stellar-description">${escapeHtml(planet.description || "")}</p>
       </article>
       <article class="stellar-panel">
         <div class="stellar-section-heading">
@@ -679,7 +1292,7 @@ function renderPlanetPage(planet) {
 function renderMoonSummary(moon) {
   return `
     <a class="stellar-body-row" href="#moon/${encodeURIComponent(moon.id)}">
-      <div class="stellar-row-image"><ph-moon weight="duotone"></ph-moon></div>
+      ${renderStellarRowImage("moon", moon, '<ph-moon weight="duotone"></ph-moon>')}
       <div class="stellar-row-main">
         <div class="stellar-row-title">
           <h3>${escapeHtml(moon.name)}</h3>
@@ -712,32 +1325,18 @@ function renderLifeformShell(lifeforms, source = {}) {
         <h2 class="is-green"><ph-dna></ph-dna> Lifeforms (${lifeforms.length})</h2>
         <button class="secondary-action" type="button" ${targetAttribute} ${!targetAttribute ? "disabled" : ""}>${buttonLabel}</button>
       </div>
-      ${lifeforms.length ? lifeforms.map(renderLifeformSummary).join("") : '<p class="stellar-muted">No lifeforms detected.</p>'}
+      ${lifeforms.length ? `<div class="stellar-body-list">${lifeforms.map(renderLifeformSummary).join("")}</div>` : '<p class="stellar-muted">No lifeforms detected.</p>'}
     </article>
   `;
 }
 
 function renderLifeformImageBlock(lifeform, sizeClass = "") {
-  const image = primaryObjectImage(lifeform.id);
-  const actionLabel = image ? "Regenerate" : "Generate";
-  return `
-    <div class="stellar-lifeform-image-block ${sizeClass}">
-      <a class="stellar-lifeform-image" href="#lifeform/${encodeURIComponent(lifeform.id)}" aria-label="Open ${escapeHtml(lifeform.name || "lifeform")}">
-        ${image?.image_url
-          ? `<img src="${escapeHtml(image.image_url)}" alt="">`
-          : '<span>No Image</span>'}
-      </a>
-      <button class="stellar-lifeform-image-action" type="button" data-generate-lifeform-image="${escapeHtml(lifeform.id)}">
-        <ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>
-        ${actionLabel}
-      </button>
-    </div>
-  `;
+  return renderStellarImageBlock("lifeform", lifeform, sizeClass);
 }
 
 function renderLifeformSummary(lifeform) {
   return `
-    <article class="stellar-body-row stellar-lifeform-row">
+    <article class="stellar-body-row stellar-lifeform-row" data-stellar-lifeform-card="${escapeHtml(lifeform.id)}" tabindex="0" role="link" aria-label="Open lifeform ${escapeHtml(lifeform.designation || lifeform.name)}">
       ${renderLifeformImageBlock(lifeform)}
       <div class="stellar-row-main">
         <div class="stellar-row-title">
@@ -774,15 +1373,25 @@ function renderColonyShell(colonies) {
 }
 
 function renderMoonPage(moon) {
+  const descriptionText = [moon.visual_appearance, moon.description]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .filter((part, index, list) => list.indexOf(part) === index)
+    .join("\n\n");
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
-      <a class="stellar-back-link" href="#planet/${encodeURIComponent(moon.planet_id)}"><ph-arrow-left></ph-arrow-left> Back to Planet</a>
-      <h1>Moon - ${escapeHtml(moon.name)}</h1>
+      ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("moon", moon))}
       <div class="stellar-page-actions"></div>
     </header>
     <section class="stellar-detail-scroll">
-      <article class="stellar-panel">
+      <h1 class="stellar-planet-page-title">Moon - ${escapeHtml(moon.name)}</h1>
+      ${renderStellarDetailImageHeader("moon", moon, "Moon")}
+      <article class="stellar-panel stellar-planet-properties-panel">
         <h2><ph-eye></ph-eye> Moon Properties</h2>
+        <div class="stellar-planet-property-badges">
+          <span class="stellar-badge">${escapeHtml(moon.type || "Moon")}</span>
+        </div>
+        ${descriptionText ? `<p class="stellar-description stellar-planet-description">${escapeHtml(descriptionText)}</p>` : ""}
         <div class="stellar-stat-grid">
           ${renderStat("Mass", formatNumber(moon.mass_lunar, " M☾"))}
           ${renderStat("Radius", formatNumber(moon.radius_lunar, " R☾"))}
@@ -796,7 +1405,6 @@ function renderMoonPage(moon) {
           ${renderStat("Geological Activity", formatValue(moon.geological_activity))}
           ${renderStat("Magnetosphere", formatValue(moon.magnetosphere))}
         </div>
-        <p class="stellar-description">${escapeHtml(moon.description || moon.visual_appearance || "")}</p>
       </article>
       ${renderLifeformShell(stellarState.lifeforms.filter((lifeform) => lifeform.moon_id === moon.id), { moonId: moon.id })}
     </section>
@@ -804,20 +1412,24 @@ function renderMoonPage(moon) {
 }
 
 function renderLifeformPage(lifeform) {
-  const parentHref = lifeform.planet_id
-    ? `#planet/${encodeURIComponent(lifeform.planet_id)}`
-    : `#moon/${encodeURIComponent(lifeform.moon_id)}`;
-  const parentLabel = lifeform.planet_id ? "Back to Planet" : "Back to Moon";
+  const lifeformTitle = lifeform.designation || lifeform.name;
+  const lifeformBadges = [
+    lifeform.kingdom ? `<span class="stellar-badge">${escapeHtml(lifeform.kingdom)}</span>` : "",
+    lifeform.biome || lifeform.habitat ? `<span class="stellar-badge stellar-habitability-badge is-habitable">${escapeHtml(lifeform.biome || lifeform.habitat)}</span>` : "",
+    lifeform.scale ? `<span class="stellar-badge">${escapeHtml(lifeform.scale)}</span>` : "",
+  ].filter(Boolean).join("");
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
-      <a class="stellar-back-link" href="${parentHref}"><ph-arrow-left></ph-arrow-left> ${parentLabel}</a>
-      <h1>Lifeform - ${escapeHtml(lifeform.name)}</h1>
+      ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("lifeform", lifeform))}
       <div class="stellar-page-actions"></div>
     </header>
     <section class="stellar-detail-scroll">
-      ${renderLifeformImageBlock(lifeform, "is-large")}
-      <article class="stellar-panel">
-        <h2 class="is-green"><ph-dna></ph-dna> Lifeform Properties</h2>
+      <h1 class="stellar-planet-page-title">Lifeform - ${escapeHtml(lifeformTitle)}</h1>
+      ${renderStellarDetailImageHeader("lifeform", lifeform, "Lifeform")}
+      <article class="stellar-panel stellar-planet-properties-panel">
+        <h2><ph-dna></ph-dna> Lifeform Properties</h2>
+        ${lifeformBadges ? `<div class="stellar-planet-property-badges">${lifeformBadges}</div>` : ""}
+        <p class="stellar-description stellar-planet-description">${escapeHtml(lifeform.description || "Lifeform generation is coming soon.")}</p>
         <div class="stellar-stat-grid">
           ${renderStat("Species", formatValue(lifeform.species_name))}
           ${renderStat("Designation", formatValue(lifeform.designation))}
@@ -836,7 +1448,6 @@ function renderLifeformPage(lifeform) {
           ${renderStat("Sensory", formatValue(lifeform.sensory))}
           ${renderStat("Thermal", formatValue(lifeform.thermal_regulation))}
         </div>
-        <p class="stellar-description">${escapeHtml(lifeform.description || "Lifeform generation is coming soon.")}</p>
       </article>
     </section>
   `;
@@ -846,14 +1457,13 @@ function renderColonyPage(colony) {
   const colonists = stellarState.colonists.filter((colonist) => colonist.colony_id === colony.id);
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
-      <a class="stellar-back-link" href="${colony.planet_id ? `#planet/${encodeURIComponent(colony.planet_id)}` : colony.moon_id ? `#moon/${encodeURIComponent(colony.moon_id)}` : `#system/${encodeURIComponent(colony.system_id)}`}"><ph-arrow-left></ph-arrow-left> ${colony.planet_id ? "Back to Planet" : colony.moon_id ? "Back to Moon" : "Back to System"}</a>
-      <h1>${escapeHtml(colony.name)}</h1>
+      ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("colony", colony))}
       <div class="stellar-page-actions">
         <button class="secondary-action" disabled title="Coming soon">Generate Colonists</button>
       </div>
     </header>
     <section class="stellar-detail-scroll">
-      <article class="stellar-panel">
+      <article class="stellar-panel stellar-primary-properties-panel">
         <h2 class="is-red"><ph-buildings></ph-buildings> Colony Properties</h2>
         <div class="stellar-stat-grid">
           ${renderStat("Founded", formatValue(colony.founded_year))}
@@ -876,12 +1486,11 @@ function renderColonyPage(colony) {
 function renderColonistPage(colonist) {
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
-      <a class="stellar-back-link" href="#colony/${encodeURIComponent(colonist.colony_id)}"><ph-arrow-left></ph-arrow-left> Back to Colony</a>
-      <h1>${escapeHtml(colonist.name)}</h1>
+      ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("colonist", colonist))}
       <div class="stellar-page-actions"></div>
     </header>
     <section class="stellar-detail-scroll">
-      <article class="stellar-panel">
+      <article class="stellar-panel stellar-primary-properties-panel">
         <h2><ph-user></ph-user> Personal Information</h2>
         <div class="stellar-stat-grid">
           ${renderStat("Age", formatValue(colonist.age))}
@@ -899,15 +1508,45 @@ function renderColonistPage(colonist) {
 function renderTree() {
   const systems = stellarState.systems;
   if (!stellarEls.tree) return;
+  applyStellarSidePanelState();
   if (stellarEls.sideGenerateButton) {
     stellarEls.sideGenerateButton.hidden = stellarState.route.name !== "systems";
   }
+  const collapsed = stellarState.sidePanelCollapsed;
+  const system = stellarState.route.name === "systems" ? null : currentSystem();
+  const headerLabel = system?.name || "Star System";
+  const panelLabel = collapsed ? "Expand star system panel" : "Collapse star system panel";
+  const treeContent = system
+    ? stellarState.planets
+      .filter((planet) => planet.system_id === system.id)
+      .map(renderTreePlanet)
+      .join("")
+    : systems.map((item) => renderTreeSystem(item)).join("");
   stellarEls.tree.innerHTML = `
-    <h2>Star Systems</h2>
-    <div class="stellar-tree-list">
-      ${systems.map((system) => renderTreeSystem(system)).join("") || '<p class="stellar-muted">No systems generated.</p>'}
+    <div class="stellar-tree-header">
+      <h2><ph-star weight="fill" aria-hidden="true"></ph-star><span>${escapeHtml(headerLabel)}</span></h2>
+      <button class="stellar-side-panel-toggle" type="button" data-toggle-stellar-side-panel aria-label="${panelLabel}" aria-expanded="${!collapsed}">
+        ${collapsed ? '<ph-caret-left weight="bold"></ph-caret-left>' : '<ph-caret-right weight="bold"></ph-caret-right>'}
+      </button>
+    </div>
+    <div class="stellar-tree-list" ${collapsed ? "hidden" : ""}>
+      ${treeContent || '<p class="stellar-muted">No planets generated.</p>'}
     </div>
   `;
+}
+
+function renderTreeObjectIcon(record, fallbackIcon) {
+  const image = primaryObjectImage(record?.id);
+  if (!image?.image_url) return `<span class="stellar-tree-icon" aria-hidden="true">${fallbackIcon}</span>`;
+  return `
+    <span class="stellar-tree-thumb" aria-hidden="true">
+      <img src="${escapeHtml(image.image_url)}" alt="">
+    </span>
+  `;
+}
+
+function renderTreeSystemIcon(system) {
+  return renderTreeObjectIcon(starForSystem(system.id), '<ph-star weight="fill"></ph-star>');
 }
 
 function renderTreeSystem(system) {
@@ -922,7 +1561,7 @@ function renderTreeSystem(system) {
       <div class="stellar-tree-row">
         ${hasChildren ? `<button class="stellar-tree-toggle ${expanded ? "is-expanded" : ""}" type="button" aria-label="${expanded ? "Collapse" : "Expand"} ${escapeHtml(system.name)}" aria-expanded="${expanded}" data-tree-toggle="${escapeHtml(treeKey)}"><ph-caret-right weight="bold"></ph-caret-right></button>` : '<span class="stellar-tree-toggle-spacer"></span>'}
         <a class="stellar-tree-item ${selected ? "is-selected" : ""}" href="#system/${encodeURIComponent(system.id)}">
-          <ph-star weight="fill"></ph-star>
+          ${renderTreeSystemIcon(system)}
           <span>${escapeHtml(system.name)}</span>
           <em>${Number(system.planet_count || 0)} planets</em>
         </a>
@@ -951,7 +1590,7 @@ function renderTreeFolder({ key, label, icon, count, childrenHtml, isAncestor = 
 }
 
 function renderTreeLifeform(lifeform) {
-  return `<a class="stellar-tree-item ${stellarState.route.id === lifeform.id ? "is-selected" : ""}" href="#lifeform/${encodeURIComponent(lifeform.id)}"><ph-dna></ph-dna><span>${escapeHtml(lifeform.name)}</span></a>`;
+  return `<a class="stellar-tree-item ${stellarState.route.id === lifeform.id ? "is-selected" : ""}" href="#lifeform/${encodeURIComponent(lifeform.id)}">${renderTreeObjectIcon(lifeform, "<ph-dna></ph-dna>")}<span>${escapeHtml(lifeform.name)}</span></a>`;
 }
 
 function renderTreeColony(colony) {
@@ -972,7 +1611,7 @@ function renderTreeMoon(moon) {
     <div>
       <div class="stellar-tree-row">
         ${hasChildren ? `<button class="stellar-tree-toggle ${expanded ? "is-expanded" : ""}" type="button" aria-label="${expanded ? "Collapse" : "Expand"} ${escapeHtml(moon.name)}" aria-expanded="${expanded}" data-tree-toggle="${escapeHtml(treeKey)}"><ph-caret-right weight="bold"></ph-caret-right></button>` : '<span class="stellar-tree-toggle-spacer"></span>'}
-        <a class="stellar-tree-item ${stellarState.route.id === moon.id ? "is-selected" : ""}" href="#moon/${encodeURIComponent(moon.id)}"><ph-moon></ph-moon><span>${escapeHtml(moon.name)}</span></a>
+        <a class="stellar-tree-item ${stellarState.route.id === moon.id ? "is-selected" : ""}" href="#moon/${encodeURIComponent(moon.id)}">${renderTreeObjectIcon(moon, "<ph-moon></ph-moon>")}<span>${escapeHtml(moon.name)}</span></a>
       </div>
       ${expanded ? `<div class="stellar-tree-children">
         ${renderTreeFolder({
@@ -1019,7 +1658,7 @@ function renderTreePlanet(planet) {
       <div class="stellar-tree-row">
         ${hasChildren ? `<button class="stellar-tree-toggle ${expanded ? "is-expanded" : ""}" type="button" aria-label="${expanded ? "Collapse" : "Expand"} ${escapeHtml(planet.name)}" aria-expanded="${expanded}" data-tree-toggle="${escapeHtml(treeKey)}"><ph-caret-right weight="bold"></ph-caret-right></button>` : '<span class="stellar-tree-toggle-spacer"></span>'}
         <a class="stellar-tree-item ${isSelected ? "is-selected" : ""}" href="#planet/${encodeURIComponent(planet.id)}">
-          ${isBelt ? "<ph-meteor></ph-meteor>" : "<ph-planet></ph-planet>"}
+          ${renderTreeObjectIcon(planet, isBelt ? "<ph-meteor></ph-meteor>" : "<ph-planet></ph-planet>")}
           <span>${escapeHtml(planet.name)}</span>
         </a>
       </div>
@@ -1107,12 +1746,15 @@ function renderRoute() {
 async function refresh() {
   if (!stellarEls.root || !stellarSupabase) return;
   stellarState.loading = true;
-  stellarEls.root.innerHTML = '<div class="stellar-loading">Loading Stellar Architect...</div>';
+  const route = parseRoute();
+  renderStellarLoading(stellarRouteLoadingName(route));
   try {
     if (!stellarState.appUser) {
       stellarState.appUser = await waitForCurrentAppUser();
     }
     if (!stellarState.appUser) throw new Error("Could not load your Centralis user profile.");
+    const loadingName = await fetchStellarRouteLoadingName(route);
+    if (loadingName) renderStellarLoading(loadingName);
     await loadForRoute();
     renderRoute();
   } catch (error) {
@@ -1168,10 +1810,10 @@ async function handleGenerateLifeforms({ planetId, moonId }) {
   setLifeModalGenerating(true);
   setStatus(stellarEls.lifeStatus, "");
   try {
-    const { data, error } = await stellarSupabase.functions.invoke("generate-stellar-lifeforms", {
-      body: planetId ? { planetId } : { moonId },
+    const data = await callEdgeFunction("generate-stellar-lifeforms", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(planetId ? { planetId } : { moonId }),
     });
-    if (error) throw error;
     if (data?.error) throw new Error(data.error);
     closeLifeModal(true);
     await refresh();
@@ -1182,26 +1824,42 @@ async function handleGenerateLifeforms({ planetId, moonId }) {
   }
 }
 
-async function handleGenerateLifeformImage(lifeformId, button) {
-  const lifeform = lifeformForId(lifeformId);
-  if (!lifeform) return;
+function stellarImageStorageModule(kind) {
+  const folderByKind = {
+    star: "stars",
+    planet: "planets",
+    moon: "moons",
+    lifeform: "lifeforms",
+  };
+  return `stellar-architect/${folderByKind[kind] || "objects"}`;
+}
+
+async function handleGenerateStellarImage(kind, objectId, button) {
+  const record = stellarObjectForKind(kind, objectId);
+  if (!record) return;
+  const config = stellarImageConfigForKind(kind);
+  const basePrompt = config.prompt(record);
+  const userInstructions = await openStellarImagePromptDialog({ config, record, basePrompt });
+  if (userInstructions === null) return;
+  const extraPrompt = buildStellarImageExtraPrompt(basePrompt, userInstructions);
   const originalHtml = button?.innerHTML;
   if (button) {
     button.disabled = true;
     button.innerHTML = '<ph-arrows-clockwise weight="bold"></ph-arrows-clockwise> Generating...';
   }
+  showStellarToast(`${config.label} image generation started. It will finish in the background.`, "success");
 
   try {
     const generated = await callEdgeFunction("generate-object-image", {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        objectId: lifeform.id,
-        storageModule: "stellar-architect",
-        objectKind: "stellar lifeform",
-        elementType: lifeform.kingdom || "Alien lifeform",
-        name: lifeform.name || lifeform.designation || "",
+        objectId: record.id,
+        storageModule: stellarImageStorageModule(kind),
+        objectKind: config.objectKind,
+        elementType: config.elementType(record),
+        name: stellarObjectDisplayName(record, config.label),
         description: "",
-        extraPrompt: buildLifeformImagePrompt(lifeform),
+        extraPrompt,
       }),
     });
     if (generated?.image?.id) {
@@ -1210,10 +1868,11 @@ async function handleGenerateLifeformImage(lifeformId, button) {
         body: JSON.stringify({ imageId: generated.image.id }),
       });
     }
-    await fetchLifeformImages();
+    await fetchStellarImages();
     renderRoute();
+    showStellarToast(`${config.label} image generated.`, "success");
   } catch (error) {
-    window.alert(`Could not generate lifeform image: ${getReadableError(error)}`);
+    showStellarToast(`Could not generate ${config.label.toLowerCase()} image: ${getReadableError(error)}`, "error");
   } finally {
     if (button) {
       button.disabled = false;
@@ -1301,6 +1960,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const sidePanelToggle = event.target.closest("[data-toggle-stellar-side-panel]");
+  if (sidePanelToggle) {
+    setStellarSidePanelCollapsed(!stellarState.sidePanelCollapsed);
+    return;
+  }
+
   if (event.target.closest("[data-close-stellar-modal]")) {
     closeGenerateModal();
     return;
@@ -1313,6 +1978,11 @@ document.addEventListener("click", (event) => {
 
   if (event.target.closest("[data-close-stellar-life-modal]")) {
     closeLifeModal();
+    return;
+  }
+
+  if (event.target.closest("[data-cancel-stellar-image-prompt]")) {
+    closeStellarImagePromptDialog(null);
     return;
   }
 
@@ -1351,9 +2021,29 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const lifeformImageButton = event.target.closest("[data-generate-lifeform-image]");
-  if (lifeformImageButton) {
-    handleGenerateLifeformImage(lifeformImageButton.dataset.generateLifeformImage, lifeformImageButton);
+  const lifeformCard = event.target.closest("[data-stellar-lifeform-card]");
+  if (lifeformCard && !event.target.closest("a, button, input, select, textarea, [role='button']")) {
+    window.location.hash = `#lifeform/${encodeURIComponent(lifeformCard.dataset.stellarLifeformCard)}`;
+    return;
+  }
+
+  const stellarImageGenerateButton = event.target.closest("[data-generate-stellar-image-kind]");
+  if (stellarImageGenerateButton) {
+    handleGenerateStellarImage(
+      stellarImageGenerateButton.dataset.generateStellarImageKind,
+      stellarImageGenerateButton.dataset.generateStellarImageId,
+      stellarImageGenerateButton
+    );
+    return;
+  }
+
+  const stellarImageViewerButton = event.target.closest("[data-open-stellar-image-kind]");
+  if (stellarImageViewerButton) {
+    openStellarImageViewer(
+      stellarImageViewerButton.dataset.openStellarImageKind,
+      stellarImageViewerButton.dataset.openStellarImageId,
+      stellarImageViewerButton.dataset.stellarImageId
+    );
     return;
   }
 
@@ -1362,7 +2052,24 @@ document.addEventListener("click", (event) => {
   }
 });
 
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && stellarImagePromptResolver && !stellarEls.imagePromptModal?.hidden) {
+    event.preventDefault();
+    closeStellarImagePromptDialog(null);
+    return;
+  }
+
+  const lifeformCard = event.target.closest?.("[data-stellar-lifeform-card]");
+  if (!lifeformCard || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  window.location.hash = `#lifeform/${encodeURIComponent(lifeformCard.dataset.stellarLifeformCard)}`;
+});
+
 stellarEls.generateForm?.addEventListener("submit", handleGenerateSystem);
+stellarEls.imagePromptForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  closeStellarImagePromptDialog(stellarEls.imagePromptExtra?.value || "");
+});
 window.addEventListener("hashchange", refresh);
 
 if (!window.location.hash) {

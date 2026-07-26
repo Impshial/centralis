@@ -574,8 +574,8 @@
     const precedingMessage = assetMessageIndex > 0 ? state.messages[assetMessageIndex - 1] : null;
     return precedingMessage?.role === "user" ? precedingMessage : null;
   }
-  function formatGenerationSettings(settings) {
-    if (!settings) return "";
+  function getGenerationSettingsRows(settings) {
+    if (!settings) return [];
     const stylePreset = settings.stylePreset || settings.style_preset;
     const negativePrompt = settings.negativePrompt || settings.negative_prompt;
     const cfgScale = settings.cfgScale ?? settings.cfg_scale;
@@ -600,7 +600,10 @@
       ["Moderation", settings.moderation],
       ["References", settings.reference_count !== null && settings.reference_count !== undefined ? String(settings.reference_count) : ""],
     ];
-    return rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim()).map(([label, value]) => `${label}: ${value}`).join("\n");
+    return rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim());
+  }
+  function formatGenerationSettings(settings) {
+    return getGenerationSettingsRows(settings).map(([label, value]) => `${label}: ${value}`).join("\n");
   }
   function formatGenerationSettingsInline(settings) {
     if (!settings) return "No generation parameters saved.";
@@ -743,6 +746,58 @@
       <p title="${html(formatGenerationSettings(settings) || params)}"><strong>Parameters Used:</strong> ${html(params)}</p>
     `;
   }
+  function getImageViewerAssetSet(asset) {
+    if (asset?.asset_kind === "output") {
+      const outputs = getOutputAssets();
+      return outputs.length ? outputs : [asset];
+    }
+    return asset ? [asset] : [];
+  }
+  function mapImageGenerationViewerAssets(assets) {
+    return (assets || []).filter((asset) => asset?.preview_url).map((asset, index, list) => ({
+      id: asset.id,
+      src: asset.preview_url,
+      name: asset.original_filename || (asset.asset_kind === "output" ? `Generated image ${index + 1}` : "Reference image"),
+      downloadName: asset.original_filename || `centralis-image-${asset.id || index + 1}.png`,
+      alt: asset.original_filename || (asset.asset_kind === "output" ? "Generated image" : "Reference image"),
+      metadata: {
+        ...asset,
+        viewerTotal: list.length
+      }
+    }));
+  }
+  function getImageGenerationViewerDetails(viewerImage) {
+    const asset = viewerImage?.metadata || viewerImage || {};
+    const promptMessage = findPromptMessageForAsset(asset);
+    const settings = getAssetGenerationSettings(asset, promptMessage);
+    const fileLabel = asset.original_filename || asset.id || "Image";
+    const imageInfoRows = [
+      ["Source", asset.asset_kind === "output" ? "Image Generation output" : "Image Generation reference"],
+      ["File", fileLabel],
+      ["Asset ID", asset.id || ""],
+      ["Images in Set", String(asset.viewerTotal || 1)]
+    ].filter(([, value]) => value !== null && value !== undefined && String(value).trim());
+    const details = {
+      imageInfo: {
+        title: "Image Information",
+        rows: imageInfoRows
+      }
+    };
+    if (promptMessage?.content) {
+      details.promptInfo = {
+        title: "Prompt Information",
+        body: promptMessage.content
+      };
+    }
+    const settingsRows = getGenerationSettingsRows(settings);
+    if (settingsRows.length) {
+      details.generatorInfo = {
+        title: "Image Generator Information",
+        rows: settingsRows
+      };
+    }
+    return details;
+  }
   function resetImageViewerZoom() {
     state.viewerZoom = 1;
     state.viewerFitWidth = 0;
@@ -796,7 +851,43 @@
     if (els.imageViewerNext) els.imageViewerNext.disabled = !hasMultiple;
   }
   function openImageViewer(asset) {
-    if (!asset?.preview_url || !els.imageViewerModal) return;
+    if (!asset?.preview_url) return;
+    if (typeof window.openCentralisImageViewer === "function") {
+      const viewerAssets = getImageViewerAssetSet(asset);
+      state.viewerAsset = asset;
+      state.selectedAsset = asset.asset_kind === "output" ? asset : state.selectedAsset;
+      renderSessionThumbnails();
+      window.openCentralisImageViewer({
+        title: asset.original_filename || "Generated image",
+        kicker: asset.asset_kind === "output" ? "Image Generator Viewer" : "Reference Image Viewer",
+        images: mapImageGenerationViewerAssets(viewerAssets),
+        activeImageId: asset.id,
+        details: getImageGenerationViewerDetails,
+        capabilities: {
+          canNavigate: asset.asset_kind === "output",
+          canShowThumbnails: asset.asset_kind === "output" && viewerAssets.length > 1,
+          canSetPrimary: false,
+          canOpen: true,
+          canDownload: true,
+          canDelete: false
+        },
+        actions: {
+          changeImage: (viewerImage) => {
+            const nextAsset = viewerImage?.metadata;
+            if (!nextAsset) return;
+            state.viewerAsset = nextAsset;
+            state.selectedAsset = nextAsset.asset_kind === "output" ? nextAsset : state.selectedAsset;
+            renderSessionThumbnails();
+          },
+          download: async (viewerImage) => {
+            await downloadAsset(viewerImage?.metadata);
+            return false;
+          }
+        }
+      });
+      return;
+    }
+    if (!els.imageViewerModal) return;
     state.viewerAsset = asset;
     state.selectedAsset = asset;
     els.imageViewerTitle.textContent = asset.original_filename || "Generated image";

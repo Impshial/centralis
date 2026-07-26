@@ -625,11 +625,13 @@ function renderGenerationActivityJobs() {
         <button class="generation-job-summary" type="button" data-toggle-generation-job="${escapeHtml(job.id)}" aria-expanded="${isExpanded ? "true" : "false"}">
           <span class="generation-job-summary-caret" aria-hidden="true">&gt;</span>
           <span class="generation-job-summary-copy">
-            <span class="generation-job-topline">
-              <span>${escapeHtml(formatGenerationModule(job.module))}</span>
-              <span>${escapeHtml(formatGenerationElapsed(job))}</span>
+            <span class="generation-job-summary-line">
+              <span class="generation-job-topline">
+                <span>${escapeHtml(formatGenerationModule(job.module))}</span>
+                <span>${escapeHtml(formatGenerationElapsed(job))}</span>
+              </span>
+              <strong>${escapeHtml(job.source_label || "Untitled generation")}</strong>
             </span>
-            <strong>${escapeHtml(job.source_label || "Untitled generation")}</strong>
           </span>
           <span class="generation-job-status generation-job-status-pill">${escapeHtml(formatGenerationStatus(job.status))}</span>
         </button>
@@ -1044,17 +1046,17 @@ function renderThemeSelectorList() {
           <span class="theme-selector-checkbox-ui" aria-hidden="true"></span>
           <span class="theme-selector-check-label">${escapeHtml(theme.label)}</span>
         </label>
+        <button class="theme-selector-preview" type="button" data-theme-preview="${escapeHtml(theme.id)}">
+          ${paletteColors.map((color) => `
+            <span class="theme-selector-swatch" title="${escapeHtml(color)}" style="--theme-selector-color: ${escapeHtml(color)};"></span>
+          `).join("")}
+        </button>
         ${canEdit ? `
           <button class="theme-selector-edit" type="button" data-edit-custom-theme="${escapeHtml(theme.id)}" aria-label="Edit ${escapeHtml(theme.label)}">
             <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
             <span>Edit</span>
           </button>
         ` : ""}
-        <button class="theme-selector-preview" type="button" data-theme-preview="${escapeHtml(theme.id)}">
-          ${paletteColors.map((color) => `
-            <span class="theme-selector-swatch" title="${escapeHtml(color)}" style="--theme-selector-color: ${escapeHtml(color)};"></span>
-          `).join("")}
-        </button>
       </article>
     `;
   }).join("");

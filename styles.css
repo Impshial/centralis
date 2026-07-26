@@ -1073,16 +1073,17 @@ button {
 .modal-backdrop.generation-activity-backdrop {
   z-index: 4010;
   display: grid;
-  padding: calc(var(--header-height) + 22px) 20px 22px;
+  padding: calc(var(--header-height) + 14px) 20px 18px;
   background: color-mix(in srgb, #000 72%, transparent);
-  place-items: start center;
+  place-items: center;
 }
 
 .modal-dialog.generation-activity-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(980px, calc(100vw - 40px));
-  max-height: calc(100vh - var(--header-height) - 44px);
+  width: min(940px, calc(100vw - 40px));
+  height: min(680px, calc(100vh - var(--header-height) - 32px));
+  max-height: calc(100vh - var(--header-height) - 32px);
   padding: 0;
   overflow: hidden;
   background: var(--surface);
@@ -1097,7 +1098,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 14px 18px;
   background: color-mix(in srgb, var(--surface) 94%, var(--page));
   border-bottom: 1px solid var(--line);
 }
@@ -1121,15 +1122,15 @@ button {
 .generation-activity-list {
   display: grid;
   align-content: start;
-  gap: 18px;
-  min-height: 420px;
-  padding: 16px 20px;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px 16px;
   overflow: auto;
 }
 
 .generation-activity-list section {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .generation-activity-list section > h3 {
@@ -1144,11 +1145,11 @@ button {
 .generation-job-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   background: color-mix(in srgb, var(--field) 82%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .generation-job-card.is-running,
@@ -1172,9 +1173,9 @@ button {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
-  gap: 12px;
-  min-height: 64px;
-  padding: 12px 14px;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 12px;
   color: inherit;
   background: transparent;
   border: 0;
@@ -1232,15 +1233,32 @@ button {
 }
 
 .generation-job-summary-copy {
-  display: grid;
+  display: block;
   min-width: 0;
-  gap: 4px;
+  overflow: hidden;
+}
+
+.generation-job-summary-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.generation-job-summary .generation-job-topline {
+  flex: 0 0 auto;
+  gap: 8px;
+  font-size: 0.86rem;
 }
 
 .generation-job-summary-copy strong {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--ink);
-  font-size: 0.98rem;
+  font-size: 0.86rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1249,14 +1267,14 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 88px;
-  min-height: 28px;
-  padding: 0 10px;
+  min-width: 76px;
+  min-height: 24px;
+  padding: 0 9px;
   border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--line));
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--ink);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 820;
 }
 
@@ -1269,8 +1287,8 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 16px;
-  padding: 14px 14px 14px 50px;
+  gap: 12px;
+  padding: 10px 12px 12px 46px;
 }
 
 .generation-job-collapsible-body[hidden] {
@@ -1496,7 +1514,7 @@ button {
 
 .theme-selector-row {
   display: grid;
-  grid-template-columns: minmax(180px, 0.34fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1599,16 +1617,21 @@ button {
 .theme-selector-edit {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  justify-self: end;
+  width: auto;
+  min-width: 84px;
   min-height: 32px;
   padding: 0 10px;
   color: var(--control-text);
   background: color-mix(in srgb, var(--field) 86%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-  border-radius: 7px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 0.78rem;
   font-weight: 780;
+  white-space: nowrap;
 }
 
 .theme-selector-edit:hover,
@@ -1760,6 +1783,7 @@ button {
   }
 
   .theme-selector-edit {
+    justify-self: stretch;
     justify-content: center;
     width: 100%;
   }
@@ -2995,6 +3019,7 @@ body[data-page="home"] :is(
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top center;
   opacity: 0.75;
 }
 
@@ -9578,7 +9603,11 @@ body.is-dragging-ai-popout {
 .chronicle-wiki-image-gallery .image-primary {
   height: clamp(240px, 34vw, 420px);
   aspect-ratio: auto;
-  border-radius: 8px;
+  border-radius: 6px;
+}
+
+.chronicle-wiki-image-gallery .image-primary img {
+  object-position: top center;
 }
 
 .chronicle-wiki-image-gallery .image-thumbs {
@@ -12067,6 +12096,10 @@ html[data-color-scheme="dark"] .react-flow__controls-button svg {
 
 
 /* Stellar Architect */
+body[data-page="stellar-architect"] {
+  overflow: hidden;
+}
+
 .stellar-page {
   min-height: 0;
   height: calc(100vh - var(--header-height));
@@ -12075,6 +12108,11 @@ html[data-color-scheme="dark"] .react-flow__controls-button svg {
   grid-template-columns: minmax(0, 1fr) 370px;
   background: #080d12;
   color: #f7fbff;
+  overflow: hidden;
+}
+
+.stellar-page.is-stellar-side-collapsed {
+  grid-template-columns: minmax(0, 1fr) 58px;
 }
 
 .stellar-main {
@@ -12090,6 +12128,15 @@ html[data-color-scheme="dark"] .react-flow__controls-button svg {
   padding: 16px;
   background: #11151b;
   overflow-y: auto;
+}
+
+.stellar-side-panel.is-collapsed {
+  padding: 16px 8px;
+  overflow: hidden;
+}
+
+.stellar-side-panel.is-collapsed .stellar-wide-action {
+  display: none;
 }
 
 body.stellar-home-route {
@@ -12133,15 +12180,72 @@ body.stellar-home-route .stellar-side-panel {
 }
 
 .stellar-tree-shell {
-  margin-top: 24px;
+  margin-top: 0;
+}
+
+.stellar-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .stellar-tree-shell h2 {
-  margin: 0 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
   color: #a9b6c2;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.stellar-tree-shell h2 span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stellar-tree-shell h2 ph-star {
+  flex: 0 0 auto;
+  color: #ffc400;
+}
+
+.stellar-side-panel.is-collapsed .stellar-tree-shell {
+  margin-top: 0;
+}
+
+.stellar-side-panel.is-collapsed .stellar-tree-header {
+  justify-content: center;
+  margin-bottom: 0;
+}
+
+.stellar-side-panel.is-collapsed .stellar-tree-header h2 {
+  display: none;
+}
+
+.stellar-side-panel-toggle {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  color: #d8e6f2;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.stellar-side-panel-toggle:hover,
+.stellar-side-panel-toggle:focus-visible {
+  color: #f7fbff;
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.38);
+  outline: none;
 }
 
 .stellar-tree-list,
@@ -12196,7 +12300,7 @@ body.stellar-home-route .stellar-side-panel {
 
 .stellar-tree-item {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   min-height: 34px;
@@ -12379,12 +12483,66 @@ body.stellar-home-route .stellar-system-card {
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
+body.stellar-home-route .stellar-system-card.has-background-image {
+  background: color-mix(in srgb, var(--surface) 72%, var(--page));
+}
+
+body.stellar-home-route .stellar-system-card.has-background-image::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 92%, transparent) 0%, color-mix(in srgb, var(--surface) 72%, transparent) 48%, color-mix(in srgb, var(--surface) 38%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--page) 38%, transparent), color-mix(in srgb, var(--page) 38%, transparent));
+}
+
+body.stellar-home-route .stellar-system-card-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  object-fit: cover;
+  object-position: center;
+}
+
+body.stellar-home-route .stellar-system-card.has-background-image > :not(.stellar-system-card-background) {
+  position: relative;
+  z-index: 2;
+}
+
 body.stellar-home-route .stellar-system-card:hover,
 body.stellar-home-route .stellar-system-card:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
   box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 14%, transparent);
   outline: none;
   transform: translateY(-1px);
+}
+
+.stellar-tree-icon,
+.stellar-tree-thumb {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stellar-tree-thumb {
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.stellar-tree-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
 }
 
 body.stellar-home-route .stellar-system-card .card-icon ph-star {
@@ -12619,7 +12777,7 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   z-index: 4;
   height: 62px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 0 28px;
@@ -12649,6 +12807,52 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   gap: 8px;
   color: #bdd1e3;
   text-decoration: none;
+}
+
+.stellar-breadcrumbs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.stellar-breadcrumbs a,
+.stellar-breadcrumb-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stellar-breadcrumbs a {
+  flex: 0 1 auto;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.stellar-breadcrumbs a:first-child {
+  flex: 0 0 auto;
+}
+
+.stellar-breadcrumbs a:hover,
+.stellar-breadcrumbs a:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.stellar-breadcrumb-current {
+  flex: 1 1 auto;
+  color: var(--ink);
+}
+
+.stellar-breadcrumbs ph-caret-right {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+  font-size: 0.78rem;
 }
 
 .stellar-detail-scroll {
@@ -12776,6 +12980,12 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
 .stellar-lifeform-row {
   grid-template-columns: 112px minmax(0, 1fr);
   align-items: start;
+  cursor: pointer;
+}
+
+.stellar-lifeform-row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .stellar-body-row:hover {
@@ -12791,6 +13001,18 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   color: #7aa5c8;
 }
 
+.stellar-body-row .stellar-row-image.has-image {
+  display: block;
+}
+
+.stellar-body-row .stellar-row-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
 .stellar-lifeform-image-block {
   display: grid;
   gap: 8px;
@@ -12803,18 +13025,31 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   display: grid;
   place-items: center;
   overflow: hidden;
+  border: 0;
   border-radius: 5px;
   background: #20242d;
   color: #7f8ea3;
   font-size: 0.86rem;
   text-align: center;
   text-decoration: none;
+  cursor: pointer;
+  padding: 0;
 }
 
 .stellar-lifeform-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top center;
+}
+
+.stellar-object-image-placeholder {
+  cursor: default;
+  gap: 8px;
+}
+
+.stellar-object-image-placeholder :is(ph-planet, ph-star, ph-moon, ph-dna) {
+  font-size: 2rem;
 }
 
 .stellar-lifeform-image-action {
@@ -12849,6 +13084,111 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
 
 .stellar-lifeform-image-block.is-large .stellar-lifeform-image-action {
   max-width: 180px;
+}
+
+.stellar-planet-page-title {
+  margin: 0 0 14px;
+  color: var(--ink);
+  font-size: clamp(2rem, 3.2vw, 3.1rem);
+  line-height: 1;
+}
+
+.stellar-planet-image-header {
+  position: relative;
+  width: 100%;
+  height: clamp(140px, 14vw, 220px);
+  min-height: 140px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 6px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+  background: color-mix(in srgb, var(--field) 88%, var(--surface));
+}
+
+.stellar-planet-image-viewer,
+.stellar-planet-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.stellar-planet-image-viewer {
+  cursor: zoom-in;
+}
+
+.stellar-planet-image-viewer img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.stellar-planet-image-placeholder {
+  gap: 10px;
+  background:
+    radial-gradient(circle at 30% 18%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
+    color-mix(in srgb, var(--field) 90%, var(--surface));
+}
+
+.stellar-planet-image-placeholder :is(ph-planet, ph-moon, ph-dna, ph-star) {
+  font-size: 2.4rem;
+  color: var(--accent);
+}
+
+.stellar-planet-image-action {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--primary-button-border);
+  border-radius: 5px;
+  background: var(--primary-button-bg);
+  color: var(--primary-button-text);
+  font-weight: 400;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.stellar-planet-image-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.stellar-planet-property-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.stellar-primary-properties-panel,
+.stellar-planet-properties-panel {
+  background: color-mix(in srgb, var(--surface) 91%, var(--accent) 9%);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--line));
+}
+
+.stellar-planet-properties-panel {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.stellar-planet-description {
+  margin: 0 0 22px;
 }
 
 .stellar-row-title {
@@ -13217,9 +13557,17 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   padding: 26px 24px 28px;
 }
 
+.stellar-image-prompt-dialog {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 96px);
+  padding: 24px;
+  overflow: auto;
+}
+
 .stellar-generate-dialog h2,
 .stellar-details-dialog h2,
-.stellar-life-dialog h2 {
+.stellar-life-dialog h2,
+.stellar-image-prompt-dialog h2 {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -13309,6 +13657,73 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
   min-width: 72px;
 }
 
+.stellar-image-prompt-header {
+  padding-right: 4px;
+}
+
+.stellar-image-prompt-header .modal-subtitle {
+  max-width: 680px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  line-height: 1.45;
+}
+
+.stellar-image-prompt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.stellar-image-prompt-field {
+  display: grid;
+  gap: 8px;
+}
+
+.stellar-image-prompt-field span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.stellar-image-prompt-field textarea {
+  width: 100%;
+  min-height: 136px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-standard);
+  background: var(--field);
+  color: var(--ink);
+  padding: 12px;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.stellar-image-prompt-field textarea[readonly] {
+  min-height: 178px;
+  color: var(--muted);
+}
+
+.stellar-image-prompt-field textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.stellar-image-prompt-dialog .dialog-status {
+  min-height: 18px;
+  margin: 12px 0 0;
+}
+
+.stellar-image-prompt-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 0;
+}
+
 .stellar-generate-dialog h3 {
   margin: 28px 0 14px;
 }
@@ -13394,6 +13809,35 @@ body[data-page="stellar-architect"] .stellar-side-panel {
   background: color-mix(in srgb, var(--surface) 92%, var(--page));
 }
 
+body[data-page="stellar-architect"] .stellar-detail-scroll,
+body[data-page="stellar-architect"] .stellar-side-panel {
+  scrollbar-color: color-mix(in srgb, var(--muted) 52%, var(--surface)) color-mix(in srgb, var(--field) 72%, transparent);
+  scrollbar-width: thin;
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar-track,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--field) 72%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar-thumb,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar-thumb {
+  border: 2px solid color-mix(in srgb, var(--field) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 52%, var(--surface));
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar-thumb:hover,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 64%, var(--muted));
+}
+
 body[data-page="stellar-architect"] .stellar-detail-toolbar {
   background: color-mix(in srgb, var(--surface) 82%, var(--page));
   border-bottom-color: var(--line);
@@ -13402,6 +13846,23 @@ body[data-page="stellar-architect"] .stellar-detail-toolbar {
 body[data-page="stellar-architect"] .stellar-page-title {
   border-bottom-color: var(--line);
   background: color-mix(in srgb, var(--surface) 92%, var(--page));
+}
+
+body[data-page="stellar-architect"] .stellar-planet-image-header {
+  border-bottom: 0;
+  border-bottom-right-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+body[data-page="stellar-architect"] .stellar-planet-properties-panel {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+body[data-page="stellar-architect"] :is(.stellar-primary-properties-panel, .stellar-planet-properties-panel) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--accent) 6%), color-mix(in srgb, var(--surface) 96.5%, var(--accent) 3.5%));
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--line));
 }
 
 body[data-page="stellar-architect"] .stellar-tree-shell h2,
@@ -13438,8 +13899,16 @@ body[data-page="stellar-architect"] .stellar-tree-toggle {
   color: var(--muted);
 }
 
+body[data-page="stellar-architect"] .stellar-side-panel-toggle {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--button-bg);
+}
+
 body[data-page="stellar-architect"] .stellar-tree-toggle:hover,
 body[data-page="stellar-architect"] .stellar-tree-toggle:focus-visible,
+body[data-page="stellar-architect"] .stellar-side-panel-toggle:hover,
+body[data-page="stellar-architect"] .stellar-side-panel-toggle:focus-visible,
 body[data-page="stellar-architect"] .stellar-tree-item:hover,
 body[data-page="stellar-architect"] .stellar-tree-item.is-selected,
 body[data-page="stellar-architect"] .stellar-tree-folder-label:hover,
@@ -13447,6 +13916,11 @@ body[data-page="stellar-architect"] .stellar-tree-folder-label:focus-visible,
 body[data-page="stellar-architect"] .stellar-body-row:hover {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
   background: var(--hover-bg);
+}
+
+body[data-page="stellar-architect"] .stellar-tree-thumb {
+  border-color: var(--line);
+  background: var(--field);
 }
 
 body[data-page="stellar-architect"] .stellar-tree-item ph-star,
@@ -13463,16 +13937,29 @@ body[data-page="stellar-architect"] .stellar-generate-dialog h2 ph-star {
 }
 
 body[data-page="stellar-architect"] .stellar-panel h2.is-green,
-body[data-page="stellar-architect"] .stellar-section-heading .is-green,
 body[data-page="stellar-architect"] .stellar-tree-item ph-users,
 body[data-page="stellar-architect"] .stellar-tree-item ph-dna,
 body[data-page="stellar-architect"] .stellar-life-dialog h2 ph-dna {
   color: var(--success);
 }
 
-body[data-page="stellar-architect"] .stellar-panel h2.is-red,
-body[data-page="stellar-architect"] .stellar-section-heading .is-red {
+body[data-page="stellar-architect"] .stellar-section-heading .is-green {
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-panel h2.is-red {
   color: var(--danger);
+}
+
+body[data-page="stellar-architect"] .stellar-section-heading .is-red {
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-green,
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-red,
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-green :is(ph-dna, ph-users, ph-buildings),
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-red :is(ph-dna, ph-users, ph-buildings) {
+  color: var(--accent);
 }
 
 body[data-page="stellar-architect"] .stellar-placeholder,
@@ -14175,7 +14662,9 @@ body[data-page="useful-things"] {
 .storage-preview-empty { display: grid; min-height: 100%; place-content: center; gap: 10px; color: var(--muted); text-align: center; }
 .storage-preview-empty ph-folder-open { margin: auto; font-size: 3rem; }
 .storage-preview-content { display: grid; align-content: start; gap: 16px; }
-.storage-image-preview { overflow: hidden; background: #050708; border: 1px solid var(--line); border-radius: 7px; }
+.storage-image-preview { display: block; width: 100%; overflow: hidden; padding: 0; background: #050708; border: 1px solid var(--line); border-radius: 7px; cursor: zoom-in; }
+.storage-image-preview:hover,
+.storage-image-preview:focus-visible { border-color: var(--accent); outline: none; }
 .storage-image-preview img { display: block; width: 100%; max-height: min(54vh, 520px); object-fit: contain; }
 .storage-file-preview-icon { display: grid; min-height: 120px; place-items: center; color: var(--accent); background: color-mix(in srgb, var(--field) 72%, transparent); border: 1px solid var(--line); border-radius: 7px; font-size: 4rem; }
 .storage-file-metadata { display: grid; gap: 10px; margin: 0; }
@@ -19293,6 +19782,61 @@ body[data-page="image-generation"] :where(
   background: color-mix(in srgb, var(--page) 92%, #000);
 }
 
+.centralis-image-viewer-thumb-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  width: 92px;
+  padding: 14px 10px;
+  background: color-mix(in srgb, var(--surface) 82%, #000);
+  border-right: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.centralis-image-viewer-thumb-rail[hidden] {
+  display: none;
+}
+
+.centralis-image-viewer-thumb-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.centralis-image-viewer-thumb {
+  display: block;
+  width: 66px;
+  height: 66px;
+  padding: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--field) 86%, #000);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 6px;
+}
+
+.centralis-image-viewer-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.centralis-image-viewer-thumb:hover,
+.centralis-image-viewer-thumb:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
+  outline: none;
+}
+
+.centralis-image-viewer-thumb.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
 .centralis-image-viewer-frame {
   position: relative;
   display: block;
@@ -19302,6 +19846,10 @@ body[data-page="image-generation"] :where(
   padding: 14px 76px;
   contain: paint;
   isolation: isolate;
+}
+
+.centralis-image-viewer-stage.has-thumbnail-rail .centralis-image-viewer-frame {
+  padding-left: 120px;
 }
 
 .centralis-image-viewer-frame img {
@@ -19344,6 +19892,10 @@ body[data-page="image-generation"] :where(
 
 .centralis-image-viewer-nav.is-prev {
   left: 18px;
+}
+
+.centralis-image-viewer-stage.has-thumbnail-rail .centralis-image-viewer-nav.is-prev {
+  left: 110px;
 }
 
 .centralis-image-viewer-nav.is-next {
@@ -19438,7 +19990,7 @@ body[data-page="image-generation"] :where(
   display: grid;
   gap: 10px;
   max-height: 210px;
-  overflow: auto;
+  overflow: hidden;
   padding: 0 16px 16px;
 }
 
@@ -19456,6 +20008,8 @@ body[data-page="image-generation"] :where(
 
 .centralis-image-viewer-detail-section {
   min-width: 0;
+  max-height: 194px;
+  overflow: auto;
   padding: 12px;
   background: var(--field);
   border: 1px solid var(--line);

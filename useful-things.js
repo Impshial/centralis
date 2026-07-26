@@ -60,8 +60,6 @@
     storagePreviewImage: document.querySelector("[data-storage-preview-image]"),
     storageFilePreviewIcon: document.querySelector("[data-storage-file-preview-icon]"),
     storageFileMetadata: document.querySelector("[data-storage-file-metadata]"),
-    storageOpenButton: document.querySelector("[data-storage-open]"),
-    storageDownloadButton: document.querySelector("[data-storage-download]"),
     storageResizers: Array.from(document.querySelectorAll("[data-storage-resizer]")),
     storageMigrationOpenButton: document.querySelector("[data-storage-migration-open]"),
     storageMigrationModal: document.querySelector("[data-storage-migration-modal]"),
@@ -3807,7 +3805,103 @@
       <div><dt>Type</dt><dd>${escapeHtml(object.contentType || "Unknown")}</dd></div>
       ${originMarkup}
       <div><dt>Modified</dt><dd>${escapeHtml(modified)}</dd></div>`;
-    if (els.storageOpenButton) els.storageOpenButton.hidden = !isImage;
+  }
+
+  function getStorageImageViewerDetails(viewerImage) {
+    const object = viewerImage?.metadata || viewerImage || {};
+    const objectMetadata = object.metadata && typeof object.metadata === "object" ? object.metadata : {};
+    const origin = objectMetadata["centralis-context"] || objectMetadata["centralis-module"] || "";
+    const note = objectMetadata["centralis-note"] || "";
+    const modified = object.lastModified ? new Date(object.lastModified).toLocaleString() : "Unknown";
+    return {
+      imageInfo: {
+        title: "Storage Information",
+        rows: [
+          ["Filename", getStorageFileName(object.key)],
+          ["Path", object.key],
+          ["Size", formatStorageBytes(object.size)],
+          ["Type", object.contentType || "Unknown"],
+          origin ? ["Origin", origin] : null,
+          note ? ["Note", note] : null,
+          ["Modified", modified]
+        ].filter(Boolean)
+      }
+    };
+  }
+
+  async function getStorageImageViewerImages() {
+    const imageObjects = storageState.objects.filter((object) => isImageStorageObject(object.key, object.contentType));
+    await Promise.all(imageObjects.map(async (object) => {
+      if (storageState.imageUrls.has(object.key)) return;
+      const payload = await getStorageObjectUrl(object);
+      Object.assign(object, payload.metadata || {});
+      storageState.imageUrls.set(object.key, payload.url);
+    }));
+    return imageObjects.map((object) => ({
+      id: object.key,
+      src: storageState.imageUrls.get(object.key) || "",
+      name: getStorageFileName(object.key),
+      downloadName: getStorageFileName(object.key),
+      alt: getStorageFileName(object.key),
+      metadata: object
+    })).filter((image) => image.src);
+  }
+
+  async function openStorageImageViewer() {
+    const object = storageState.selected;
+    if (!object || !isImageStorageObject(object.key, object.contentType) || typeof window.openCentralisImageViewer !== "function") return;
+    setStorageStatus("Loading image viewer...");
+    let viewerImages = [];
+    try {
+      viewerImages = await getStorageImageViewerImages();
+    } catch (error) {
+      setStorageStatus(error instanceof Error ? error.message : "Could not load images for the viewer.");
+      return;
+    }
+    if (!viewerImages.length) {
+      setStorageStatus("No images are available to preview.");
+      return;
+    }
+    setStorageStatus("");
+
+    window.openCentralisImageViewer({
+      title: getStorageFileName(object.key),
+      kicker: "Storage Image Viewer",
+      images: viewerImages,
+      activeImageId: object.key,
+      details: getStorageImageViewerDetails,
+      capabilities: {
+        canNavigate: viewerImages.length > 1,
+        canSetPrimary: false,
+        canOpen: true,
+        canDownload: true,
+        canDelete: false
+      },
+      actions: {
+        changeImage: (viewerImage) => {
+          const nextObject = viewerImage?.metadata;
+          if (!nextObject?.key) return;
+          storageState.selected = nextObject;
+          updateStorageItemSelection(nextObject.key);
+          renderStoragePreview();
+        },
+        download: async (viewerImage) => {
+          const sourceObject = viewerImage?.metadata || object;
+          try {
+            const payload = await getStorageObjectUrl(sourceObject, true);
+            const link = document.createElement("a");
+            link.href = payload.url;
+            link.download = getStorageFileName(sourceObject.key);
+            document.body.append(link);
+            link.click();
+            link.remove();
+          } catch (error) {
+            setStorageStatus(error instanceof Error ? error.message : "Could not start download.");
+          }
+          return false;
+        }
+      }
+    });
   }
 
   function updateStorageItemSelection(selectedKey) {
@@ -3950,24 +4044,7 @@
     els.storageLoadMore?.addEventListener("click", () => {
       if (storageState.nextContinuationToken) loadStoragePath(storageState.bucket, storageState.prefix, { append: true });
     });
-    els.storageOpenButton?.addEventListener("click", () => {
-      const url = storageState.selected && storageState.imageUrls.get(storageState.selected.key);
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
-    });
-    els.storageDownloadButton?.addEventListener("click", async () => {
-      if (!storageState.selected) return;
-      try {
-        const payload = await getStorageObjectUrl(storageState.selected, true);
-        const link = document.createElement("a");
-        link.href = payload.url;
-        link.download = getStorageFileName(storageState.selected.key);
-        document.body.append(link);
-        link.click();
-        link.remove();
-      } catch (error) {
-        setStorageStatus(error instanceof Error ? error.message : "Could not start download.");
-      }
-    });
+    els.storageImagePreview?.addEventListener("click", openStorageImageViewer);
     els.storageResizers.forEach((resizer) => resizer.addEventListener("pointerdown", (event) => {
       const side = resizer.dataset.storageResizer;
       const startX = event.clientX;

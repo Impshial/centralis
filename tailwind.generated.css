@@ -367,16 +367,17 @@ textarea::placeholder {
 .modal-backdrop.generation-activity-backdrop {
   z-index: 4010;
   display: grid;
-  padding: calc(var(--header-height) + 22px) 20px 22px;
+  padding: calc(var(--header-height) + 14px) 20px 18px;
   background: color-mix(in srgb, #000 72%, transparent);
-  place-items: start center;
+  place-items: center;
 }
 
 .modal-dialog.generation-activity-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(980px, calc(100vw - 40px));
-  max-height: calc(100vh - var(--header-height) - 44px);
+  width: min(940px, calc(100vw - 40px));
+  height: min(680px, calc(100vh - var(--header-height) - 32px));
+  max-height: calc(100vh - var(--header-height) - 32px);
   padding: 0;
   overflow: hidden;
   background: var(--surface);
@@ -391,7 +392,7 @@ textarea::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 14px 18px;
   background: color-mix(in srgb, var(--surface) 94%, var(--page));
   border-bottom: 1px solid var(--line);
 }
@@ -415,15 +416,15 @@ textarea::placeholder {
 .generation-activity-list {
   display: grid;
   align-content: start;
-  gap: 18px;
-  min-height: 420px;
-  padding: 16px 20px;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px 16px;
   overflow: auto;
 }
 
 .generation-activity-list section {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .generation-activity-list section > h3 {
@@ -438,11 +439,11 @@ textarea::placeholder {
 .generation-job-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   background: color-mix(in srgb, var(--field) 82%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .generation-job-card.is-running,
@@ -466,9 +467,9 @@ textarea::placeholder {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
-  gap: 12px;
-  min-height: 64px;
-  padding: 12px 14px;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 12px;
   color: inherit;
   background: transparent;
   border: 0;
@@ -499,15 +500,32 @@ textarea::placeholder {
 }
 
 .generation-job-summary-copy {
-  display: grid;
+  display: block;
   min-width: 0;
-  gap: 4px;
+  overflow: hidden;
+}
+
+.generation-job-summary-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.generation-job-summary .generation-job-topline {
+  flex: 0 0 auto;
+  gap: 8px;
+  font-size: 0.86rem;
 }
 
 .generation-job-summary-copy strong {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--ink);
-  font-size: 0.98rem;
+  font-size: 0.86rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -516,14 +534,14 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 88px;
-  min-height: 28px;
-  padding: 0 10px;
+  min-width: 76px;
+  min-height: 24px;
+  padding: 0 9px;
   border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--line));
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--ink);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 820;
 }
 
@@ -536,8 +554,8 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 16px;
-  padding: 14px 14px 14px 50px;
+  gap: 12px;
+  padding: 10px 12px 12px 46px;
 }
 
 .generation-job-collapsible-body[hidden] {
@@ -733,14 +751,14 @@ textarea::placeholder {
 
 .theme-selector-row {
   display: grid;
-  grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
   padding: 10px;
   background: color-mix(in srgb, var(--muted) 6%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .theme-selector-row.is-previewed {
@@ -831,6 +849,37 @@ textarea::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.theme-selector-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  justify-self: end;
+  width: auto;
+  min-width: 84px;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--control-text);
+  background: color-mix(in srgb, var(--field) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.theme-selector-edit:hover,
+.theme-selector-edit:focus-visible {
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border-color: var(--primary-button-border);
+}
+
+.theme-selector-row:not(:has(.theme-selector-edit)) .theme-selector-preview {
+  grid-column: 2 / 4;
 }
 
 .theme-selector-empty {
@@ -962,6 +1011,17 @@ textarea::placeholder {
 
   .theme-selector-row {
     grid-template-columns: 1fr;
+  }
+
+  .theme-selector-row:not(:has(.theme-selector-edit)) .theme-selector-preview,
+  .theme-selector-preview {
+    grid-column: auto;
+  }
+
+  .theme-selector-edit {
+    justify-self: stretch;
+    justify-content: center;
+    width: 100%;
   }
 
   .custom-theme-colors {
@@ -1129,6 +1189,10 @@ html[data-color-scheme="dark"] .moon-icon {
   opacity: 0.58;
 }
 
+body[data-page="stellar-architect"] {
+  overflow: hidden;
+}
+
 .stellar-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 370px;
@@ -1137,12 +1201,17 @@ html[data-color-scheme="dark"] .moon-icon {
   margin-top: var(--header-height);
   color: #f7fbff;
   background: #080d12;
+  overflow: hidden;
 }
 
 .stellar-main {
   min-width: 0;
   overflow: hidden;
   border-right: 1px solid rgb(148 163 184 / 16%);
+}
+
+.stellar-page.is-stellar-side-collapsed {
+  grid-template-columns: minmax(0, 1fr) 58px;
 }
 
 .stellar-side-panel {
@@ -1154,6 +1223,15 @@ html[data-color-scheme="dark"] .moon-icon {
   background: #11151b;
 }
 
+.stellar-side-panel.is-collapsed {
+  padding: 16px 8px;
+  overflow: hidden;
+}
+
+.stellar-side-panel.is-collapsed .stellar-wide-action {
+  display: none;
+}
+
 .stellar-wide-action {
   display: inline-flex;
   align-items: center;
@@ -1163,15 +1241,72 @@ html[data-color-scheme="dark"] .moon-icon {
 }
 
 .stellar-tree-shell {
-  margin-top: 24px;
+  margin-top: 0;
+}
+
+.stellar-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .stellar-tree-shell h2 {
-  margin: 0 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
   color: #a9b6c2;
   font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.stellar-tree-shell h2 span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stellar-tree-shell h2 ph-star {
+  flex: 0 0 auto;
+  color: #ffc400;
+}
+
+.stellar-side-panel.is-collapsed .stellar-tree-shell {
+  margin-top: 0;
+}
+
+.stellar-side-panel.is-collapsed .stellar-tree-header {
+  justify-content: center;
+  margin-bottom: 0;
+}
+
+.stellar-side-panel.is-collapsed .stellar-tree-header h2 {
+  display: none;
+}
+
+.stellar-side-panel-toggle {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  color: #d8e6f2;
+  background: rgb(148 163 184 / 8%);
+  border: 1px solid rgb(148 163 184 / 22%);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.stellar-side-panel-toggle:hover,
+.stellar-side-panel-toggle:focus-visible {
+  color: #f7fbff;
+  background: rgb(148 163 184 / 16%);
+  border-color: rgb(148 163 184 / 38%);
+  outline: none;
 }
 
 .stellar-tree-list,
@@ -1232,7 +1367,7 @@ html[data-color-scheme="dark"] .moon-icon {
 
 .stellar-tree-item {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: 34px;
@@ -1240,6 +1375,29 @@ html[data-color-scheme="dark"] .moon-icon {
   color: #e9f2fb;
   border-radius: 6px;
   text-decoration: none;
+}
+
+.stellar-tree-icon,
+.stellar-tree-thumb {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.stellar-tree-thumb {
+  background: rgb(148 163 184 / 14%);
+  border: 1px solid rgb(148 163 184 / 18%);
+}
+
+.stellar-tree-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
 }
 
 .stellar-tree-item:hover,
@@ -1348,6 +1506,39 @@ html[data-color-scheme="dark"] .moon-icon {
   color: inherit;
   text-decoration: none;
   transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.stellar-system-card.has-background-image {
+  position: relative;
+  isolation: isolate;
+  background: color-mix(in srgb, var(--surface) 72%, var(--page));
+}
+
+.stellar-system-card.has-background-image::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 92%, transparent) 0%, color-mix(in srgb, var(--surface) 72%, transparent) 48%, color-mix(in srgb, var(--surface) 38%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--page) 38%, transparent), color-mix(in srgb, var(--page) 38%, transparent));
+}
+
+.stellar-system-card-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  object-fit: cover;
+  object-position: center;
+}
+
+.stellar-system-card.has-background-image > :not(.stellar-system-card-background) {
+  position: relative;
+  z-index: 2;
 }
 
 .stellar-system-card:hover {
@@ -1478,7 +1669,7 @@ html[data-color-scheme="dark"] .moon-icon {
   top: 0;
   z-index: 4;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   height: 62px;
@@ -1507,6 +1698,52 @@ html[data-color-scheme="dark"] .moon-icon {
   gap: 8px;
   color: #bdd1e3;
   text-decoration: none;
+}
+
+.stellar-breadcrumbs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.stellar-breadcrumbs a,
+.stellar-breadcrumb-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stellar-breadcrumbs a {
+  flex: 0 1 auto;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.stellar-breadcrumbs a:first-child {
+  flex: 0 0 auto;
+}
+
+.stellar-breadcrumbs a:hover,
+.stellar-breadcrumbs a:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.stellar-breadcrumb-current {
+  flex: 1 1 auto;
+  color: var(--ink);
+}
+
+.stellar-breadcrumbs ph-caret-right {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+  font-size: 0.78rem;
 }
 
 .stellar-panel {
@@ -1618,6 +1855,12 @@ html[data-color-scheme="dark"] .moon-icon {
 .stellar-lifeform-row {
   grid-template-columns: 112px minmax(0, 1fr);
   align-items: start;
+  cursor: pointer;
+}
+
+.stellar-lifeform-row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .stellar-body-row:hover {
@@ -1631,6 +1874,18 @@ html[data-color-scheme="dark"] .moon-icon {
   place-items: center;
   color: #7aa5c8;
   background: #1f2430;
+}
+
+.stellar-body-row .stellar-row-image.has-image {
+  display: block;
+}
+
+.stellar-body-row .stellar-row-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
 }
 
 .stellar-lifeform-image-block {
@@ -1647,16 +1902,29 @@ html[data-color-scheme="dark"] .moon-icon {
   place-items: center;
   color: #7f8ea3;
   background: #20242d;
+  border: 0;
   border-radius: 5px;
+  padding: 0;
   font-size: 0.86rem;
   text-align: center;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .stellar-lifeform-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top center;
+}
+
+.stellar-object-image-placeholder {
+  gap: 8px;
+  cursor: default;
+}
+
+.stellar-object-image-placeholder :is(ph-planet, ph-star, ph-moon, ph-dna) {
+  font-size: 2rem;
 }
 
 .stellar-lifeform-image-action {
@@ -1691,6 +1959,111 @@ html[data-color-scheme="dark"] .moon-icon {
 
 .stellar-lifeform-image-block.is-large .stellar-lifeform-image-action {
   max-width: 180px;
+}
+
+.stellar-planet-page-title {
+  margin: 0 0 14px;
+  color: var(--ink);
+  font-size: clamp(2rem, 3.2vw, 3.1rem);
+  line-height: 1;
+}
+
+.stellar-planet-image-header {
+  position: relative;
+  width: 100%;
+  height: clamp(140px, 14vw, 220px);
+  min-height: 140px;
+  overflow: hidden;
+  margin: 0;
+  background: color-mix(in srgb, var(--field) 88%, var(--surface));
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 6px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.stellar-planet-image-viewer,
+.stellar-planet-image-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.stellar-planet-image-viewer {
+  cursor: zoom-in;
+}
+
+.stellar-planet-image-viewer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.stellar-planet-image-placeholder {
+  gap: 10px;
+  background:
+    radial-gradient(circle at 30% 18%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
+    color-mix(in srgb, var(--field) 90%, var(--surface));
+}
+
+.stellar-planet-image-placeholder :is(ph-planet, ph-moon, ph-dna, ph-star) {
+  color: var(--accent);
+  font-size: 2.4rem;
+}
+
+.stellar-planet-image-action {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border: 1px solid var(--primary-button-border);
+  border-radius: 5px;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 28%);
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.stellar-planet-image-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.stellar-planet-property-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.stellar-primary-properties-panel,
+.stellar-planet-properties-panel {
+  background: color-mix(in srgb, var(--surface) 91%, var(--accent) 9%);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--line));
+}
+
+.stellar-planet-properties-panel {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.stellar-planet-description {
+  margin: 0 0 22px;
 }
 
 .stellar-row-title {
@@ -2123,8 +2496,16 @@ html[data-color-scheme="dark"] .moon-icon {
   width: min(620px, calc(100vw - 32px));
 }
 
+.stellar-image-prompt-dialog {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 96px);
+  padding: 24px;
+  overflow: auto;
+}
+
 .stellar-details-dialog h2,
-.stellar-life-dialog h2 {
+.stellar-life-dialog h2,
+.stellar-image-prompt-dialog h2 {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2146,6 +2527,69 @@ html[data-color-scheme="dark"] .moon-icon {
 .stellar-details-actions,
 .stellar-life-actions {
   justify-content: flex-end;
+}
+
+.stellar-image-prompt-header .modal-subtitle {
+  max-width: 680px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  line-height: 1.45;
+}
+
+.stellar-image-prompt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.stellar-image-prompt-field {
+  display: grid;
+  gap: 8px;
+}
+
+.stellar-image-prompt-field span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.stellar-image-prompt-field textarea {
+  width: 100%;
+  min-height: 136px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-standard);
+  background: var(--field);
+  color: var(--ink);
+  padding: 12px;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.stellar-image-prompt-field textarea[readonly] {
+  min-height: 178px;
+  color: var(--muted);
+}
+
+.stellar-image-prompt-field textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.stellar-image-prompt-dialog .dialog-status {
+  min-height: 18px;
+  margin: 12px 0 0;
+}
+
+.stellar-image-prompt-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 0;
 }
 
 @media (max-width: 1100px) {
@@ -2256,6 +2700,35 @@ body[data-page="stellar-architect"] .stellar-side-panel {
   background: color-mix(in srgb, var(--surface) 92%, var(--page));
 }
 
+body[data-page="stellar-architect"] .stellar-detail-scroll,
+body[data-page="stellar-architect"] .stellar-side-panel {
+  scrollbar-color: color-mix(in srgb, var(--muted) 52%, var(--surface)) color-mix(in srgb, var(--field) 72%, transparent);
+  scrollbar-width: thin;
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar-track,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--field) 72%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar-thumb,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 52%, var(--surface));
+  border: 2px solid color-mix(in srgb, var(--field) 72%, transparent);
+  border-radius: 999px;
+}
+
+body[data-page="stellar-architect"] .stellar-detail-scroll::-webkit-scrollbar-thumb:hover,
+body[data-page="stellar-architect"] .stellar-side-panel::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 64%, var(--muted));
+}
+
 body[data-page="stellar-architect"] .stellar-detail-toolbar {
   background: color-mix(in srgb, var(--surface) 82%, var(--page));
   border-bottom-color: var(--line);
@@ -2264,6 +2737,23 @@ body[data-page="stellar-architect"] .stellar-detail-toolbar {
 body[data-page="stellar-architect"] .stellar-page-title {
   border-bottom-color: var(--line);
   background: color-mix(in srgb, var(--surface) 92%, var(--page));
+}
+
+body[data-page="stellar-architect"] .stellar-planet-image-header {
+  border-bottom: 0;
+  border-bottom-right-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+body[data-page="stellar-architect"] .stellar-planet-properties-panel {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+body[data-page="stellar-architect"] :is(.stellar-primary-properties-panel, .stellar-planet-properties-panel) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--accent) 6%), color-mix(in srgb, var(--surface) 96.5%, var(--accent) 3.5%));
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--line));
 }
 
 body[data-page="stellar-architect"] .stellar-tree-shell h2,
@@ -2298,8 +2788,16 @@ body[data-page="stellar-architect"] .stellar-tree-toggle {
   color: var(--muted);
 }
 
+body[data-page="stellar-architect"] .stellar-side-panel-toggle {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--button-bg);
+}
+
 body[data-page="stellar-architect"] .stellar-tree-toggle:hover,
 body[data-page="stellar-architect"] .stellar-tree-toggle:focus-visible,
+body[data-page="stellar-architect"] .stellar-side-panel-toggle:hover,
+body[data-page="stellar-architect"] .stellar-side-panel-toggle:focus-visible,
 body[data-page="stellar-architect"] .stellar-tree-item:hover,
 body[data-page="stellar-architect"] .stellar-tree-item.is-selected,
 body[data-page="stellar-architect"] .stellar-tree-folder-label:hover,
@@ -2307,6 +2805,11 @@ body[data-page="stellar-architect"] .stellar-tree-folder-label:focus-visible,
 body[data-page="stellar-architect"] .stellar-body-row:hover {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
   background: var(--hover-bg);
+}
+
+body[data-page="stellar-architect"] .stellar-tree-thumb {
+  border-color: var(--line);
+  background: var(--field);
 }
 
 body[data-page="stellar-architect"] .stellar-tree-item ph-star,
@@ -2323,16 +2826,29 @@ body[data-page="stellar-architect"] .stellar-generate-dialog h2 ph-star {
 }
 
 body[data-page="stellar-architect"] .stellar-panel h2.is-green,
-body[data-page="stellar-architect"] .stellar-section-heading .is-green,
 body[data-page="stellar-architect"] .stellar-tree-item ph-users,
 body[data-page="stellar-architect"] .stellar-tree-item ph-dna,
 body[data-page="stellar-architect"] .stellar-life-dialog h2 ph-dna {
   color: var(--success);
 }
 
-body[data-page="stellar-architect"] .stellar-panel h2.is-red,
-body[data-page="stellar-architect"] .stellar-section-heading .is-red {
+body[data-page="stellar-architect"] .stellar-section-heading .is-green {
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-panel h2.is-red {
   color: var(--danger);
+}
+
+body[data-page="stellar-architect"] .stellar-section-heading .is-red {
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-green,
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-red,
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-green :is(ph-dna, ph-users, ph-buildings),
+body[data-page="stellar-architect"] .stellar-panel .stellar-section-heading h2.is-red :is(ph-dna, ph-users, ph-buildings) {
+  color: var(--accent);
 }
 
 body[data-page="stellar-architect"] .stellar-placeholder,
@@ -2958,7 +3474,7 @@ body[data-page="image-generation"] :where(
   display: grid;
   gap: 10px;
   max-height: 210px;
-  overflow: auto;
+  overflow: hidden;
   padding: 0 16px 16px;
 }
 
@@ -2976,6 +3492,8 @@ body[data-page="image-generation"] :where(
 
 .centralis-image-viewer-detail-section {
   min-width: 0;
+  max-height: 194px;
+  overflow: auto;
   padding: 12px;
   background: var(--field);
   border: 1px solid var(--line);

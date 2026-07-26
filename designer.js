@@ -9,10 +9,14 @@
     stage: document.querySelector("[data-centralis-image-viewer-stage]"),
     frame: document.querySelector("[data-centralis-image-viewer-frame]"),
     image: document.querySelector("[data-centralis-image-viewer-image]"),
+    thumbRail: document.querySelector("[data-centralis-image-viewer-thumb-rail]"),
+    thumbs: document.querySelector("[data-centralis-image-viewer-thumbs]"),
     prev: document.querySelector("[data-centralis-image-viewer-prev]"),
     next: document.querySelector("[data-centralis-image-viewer-next]"),
     actualSize: document.querySelector("[data-centralis-image-viewer-actual-size]"),
     fitView: document.querySelector("[data-centralis-image-viewer-fit-view]"),
+    upload: document.querySelector("[data-centralis-image-viewer-upload]"),
+    uploadInput: document.querySelector("[data-centralis-image-viewer-upload-input]"),
     open: document.querySelector("[data-centralis-image-viewer-open]"),
     download: document.querySelector("[data-centralis-image-viewer-download]"),
     delete: document.querySelector("[data-centralis-image-viewer-delete]"),
@@ -84,7 +88,11 @@
         canSetPrimary: true,
         canOpen: true,
         canDownload: true,
-        canDelete: true
+        canDelete: true,
+        canUpload: true,
+        canShowThumbnails: true,
+        uploadMode: "add",
+        uploadLabel: "Upload"
       },
       images: [
         {
@@ -135,7 +143,11 @@
         canSetPrimary: false,
         canOpen: true,
         canDownload: true,
-        canDelete: true
+        canDelete: true,
+        canUpload: true,
+        canShowThumbnails: true,
+        uploadMode: "add",
+        uploadLabel: "Upload"
       },
       images: [
         {
@@ -189,7 +201,11 @@
         canSetPrimary: false,
         canOpen: true,
         canDownload: true,
-        canDelete: true
+        canDelete: true,
+        canUpload: true,
+        canShowThumbnails: false,
+        uploadMode: "replace",
+        uploadLabel: "Replace Image"
       },
       images: [
         {
@@ -223,7 +239,11 @@
         canSetPrimary: true,
         canOpen: true,
         canDownload: true,
-        canDelete: true
+        canDelete: true,
+        canUpload: true,
+        canShowThumbnails: false,
+        uploadMode: "add",
+        uploadLabel: "Upload"
       },
       images: [
         {
@@ -462,6 +482,11 @@
       canOpen: true,
       canDownload: true,
       canDelete: true,
+      canUpload: false,
+      canShowThumbnails: false,
+      uploadMode: "add",
+      uploadLabel: "Upload",
+      uploadAccept: "image/*",
       ...(config?.capabilities || {})
     };
   }
@@ -483,6 +508,8 @@
       const flags = [
         capabilities.canNavigate ? "List navigation" : "Single image",
         capabilities.canSetPrimary ? "Primary image" : "No primary",
+        capabilities.canShowThumbnails ? "Thumbnail rail" : null,
+        capabilities.canUpload ? (capabilities.uploadMode === "replace" ? "Upload replaces current" : "Upload adds image") : null,
         scenario.details?.promptInfo ? "Prompt details" : null,
         scenario.details?.generatorInfo ? "Generation settings" : null
       ].filter(Boolean);
@@ -512,6 +539,7 @@
     }
     const capabilities = getCapabilities(scenario);
     const enabled = Object.entries(capabilities)
+      .filter(([key]) => key.startsWith("can"))
       .filter(([, value]) => value)
       .map(([key]) => key.replace(/^can/, ""))
       .join(", ");
@@ -639,12 +667,30 @@
     }).join("");
   }
 
+  function renderThumbnails(config, capabilities) {
+    if (!viewer.thumbRail || !viewer.thumbs) return;
+    const images = Array.isArray(config.images) ? config.images : [];
+    const shouldShow = Boolean(capabilities.canShowThumbnails && images.length > 1);
+    viewer.thumbRail.hidden = !shouldShow;
+    viewer.stage?.classList.toggle("has-thumbnail-rail", shouldShow);
+    if (!shouldShow) {
+      viewer.thumbs.innerHTML = "";
+      return;
+    }
+    viewer.thumbs.innerHTML = images.map((item, index) => `
+      <button class="centralis-image-viewer-thumb${index === state.currentIndex ? " is-active" : ""}" type="button" data-centralis-image-viewer-thumb="${index}" aria-label="View ${escapeHtml(item.name || `image ${index + 1}`)}">
+        <img src="${escapeHtml(item.src || "")}" alt="">
+      </button>
+    `).join("");
+  }
+
   function renderViewer() {
     const config = state.currentConfig;
     const image = getCurrentImage();
     if (!config || !image || !viewer.modal) return;
     const capabilities = getCapabilities(config);
     const hasMultiple = capabilities.canNavigate && (config.images || []).length > 1;
+    renderThumbnails(config, capabilities);
 
     if (viewer.kicker) viewer.kicker.textContent = config.kicker || "Image Viewer";
     if (viewer.title) viewer.title.textContent = image.name || config.title || "Image";
@@ -679,6 +725,11 @@
 
     if (viewer.prev) viewer.prev.hidden = !hasMultiple;
     if (viewer.next) viewer.next.hidden = !hasMultiple;
+    if (viewer.upload) {
+      viewer.upload.hidden = !capabilities.canUpload;
+      viewer.upload.querySelector("span").textContent = capabilities.uploadLabel || "Upload";
+    }
+    if (viewer.uploadInput) viewer.uploadInput.accept = capabilities.uploadAccept || "image/*";
     if (viewer.open) viewer.open.hidden = !capabilities.canOpen;
     if (viewer.download) viewer.download.hidden = !capabilities.canDownload;
     if (viewer.delete) viewer.delete.hidden = !capabilities.canDelete;
@@ -689,6 +740,18 @@
     }
 
     renderDetails(config.details);
+  }
+
+  function selectThumbnail(event) {
+    const button = event.target.closest("[data-centralis-image-viewer-thumb]");
+    if (!button || !state.currentConfig) return;
+    const index = Number(button.dataset.centralisImageViewerThumb);
+    const images = state.currentConfig.images || [];
+    if (!Number.isInteger(index) || index < 0 || index >= images.length || index === state.currentIndex) return;
+    state.currentIndex = index;
+    state.currentConfig.actions?.changeImage?.(images[index], index);
+    renderViewer();
+    renderScenarioSummary(state.currentConfig);
   }
 
   function openCentralisImageViewer(config = {}) {
@@ -732,14 +795,35 @@
     window.open(image.src, "_blank", "noopener,noreferrer");
   }
 
-  function handleDownloadImage() {
+  async function handleDownloadImage() {
     const image = getCurrentImage();
     if (!image?.src) return;
     state.currentConfig?.actions?.download?.(image);
+    if (viewer.download) viewer.download.disabled = true;
+    const downloadName = image.downloadName || image.name || "centralis-image.png";
     const link = document.createElement("a");
-    link.href = image.src;
-    link.download = image.downloadName || image.name || "centralis-image.png";
-    link.click();
+    try {
+      const response = await fetch(image.src);
+      if (!response.ok) throw new Error(`Image download failed with HTTP ${response.status}.`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.download = downloadName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error("Prototype image download failed; using direct link fallback.", error);
+      link.href = image.src;
+      link.download = downloadName;
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      if (viewer.download) viewer.download.disabled = false;
+    }
   }
 
   function handleDeleteImage() {
@@ -747,6 +831,41 @@
     if (!image) return;
     state.currentConfig?.actions?.delete?.(image);
     window.alert(`Prototype delete action: ${image.name || image.id}`);
+  }
+
+  function handleUploadButtonClick() {
+    if (!viewer.uploadInput) return;
+    viewer.uploadInput.value = "";
+    viewer.uploadInput.click();
+  }
+
+  function handleUploadImage() {
+    const file = viewer.uploadInput?.files?.[0] || null;
+    if (!file || !state.currentConfig) return;
+    const capabilities = getCapabilities(state.currentConfig);
+    const currentImage = getCurrentImage();
+    const uploadedImage = {
+      id: `uploaded-${Date.now()}`,
+      src: URL.createObjectURL(file),
+      name: file.name,
+      downloadName: file.name,
+      alt: file.name,
+      isPrimary: capabilities.uploadMode === "replace" ? Boolean(currentImage?.isPrimary) : false,
+      metadata: {
+        key: file.name,
+        size: file.size,
+        contentType: file.type || "image"
+      }
+    };
+    if (capabilities.uploadMode === "replace") {
+      state.currentConfig.images[state.currentIndex] = uploadedImage;
+    } else {
+      state.currentConfig.images.push(uploadedImage);
+      state.currentIndex = state.currentConfig.images.length - 1;
+    }
+    if (viewer.uploadInput) viewer.uploadInput.value = "";
+    renderViewer();
+    renderScenarioSummary(state.currentConfig);
   }
 
   function handleSetPrimary() {
@@ -826,8 +945,12 @@
     viewer.close?.addEventListener("click", closeCentralisImageViewer);
     viewer.prev?.addEventListener("click", () => moveImage(-1));
     viewer.next?.addEventListener("click", () => moveImage(1));
+    viewer.thumbs?.addEventListener("click", selectThumbnail);
+    viewer.thumbs?.addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
     viewer.actualSize?.addEventListener("click", setImageActualSize);
     viewer.fitView?.addEventListener("click", setImageFitToView);
+    viewer.upload?.addEventListener("click", handleUploadButtonClick);
+    viewer.uploadInput?.addEventListener("change", handleUploadImage);
     viewer.open?.addEventListener("click", handleOpenImage);
     viewer.download?.addEventListener("click", handleDownloadImage);
     viewer.delete?.addEventListener("click", handleDeleteImage);

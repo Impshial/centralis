@@ -511,13 +511,9 @@
                   <p>Select a file to inspect it.</p>
                 </div>
                 <div class="storage-preview-content" data-storage-preview-content hidden>
-                  <div class="storage-image-preview" data-storage-image-preview hidden><img data-storage-preview-image alt=""></div>
+                  <button class="storage-image-preview" type="button" data-storage-image-preview hidden aria-label="Open image viewer"><img data-storage-preview-image alt=""></button>
                   <div class="storage-file-preview-icon" data-storage-file-preview-icon></div>
                   <dl class="storage-file-metadata" data-storage-file-metadata></dl>
-                  <div class="storage-preview-actions">
-                    <button class="secondary-action" type="button" data-storage-open hidden>Open</button>
-                    <button class="primary-action" type="button" data-storage-download>Download</button>
-                  </div>
                 </div>
               </aside>
             </div>
@@ -625,6 +621,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=generation-activity-1"></script>
-  <script src="useful-things.js?v=custom-converter-1"></script>
+  <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
+  <script src="useful-things.js?v=storage-viewer-1"></script>
 </body>
 </html>
