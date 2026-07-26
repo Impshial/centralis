@@ -16,6 +16,8 @@ const stellarState = {
   collapsedTree: new Set(),
   sidePanelCollapsed: readStellarSidePanelPreference(),
   lifeformModal: { planetId: null, moonId: null, isGenerating: false },
+  colonyModal: { planetId: null, moonId: null, isGenerating: false },
+  colonistModal: { colonyId: null, isGenerating: false },
   loading: false,
 };
 
@@ -39,6 +41,20 @@ const stellarEls = {
   lifeTitle: document.querySelector("[data-stellar-life-title]"),
   lifeStatus: document.querySelector("[data-stellar-life-status]"),
   lifeConfirm: document.querySelector("[data-confirm-stellar-life]"),
+  colonyModal: document.getElementById("stellar-colony-modal"),
+  colonyTitle: document.querySelector("[data-stellar-colony-title]"),
+  colonyInstructions: document.querySelector("[data-stellar-colony-instructions]"),
+  colonyIncludeColonists: document.querySelector("[data-stellar-colony-include-colonists]"),
+  colonyRosterWrap: document.querySelector("[data-stellar-colony-roster-wrap]"),
+  colonyRoster: document.querySelector("[data-stellar-colony-roster]"),
+  colonyStatus: document.querySelector("[data-stellar-colony-status]"),
+  colonyConfirm: document.querySelector("[data-confirm-stellar-colony]"),
+  colonistModal: document.getElementById("stellar-colonist-modal"),
+  colonistTitle: document.querySelector("[data-stellar-colonist-title]"),
+  colonistInstructions: document.querySelector("[data-stellar-colonist-instructions]"),
+  colonistRoster: document.querySelector("[data-stellar-colonist-roster]"),
+  colonistStatus: document.querySelector("[data-stellar-colonist-status]"),
+  colonistConfirm: document.querySelector("[data-confirm-stellar-colonists]"),
   imagePromptModal: document.getElementById("stellar-image-prompt-modal"),
   imagePromptForm: document.querySelector("[data-stellar-image-prompt-form]"),
   imagePromptTitle: document.getElementById("stellar-image-prompt-title"),
@@ -150,15 +166,21 @@ async function callEdgeFunction(name, options = {}) {
     throw new Error(sessionError?.message || "You must be signed in to use this feature.");
   }
 
-  const response = await fetch(`${window.CENTRALIS_SUPABASE_CONFIG.url}/functions/v1/${name}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
-      apikey: window.CENTRALIS_SUPABASE_CONFIG.publishableKey,
-      ...(options.headers || {}),
-    },
-    body: options.body,
-  });
+  const functionUrl = `${window.CENTRALIS_SUPABASE_CONFIG.url}/functions/v1/${name}`;
+  let response;
+  try {
+    response = await fetch(functionUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        apikey: window.CENTRALIS_SUPABASE_CONFIG.publishableKey,
+        ...(options.headers || {}),
+      },
+      body: options.body,
+    });
+  } catch (error) {
+    throw new Error(`Could not reach Edge Function "${name}". Confirm it is deployed, then retry. (${getReadableError(error)})`);
+  }
   const responseText = await response.text();
   let data = null;
   if (responseText) {
@@ -244,16 +266,96 @@ function closeLifeModal(force = false) {
   stellarState.lifeformModal = { planetId: null, moonId: null, isGenerating: false };
 }
 
-function openStellarImagePromptDialog({ config, record, basePrompt }) {
+function getColonySourceName({ planetId, moonId }) {
+  const source = planetId ? planetForId(planetId) : moonForId(moonId);
+  return source?.name || source?.designation || "this body";
+}
+
+function getColonistSourceName(colonyId) {
+  const colony = colonyForId(colonyId);
+  return colony?.name || "this colony";
+}
+
+function setColonyModalGenerating(isGenerating) {
+  stellarState.colonyModal.isGenerating = isGenerating;
+  if (stellarEls.colonyConfirm) {
+    stellarEls.colonyConfirm.disabled = isGenerating;
+    stellarEls.colonyConfirm.textContent = isGenerating ? "Starting..." : "Generate Colony";
+  }
+  document.querySelectorAll("[data-close-stellar-colony-modal]").forEach((button) => {
+    button.disabled = isGenerating;
+  });
+}
+
+function updateColonyRosterVisibility() {
+  if (!stellarEls.colonyRosterWrap || !stellarEls.colonyIncludeColonists) return;
+  stellarEls.colonyRosterWrap.hidden = !stellarEls.colonyIncludeColonists.checked;
+}
+
+function openColonyModal({ planetId = null, moonId = null }) {
+  if (!stellarEls.colonyModal) return;
+  stellarState.colonyModal = { planetId, moonId, isGenerating: false };
+  if (stellarEls.colonyTitle) {
+    stellarEls.colonyTitle.textContent = `Generate Colony on ${getColonySourceName({ planetId, moonId })}`;
+  }
+  if (stellarEls.colonyInstructions) stellarEls.colonyInstructions.value = "";
+  if (stellarEls.colonyIncludeColonists) stellarEls.colonyIncludeColonists.checked = false;
+  if (stellarEls.colonyRoster) stellarEls.colonyRoster.value = "core";
+  updateColonyRosterVisibility();
+  setStatus(stellarEls.colonyStatus, "");
+  setColonyModalGenerating(false);
+  stellarEls.colonyModal.hidden = false;
+  window.setTimeout(() => stellarEls.colonyInstructions?.focus(), 0);
+}
+
+function closeColonyModal(force = false) {
+  if (stellarState.colonyModal.isGenerating && !force) return;
+  if (stellarEls.colonyModal) stellarEls.colonyModal.hidden = true;
+  stellarState.colonyModal = { planetId: null, moonId: null, isGenerating: false };
+}
+
+function setColonistModalGenerating(isGenerating) {
+  stellarState.colonistModal.isGenerating = isGenerating;
+  if (stellarEls.colonistConfirm) {
+    stellarEls.colonistConfirm.disabled = isGenerating;
+    stellarEls.colonistConfirm.textContent = isGenerating ? "Starting..." : "Generate Colonists";
+  }
+  document.querySelectorAll("[data-close-stellar-colonist-modal]").forEach((button) => {
+    button.disabled = isGenerating;
+  });
+}
+
+function openColonistModal(colonyId) {
+  if (!stellarEls.colonistModal) return;
+  stellarState.colonistModal = { colonyId, isGenerating: false };
+  if (stellarEls.colonistTitle) {
+    stellarEls.colonistTitle.textContent = `Generate Colonists for ${getColonistSourceName(colonyId)}`;
+  }
+  if (stellarEls.colonistInstructions) stellarEls.colonistInstructions.value = "";
+  if (stellarEls.colonistRoster) stellarEls.colonistRoster.value = "core";
+  setStatus(stellarEls.colonistStatus, "");
+  setColonistModalGenerating(false);
+  stellarEls.colonistModal.hidden = false;
+  window.setTimeout(() => stellarEls.colonistInstructions?.focus(), 0);
+}
+
+function closeColonistModal(force = false) {
+  if (stellarState.colonistModal.isGenerating && !force) return;
+  if (stellarEls.colonistModal) stellarEls.colonistModal.hidden = true;
+  stellarState.colonistModal = { colonyId: null, isGenerating: false };
+}
+
+function openStellarImagePromptDialog({ kind, config, record, basePrompt }) {
   if (!stellarEls.imagePromptModal) return Promise.resolve("");
   if (stellarImagePromptResolver) {
     stellarImagePromptResolver(null);
     stellarImagePromptResolver = null;
   }
 
-  const objectName = stellarObjectDisplayName(record, config.label);
+  const displayLabel = stellarImageDisplayLabel(kind, record, config.label);
+  const objectName = stellarObjectDisplayName(record, displayLabel);
   if (stellarEls.imagePromptTitle) {
-    stellarEls.imagePromptTitle.textContent = `Generate ${config.label} Image`;
+    stellarEls.imagePromptTitle.textContent = `Generate ${displayLabel} Image`;
   }
   if (stellarEls.imagePromptSubtitle) {
     stellarEls.imagePromptSubtitle.textContent = `Add optional overriding instructions for ${objectName}. Leave this blank to use the generated prompt as-is.`;
@@ -385,8 +487,9 @@ function stellarObjectBreadcrumbs(kind, record) {
       : null;
   const items = stellarSystemBreadcrumbs(system);
   if (parentPlanet) {
+    const parentPlanetKind = stellarPlanetKindLabel(parentPlanet);
     items.push({
-      label: parentPlanet.name ? `Planet - ${parentPlanet.name}` : "Planet",
+      label: parentPlanet.name ? `${parentPlanetKind} - ${parentPlanet.name}` : parentPlanetKind,
       href: `#planet/${encodeURIComponent(parentPlanet.id)}`,
     });
   }
@@ -403,7 +506,7 @@ function stellarObjectBreadcrumbs(kind, record) {
     });
   }
   const currentLabels = {
-    planet: record?.name ? `Planet - ${record.name}` : "Planet",
+    planet: record?.name ? `${stellarPlanetKindLabel(record)} - ${record.name}` : stellarPlanetKindLabel(record),
     moon: record?.name ? `Moon - ${record.name}` : "Moon",
     lifeform: record?.designation || record?.name ? `Lifeform - ${record.designation || record.name}` : "Lifeform",
     colony: record?.name ? `Colony - ${record.name}` : "Colony",
@@ -539,6 +642,8 @@ async function fetchStellarImages() {
     ...stellarState.planets.map((planet) => planet.id),
     ...stellarState.moons.map((moon) => moon.id),
     ...stellarState.lifeforms.map((lifeform) => lifeform.id),
+    ...stellarState.colonies.map((colony) => colony.id),
+    ...stellarState.colonists.map((colonist) => colonist.id),
   ].filter(Boolean);
   if (!objectIds.length) {
     stellarState.images = [];
@@ -648,6 +753,26 @@ function stellarImageConfigForKind(kind) {
       },
       prompt: buildLifeformImagePrompt,
     },
+    colony: {
+      label: "Colony",
+      kicker: "Stellar Colony Viewer",
+      source: "Stellar Architect colony image",
+      objectKind: "stellar colony",
+      elementType(record) {
+        return record?.settlement_type || record?.location_type || "Colony";
+      },
+      prompt: buildColonyImagePrompt,
+    },
+    colonist: {
+      label: "Colonist",
+      kicker: "Stellar Colonist Portrait Viewer",
+      source: "Stellar Architect colonist portrait",
+      objectKind: "stellar colonist portrait",
+      elementType(record) {
+        return record?.role || record?.department || "Human colonist";
+      },
+      prompt: buildColonistPortraitPrompt,
+    },
   };
   return configs[kind] || configs.lifeform;
 }
@@ -656,6 +781,8 @@ function stellarObjectForKind(kind, id) {
   if (kind === "star") return stellarState.stars.find((star) => star.id === id) || null;
   if (kind === "planet") return planetForId(id);
   if (kind === "moon") return moonForId(id);
+  if (kind === "colony") return colonyForId(id);
+  if (kind === "colonist") return colonistForId(id);
   return lifeformForId(id);
 }
 
@@ -665,8 +792,11 @@ function stellarObjectDisplayName(record, fallback = "Stellar object") {
 
 function stellarImageName(image, record, kind) {
   const config = stellarImageConfigForKind(kind);
-  const baseName = stellarObjectDisplayName(record, config.label);
+  const baseName = stellarObjectDisplayName(record, stellarImageDisplayLabel(kind, record, config.label));
   const filename = image?.stored_image_url ? String(image.stored_image_url).split("/").pop() : "";
+  if (kind === "colonist") {
+    return image?.is_primary ? `${baseName} Primary Portrait` : filename || `${baseName} Portrait`;
+  }
   return image?.is_primary ? `${baseName} Primary Image` : filename || `${baseName} Image`;
 }
 
@@ -682,12 +812,13 @@ function stellarImageDownloadName(image, record) {
 
 function stellarViewerImagesForObject(record, kind) {
   const config = stellarImageConfigForKind(kind);
+  const displayLabel = stellarImageDisplayLabel(kind, record, config.label);
   return sortedObjectImages(record?.id).map((image) => ({
     id: image.id,
     src: image.image_url,
     name: stellarImageName(image, record, kind),
     downloadName: stellarImageDownloadName(image, record),
-    alt: `${stellarObjectDisplayName(record, config.label)} image`,
+    alt: `${stellarObjectDisplayName(record, displayLabel)} image`,
     isPrimary: Boolean(image.is_primary),
     metadata: {
       objectId: record?.id,
@@ -699,24 +830,40 @@ function stellarViewerImagesForObject(record, kind) {
 
 function stellarObjectContext(record, kind) {
   const system = systemForId(record?.system_id) || currentSystem();
-  const planet = kind === "planet" ? record : record?.planet_id ? planetForId(record.planet_id) : null;
-  const moon = kind === "moon" ? record : record?.moon_id ? moonForId(record.moon_id) : null;
-  return { system, planet, moon };
+  const colony = kind === "colony" ? record : record?.colony_id ? colonyForId(record.colony_id) : null;
+  const planetId = record?.planet_id || colony?.planet_id;
+  const moonId = record?.moon_id || colony?.moon_id;
+  const planet = kind === "planet" ? record : planetId ? planetForId(planetId) : null;
+  const moon = kind === "moon" ? record : moonId ? moonForId(moonId) : null;
+  return { system, planet, moon, colony };
 }
 
 function stellarViewerDetailsForObject(record, kind) {
   const config = stellarImageConfigForKind(kind);
-  const { system, planet, moon } = stellarObjectContext(record, kind);
+  const displayLabel = stellarImageDisplayLabel(kind, record, config.label);
+  const { system, planet, moon, colony } = stellarObjectContext(record, kind);
+  const colonyColonistCount = kind === "colony"
+    ? stellarState.colonists.filter((colonist) => colonist.colony_id === record?.id).length
+    : 0;
   const objectRows = kind === "planet"
-    ? [
-      ["Planet", stellarObjectDisplayName(record, "Planet")],
-      ["Type", record?.type || "--"],
-      ["System", system?.name || "--"],
-      ["Habitability", displayHabitability(record) || "--"],
-      ["Atmosphere", record?.atmosphere || "--"],
-      ["Water", record?.water_presence || "--"],
-      ["Surface Temp", record?.surface_temperature_k ? `${record.surface_temperature_k} K` : "--"],
-    ]
+    ? isAsteroidBelt(record)
+      ? [
+        ["Asteroid Belt", stellarObjectDisplayName(record, "Asteroid Belt")],
+        ["Type", record?.type || "Asteroid Belt"],
+        ["System", system?.name || "--"],
+        ["Orbital Distance", record?.orbital_distance_au ? `${record.orbital_distance_au} AU` : "--"],
+        ["Orbital Period", record?.orbital_period_days ? `${record.orbital_period_days} days` : "--"],
+        ["Colonies", String(stellarState.colonies.filter((colonyItem) => colonyItem.planet_id === record?.id).length)],
+      ]
+      : [
+        ["Planet", stellarObjectDisplayName(record, "Planet")],
+        ["Type", record?.type || "--"],
+        ["System", system?.name || "--"],
+        ["Habitability", displayHabitability(record) || "--"],
+        ["Atmosphere", record?.atmosphere || "--"],
+        ["Water", record?.water_presence || "--"],
+        ["Surface Temp", record?.surface_temperature_k ? `${record.surface_temperature_k} K` : "--"],
+      ]
     : kind === "moon"
       ? [
         ["Moon", stellarObjectDisplayName(record, "Moon")],
@@ -748,19 +895,41 @@ function stellarViewerDetailsForObject(record, kind) {
         ["Body Type", record?.body_type || "--"],
         ["Scale", record?.scale || "--"],
       ];
+  const colonyRows = [
+    ["Colony", stellarObjectDisplayName(record, "Colony")],
+    ["System", system?.name || "--"],
+    ["Parent", planet?.name || moon?.name || "--"],
+    ["Location Type", record?.location_type || "--"],
+    ["Settlement Type", record?.settlement_type || "--"],
+    ["Population", record?.population ? String(record.population) : "--"],
+    ["Colonists", String(colonyColonistCount)],
+  ];
+  const colonistRows = [
+    ["Colonist", stellarObjectDisplayName(record, "Colonist")],
+    ["System", system?.name || "--"],
+    ["Colony", colony?.name || "--"],
+    ["Role", record?.role || "--"],
+    ["Department", record?.department || "--"],
+    ["Specialization", record?.specialization || "--"],
+    ["Assignment", record?.primary_role || "--"],
+  ];
+  const rowsByKind = {
+    colony: colonyRows,
+    colonist: colonistRows,
+  };
   return (image) => ({
     imageInfo: {
       title: "Image Information",
       rows: [
-        ["Source", config.source],
+        ["Source", stellarImageSourceLabel(kind, record, config)],
         ["Selected Image", image?.metadata?.storagePath || image?.id || "--"],
         ["Images In Set", String(stellarViewerImagesForObject(record, kind).length || 1)],
         ["Image Role", image?.metadata?.role || "--"],
       ],
     },
     objectDetails: {
-      title: `${config.label} Details`,
-      rows: objectRows,
+      title: `${displayLabel} Details`,
+      rows: rowsByKind[kind] || objectRows,
       body: record?.description || record?.visual_appearance || "",
     },
   });
@@ -783,8 +952,8 @@ async function uploadStellarViewerImage(record, kind, file) {
   const body = new FormData();
   body.append("objectId", record.id);
   body.append("storageModule", stellarImageStorageModule(kind));
-  body.append("objectName", stellarObjectDisplayName(record, config.label));
-  body.append("objectKind", config.objectKind);
+  body.append("objectName", stellarObjectDisplayName(record, stellarImageDisplayLabel(kind, record, config.label)));
+  body.append("objectKind", stellarImageObjectKind(kind, record, config));
   body.append("elementType", config.elementType(record));
   body.append("file", file);
   const uploaded = await callEdgeFunction("upload-object-image", { body });
@@ -795,11 +964,13 @@ function openStellarImageViewer(kind, objectId, activeImageId) {
   const record = stellarObjectForKind(kind, objectId);
   if (!record || typeof window.openCentralisImageViewer !== "function") return;
   const config = stellarImageConfigForKind(kind);
+  const displayLabel = stellarImageDisplayLabel(kind, record, config.label);
   const images = stellarViewerImagesForObject(record, kind);
   if (!images.length) return;
+  const titleSuffix = kind === "colonist" ? "Portrait" : "Image";
   window.openCentralisImageViewer({
-    title: `${stellarObjectDisplayName(record, config.label)} Image`,
-    kicker: config.kicker,
+    title: `${stellarObjectDisplayName(record, displayLabel)} ${titleSuffix}`,
+    kicker: stellarImageViewerKicker(kind, record, config),
     images,
     activeImageId: activeImageId || images[0]?.id,
     details: stellarViewerDetailsForObject(record, kind),
@@ -893,21 +1064,26 @@ function buildStarImagePrompt(star) {
 
 function buildPlanetImagePrompt(planet) {
   const system = systemForId(planet?.system_id) || currentSystem();
+  const isBelt = isAsteroidBelt(planet);
   const lines = [
-    "Scientifically plausible exoplanet concept art.",
-    `Planet: ${planet?.name || planet?.designation || "Unnamed planet"}.`,
+    isBelt ? "Scientifically plausible asteroid belt concept art." : "Scientifically plausible exoplanet concept art.",
+    `${isBelt ? "Asteroid belt" : "Planet"}: ${planet?.name || planet?.designation || (isBelt ? "Unnamed asteroid belt" : "Unnamed planet")}.`,
     system ? `Star system: ${system.name}.` : "",
-    planet?.type ? `Planet type: ${planet.type}.` : "",
-    planet ? `Habitability: ${displayHabitability(planet) || "unknown"}.` : "",
-    planet?.atmosphere ? `Atmosphere: ${planet.atmosphere}.` : "",
-    planet?.water_presence ? `Water: ${planet.water_presence}.` : "",
-    planet?.climate ? `Climate: ${planet.climate}.` : "",
-    planet?.surface_temperature_k ? `Surface temperature: ${planet.surface_temperature_k} K.` : "",
-    planet?.gravity_ms2 ? `Gravity: ${planet.gravity_ms2} m/s2.` : "",
-    planet?.rings ? "The planet has rings." : "",
+    planet?.type ? `${isBelt ? "Belt type" : "Planet type"}: ${planet.type}.` : "",
+    !isBelt && planet ? `Habitability: ${displayHabitability(planet) || "unknown"}.` : "",
+    !isBelt && planet?.atmosphere ? `Atmosphere: ${planet.atmosphere}.` : "",
+    !isBelt && planet?.water_presence ? `Water: ${planet.water_presence}.` : "",
+    !isBelt && planet?.climate ? `Climate: ${planet.climate}.` : "",
+    !isBelt && planet?.surface_temperature_k ? `Surface temperature: ${planet.surface_temperature_k} K.` : "",
+    !isBelt && planet?.gravity_ms2 ? `Gravity: ${planet.gravity_ms2} m/s2.` : "",
+    !isBelt && planet?.rings ? "The planet has rings." : "",
+    isBelt && planet?.orbital_distance_au ? `Orbital distance: ${planet.orbital_distance_au} AU.` : "",
+    isBelt && planet?.orbital_period_days ? `Orbital period: ${planet.orbital_period_days} days.` : "",
     planet?.visual_appearance ? `Visual appearance: ${truncatePromptText(planet.visual_appearance, 900)}` : "",
     planet?.description ? `Description: ${truncatePromptText(planet.description, 1200)}` : "",
-    "Show the planet clearly as a cinematic space vista, with scientifically plausible atmosphere, surface, clouds, rings, or terrain where relevant. No labels, captions, diagrams, UI, logos, or watermarks.",
+    isBelt
+      ? "Show a cinematic asteroid belt vista with scientifically plausible rock fields, dust, orbital scale, nearby star light, and any industrial colony context where relevant. No planet surface framing, labels, captions, diagrams, UI, logos, or watermarks."
+      : "Show the planet clearly as a cinematic space vista, with scientifically plausible atmosphere, surface, clouds, rings, or terrain where relevant. No labels, captions, diagrams, UI, logos, or watermarks.",
   ].filter(Boolean);
   return truncatePromptText(lines.join("\n"), 3800);
 }
@@ -932,8 +1108,87 @@ function buildMoonImagePrompt(moon) {
   return truncatePromptText(lines.join("\n"), 3800);
 }
 
+function buildColonyImagePrompt(colony) {
+  const { system, planet, moon } = stellarObjectContext(colony, "colony");
+  const parent = planet || moon;
+  const lines = [
+    "Scientifically plausible frontier space colony concept art.",
+    `Colony: ${colony?.name || "Unnamed colony"}.`,
+    system ? `Star system: ${system.name}.` : "",
+    parent ? `Parent body: ${parent.name}.` : "",
+    colony?.location_type ? `Location type: ${colony.location_type}.` : "",
+    colony?.settlement_type ? `Settlement type: ${colony.settlement_type}.` : "",
+    colony?.organization ? `Organization: ${colony.organization}.` : "",
+    colony?.primary_biome ? `Local environment: ${colony.primary_biome}.` : "",
+    colony?.local_hazards ? `Hazards: ${colony.local_hazards}.` : "",
+    colony?.energy_sources ? `Energy systems: ${colony.energy_sources}.` : "",
+    colony?.water_source ? `Water source: ${colony.water_source}.` : "",
+    colony?.industry ? `Primary work: ${colony.industry}.` : "",
+    colony?.housing ? `Housing: ${colony.housing}.` : "",
+    colony?.location_notes ? `Location notes: ${truncatePromptText(colony.location_notes, 900)}` : "",
+    colony?.description ? `Description: ${truncatePromptText(colony.description, 1200)}` : "",
+    "Show the colony environment clearly: structures, habitat systems, terrain or orbital context, and scale. No sentient aliens, alien ruins, alien artifacts, captions, diagrams, UI, logos, or watermarks.",
+  ].filter(Boolean);
+  return truncatePromptText(lines.join("\n"), 3800);
+}
+
+function buildColonistPortraitPrompt(colonist) {
+  const colony = colonist?.colony_id ? colonyForId(colonist.colony_id) : null;
+  const { system, planet, moon } = stellarObjectContext(colonist, "colonist");
+  const parent = planet || moon;
+  const profile = colonist?.profile || {};
+  const lines = [
+    "Realistic science fiction character portrait of a human colonist.",
+    `Colonist: ${colonist?.name || "Unnamed colonist"}.`,
+    colonist?.role ? `Role: ${colonist.role}.` : "",
+    colonist?.department ? `Department: ${colonist.department}.` : "",
+    colonist?.specialization ? `Specialization: ${colonist.specialization}.` : "",
+    colonist?.age ? `Age: ${colonist.age}.` : "",
+    colonist?.gender ? `Gender: ${colonist.gender}.` : "",
+    colonist?.nationality ? `Origin or nationality: ${colonist.nationality}.` : "",
+    colonist?.personality ? `Personality: ${colonist.personality}.` : "",
+    colonist?.temperament ? `Temperament: ${colonist.temperament}.` : "",
+    colonist?.physical_description ? `Physical description: ${truncatePromptText(colonist.physical_description, 900)}` : "",
+    colony ? `Colony: ${colony.name}; ${colony.location_type || "unknown location type"}.` : "",
+    parent ? `Parent body: ${parent.name}.` : "",
+    system ? `Star system: ${system.name}.` : "",
+    profile.background ? `Background: ${truncatePromptText(profile.background, 700)}` : "",
+    colonist?.biography ? `Biography: ${truncatePromptText(colonist.biography, 1000)}` : "",
+    "Portrait framing, face and upper body visible, practical colony clothing and tools appropriate to their work. No labels, captions, diagrams, UI, logos, or watermarks.",
+  ].filter(Boolean);
+  return truncatePromptText(lines.join("\n"), 3800);
+}
+
 function isAsteroidBelt(planet) {
   return String(planet?.type || "").toLowerCase().includes("asteroid");
+}
+
+function stellarPlanetKindLabel(planet) {
+  return isAsteroidBelt(planet) ? "Asteroid Belt" : "Planet";
+}
+
+function stellarPlanetIcon(planet) {
+  return isAsteroidBelt(planet) ? "<ph-meteor></ph-meteor>" : "<ph-planet></ph-planet>";
+}
+
+function stellarImageDisplayLabel(kind, record, fallback = "Stellar object") {
+  if (kind === "planet") return stellarPlanetKindLabel(record);
+  return fallback;
+}
+
+function stellarImageViewerKicker(kind, record, config) {
+  if (kind === "planet" && isAsteroidBelt(record)) return "Stellar Asteroid Belt Viewer";
+  return config.kicker;
+}
+
+function stellarImageObjectKind(kind, record, config) {
+  if (kind === "planet" && isAsteroidBelt(record)) return "stellar asteroid belt";
+  return config.objectKind;
+}
+
+function stellarImageSourceLabel(kind, record, config) {
+  if (kind === "planet" && isAsteroidBelt(record)) return "Stellar Architect asteroid belt image";
+  return config.source;
 }
 
 function habitabilityClass(value) {
@@ -1085,6 +1340,8 @@ function stellarImagePlaceholderIcon(kind) {
   if (kind === "star") return '<ph-star weight="fill"></ph-star>';
   if (kind === "moon") return '<ph-moon weight="duotone"></ph-moon>';
   if (kind === "lifeform") return '<ph-dna weight="duotone"></ph-dna>';
+  if (kind === "colony") return '<ph-buildings weight="duotone"></ph-buildings>';
+  if (kind === "colonist") return '<ph-user weight="duotone"></ph-user>';
   return '<ph-planet weight="duotone"></ph-planet>';
 }
 
@@ -1113,7 +1370,8 @@ function renderStellarImageBlock(kind, record, sizeClass = "") {
 
 function renderStellarRowImage(kind, record, fallbackIcon) {
   const image = primaryObjectImage(record?.id);
-  const objectName = stellarObjectDisplayName(record, stellarImageConfigForKind(kind).label);
+  const config = stellarImageConfigForKind(kind);
+  const objectName = stellarObjectDisplayName(record, stellarImageDisplayLabel(kind, record, config.label));
   if (!image?.image_url) {
     return `<div class="stellar-row-image">${fallbackIcon}</div>`;
   }
@@ -1156,7 +1414,89 @@ function renderStellarDetailImageHeader(kind, record, fallbackLabel) {
 }
 
 function renderPlanetImageHeader(planet) {
-  return renderStellarDetailImageHeader("planet", planet, "Planet");
+  return renderStellarDetailImageHeader("planet", planet, stellarPlanetKindLabel(planet));
+}
+
+function colonistProfileValue(profile, keys) {
+  for (const key of keys) {
+    const value = profile?.[key];
+    if (value !== null && value !== undefined && value !== "") return value;
+  }
+  return "";
+}
+
+function formatColonistProfileLabel(key) {
+  const labels = {
+    background: "Background",
+    personalConflict: "Personal Conflict",
+    personal_conflict: "Personal Conflict",
+    currentAssignment: "Current Assignment",
+    current_assignment: "Current Assignment",
+  };
+  if (labels[key]) return labels[key];
+  return String(key || "")
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function renderColonistPortraitArea(colonist) {
+  const images = sortedObjectImages(colonist?.id);
+  const primary = images[0] || null;
+  const profile = colonist.profile || {};
+  const objectName = stellarObjectDisplayName(colonist, "Colonist");
+  const actionLabel = primary ? "Regenerate" : "Generate";
+  const portraitStats = [
+    ["Age", formatValue(colonist.age)],
+    ["Gender", formatValue(colonist.gender)],
+    ["Nationality", formatValue(colonist.nationality)],
+    ["Role", formatValue(colonist.role)],
+    ["Department", formatValue(colonist.department)],
+  ];
+  const featuredProfile = [
+    ["background", colonistProfileValue(profile, ["background"])],
+    ["personalConflict", colonistProfileValue(profile, ["personalConflict", "personal_conflict"])],
+    ["currentAssignment", colonistProfileValue(profile, ["currentAssignment", "current_assignment"])],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== "");
+  const portrait = primary?.image_url
+    ? `<button class="stellar-colonist-portrait-image" type="button" data-open-stellar-image-kind="colonist" data-open-stellar-image-id="${escapeHtml(colonist.id)}" data-stellar-image-id="${escapeHtml(primary.id)}" aria-label="View ${escapeHtml(objectName)} portrait">
+        <img src="${escapeHtml(primary.image_url)}" alt="${escapeHtml(objectName)} portrait">
+      </button>`
+    : `<div class="stellar-colonist-portrait-placeholder">
+        ${stellarImagePlaceholderIcon("colonist")}
+        <span>No Portrait</span>
+      </div>`;
+  const gallery = images.length
+    ? `<div class="stellar-colonist-portrait-gallery" aria-label="${escapeHtml(objectName)} portrait gallery">
+        ${images.map((image) => `
+          <button class="stellar-colonist-portrait-thumb ${image.id === primary?.id ? "is-active" : ""}" type="button" data-open-stellar-image-kind="colonist" data-open-stellar-image-id="${escapeHtml(colonist.id)}" data-stellar-image-id="${escapeHtml(image.id)}" aria-label="View portrait ${escapeHtml(stellarImageName(image, colonist, "colonist"))}">
+            <img src="${escapeHtml(image.image_url)}" alt="">
+          </button>
+        `).join("")}
+      </div>`
+    : '<p class="stellar-muted">Generated portraits will appear here.</p>';
+
+  return `
+    <div class="stellar-colonist-portrait-area">
+      <div class="stellar-colonist-portrait-frame">
+        ${portrait}
+        <button class="stellar-colonist-portrait-action" type="button" data-generate-stellar-image-kind="colonist" data-generate-stellar-image-id="${escapeHtml(colonist.id)}">
+          <ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>
+          ${actionLabel}
+        </button>
+      </div>
+      <div class="stellar-colonist-portrait-side">
+        <p class="stellar-section-kicker">Portrait Gallery</p>
+        ${gallery}
+        <div class="stellar-colonist-portrait-meta stellar-stat-grid-flipped">
+          ${portraitStats.map(([label, value]) => renderStat(label, value)).join("")}
+        </div>
+        ${featuredProfile.length ? `<div class="stellar-colonist-profile-callouts stellar-stat-grid-flipped">
+          ${featuredProfile.map(([key, value]) => renderStat(formatColonistProfileLabel(key), formatValue(value))).join("")}
+        </div>` : ""}
+      </div>
+    </div>
+  `;
 }
 
 function renderSystemPage(system) {
@@ -1214,6 +1554,41 @@ function renderSystemPage(system) {
 function renderPlanetSummary(planet) {
   const isBelt = isAsteroidBelt(planet);
   const fallbackIcon = isBelt ? '<ph-meteor weight="duotone"></ph-meteor>' : '<ph-planet weight="duotone"></ph-planet>';
+  const colonies = stellarState.colonies.filter((colony) => colony.planet_id === planet.id);
+  const statItems = isBelt
+    ? [
+      renderStat("Type", formatValue(planet.type || "Asteroid Belt")),
+      renderStat("Distance", formatNumber(planet.orbital_distance_au, " AU")),
+      renderStat("Orbital Period", formatNumber(planet.orbital_period_days, " days", 1)),
+      renderStat("Colonies", formatNumber(colonies.length, "", 0)),
+    ]
+    : [
+      renderStat("Mass", formatNumber(planet.mass_earth, " MâŠ•")),
+      renderStat("Radius", formatNumber(planet.radius_earth, " RâŠ•")),
+      renderStat("Distance", formatNumber(planet.orbital_distance_au, " AU")),
+      renderStat("Moons", formatNumber(planet.moon_count, "", 0)),
+      renderStat("Atmosphere", formatValue(planet.atmosphere)),
+      renderStat("Water", formatValue(planet.water_presence)),
+      renderStat("Orbital Period", formatNumber(planet.orbital_period_days, " days", 1)),
+      renderStat("Surface Temp", formatNumber(planet.surface_temperature_k, " K", 0)),
+    ];
+  if (isBelt) {
+    return `
+      <a class="stellar-body-row" href="#planet/${encodeURIComponent(planet.id)}">
+        ${renderStellarRowImage("planet", planet, fallbackIcon)}
+        <div class="stellar-row-main">
+          <div class="stellar-row-title">
+            <h3>${escapeHtml(planet.name)}</h3>
+            ${planetTypeBadge(planet)}
+          </div>
+          <div class="stellar-mini-grid">
+            ${statItems.join("")}
+          </div>
+          <p>${escapeHtml(planet.description || planet.visual_appearance || "")}</p>
+        </div>
+      </a>
+    `;
+  }
   return `
     <a class="stellar-body-row" href="#planet/${encodeURIComponent(planet.id)}">
       ${renderStellarRowImage("planet", planet, fallbackIcon)}
@@ -1221,7 +1596,7 @@ function renderPlanetSummary(planet) {
         <div class="stellar-row-title">
           <h3>${escapeHtml(planet.name)}</h3>
           ${planetTypeBadge(planet)}
-          ${planetHabitabilityBadge(planet)}
+          ${isBelt ? "" : planetHabitabilityBadge(planet)}
         </div>
         <div class="stellar-mini-grid">
           ${renderStat("Mass", formatNumber(planet.mass_earth, " M⊕"))}
@@ -1244,6 +1619,34 @@ function renderPlanetPage(planet) {
   const lifeforms = stellarState.lifeforms.filter((lifeform) => lifeform.planet_id === planet.id);
   const colonies = stellarState.colonies.filter((colony) => colony.planet_id === planet.id);
   const descriptionText = planetDescriptionText(planet);
+  const isBelt = isAsteroidBelt(planet);
+  const bodyLabel = stellarPlanetKindLabel(planet);
+  if (isBelt) {
+    stellarEls.root.innerHTML = `
+      <header class="stellar-detail-toolbar">
+        ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("planet", planet))}
+      </header>
+      <section class="stellar-detail-scroll">
+        <h1 class="stellar-planet-page-title">${escapeHtml(bodyLabel)} - ${escapeHtml(planet.name)}</h1>
+        ${renderPlanetImageHeader(planet)}
+        <article class="stellar-panel stellar-planet-properties-panel">
+          <h2>${stellarPlanetIcon(planet)} ${escapeHtml(bodyLabel)} Properties</h2>
+          <div class="stellar-planet-property-badges">
+            ${planetTypeBadge(planet)}
+          </div>
+          ${descriptionText ? `<p class="stellar-description stellar-planet-description">${escapeHtml(descriptionText)}</p>` : ""}
+          <div class="stellar-stat-grid">
+            ${renderStat("Type", formatValue(planet.type || "Asteroid Belt"))}
+            ${renderStat("Orbital Distance", formatNumber(planet.orbital_distance_au, " AU"))}
+            ${renderStat("Orbital Period", formatNumber(planet.orbital_period_days, " days", 1))}
+            ${renderStat("Colonies", formatNumber(colonies.length, "", 0))}
+          </div>
+        </article>
+        ${renderColonyShell(colonies, { planetId: planet.id })}
+      </section>
+    `;
+    return;
+  }
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
       ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("planet", planet))}
@@ -1252,10 +1655,10 @@ function renderPlanetPage(planet) {
       </div>
     </header>
     <section class="stellar-detail-scroll">
-      <h1 class="stellar-planet-page-title">Planet - ${escapeHtml(planet.name)}</h1>
+      <h1 class="stellar-planet-page-title">${escapeHtml(bodyLabel)} - ${escapeHtml(planet.name)}</h1>
       ${renderPlanetImageHeader(planet)}
       <article class="stellar-panel stellar-planet-properties-panel">
-        <h2><ph-globe-hemisphere-west></ph-globe-hemisphere-west> Planet Properties</h2>
+        <h2>${stellarPlanetIcon(planet)} ${escapeHtml(bodyLabel)} Properties</h2>
         <div class="stellar-planet-property-badges">
           ${planetTypeBadge(planet)}
           ${planetHabitabilityBadge(planet)}
@@ -1284,7 +1687,7 @@ function renderPlanetPage(planet) {
         <div class="stellar-body-list">${moons.map(renderMoonSummary).join("") || '<p class="stellar-muted">No moons generated yet.</p>'}</div>
       </article>
       ${renderLifeformShell(lifeforms, { planetId: planet.id })}
-      ${renderColonyShell(colonies)}
+      ${renderColonyShell(colonies, { planetId: planet.id })}
     </section>
   `;
 }
@@ -1322,7 +1725,7 @@ function renderLifeformShell(lifeforms, source = {}) {
   return `
     <article class="stellar-panel">
       <div class="stellar-section-heading">
-        <h2 class="is-green"><ph-dna></ph-dna> Lifeforms (${lifeforms.length})</h2>
+        <h2><ph-dna></ph-dna> Lifeforms (${lifeforms.length})</h2>
         <button class="secondary-action" type="button" ${targetAttribute} ${!targetAttribute ? "disabled" : ""}>${buttonLabel}</button>
       </div>
       ${lifeforms.length ? `<div class="stellar-body-list">${lifeforms.map(renderLifeformSummary).join("")}</div>` : '<p class="stellar-muted">No lifeforms detected.</p>'}
@@ -1334,13 +1737,24 @@ function renderLifeformImageBlock(lifeform, sizeClass = "") {
   return renderStellarImageBlock("lifeform", lifeform, sizeClass);
 }
 
+function lifeformDisplayName(lifeform) {
+  return lifeform?.name || lifeform?.designation || "Unnamed Lifeform";
+}
+
+function lifeformDesignationBadge(lifeform) {
+  if (!lifeform?.designation || lifeform.designation === lifeform.name) return "";
+  return `<span class="stellar-badge">${escapeHtml(lifeform.designation)}</span>`;
+}
+
 function renderLifeformSummary(lifeform) {
+  const displayName = lifeformDisplayName(lifeform);
   return `
-    <article class="stellar-body-row stellar-lifeform-row" data-stellar-lifeform-card="${escapeHtml(lifeform.id)}" tabindex="0" role="link" aria-label="Open lifeform ${escapeHtml(lifeform.designation || lifeform.name)}">
+    <article class="stellar-body-row stellar-lifeform-row" data-stellar-lifeform-card="${escapeHtml(lifeform.id)}" tabindex="0" role="link" aria-label="Open lifeform ${escapeHtml(displayName)}">
       ${renderLifeformImageBlock(lifeform)}
       <div class="stellar-row-main">
         <div class="stellar-row-title">
-          <h3><a href="#lifeform/${encodeURIComponent(lifeform.id)}">${escapeHtml(lifeform.designation || lifeform.name)}</a></h3>
+          <h3><a href="#lifeform/${encodeURIComponent(lifeform.id)}">${escapeHtml(displayName)}</a></h3>
+          ${lifeformDesignationBadge(lifeform)}
           ${lifeform.kingdom ? `<span class="stellar-badge">${escapeHtml(lifeform.kingdom)}</span>` : ""}
           ${lifeform.biome || lifeform.habitat ? `<span class="stellar-badge stellar-habitability-badge is-habitable">${escapeHtml(lifeform.biome || lifeform.habitat)}</span>` : ""}
           ${lifeform.scale ? `<span class="stellar-muted">${escapeHtml(lifeform.scale)}</span>` : ""}
@@ -1360,14 +1774,71 @@ function renderLifeformSummary(lifeform) {
   `;
 }
 
-function renderColonyShell(colonies) {
+function renderColonyShell(colonies, source = {}) {
+  const targetAttribute = source.planetId
+    ? `data-generate-colony-planet="${escapeHtml(source.planetId)}"`
+    : source.moonId
+      ? `data-generate-colony-moon="${escapeHtml(source.moonId)}"`
+      : "";
+  const buttonLabel = colonies.length ? "Generate Another Colony" : "Generate Colony";
   return `
     <article class="stellar-panel">
       <div class="stellar-section-heading">
-        <h2 class="is-red"><ph-buildings></ph-buildings> Colonies (${colonies.length})</h2>
-        <button class="secondary-action" type="button" disabled title="Coming soon">Generate Colony</button>
+        <h2><ph-buildings></ph-buildings> Colonies (${colonies.length})</h2>
+        <button class="secondary-action" type="button" ${targetAttribute} ${!targetAttribute ? "disabled" : ""}>${buttonLabel}</button>
       </div>
-      ${colonies.length ? colonies.map((colony) => `<a class="stellar-body-row" href="#colony/${encodeURIComponent(colony.id)}"><div class="stellar-row-image"><ph-buildings></ph-buildings></div><div><h3>${escapeHtml(colony.name)}</h3><p>${escapeHtml(colony.description || "")}</p></div></a>`).join("") : '<p class="stellar-muted">Colony generation is coming soon.</p>'}
+      ${colonies.length ? `<div class="stellar-body-list">${colonies.map(renderColonySummary).join("")}</div>` : '<p class="stellar-muted">No colonies generated yet.</p>'}
+    </article>
+  `;
+}
+
+function renderColonySummary(colony) {
+  const parent = colony.planet_id ? planetForId(colony.planet_id) : moonForId(colony.moon_id);
+  const parentLabel = parent?.name ? `On ${parent.name}` : "Stellar colony";
+  const colonistCount = stellarState.colonists.filter((colonist) => colonist.colony_id === colony.id).length;
+  return `
+    <article class="stellar-body-row stellar-colony-row" data-stellar-colony-card="${escapeHtml(colony.id)}" tabindex="0" role="link" aria-label="Open colony ${escapeHtml(colony.name)}">
+      ${renderStellarRowImage("colony", colony, '<ph-buildings weight="duotone"></ph-buildings>')}
+      <div class="stellar-row-main">
+        <div class="stellar-row-title">
+          <h3><a href="#colony/${encodeURIComponent(colony.id)}">${escapeHtml(colony.name)}</a></h3>
+          ${colony.location_type ? `<span class="stellar-badge">${escapeHtml(colony.location_type)}</span>` : ""}
+          ${colony.settlement_type ? `<span class="stellar-badge">${escapeHtml(colony.settlement_type)}</span>` : ""}
+          ${colony.population ? `<span class="stellar-muted">${formatNumber(colony.population, " people", 0)}</span>` : ""}
+        </div>
+        <p>${escapeHtml(colony.location_notes || colony.description || parentLabel)}</p>
+        <div class="stellar-mini-grid">
+          ${renderStat("Parent", formatValue(parent?.name || parentLabel))}
+          ${renderStat("Industry", formatValue(colony.industry))}
+          ${renderStat("Supply", formatValue(colony.supply_status))}
+          ${renderStat("Organization", formatValue(colony.organization))}
+          ${renderStat("Energy", formatValue(colony.energy_sources))}
+          ${renderStat("Colonists", formatNumber(colonistCount, "", 0))}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderColonistSummary(colonist) {
+  const profile = colonist.profile || {};
+  return `
+    <article class="stellar-body-row stellar-colonist-row" data-stellar-colonist-card="${escapeHtml(colonist.id)}" tabindex="0" role="link" aria-label="Open colonist ${escapeHtml(colonist.name)}">
+      ${renderStellarRowImage("colonist", colonist, '<ph-user weight="duotone"></ph-user>')}
+      <div class="stellar-row-main">
+        <div class="stellar-row-title">
+          <h3><a href="#colonist/${encodeURIComponent(colonist.id)}">${escapeHtml(colonist.name)}</a></h3>
+          ${colonist.role ? `<span class="stellar-badge">${escapeHtml(colonist.role)}</span>` : ""}
+          ${colonist.department ? `<span class="stellar-badge">${escapeHtml(colonist.department)}</span>` : ""}
+        </div>
+        <p>${escapeHtml(colonist.biography || colonist.personality || profile.background || "")}</p>
+        <div class="stellar-mini-grid">
+          ${renderStat("Age", formatValue(colonist.age))}
+          ${renderStat("Assignment", formatValue(colonist.primary_role))}
+          ${renderStat("Specialization", formatValue(colonist.specialization))}
+          ${renderStat("Temperament", formatValue(colonist.temperament))}
+        </div>
+      </div>
     </article>
   `;
 }
@@ -1407,13 +1878,15 @@ function renderMoonPage(moon) {
         </div>
       </article>
       ${renderLifeformShell(stellarState.lifeforms.filter((lifeform) => lifeform.moon_id === moon.id), { moonId: moon.id })}
+      ${renderColonyShell(stellarState.colonies.filter((colony) => colony.moon_id === moon.id), { moonId: moon.id })}
     </section>
   `;
 }
 
 function renderLifeformPage(lifeform) {
-  const lifeformTitle = lifeform.designation || lifeform.name;
+  const lifeformTitle = lifeformDisplayName(lifeform);
   const lifeformBadges = [
+    lifeformDesignationBadge(lifeform),
     lifeform.kingdom ? `<span class="stellar-badge">${escapeHtml(lifeform.kingdom)}</span>` : "",
     lifeform.biome || lifeform.habitat ? `<span class="stellar-badge stellar-habitability-badge is-habitable">${escapeHtml(lifeform.biome || lifeform.habitat)}</span>` : "",
     lifeform.scale ? `<span class="stellar-badge">${escapeHtml(lifeform.scale)}</span>` : "",
@@ -1431,6 +1904,7 @@ function renderLifeformPage(lifeform) {
         ${lifeformBadges ? `<div class="stellar-planet-property-badges">${lifeformBadges}</div>` : ""}
         <p class="stellar-description stellar-planet-description">${escapeHtml(lifeform.description || "Lifeform generation is coming soon.")}</p>
         <div class="stellar-stat-grid">
+          ${renderStat("Name", formatValue(lifeform.name))}
           ${renderStat("Species", formatValue(lifeform.species_name))}
           ${renderStat("Designation", formatValue(lifeform.designation))}
           ${renderStat("Kingdom", formatValue(lifeform.kingdom))}
@@ -1455,51 +1929,90 @@ function renderLifeformPage(lifeform) {
 
 function renderColonyPage(colony) {
   const colonists = stellarState.colonists.filter((colonist) => colonist.colony_id === colony.id);
+  const colonistsWithoutImages = colonists.filter((colonist) => !sortedObjectImages(colonist.id).length);
+  const parent = colony.planet_id ? planetForId(colony.planet_id) : moonForId(colony.moon_id);
+  const parentLabel = parent?.name ? `${colony.planet_id ? "Planet" : "Moon"} - ${parent.name}` : "Parent Body";
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
       ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("colony", colony))}
       <div class="stellar-page-actions">
-        <button class="secondary-action" disabled title="Coming soon">Generate Colonists</button>
+        <button class="secondary-action" type="button" data-generate-colonists-colony="${escapeHtml(colony.id)}">Generate Colonists</button>
       </div>
     </header>
     <section class="stellar-detail-scroll">
+      <h1 class="stellar-planet-page-title">Colony - ${escapeHtml(colony.name)}</h1>
+      ${renderStellarDetailImageHeader("colony", colony, "Colony")}
       <article class="stellar-panel stellar-primary-properties-panel">
-        <h2 class="is-red"><ph-buildings></ph-buildings> Colony Properties</h2>
-        <div class="stellar-stat-grid">
+        <h2><ph-buildings></ph-buildings> Colony Properties</h2>
+        <div class="stellar-planet-property-badges">
+          ${colony.location_type ? `<span class="stellar-badge">${escapeHtml(colony.location_type)}</span>` : ""}
+          ${colony.settlement_type ? `<span class="stellar-badge">${escapeHtml(colony.settlement_type)}</span>` : ""}
+          <span class="stellar-badge">${formatNumber(colonists.length, " colonists", 0)}</span>
+        </div>
+        ${colony.location_notes ? `<p class="stellar-description stellar-planet-description">${escapeHtml(colony.location_notes)}</p>` : ""}
+        ${colony.description ? `<p class="stellar-description stellar-planet-description">${escapeHtml(colony.description)}</p>` : ""}
+        <div class="stellar-stat-grid stellar-stat-grid-flipped">
+          ${renderStat("Parent Body", formatValue(parentLabel))}
+          ${renderStat("Location Type", formatValue(colony.location_type))}
           ${renderStat("Founded", formatValue(colony.founded_year))}
           ${renderStat("Organization", formatValue(colony.organization))}
           ${renderStat("Settlement Type", formatValue(colony.settlement_type))}
           ${renderStat("Population", formatNumber(colony.population, "", 0))}
+          ${renderStat("Primary Biome", formatValue(colony.primary_biome))}
+          ${renderStat("Local Hazards", formatValue(colony.local_hazards))}
+          ${renderStat("Energy", formatValue(colony.energy_sources))}
+          ${renderStat("Water", formatValue(colony.water_source))}
           ${renderStat("Industry", formatValue(colony.industry))}
+          ${renderStat("Food", formatValue(colony.food_production))}
+          ${renderStat("Housing", formatValue(colony.housing))}
           ${renderStat("Supply Status", formatValue(colony.supply_status))}
+          ${renderStat("Government", formatValue(colony.government_type))}
+          ${renderStat("Protection", formatValue(colony.defensive_structures))}
+          ${renderStat("Communication", formatValue(colony.communication))}
+          ${renderStat("Research Focus", formatValue(colony.research_focus))}
+          ${renderStat("Colonists", formatNumber(colonists.length, "", 0))}
         </div>
-        <p class="stellar-description">${escapeHtml(colony.description || "")}</p>
       </article>
       <article class="stellar-panel">
-        <h2 class="is-green"><ph-users></ph-users> Colonists</h2>
-        ${colonists.length ? colonists.map((colonist) => `<a class="stellar-body-row" href="#colonist/${encodeURIComponent(colonist.id)}"><div class="stellar-row-image"><ph-user></ph-user></div><div><h3>${escapeHtml(colonist.name)}</h3><p>${escapeHtml(colonist.role || "")}</p></div></a>`).join("") : '<p class="stellar-muted">Colonist generation is coming soon.</p>'}
+        <div class="stellar-section-heading">
+          <h2><ph-users></ph-users> Colonists (${colonists.length})</h2>
+          <div class="stellar-section-actions">
+            <button class="secondary-action" type="button" data-generate-colonists-colony="${escapeHtml(colony.id)}">${colonists.length ? "Generate More Colonists" : "Generate Colonists"}</button>
+            <button class="secondary-action" type="button" data-generate-colonist-images-colony="${escapeHtml(colony.id)}" ${colonistsWithoutImages.length ? "" : "disabled"}>Generate All Images</button>
+          </div>
+        </div>
+        ${colonists.length ? `<div class="stellar-body-list">${colonists.map(renderColonistSummary).join("")}</div>` : '<p class="stellar-muted">No colonists generated yet.</p>'}
       </article>
     </section>
   `;
 }
 
 function renderColonistPage(colonist) {
+  const colony = colonyForId(colonist.colony_id);
+  const profile = colonist.profile || {};
+  const featuredProfileKeys = new Set(["background", "personalConflict", "personal_conflict", "currentAssignment", "current_assignment"]);
+  const profileEntries = Object.entries(profile)
+    .filter(([key, value]) => !featuredProfileKeys.has(key) && value !== null && value !== undefined && value !== "");
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
       ${renderStellarBreadcrumbs(stellarObjectBreadcrumbs("colonist", colonist))}
       <div class="stellar-page-actions"></div>
     </header>
     <section class="stellar-detail-scroll">
+      <h1 class="stellar-planet-page-title">Colonist - ${escapeHtml(colonist.name)}</h1>
       <article class="stellar-panel stellar-primary-properties-panel">
-        <h2><ph-user></ph-user> Personal Information</h2>
-        <div class="stellar-stat-grid">
-          ${renderStat("Age", formatValue(colonist.age))}
-          ${renderStat("Gender", formatValue(colonist.gender))}
-          ${renderStat("Nationality", formatValue(colonist.nationality))}
-          ${renderStat("Role", formatValue(colonist.role))}
-          ${renderStat("Department", formatValue(colonist.department))}
+        <h2><ph-user></ph-user> Colonist Properties</h2>
+        ${renderColonistPortraitArea(colonist)}
+        <div class="stellar-stat-grid stellar-stat-grid-flipped">
+          ${renderStat("Specialization", formatValue(colonist.specialization))}
+          ${renderStat("Assignment", formatValue(colonist.primary_role))}
+          ${renderStat("Personality", formatValue(colonist.personality))}
+          ${renderStat("Temperament", formatValue(colonist.temperament))}
+          ${renderStat("Colony", formatValue(colony?.name))}
         </div>
-        <p class="stellar-description">${escapeHtml(colonist.biography || colonist.physical_description || "Colonist generation is coming soon.")}</p>
+        ${colonist.physical_description ? `<p class="stellar-description">${escapeHtml(colonist.physical_description)}</p>` : ""}
+        ${colonist.biography ? `<p class="stellar-description">${escapeHtml(colonist.biography)}</p>` : ""}
+        ${profileEntries.length ? `<div class="stellar-profile-list stellar-stat-grid-flipped">${profileEntries.map(([key, value]) => renderStat(formatColonistProfileLabel(key), formatValue(value))).join("")}</div>` : ""}
       </article>
     </section>
   `;
@@ -1593,8 +2106,25 @@ function renderTreeLifeform(lifeform) {
   return `<a class="stellar-tree-item ${stellarState.route.id === lifeform.id ? "is-selected" : ""}" href="#lifeform/${encodeURIComponent(lifeform.id)}">${renderTreeObjectIcon(lifeform, "<ph-dna></ph-dna>")}<span>${escapeHtml(lifeform.name)}</span></a>`;
 }
 
+function renderTreeColonist(colonist) {
+  return `<a class="stellar-tree-item ${stellarState.route.id === colonist.id ? "is-selected" : ""}" href="#colonist/${encodeURIComponent(colonist.id)}">${renderTreeObjectIcon(colonist, "<ph-user></ph-user>")}<span>${escapeHtml(colonist.name)}</span></a>`;
+}
+
 function renderTreeColony(colony) {
-  return `<a class="stellar-tree-item ${stellarState.route.id === colony.id ? "is-selected" : ""}" href="#colony/${encodeURIComponent(colony.id)}"><ph-users></ph-users><span>${escapeHtml(colony.name)}</span></a>`;
+  const colonists = stellarState.colonists.filter((colonist) => colonist.colony_id === colony.id);
+  const hasChildren = colonists.length > 0;
+  const isAncestor = colonists.some((colonist) => colonist.id === stellarState.route.id);
+  const treeKey = `colony:${colony.id}`;
+  const expanded = hasChildren && !stellarState.collapsedTree.has(treeKey) && (stellarState.expandedTree.has(treeKey) || isAncestor);
+  return `
+    <div>
+      <div class="stellar-tree-row">
+        ${hasChildren ? `<button class="stellar-tree-toggle ${expanded ? "is-expanded" : ""}" type="button" aria-label="${expanded ? "Collapse" : "Expand"} ${escapeHtml(colony.name)}" aria-expanded="${expanded}" data-tree-toggle="${escapeHtml(treeKey)}"><ph-caret-right weight="bold"></ph-caret-right></button>` : '<span class="stellar-tree-toggle-spacer"></span>'}
+        <a class="stellar-tree-item ${stellarState.route.id === colony.id ? "is-selected" : ""}" href="#colony/${encodeURIComponent(colony.id)}">${renderTreeObjectIcon(colony, "<ph-buildings></ph-buildings>")}<span>${escapeHtml(colony.name)}</span></a>
+      </div>
+      ${expanded ? `<div class="stellar-tree-children">${colonists.map(renderTreeColonist).join("")}</div>` : ""}
+    </div>
+  `;
 }
 
 function renderTreeMoon(moon) {
@@ -1636,6 +2166,7 @@ function renderTreeMoon(moon) {
 }
 
 function renderTreePlanet(planet) {
+  const isBelt = isAsteroidBelt(planet);
   const moons = stellarState.moons.filter((moon) => moon.planet_id === planet.id);
   const lifeforms = stellarState.lifeforms.filter((lifeform) => lifeform.planet_id === planet.id);
   const colonies = stellarState.colonies.filter((colony) => colony.planet_id === planet.id);
@@ -1643,16 +2174,46 @@ function renderTreePlanet(planet) {
   const moonColonies = stellarState.colonies.filter((colony) => moons.some((moon) => moon.id === colony.moon_id));
   const colonist = stellarState.route.name === "colonist" ? colonistForId(stellarState.route.id) : null;
   const isSelected = stellarState.route.id === planet.id;
-  const isBelt = isAsteroidBelt(planet);
-  const hasChildren = moons.length > 0 || lifeforms.length > 0 || colonies.length > 0 || moonLifeforms.length > 0 || moonColonies.length > 0;
-  const isAncestor = moons.some((moon) => moon.id === stellarState.route.id)
-    || moonLifeforms.some((lifeform) => lifeform.id === stellarState.route.id)
-    || moonColonies.some((colony) => colony.id === stellarState.route.id)
-    || lifeforms.some((lifeform) => lifeform.id === stellarState.route.id)
+  const visibleMoons = isBelt ? [] : moons;
+  const visibleLifeforms = isBelt ? [] : lifeforms;
+  const visibleMoonLifeforms = isBelt ? [] : moonLifeforms;
+  const visibleMoonColonies = isBelt ? [] : moonColonies;
+  const hasChildren = visibleMoons.length > 0 || visibleLifeforms.length > 0 || colonies.length > 0 || visibleMoonLifeforms.length > 0 || visibleMoonColonies.length > 0;
+  const isAncestor = visibleMoons.some((moon) => moon.id === stellarState.route.id)
+    || visibleMoonLifeforms.some((lifeform) => lifeform.id === stellarState.route.id)
+    || visibleMoonColonies.some((colony) => colony.id === stellarState.route.id)
+    || visibleLifeforms.some((lifeform) => lifeform.id === stellarState.route.id)
     || colonies.some((colony) => colony.id === stellarState.route.id)
-    || (stellarState.route.name === "colonist" && [...colonies, ...moonColonies].some((colony) => colony.id === colonist?.colony_id));
+    || (stellarState.route.name === "colonist" && [...colonies, ...visibleMoonColonies].some((colony) => colony.id === colonist?.colony_id));
   const treeKey = `planet:${planet.id}`;
   const expanded = hasChildren && !stellarState.collapsedTree.has(treeKey) && (stellarState.expandedTree.has(treeKey) || isAncestor);
+  const moonsFolder = isBelt ? "" : renderTreeFolder({
+    key: `planet-moons:${planet.id}`,
+    label: "Moons",
+    icon: "<ph-moon-stars></ph-moon-stars>",
+    count: visibleMoons.length,
+    childrenHtml: visibleMoons.map(renderTreeMoon).join(""),
+    isAncestor: visibleMoons.some((moon) => moon.id === stellarState.route.id)
+      || visibleMoonLifeforms.some((lifeform) => lifeform.id === stellarState.route.id)
+      || visibleMoonColonies.some((colony) => colony.id === stellarState.route.id)
+      || visibleMoonColonies.some((colony) => colony.id === colonist?.colony_id),
+  });
+  const lifeformsFolder = isBelt ? "" : renderTreeFolder({
+    key: `planet-lifeforms:${planet.id}`,
+    label: "Planetary Lifeforms",
+    icon: "<ph-dna></ph-dna>",
+    count: visibleLifeforms.length,
+    childrenHtml: visibleLifeforms.map(renderTreeLifeform).join(""),
+    isAncestor: visibleLifeforms.some((lifeform) => lifeform.id === stellarState.route.id),
+  });
+  const coloniesFolder = renderTreeFolder({
+    key: `planet-colonies:${planet.id}`,
+    label: isBelt ? "Belt Colonies" : "Planetary Colonies",
+    icon: "<ph-users></ph-users>",
+    count: colonies.length,
+    childrenHtml: colonies.map(renderTreeColony).join(""),
+    isAncestor: colonies.some((colony) => colony.id === stellarState.route.id) || colonies.some((colony) => colony.id === colonist?.colony_id),
+  });
   return `
     <div>
       <div class="stellar-tree-row">
@@ -1663,33 +2224,9 @@ function renderTreePlanet(planet) {
         </a>
       </div>
       ${expanded ? `<div class="stellar-tree-children">
-        ${renderTreeFolder({
-          key: `planet-moons:${planet.id}`,
-          label: "Moons",
-          icon: "<ph-moon-stars></ph-moon-stars>",
-          count: moons.length,
-          childrenHtml: moons.map(renderTreeMoon).join(""),
-          isAncestor: moons.some((moon) => moon.id === stellarState.route.id)
-            || moonLifeforms.some((lifeform) => lifeform.id === stellarState.route.id)
-            || moonColonies.some((colony) => colony.id === stellarState.route.id)
-            || moonColonies.some((colony) => colony.id === colonist?.colony_id),
-        })}
-        ${renderTreeFolder({
-          key: `planet-lifeforms:${planet.id}`,
-          label: "Planetary Lifeforms",
-          icon: "<ph-dna></ph-dna>",
-          count: lifeforms.length,
-          childrenHtml: lifeforms.map(renderTreeLifeform).join(""),
-          isAncestor: lifeforms.some((lifeform) => lifeform.id === stellarState.route.id),
-        })}
-        ${renderTreeFolder({
-          key: `planet-colonies:${planet.id}`,
-          label: "Planetary Colonies",
-          icon: "<ph-users></ph-users>",
-          count: colonies.length,
-          childrenHtml: colonies.map(renderTreeColony).join(""),
-          isAncestor: colonies.some((colony) => colony.id === stellarState.route.id) || colonies.some((colony) => colony.id === colonist?.colony_id),
-        })}
+        ${moonsFolder}
+        ${lifeformsFolder}
+        ${coloniesFolder}
       </div>` : ""}
     </div>
   `;
@@ -1824,60 +2361,185 @@ async function handleGenerateLifeforms({ planetId, moonId }) {
   }
 }
 
+async function handleGenerateColony() {
+  const { planetId, moonId } = stellarState.colonyModal;
+  if (!planetId && !moonId) return;
+  const sourceName = getColonySourceName({ planetId, moonId });
+  const payload = planetId ? { planetId } : { moonId };
+  payload.instructions = stellarEls.colonyInstructions?.value || "";
+  payload.includeColonists = Boolean(stellarEls.colonyIncludeColonists?.checked);
+  payload.rosterRange = stellarEls.colonyRoster?.value || "core";
+  closeColonyModal(true);
+  showStellarToast(`Colony generation started for ${sourceName}.`, "success");
+
+  try {
+    const data = await callEdgeFunction("generate-stellar-colony", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (data?.error) throw new Error(data.error);
+    await refresh();
+    const colonistText = data?.insertedColonists ? ` with ${data.insertedColonists} colonists` : "";
+    showStellarToast(`Generated ${data?.colony?.name || "a colony"}${colonistText}.`, "success");
+  } catch (error) {
+    await refresh().catch(() => null);
+    showStellarToast(`Could not generate colony: ${getReadableError(error)}`, "error");
+  }
+}
+
+async function handleGenerateColonists() {
+  const { colonyId } = stellarState.colonistModal;
+  if (!colonyId) return;
+  const colonyName = getColonistSourceName(colonyId);
+  const payload = {
+    colonyId,
+    instructions: stellarEls.colonistInstructions?.value || "",
+    rosterRange: stellarEls.colonistRoster?.value || "core",
+  };
+  closeColonistModal(true);
+  showStellarToast(`Colonist generation started for ${colonyName}.`, "success");
+
+  try {
+    const data = await callEdgeFunction("generate-stellar-colonists", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (data?.error) throw new Error(data.error);
+    await refresh();
+    showStellarToast(`Generated ${data?.inserted || 0} colonists for ${colonyName}.`, "success");
+  } catch (error) {
+    await refresh().catch(() => null);
+    showStellarToast(`Could not generate colonists: ${getReadableError(error)}`, "error");
+  }
+}
+
 function stellarImageStorageModule(kind) {
   const folderByKind = {
     star: "stars",
     planet: "planets",
     moon: "moons",
     lifeform: "lifeforms",
+    colony: "colonies",
+    colonist: "colonists",
   };
   return `stellar-architect/${folderByKind[kind] || "objects"}`;
+}
+
+async function generateStellarImageForRecord(kind, record, userInstructions = "") {
+  const config = stellarImageConfigForKind(kind);
+  const displayLabel = stellarImageDisplayLabel(kind, record, config.label);
+  const objectKind = stellarImageObjectKind(kind, record, config);
+  const basePrompt = config.prompt(record);
+  const extraPrompt = buildStellarImageExtraPrompt(basePrompt, userInstructions);
+  const generated = await callEdgeFunction("generate-object-image", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      objectId: record.id,
+      storageModule: stellarImageStorageModule(kind),
+      objectKind,
+      elementType: config.elementType(record),
+      name: stellarObjectDisplayName(record, displayLabel),
+      description: "",
+      extraPrompt,
+    }),
+  });
+  if (generated?.image?.id) {
+    await callEdgeFunction("set-primary-image", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageId: generated.image.id }),
+    });
+  }
+  return generated;
 }
 
 async function handleGenerateStellarImage(kind, objectId, button) {
   const record = stellarObjectForKind(kind, objectId);
   if (!record) return;
   const config = stellarImageConfigForKind(kind);
+  const displayLabel = stellarImageDisplayLabel(kind, record, config.label);
   const basePrompt = config.prompt(record);
-  const userInstructions = await openStellarImagePromptDialog({ config, record, basePrompt });
+  const userInstructions = await openStellarImagePromptDialog({ kind, config, record, basePrompt });
   if (userInstructions === null) return;
-  const extraPrompt = buildStellarImageExtraPrompt(basePrompt, userInstructions);
   const originalHtml = button?.innerHTML;
   if (button) {
     button.disabled = true;
     button.innerHTML = '<ph-arrows-clockwise weight="bold"></ph-arrows-clockwise> Generating...';
   }
-  showStellarToast(`${config.label} image generation started. It will finish in the background.`, "success");
+  showStellarToast(`${displayLabel} image generation started. It will finish in the background.`, "success");
 
   try {
-    const generated = await callEdgeFunction("generate-object-image", {
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        objectId: record.id,
-        storageModule: stellarImageStorageModule(kind),
-        objectKind: config.objectKind,
-        elementType: config.elementType(record),
-        name: stellarObjectDisplayName(record, config.label),
-        description: "",
-        extraPrompt,
-      }),
-    });
-    if (generated?.image?.id) {
-      await callEdgeFunction("set-primary-image", {
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageId: generated.image.id }),
-      });
-    }
+    await generateStellarImageForRecord(kind, record, userInstructions);
     await fetchStellarImages();
     renderRoute();
-    showStellarToast(`${config.label} image generated.`, "success");
+    showStellarToast(`${displayLabel} image generated.`, "success");
   } catch (error) {
-    showStellarToast(`Could not generate ${config.label.toLowerCase()} image: ${getReadableError(error)}`, "error");
+    showStellarToast(`Could not generate ${displayLabel.toLowerCase()} image: ${getReadableError(error)}`, "error");
   } finally {
     if (button) {
       button.disabled = false;
       button.innerHTML = originalHtml;
     }
+  }
+}
+
+async function handleGenerateMissingColonistImages(colonyId, button) {
+  const colony = colonyForId(colonyId);
+  if (!colony) return;
+  const colonists = stellarState.colonists.filter((colonist) => colonist.colony_id === colony.id);
+  const missingImages = colonists.filter((colonist) => !sortedObjectImages(colonist.id).length);
+  if (!missingImages.length) {
+    showStellarToast("All colonists in this colony already have images.", "success");
+    return;
+  }
+
+  const originalHtml = button?.innerHTML;
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<ph-arrows-clockwise weight="bold"></ph-arrows-clockwise> Generating...';
+  }
+  showStellarToast(`Generating ${missingImages.length} colonist portrait${missingImages.length === 1 ? "" : "s"} for ${colony.name}.`, "success");
+
+  let completedCount = 0;
+  const updateBatchButton = () => {
+    if (!button) return;
+    button.innerHTML = `<ph-arrows-clockwise weight="bold"></ph-arrows-clockwise> Generating ${completedCount}/${missingImages.length}...`;
+  };
+  updateBatchButton();
+
+  const results = await Promise.all(
+    missingImages.map(async (colonist) => {
+      try {
+        await generateStellarImageForRecord("colonist", colonist, "");
+        return { colonist, success: true };
+      } catch (error) {
+        return {
+          colonist,
+          success: false,
+          message: `${stellarObjectDisplayName(colonist, "Colonist")}: ${getReadableError(error)}`,
+        };
+      } finally {
+        completedCount += 1;
+        updateBatchButton();
+      }
+    })
+  );
+
+  const generatedCount = results.filter((result) => result.success).length;
+  const failures = results.filter((result) => !result.success).map((result) => result.message);
+
+  await fetchStellarImages().catch(() => null);
+  renderRoute();
+
+  if (failures.length) {
+    showStellarToast(`Generated ${generatedCount} portrait${generatedCount === 1 ? "" : "s"}; ${failures.length} failed.`, "error");
+    console.warn("Colonist portrait generation failures", failures);
+  } else {
+    showStellarToast(`Generated ${generatedCount} colonist portrait${generatedCount === 1 ? "" : "s"}.`, "success");
+  }
+
+  if (button) {
+    button.disabled = false;
+    button.innerHTML = originalHtml;
   }
 }
 
@@ -1981,6 +2643,16 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  if (event.target.closest("[data-close-stellar-colony-modal]")) {
+    closeColonyModal();
+    return;
+  }
+
+  if (event.target.closest("[data-close-stellar-colonist-modal]")) {
+    closeColonistModal();
+    return;
+  }
+
   if (event.target.closest("[data-cancel-stellar-image-prompt]")) {
     closeStellarImagePromptDialog(null);
     return;
@@ -2021,9 +2693,49 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const planetColonyButton = event.target.closest("[data-generate-colony-planet]");
+  if (planetColonyButton) {
+    openColonyModal({ planetId: planetColonyButton.dataset.generateColonyPlanet });
+    return;
+  }
+
+  const moonColonyButton = event.target.closest("[data-generate-colony-moon]");
+  if (moonColonyButton) {
+    openColonyModal({ moonId: moonColonyButton.dataset.generateColonyMoon });
+    return;
+  }
+
+  if (event.target.closest("[data-confirm-stellar-colony]")) {
+    handleGenerateColony();
+    return;
+  }
+
+  const colonistsButton = event.target.closest("[data-generate-colonists-colony]");
+  if (colonistsButton) {
+    openColonistModal(colonistsButton.dataset.generateColonistsColony);
+    return;
+  }
+
+  if (event.target.closest("[data-confirm-stellar-colonists]")) {
+    handleGenerateColonists();
+    return;
+  }
+
   const lifeformCard = event.target.closest("[data-stellar-lifeform-card]");
   if (lifeformCard && !event.target.closest("a, button, input, select, textarea, [role='button']")) {
     window.location.hash = `#lifeform/${encodeURIComponent(lifeformCard.dataset.stellarLifeformCard)}`;
+    return;
+  }
+
+  const colonyCard = event.target.closest("[data-stellar-colony-card]");
+  if (colonyCard && !event.target.closest("a, button, input, select, textarea, [role='button']")) {
+    window.location.hash = `#colony/${encodeURIComponent(colonyCard.dataset.stellarColonyCard)}`;
+    return;
+  }
+
+  const colonistCard = event.target.closest("[data-stellar-colonist-card]");
+  if (colonistCard && !event.target.closest("a, button, input, select, textarea, [role='button']")) {
+    window.location.hash = `#colonist/${encodeURIComponent(colonistCard.dataset.stellarColonistCard)}`;
     return;
   }
 
@@ -2033,6 +2745,15 @@ document.addEventListener("click", (event) => {
       stellarImageGenerateButton.dataset.generateStellarImageKind,
       stellarImageGenerateButton.dataset.generateStellarImageId,
       stellarImageGenerateButton
+    );
+    return;
+  }
+
+  const generateColonistImagesButton = event.target.closest("[data-generate-colonist-images-colony]");
+  if (generateColonistImagesButton) {
+    handleGenerateMissingColonistImages(
+      generateColonistImagesButton.dataset.generateColonistImagesColony,
+      generateColonistImagesButton
     );
     return;
   }
@@ -2059,13 +2780,41 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (event.key === "Escape" && !stellarEls.colonyModal?.hidden) {
+    event.preventDefault();
+    closeColonyModal();
+    return;
+  }
+
+  if (event.key === "Escape" && !stellarEls.colonistModal?.hidden) {
+    event.preventDefault();
+    closeColonistModal();
+    return;
+  }
+
   const lifeformCard = event.target.closest?.("[data-stellar-lifeform-card]");
-  if (!lifeformCard || !["Enter", " "].includes(event.key)) return;
-  event.preventDefault();
-  window.location.hash = `#lifeform/${encodeURIComponent(lifeformCard.dataset.stellarLifeformCard)}`;
+  if (lifeformCard && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    window.location.hash = `#lifeform/${encodeURIComponent(lifeformCard.dataset.stellarLifeformCard)}`;
+    return;
+  }
+
+  const colonyCard = event.target.closest?.("[data-stellar-colony-card]");
+  if (colonyCard && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    window.location.hash = `#colony/${encodeURIComponent(colonyCard.dataset.stellarColonyCard)}`;
+    return;
+  }
+
+  const colonistCard = event.target.closest?.("[data-stellar-colonist-card]");
+  if (colonistCard && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    window.location.hash = `#colonist/${encodeURIComponent(colonistCard.dataset.stellarColonistCard)}`;
+  }
 });
 
 stellarEls.generateForm?.addEventListener("submit", handleGenerateSystem);
+stellarEls.colonyIncludeColonists?.addEventListener("change", updateColonyRosterVisibility);
 stellarEls.imagePromptForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   closeStellarImagePromptDialog(stellarEls.imagePromptExtra?.value || "");

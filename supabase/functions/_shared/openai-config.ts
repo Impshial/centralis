@@ -2,6 +2,7 @@ export const TEXT_MODEL = "gpt-5.5";
 export const IMAGE_MODEL = "gpt-image-2";
 export const IMAGE_SIZE = "2048x2048";
 export const IMAGE_QUALITY = "medium";
+const TEXT_MODEL_SUPPORTS_TEMPERATURE = false;
 
 type ResponseInputMessage = {
   role: "system" | "developer" | "user" | "assistant";
@@ -58,7 +59,7 @@ export async function generateJsonText(
     text: {
       format: { type: "json_object" },
     },
-    ...(typeof options.temperature === "number" ? { temperature: options.temperature } : {}),
+    ...(TEXT_MODEL_SUPPORTS_TEMPERATURE && typeof options.temperature === "number" ? { temperature: options.temperature } : {}),
     ...(typeof options.maxOutputTokens === "number" ? { max_output_tokens: options.maxOutputTokens } : {}),
   });
 

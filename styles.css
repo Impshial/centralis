@@ -13139,7 +13139,7 @@ body.stellar-home-route .stellar-system-card .stellar-badges {
     color-mix(in srgb, var(--field) 90%, var(--surface));
 }
 
-.stellar-planet-image-placeholder :is(ph-planet, ph-moon, ph-dna, ph-star) {
+.stellar-planet-image-placeholder :is(ph-planet, ph-moon, ph-dna, ph-star, ph-buildings, ph-user) {
   font-size: 2.4rem;
   color: var(--accent);
 }
@@ -13855,6 +13855,11 @@ body[data-page="stellar-architect"] .stellar-planet-image-header {
 }
 
 body[data-page="stellar-architect"] .stellar-planet-properties-panel {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+body[data-page="stellar-architect"] .stellar-planet-image-header + .stellar-primary-properties-panel {
   border-top-left-radius: 0 !important;
   border-top-right-radius: 0 !important;
 }
@@ -20100,4 +20105,252 @@ body:is(
   [data-page="designer"]
 ) *:not([class*="avatar"]):not([class*="badge"]):not([class*="chip"]):not([class*="dot"]):not([class*="icon-button"]):not([class*="pill"]):not([class*="profile"]):not([class*="radio"]):not([class*="swatch"]):not([class*="user-button"]) {
   border-radius: min(var(--module-corner-radius), 6px);
+}
+
+body[data-page="stellar-architect"] .stellar-colony-dialog {
+  width: min(920px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  padding: 24px;
+}
+
+body[data-page="stellar-architect"] .stellar-colony-header {
+  padding-right: 38px;
+}
+
+body[data-page="stellar-architect"] .stellar-colony-header h2 {
+  align-items: center;
+  display: flex;
+  font-size: 1.42rem;
+  gap: 10px;
+  margin: 0;
+}
+
+body[data-page="stellar-architect"] .stellar-dialog-field {
+  margin-top: 18px;
+}
+
+body[data-page="stellar-architect"] .stellar-dialog-field textarea {
+  min-height: 154px;
+  resize: vertical;
+}
+
+body[data-page="stellar-architect"] .stellar-dialog-field select {
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--control-text, var(--ink));
+  font: inherit;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 0 12px;
+  width: 100%;
+}
+
+body[data-page="stellar-architect"] .stellar-dialog-check {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  gap: 10px;
+  font-weight: 800;
+  margin-top: 18px;
+}
+
+body[data-page="stellar-architect"] .stellar-dialog-check input {
+  accent-color: var(--accent);
+  height: 18px;
+  width: 18px;
+}
+
+body[data-page="stellar-architect"] .stellar-colony-row,
+body[data-page="stellar-architect"] .stellar-colonist-row {
+  cursor: pointer;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-row {
+  grid-template-columns: 86px minmax(0, 1fr);
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-row .stellar-row-image {
+  width: 86px;
+  height: 116px;
+  min-height: 116px;
+  align-self: start;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-row .stellar-row-image ph-user {
+  font-size: 2rem;
+}
+
+body[data-page="stellar-architect"] .stellar-colony-row:hover,
+body[data-page="stellar-architect"] .stellar-colonist-row:hover {
+  background: var(--hover-bg);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-profile-list {
+  display: grid;
+  gap: 16px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 20px;
+}
+
+body[data-page="stellar-architect"] .stellar-stat-grid-flipped .stellar-stat span {
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+body[data-page="stellar-architect"] .stellar-stat-grid-flipped .stellar-stat strong {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-area {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin: 8px 0 24px;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-frame {
+  position: relative;
+  width: min(240px, 100%);
+  aspect-ratio: 3 / 4;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--field) 88%, var(--surface));
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-image,
+body[data-page="stellar-architect"] .stellar-colonist-portrait-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-image {
+  cursor: zoom-in;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-placeholder {
+  gap: 10px;
+  background:
+    radial-gradient(circle at 40% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 36%),
+    color-mix(in srgb, var(--field) 92%, var(--surface));
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-placeholder ph-user {
+  font-size: 2.3rem;
+  color: var(--accent);
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-action {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--primary-button-border);
+  border-radius: 5px;
+  background: var(--primary-button-bg);
+  color: var(--primary-button-text);
+  font-weight: 400;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26);
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-side {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-meta,
+body[data-page="stellar-architect"] .stellar-colonist-profile-callouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 18px;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-profile-callouts {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+body[data-page="stellar-architect"] .stellar-section-kicker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb {
+  width: 52px;
+  height: 68px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0;
+  background: var(--field);
+  cursor: pointer;
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+}
+
+@media (max-width: 760px) {
+  body[data-page="stellar-architect"] .stellar-colonist-portrait-area {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="stellar-architect"] .stellar-colonist-portrait-frame {
+    max-width: 220px;
+  }
 }

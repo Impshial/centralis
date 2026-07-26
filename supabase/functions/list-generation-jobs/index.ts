@@ -23,12 +23,14 @@ Deno.serve(async (req) => {
       .from("generation_jobs")
       .select("*")
       .eq("user_id", appUser.id)
+      .eq("job_type", "image")
       .in("status", ACTIVE_STATUSES)
       .order("created_at", { ascending: false });
     const recentQuery = supabase
       .from("generation_jobs")
       .select("*")
       .eq("user_id", appUser.id)
+      .eq("job_type", "image")
       .in("status", ["completed", "failed", "cancelled"])
       .order("updated_at", { ascending: false })
       .limit(25);

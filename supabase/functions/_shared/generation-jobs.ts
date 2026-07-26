@@ -1,10 +1,12 @@
 import { createAdminClient } from "./image-storage.ts";
 
 export type GenerationJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type GenerationJobType = "image" | "colony" | "colonists";
 
 export async function createGenerationJob(input: {
   userId: number;
   module: "image_generation" | "universe_builder" | "stellar_architect";
+  jobType?: GenerationJobType;
   sourceType?: string;
   sourceId?: string | null;
   sourceLabel?: string | null;
@@ -20,7 +22,7 @@ export async function createGenerationJob(input: {
     .insert({
       user_id: input.userId,
       module: input.module,
-      job_type: "image",
+      job_type: input.jobType || "image",
       source_type: input.sourceType || "unknown",
       source_id: input.sourceId || null,
       source_label: input.sourceLabel || null,

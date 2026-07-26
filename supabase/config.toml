@@ -95,3 +95,9 @@ verify_jwt = true
 
 [functions.cancel-generation-job]
 verify_jwt = true
+
+[functions.generate-stellar-colony]
+verify_jwt = true
+
+[functions.generate-stellar-colonists]
+verify_jwt = true
