@@ -1799,14 +1799,19 @@ body[data-page="stellar-architect"] {
 
 .stellar-stat span {
   display: block;
-  margin-bottom: 5px;
-  color: #9db2c5;
-  font-size: 13px;
+  margin-bottom: 4px;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .stellar-stat strong {
-  color: #ffffff;
-  font-size: 17px;
+  display: block;
+  color: #9db2c5;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .stellar-description {
@@ -2765,7 +2770,7 @@ body[data-page="stellar-architect"] .stellar-tree-shell h2,
 body[data-page="stellar-architect"] .stellar-page-title p,
 body[data-page="stellar-architect"] .stellar-card-body p,
 body[data-page="stellar-architect"] .stellar-muted,
-body[data-page="stellar-architect"] .stellar-stat span,
+body[data-page="stellar-architect"] .stellar-stat strong,
 body[data-page="stellar-architect"] .stellar-tree-item em,
 body[data-page="stellar-architect"] .stellar-details-header .modal-subtitle,
 body[data-page="stellar-architect"] .stellar-life-header .modal-subtitle,
@@ -2779,7 +2784,7 @@ body[data-page="stellar-architect"] .stellar-disabled-option span {
 body[data-page="stellar-architect"] .stellar-tree-item,
 body[data-page="stellar-architect"] .stellar-tree-folder-label,
 body[data-page="stellar-architect"] .stellar-card-body h2,
-body[data-page="stellar-architect"] .stellar-stat strong,
+body[data-page="stellar-architect"] .stellar-stat span,
 body[data-page="stellar-architect"] .stellar-description,
 body[data-page="stellar-architect"] .stellar-row-main p,
 body[data-page="stellar-architect"] .stellar-section-heading span,

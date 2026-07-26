@@ -1503,6 +1503,7 @@ function renderSystemPage(system) {
   const star = starForSystem(system.id);
   const planets = stellarState.planets.filter((planet) => planet.system_id === system.id);
   const planetCount = planets.filter((planet) => !isAsteroidBelt(planet)).length;
+  const planetsWithoutImages = planets.filter((planet) => !isAsteroidBelt(planet) && !sortedObjectImages(planet.id).length);
   stellarEls.root.innerHTML = `
     <header class="stellar-detail-toolbar">
       ${renderStellarBreadcrumbs(stellarSystemBreadcrumbs(system, true))}
@@ -1540,6 +1541,10 @@ function renderSystemPage(system) {
             <button class="primary-action" type="button" data-open-stellar-details="${escapeHtml(system.id)}">
               <ph-gear-six weight="bold" aria-hidden="true"></ph-gear-six>
               Generate Details
+            </button>
+            <button class="secondary-action" type="button" data-generate-planet-images-system="${escapeHtml(system.id)}" ${planetsWithoutImages.length ? "" : "disabled"}>
+              <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+              Generate All Images
             </button>
           </div>
         </div>
@@ -1616,6 +1621,7 @@ function renderPlanetSummary(planet) {
 
 function renderPlanetPage(planet) {
   const moons = stellarState.moons.filter((moon) => moon.planet_id === planet.id);
+  const moonsWithoutImages = moons.filter((moon) => !sortedObjectImages(moon.id).length);
   const lifeforms = stellarState.lifeforms.filter((lifeform) => lifeform.planet_id === planet.id);
   const colonies = stellarState.colonies.filter((colony) => colony.planet_id === planet.id);
   const descriptionText = planetDescriptionText(planet);
@@ -1682,7 +1688,13 @@ function renderPlanetPage(planet) {
       <article class="stellar-panel">
         <div class="stellar-section-heading">
           <h2><ph-eye></ph-eye> Moons (${moons.length})</h2>
-          <button class="secondary-action" type="button" data-generate-moons="${escapeHtml(planet.id)}">Generate Moons</button>
+          <div class="stellar-section-actions">
+            <button class="secondary-action" type="button" data-generate-moons="${escapeHtml(planet.id)}">Generate Moons</button>
+            <button class="secondary-action" type="button" data-generate-moon-images-planet="${escapeHtml(planet.id)}" ${moonsWithoutImages.length ? "" : "disabled"}>
+              <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+              Generate All Images
+            </button>
+          </div>
         </div>
         <div class="stellar-body-list">${moons.map(renderMoonSummary).join("") || '<p class="stellar-muted">No moons generated yet.</p>'}</div>
       </article>
@@ -2486,9 +2498,67 @@ async function handleGenerateMissingColonistImages(colonyId, button) {
   const colony = colonyForId(colonyId);
   if (!colony) return;
   const colonists = stellarState.colonists.filter((colonist) => colonist.colony_id === colony.id);
-  const missingImages = colonists.filter((colonist) => !sortedObjectImages(colonist.id).length);
+  await handleGenerateMissingStellarImages({
+    kind: "colonist",
+    records: colonists,
+    button,
+    emptyMessage: "All colonists in this colony already have images.",
+    startMessage: (count) => `Generating ${count} colonist portrait${count === 1 ? "" : "s"} for ${colony.name}.`,
+    successMessage: (count) => `Generated ${count} colonist portrait${count === 1 ? "" : "s"}.`,
+    failureMessage: (generatedCount, failureCount) => `Generated ${generatedCount} portrait${generatedCount === 1 ? "" : "s"}; ${failureCount} failed.`,
+    warningLabel: "Colonist portrait generation failures",
+    displayFallback: "Colonist",
+  });
+}
+
+async function handleGenerateMissingMoonImages(planetId, button) {
+  const planet = planetForId(planetId);
+  if (!planet) return;
+  const moons = stellarState.moons.filter((moon) => moon.planet_id === planet.id);
+  await handleGenerateMissingStellarImages({
+    kind: "moon",
+    records: moons,
+    button,
+    emptyMessage: "All moons for this planet already have images.",
+    startMessage: (count) => `Generating ${count} moon image${count === 1 ? "" : "s"} for ${planet.name}.`,
+    successMessage: (count) => `Generated ${count} moon image${count === 1 ? "" : "s"}.`,
+    failureMessage: (generatedCount, failureCount) => `Generated ${generatedCount} moon image${generatedCount === 1 ? "" : "s"}; ${failureCount} failed.`,
+    warningLabel: "Moon image generation failures",
+    displayFallback: "Moon",
+  });
+}
+
+async function handleGenerateMissingPlanetImages(systemId, button) {
+  const system = systemForId(systemId);
+  if (!system) return;
+  const planets = stellarState.planets.filter((planet) => planet.system_id === system.id && !isAsteroidBelt(planet));
+  await handleGenerateMissingStellarImages({
+    kind: "planet",
+    records: planets,
+    button,
+    emptyMessage: "All planets in this system already have images.",
+    startMessage: (count) => `Generating ${count} planet image${count === 1 ? "" : "s"} for ${system.name}.`,
+    successMessage: (count) => `Generated ${count} planet image${count === 1 ? "" : "s"}.`,
+    failureMessage: (generatedCount, failureCount) => `Generated ${generatedCount} planet image${generatedCount === 1 ? "" : "s"}; ${failureCount} failed.`,
+    warningLabel: "Planet image generation failures",
+    displayFallback: "Planet",
+  });
+}
+
+async function handleGenerateMissingStellarImages({
+  kind,
+  records,
+  button,
+  emptyMessage,
+  startMessage,
+  successMessage,
+  failureMessage,
+  warningLabel,
+  displayFallback,
+}) {
+  const missingImages = records.filter((record) => record?.id && !sortedObjectImages(record.id).length);
   if (!missingImages.length) {
-    showStellarToast("All colonists in this colony already have images.", "success");
+    showStellarToast(emptyMessage, "success");
     return;
   }
 
@@ -2497,7 +2567,7 @@ async function handleGenerateMissingColonistImages(colonyId, button) {
     button.disabled = true;
     button.innerHTML = '<ph-arrows-clockwise weight="bold"></ph-arrows-clockwise> Generating...';
   }
-  showStellarToast(`Generating ${missingImages.length} colonist portrait${missingImages.length === 1 ? "" : "s"} for ${colony.name}.`, "success");
+  showStellarToast(startMessage(missingImages.length), "success");
 
   let completedCount = 0;
   const updateBatchButton = () => {
@@ -2507,15 +2577,15 @@ async function handleGenerateMissingColonistImages(colonyId, button) {
   updateBatchButton();
 
   const results = await Promise.all(
-    missingImages.map(async (colonist) => {
+    missingImages.map(async (record) => {
       try {
-        await generateStellarImageForRecord("colonist", colonist, "");
-        return { colonist, success: true };
+        await generateStellarImageForRecord(kind, record, "");
+        return { record, success: true };
       } catch (error) {
         return {
-          colonist,
+          record,
           success: false,
-          message: `${stellarObjectDisplayName(colonist, "Colonist")}: ${getReadableError(error)}`,
+          message: `${stellarObjectDisplayName(record, displayFallback)}: ${getReadableError(error)}`,
         };
       } finally {
         completedCount += 1;
@@ -2531,10 +2601,10 @@ async function handleGenerateMissingColonistImages(colonyId, button) {
   renderRoute();
 
   if (failures.length) {
-    showStellarToast(`Generated ${generatedCount} portrait${generatedCount === 1 ? "" : "s"}; ${failures.length} failed.`, "error");
-    console.warn("Colonist portrait generation failures", failures);
+    showStellarToast(failureMessage(generatedCount, failures.length), "error");
+    console.warn(warningLabel, failures);
   } else {
-    showStellarToast(`Generated ${generatedCount} colonist portrait${generatedCount === 1 ? "" : "s"}.`, "success");
+    showStellarToast(successMessage(generatedCount), "success");
   }
 
   if (button) {
@@ -2754,6 +2824,24 @@ document.addEventListener("click", (event) => {
     handleGenerateMissingColonistImages(
       generateColonistImagesButton.dataset.generateColonistImagesColony,
       generateColonistImagesButton
+    );
+    return;
+  }
+
+  const generateMoonImagesButton = event.target.closest("[data-generate-moon-images-planet]");
+  if (generateMoonImagesButton) {
+    handleGenerateMissingMoonImages(
+      generateMoonImagesButton.dataset.generateMoonImagesPlanet,
+      generateMoonImagesButton
+    );
+    return;
+  }
+
+  const generatePlanetImagesButton = event.target.closest("[data-generate-planet-images-system]");
+  if (generatePlanetImagesButton) {
+    handleGenerateMissingPlanetImages(
+      generatePlanetImagesButton.dataset.generatePlanetImagesSystem,
+      generatePlanetImagesButton
     );
     return;
   }
