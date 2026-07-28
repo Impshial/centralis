@@ -6,8 +6,8 @@
   <title>Calendar | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
-  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=calendar-views-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=calendar-views-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 
@@ -125,14 +125,16 @@
     </div>
   </header>
 
-  <main class="calendar-page" aria-label="Calendar">
+  <main class="calendar-page" aria-label="Calendar" data-calendar-page>
     <aside class="calendar-sidebar" aria-label="Calendar sidebar">
-      <button class="calendar-sidebar-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">
-        <ph-sidebar-simple weight="bold" aria-hidden="true"></ph-sidebar-simple>
-      </button>
       <section class="mini-calendar" aria-label="Mini calendar">
         <div class="mini-calendar-header">
-          <h2 data-mini-month>Month</h2>
+          <div class="mini-calendar-title-row">
+            <button class="calendar-sidebar-toggle" type="button" aria-label="Collapse mini calendar" title="Collapse mini calendar" data-calendar-sidebar-toggle>
+              <ph-sidebar-simple weight="bold" aria-hidden="true"></ph-sidebar-simple>
+            </button>
+            <h2 data-mini-month>Month</h2>
+          </div>
           <div class="mini-calendar-nav">
             <button type="button" data-mini-prev aria-label="Previous month">
               <ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>
@@ -170,11 +172,12 @@
           <h1 data-calendar-title>Calendar</h1>
         </div>
         <div class="calendar-toolbar-right">
+          <p class="calendar-status" data-calendar-status role="status"></p>
           <div class="calendar-view-tabs" aria-label="Calendar views">
-            <button class="is-active" type="button">Month</button>
-            <button type="button" disabled title="Coming soon">Week</button>
-            <button type="button" disabled title="Coming soon">Day</button>
-            <button type="button" disabled title="Coming soon">Agenda</button>
+            <button class="is-active" type="button" data-calendar-view="month">Month</button>
+            <button type="button" data-calendar-view="week">Week</button>
+            <button type="button" data-calendar-view="day">Day</button>
+            <button type="button" data-calendar-view="agenda">Agenda</button>
           </div>
           <button class="primary-action calendar-new-event" type="button" data-open-event-modal>
             <ph-plus weight="bold" aria-hidden="true"></ph-plus>
@@ -182,7 +185,6 @@
           </button>
         </div>
       </header>
-      <p class="calendar-status" data-calendar-status role="status"></p>
       <div class="calendar-empty-prompt" data-calendar-empty hidden>
         <h2>No calendars yet</h2>
         <p>Create a calendar before adding events.</p>
@@ -190,11 +192,14 @@
       </div>
       <div class="month-weekdays" data-month-weekdays></div>
       <div class="month-grid" data-month-grid aria-label="Month grid"></div>
+      <div class="calendar-alt-view week-view" data-week-view hidden></div>
+      <div class="calendar-alt-view day-view" data-day-view hidden></div>
+      <div class="calendar-alt-view agenda-view" data-agenda-view hidden></div>
     </section>
   </main>
   </div>
 
-  <div class="modal-backdrop" id="calendar-modal" hidden>
+  <div class="modal-backdrop" id="calendar-modal" data-strict-modal hidden>
     <section class="modal-dialog calendar-create-dialog" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
       <div class="modal-header">
         <div>
@@ -300,6 +305,10 @@
         </section>
         <p class="dialog-status" data-event-form-status role="status"></p>
         <div class="dialog-actions">
+          <button class="danger-action calendar-delete-event" type="button" data-delete-event hidden>
+            <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+            Delete Event
+          </button>
           <button class="secondary-action" type="button" data-close-event-modal>Cancel</button>
           <button class="primary-action" type="submit">Save Event</button>
         </div>
@@ -310,7 +319,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=generation-activity-1"></script>
-  <script src="calendar.js?v=todo-v1"></script>
+  <script src="calendar.js?v=calendar-views-1"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisCalendarLoaded) {

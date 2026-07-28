@@ -3,6 +3,9 @@ const calendarSupabaseClient = window.centralisSupabase;
 const state = {
   appUser: null,
   settings: null,
+  view: "month",
+  selectedDate: new Date(),
+  editingEventId: null,
   visibleMonth: startOfMonth(new Date()),
   miniMonth: startOfMonth(new Date()),
   calendars: [],
@@ -12,15 +15,21 @@ const state = {
   selectedReminderMinutes: new Set()
 };
 
+const calendarPage = document.querySelector("[data-calendar-page]");
 const calendarList = document.querySelector("[data-calendar-list]");
 const calendarStatus = document.querySelector("[data-calendar-status]");
 const calendarEmpty = document.querySelector("[data-calendar-empty]");
 const calendarTitle = document.querySelector("[data-calendar-title]");
+const viewButtons = document.querySelectorAll("[data-calendar-view]");
+const sidebarToggle = document.querySelector("[data-calendar-sidebar-toggle]");
 const miniMonthTitle = document.querySelector("[data-mini-month]");
 const miniWeekdays = document.querySelector("[data-mini-weekdays]");
 const miniDays = document.querySelector("[data-mini-days]");
 const monthWeekdays = document.querySelector("[data-month-weekdays]");
 const monthGrid = document.querySelector("[data-month-grid]");
+const weekView = document.querySelector("[data-week-view]");
+const dayView = document.querySelector("[data-day-view]");
+const agendaView = document.querySelector("[data-agenda-view]");
 const newEventButton = document.querySelector("[data-open-event-modal]");
 const calendarModal = document.getElementById("calendar-modal");
 const calendarForm = document.querySelector("[data-calendar-form]");
@@ -28,15 +37,18 @@ const calendarFormStatus = document.querySelector("[data-calendar-form-status]")
 const eventModal = document.getElementById("event-modal");
 const eventForm = document.querySelector("[data-event-form]");
 const eventFormStatus = document.querySelector("[data-event-form-status]");
+const eventModalTitle = document.getElementById("event-modal-title");
 const eventCalendarSelect = document.querySelector("[data-event-calendar]");
 const eventCategorySelect = document.querySelector("[data-event-category]");
 const allDayInput = document.querySelector("[data-event-all-day]");
+const deleteEventButton = document.querySelector("[data-delete-event]");
 const reminderStatus = document.querySelector("[data-reminder-status]");
 const reminderPresetWrap = document.querySelector("[data-reminder-presets]");
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_FORMATTER = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
 const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const FULL_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const DEFAULT_COLOR = "#6366f1";
 
@@ -112,6 +124,96 @@ function getGridRange(month) {
   };
 }
 
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function startOfWeek(date) {
+  const weekStartsOn = Number(state.settings?.week_starts_on ?? 0);
+  const day = startOfDay(date);
+  const offset = (day.getDay() - weekStartsOn + 7) % 7;
+  return addDays(day, -offset);
+}
+
+function getActiveRange() {
+  if (state.view === "week") {
+    const start = startOfWeek(state.selectedDate);
+    return { start, end: addDays(start, 6) };
+  }
+
+  if (state.view === "day") {
+    const day = startOfDay(state.selectedDate);
+    return { start: day, end: day };
+  }
+
+  if (state.view === "agenda") {
+    return {
+      start: startOfMonth(state.visibleMonth),
+      end: endOfMonth(state.visibleMonth)
+    };
+  }
+
+  return getGridRange(state.visibleMonth);
+}
+
+function setSelectedDate(date) {
+  state.selectedDate = startOfDay(date);
+  state.visibleMonth = startOfMonth(date);
+  state.miniMonth = startOfMonth(date);
+}
+
+function getViewTitle() {
+  if (state.view === "week") {
+    const { start, end } = getActiveRange();
+    return `${DATE_LABEL_FORMATTER.format(start)} - ${DATE_LABEL_FORMATTER.format(end)}, ${end.getFullYear()}`;
+  }
+
+  if (state.view === "day") {
+    return FULL_DATE_FORMATTER.format(state.selectedDate);
+  }
+
+  if (state.view === "agenda") {
+    return `Agenda - ${MONTH_FORMATTER.format(state.visibleMonth)}`;
+  }
+
+  return MONTH_FORMATTER.format(state.visibleMonth);
+}
+
+function updateCalendarTitle() {
+  if (calendarTitle) {
+    calendarTitle.textContent = getViewTitle();
+  }
+}
+
+function setCalendarView(view, date = state.selectedDate) {
+  state.view = view;
+  setSelectedDate(date);
+  viewButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.calendarView === view);
+  });
+}
+
+function shiftActiveView(amount) {
+  if (state.view === "week") {
+    setSelectedDate(addDays(state.selectedDate, amount * 7));
+    return;
+  }
+
+  if (state.view === "day") {
+    setSelectedDate(addDays(state.selectedDate, amount));
+    return;
+  }
+
+  const nextMonth = addMonths(state.visibleMonth, amount);
+  state.visibleMonth = startOfMonth(nextMonth);
+  state.miniMonth = startOfMonth(nextMonth);
+  state.selectedDate = startOfDay(nextMonth);
+}
+
 function localInputDate(date) {
   return dateKey(date);
 }
@@ -155,12 +257,19 @@ function closeCalendarModal() {
   }
 }
 
-function openEventModal(date = new Date()) {
+function openEventModal(date = state.selectedDate || new Date()) {
   if (!state.calendars.length) {
     setStatus("Create a calendar before adding events.", "error");
     return;
   }
 
+  state.editingEventId = null;
+  if (eventModalTitle) {
+    eventModalTitle.textContent = "New Event";
+  }
+  if (deleteEventButton) {
+    deleteEventButton.hidden = true;
+  }
   setDialogStatus(eventFormStatus, "");
   eventForm?.reset();
   state.selectedReminderMinutes.clear();
@@ -187,10 +296,69 @@ function openEventModal(date = new Date()) {
   }
 }
 
+async function openEventEditModal(eventId) {
+  const event = state.events.find((item) => item.id === eventId);
+  if (!event || !state.calendars.some((calendar) => calendar.id === event.calendar_id)) {
+    setStatus("Could not find that event.", "error");
+    return;
+  }
+
+  state.editingEventId = event.id;
+  if (eventModalTitle) {
+    eventModalTitle.textContent = "Edit Event";
+  }
+  if (deleteEventButton) {
+    deleteEventButton.hidden = false;
+  }
+  setDialogStatus(eventFormStatus, "");
+  eventForm?.reset();
+  populateEventSelects();
+
+  const start = new Date(event.start_time);
+  const end = new Date(event.end_time);
+  eventForm.elements["event-title"].value = event.title || "";
+  eventForm.elements["event-calendar"].value = String(event.calendar_id || "");
+  eventForm.elements["event-category"].value = event.category_id ? String(event.category_id) : "";
+  eventForm.elements["event-all-day"].checked = Boolean(event.is_all_day);
+  eventForm.elements["event-start-date"].value = localInputDate(start);
+  eventForm.elements["event-start-time"].value = localInputTime(start);
+  eventForm.elements["event-end-date"].value = localInputDate(end);
+  eventForm.elements["event-end-time"].value = localInputTime(end);
+  eventForm.elements["event-repeat"].value = rRuleToRepeat(event.recurrence_rule);
+  eventForm.elements["event-location"].value = event.location || "";
+  eventForm.elements["event-description"].value = event.description || event.notes || "";
+  eventForm.elements["event-start-time"].disabled = Boolean(event.is_all_day);
+  eventForm.elements["event-end-time"].disabled = Boolean(event.is_all_day);
+
+  state.selectedReminderMinutes.clear();
+  try {
+    const { data, error } = await calendarSupabaseClient
+      .from("reminders")
+      .select("minutes_before")
+      .eq("event_id", event.id)
+      .eq("deleted", false);
+    if (error) {
+      throw error;
+    }
+    (data || []).forEach((reminder) => {
+      state.selectedReminderMinutes.add(Number(reminder.minutes_before));
+    });
+  } catch (error) {
+    console.warn("Could not load event reminders.", error);
+  }
+  updateReminderUi();
+
+  if (eventModal) {
+    eventModal.hidden = false;
+    eventForm.elements["event-title"]?.focus();
+  }
+}
+
 function closeEventModal() {
   if (eventModal) {
     eventModal.hidden = true;
   }
+  state.editingEventId = null;
 }
 
 function getOrderedWeekdays() {
@@ -227,7 +395,7 @@ function renderMiniCalendar() {
 
   const { start } = getGridRange(state.miniMonth);
   const todayKey = dateKey(new Date());
-  const selectedMonthKey = `${state.visibleMonth.getFullYear()}-${state.visibleMonth.getMonth()}`;
+  const selectedKey = dateKey(state.selectedDate);
   const cells = [];
 
   for (let index = 0; index < 42; index += 1) {
@@ -237,10 +405,9 @@ function renderMiniCalendar() {
     button.textContent = String(date.getDate());
     button.classList.toggle("is-muted", date.getMonth() !== state.miniMonth.getMonth());
     button.classList.toggle("is-today", dateKey(date) === todayKey);
-    button.classList.toggle("is-current-month", `${date.getFullYear()}-${date.getMonth()}` === selectedMonthKey);
+    button.classList.toggle("is-current-month", dateKey(date) === selectedKey);
     button.addEventListener("click", () => {
-      state.visibleMonth = startOfMonth(date);
-      state.miniMonth = startOfMonth(date);
+      setSelectedDate(date);
       refreshCalendarData();
     });
     cells.push(button);
@@ -279,9 +446,6 @@ function renderCalendarList() {
 }
 
 function renderMonthGrid() {
-  if (calendarTitle) {
-    calendarTitle.textContent = MONTH_FORMATTER.format(state.visibleMonth);
-  }
   if (!monthGrid) {
     return;
   }
@@ -304,29 +468,175 @@ function renderMonthGrid() {
       <span class="month-event-list"></span>
     `;
     const list = cell.querySelector(".month-event-list");
-    (eventsByDate.get(key) || []).slice(0, 4).forEach((event) => {
-      const chip = document.createElement("span");
-      chip.className = event.type === "task" ? "month-event-chip month-task-chip" : "month-event-chip";
-      chip.style.setProperty("--event-color", normalizeColor(event.color));
-      chip.textContent = event.type === "task"
-        ? `Task: ${event.title}`
-        : event.is_all_day ? event.title : `${TIME_FORMATTER.format(event.start)} ${event.title}`;
-      list.append(chip);
+    (eventsByDate.get(key) || []).slice(0, 4).forEach((item) => {
+      list.append(createCalendarItemElement(item, "month"));
     });
 
     const extra = (eventsByDate.get(key) || []).length - 4;
     if (extra > 0) {
       const chip = document.createElement("span");
       chip.className = "month-event-more";
-      chip.textContent = `+${extra} more`;
+      chip.textContent = `+${extra}`;
+      chip.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setCalendarView("day", date);
+        refreshCalendarData();
+      });
       list.append(chip);
     }
 
+    cell.addEventListener("click", () => {
+      state.selectedDate = startOfDay(date);
+      renderMiniCalendar();
+    });
     cell.addEventListener("dblclick", () => openEventModal(date));
     cells.push(cell);
   }
 
   monthGrid.replaceChildren(...cells);
+}
+
+function createCalendarItemElement(item, variant = "card") {
+  const element = document.createElement(variant === "month" ? "span" : "article");
+  const isTask = item.type === "task";
+  element.className = variant === "month"
+    ? isTask ? "month-event-chip month-task-chip" : "month-event-chip"
+    : isTask ? "calendar-item-card calendar-task-card" : "calendar-item-card";
+  element.style.setProperty("--event-color", normalizeColor(item.color));
+
+  if (variant === "month") {
+    element.textContent = isTask
+      ? `Task: ${item.title}`
+      : item.is_all_day ? item.title : `${TIME_FORMATTER.format(item.start)} ${item.title}`;
+  } else {
+    element.innerHTML = `
+      <span class="calendar-item-time">${escapeHtml(getItemTimeLabel(item))}</span>
+      <strong>${escapeHtml(item.title)}</strong>
+      <span class="calendar-item-kind">${isTask ? "Task" : "Event"}</span>
+    `;
+  }
+
+  if (!isTask) {
+    element.tabIndex = 0;
+    element.setAttribute("role", "button");
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      openEventEditModal(item.id);
+    });
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        openEventEditModal(item.id);
+      }
+    });
+  }
+
+  return element;
+}
+
+function getItemTimeLabel(item) {
+  if (item.type === "task") {
+    return "Task";
+  }
+  if (item.is_all_day) {
+    return "All day";
+  }
+  return `${TIME_FORMATTER.format(item.start)} - ${TIME_FORMATTER.format(item.end)}`;
+}
+
+function renderWeekView() {
+  if (!weekView) return;
+  const { start, end } = getActiveRange();
+  const itemsByDate = buildCalendarItemsByDate(start, end);
+  const columns = [];
+
+  for (let index = 0; index < 7; index += 1) {
+    const date = addDays(start, index);
+    const key = dateKey(date);
+    const column = document.createElement("section");
+    column.className = "calendar-week-day";
+    column.innerHTML = `
+      <button class="calendar-week-day-header" type="button">
+        <span>${WEEKDAY_LABELS[date.getDay()]}</span>
+        <strong>${date.getDate()}</strong>
+      </button>
+      <div class="calendar-day-items"></div>
+    `;
+    column.querySelector(".calendar-week-day-header").addEventListener("click", () => {
+      setCalendarView("day", date);
+      refreshCalendarData();
+    });
+    column.addEventListener("dblclick", () => openEventModal(date));
+    const list = column.querySelector(".calendar-day-items");
+    const items = itemsByDate.get(key) || [];
+    if (!items.length) {
+      list.innerHTML = '<p class="calendar-view-empty">No items.</p>';
+    } else {
+      items.forEach((item) => list.append(createCalendarItemElement(item)));
+    }
+    columns.push(column);
+  }
+
+  weekView.replaceChildren(...columns);
+}
+
+function renderDayView() {
+  if (!dayView) return;
+  const day = startOfDay(state.selectedDate);
+  const items = buildCalendarItemsByDate(day, day).get(dateKey(day)) || [];
+  const panel = document.createElement("section");
+  panel.className = "calendar-day-panel";
+  panel.addEventListener("dblclick", () => openEventModal(day));
+  panel.innerHTML = `
+    <div class="calendar-day-heading">
+      <span>${WEEKDAY_LABELS[day.getDay()]}</span>
+      <strong>${FULL_DATE_FORMATTER.format(day)}</strong>
+    </div>
+    <div class="calendar-day-items"></div>
+  `;
+  const list = panel.querySelector(".calendar-day-items");
+  if (!items.length) {
+    list.innerHTML = '<p class="calendar-view-empty">No events or tasks for this day.</p>';
+  } else {
+    items.forEach((item) => list.append(createCalendarItemElement(item)));
+  }
+  dayView.replaceChildren(panel);
+}
+
+function renderAgendaView() {
+  if (!agendaView) return;
+  const start = startOfMonth(state.visibleMonth);
+  const end = endOfMonth(state.visibleMonth);
+  const itemsByDate = buildCalendarItemsByDate(start, end);
+  const groups = [];
+
+  for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
+    const items = itemsByDate.get(dateKey(date)) || [];
+    if (!items.length) {
+      continue;
+    }
+    const group = document.createElement("section");
+    group.className = "calendar-agenda-group";
+    group.innerHTML = `
+      <button class="calendar-agenda-date" type="button">${escapeHtml(FULL_DATE_FORMATTER.format(date))}</button>
+      <div class="calendar-day-items"></div>
+    `;
+    group.querySelector(".calendar-agenda-date").addEventListener("click", () => {
+      setCalendarView("day", date);
+      refreshCalendarData();
+    });
+    const list = group.querySelector(".calendar-day-items");
+    items.forEach((item) => list.append(createCalendarItemElement(item)));
+    groups.push(group);
+  }
+
+  if (!groups.length) {
+    agendaView.innerHTML = '<p class="calendar-view-empty calendar-agenda-empty">No events or tasks this month.</p>';
+    return;
+  }
+
+  agendaView.replaceChildren(...groups);
 }
 
 function renderEmptyState() {
@@ -336,10 +646,19 @@ function renderEmptyState() {
     calendarEmpty.hidden = hasCalendarContent;
   }
   if (monthGrid) {
-    monthGrid.hidden = !hasCalendarContent;
+    monthGrid.hidden = !hasCalendarContent || state.view !== "month";
   }
   if (monthWeekdays) {
-    monthWeekdays.hidden = !hasCalendarContent;
+    monthWeekdays.hidden = !hasCalendarContent || state.view !== "month";
+  }
+  if (weekView) {
+    weekView.hidden = !hasCalendarContent || state.view !== "week";
+  }
+  if (dayView) {
+    dayView.hidden = !hasCalendarContent || state.view !== "day";
+  }
+  if (agendaView) {
+    agendaView.hidden = !hasCalendarContent || state.view !== "agenda";
   }
   if (newEventButton) {
     newEventButton.disabled = !hasCalendars;
@@ -347,11 +666,18 @@ function renderEmptyState() {
 }
 
 function renderAll() {
+  updateCalendarTitle();
+  viewButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.calendarView === state.view);
+  });
   renderWeekdayHeaders();
   renderMiniCalendar();
   renderCalendarList();
   renderEmptyState();
   renderMonthGrid();
+  renderWeekView();
+  renderDayView();
+  renderAgendaView();
 }
 
 function wait(milliseconds) {
@@ -570,6 +896,23 @@ function repeatToRRule(repeat) {
   return rules[repeat] || null;
 }
 
+function rRuleToRepeat(rawRule) {
+  const rule = parseRRule(rawRule);
+  if (!rawRule) {
+    return "none";
+  }
+  if (rule.BYDAY === "MO,TU,WE,TH,FR") {
+    return "weekdays";
+  }
+  const repeatByFrequency = {
+    DAILY: "daily",
+    WEEKLY: "weekly",
+    MONTHLY: "monthly",
+    YEARLY: "yearly"
+  };
+  return repeatByFrequency[rule.FREQ] || "none";
+}
+
 function repeatToRuleRow(eventId, repeat, rawRule) {
   const frequencyByRepeat = {
     daily: "daily",
@@ -643,7 +986,7 @@ async function loadEvents() {
     return;
   }
 
-  const { start, end } = getGridRange(state.visibleMonth);
+  const { start, end } = getActiveRange();
   const { data, error } = await calendarSupabaseClient
     .from("events")
     .select("*")
@@ -670,7 +1013,7 @@ async function loadTasks() {
     return;
   }
 
-  const { start, end } = getGridRange(state.visibleMonth);
+  const { start, end } = getActiveRange();
   const { data, error } = await calendarSupabaseClient
     .from("todo_tasks")
     .select("id,title,due_date,status,priority,category")
@@ -771,7 +1114,7 @@ async function createCalendar(formData) {
   await refreshCalendarData();
 }
 
-async function createEvent(formData) {
+function buildEventPayload(formData) {
   const title = String(formData.get("event-title") || "").trim();
   const calendarId = Number(formData.get("event-calendar"));
   const categoryId = formData.get("event-category") ? Number(formData.get("event-category")) : null;
@@ -780,7 +1123,12 @@ async function createEvent(formData) {
 
   if (!title || !calendarId) {
     setDialogStatus(eventFormStatus, "Title and calendar are required.", "error");
-    return;
+    return null;
+  }
+
+  if (!state.calendars.some((calendar) => calendar.id === calendarId)) {
+    setDialogStatus(eventFormStatus, "Choose one of your calendars.", "error");
+    return null;
   }
 
   const startDate = String(formData.get("event-start-date"));
@@ -792,14 +1140,14 @@ async function createEvent(formData) {
 
   if (end < start) {
     setDialogStatus(eventFormStatus, "End must be after start.", "error");
-    return;
+    return null;
   }
 
   const rawRule = repeatToRRule(repeat);
-  setDialogStatus(eventFormStatus, "Saving event...");
-  const { data: event, error } = await calendarSupabaseClient
-    .from("events")
-    .insert({
+  return {
+    repeat,
+    rawRule,
+    payload: {
       calendar_id: calendarId,
       category_id: categoryId,
       title,
@@ -812,26 +1160,55 @@ async function createEvent(formData) {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       is_recurring: Boolean(rawRule),
       recurrence_rule: rawRule
-    })
-    .select("*")
-    .single();
+    }
+  };
+}
 
-  if (error) {
-    throw error;
+function getDeletedStamp() {
+  const now = new Date().toISOString();
+  return {
+    deleted: true,
+    deleted_at: now,
+    deleted_by: state.appUser.id,
+    updated_at: now
+  };
+}
+
+async function softDeleteEventFollowUps(eventId) {
+  const stamp = getDeletedStamp();
+  const results = await Promise.all([
+    calendarSupabaseClient
+      .from("event_recurrence_rules")
+      .update(stamp)
+      .eq("event_id", eventId)
+      .eq("deleted", false),
+    calendarSupabaseClient
+      .from("reminders")
+      .update(stamp)
+      .eq("event_id", eventId)
+      .eq("deleted", false)
+  ]);
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    throw failed.error;
   }
+}
+
+async function replaceEventFollowUps(eventId, repeat, rawRule) {
+  await softDeleteEventFollowUps(eventId);
 
   const followUps = [];
   if (rawRule) {
     followUps.push(calendarSupabaseClient
       .from("event_recurrence_rules")
-      .insert(repeatToRuleRow(event.id, repeat, rawRule)));
+      .insert(repeatToRuleRow(eventId, repeat, rawRule)));
   }
 
   if (state.selectedReminderMinutes.size) {
     followUps.push(calendarSupabaseClient
       .from("reminders")
       .insert([...state.selectedReminderMinutes].map((minutes) => ({
-        event_id: event.id,
+        event_id: eventId,
         minutes_before: minutes,
         method: "popup"
       }))));
@@ -842,7 +1219,77 @@ async function createEvent(formData) {
   if (failed?.error) {
     throw failed.error;
   }
+}
 
+async function createEvent(formData) {
+  const built = buildEventPayload(formData);
+  if (!built) {
+    return;
+  }
+
+  setDialogStatus(eventFormStatus, "Saving event...");
+  const { data: event, error } = await calendarSupabaseClient
+    .from("events")
+    .insert(built.payload)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  await replaceEventFollowUps(event.id, built.repeat, built.rawRule);
+
+  closeEventModal();
+  await refreshCalendarData();
+}
+
+async function updateEvent(formData) {
+  const built = buildEventPayload(formData);
+  if (!built || !state.editingEventId) {
+    return;
+  }
+
+  const calendarIds = state.calendars.map((calendar) => calendar.id);
+  setDialogStatus(eventFormStatus, "Saving event...");
+  const { error } = await calendarSupabaseClient
+    .from("events")
+    .update({
+      ...built.payload,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", state.editingEventId)
+    .in("calendar_id", calendarIds)
+    .eq("deleted", false);
+
+  if (error) {
+    throw error;
+  }
+
+  await replaceEventFollowUps(state.editingEventId, built.repeat, built.rawRule);
+  closeEventModal();
+  await refreshCalendarData();
+}
+
+async function deleteEvent(eventId) {
+  const event = state.events.find((item) => item.id === eventId);
+  if (!event || !window.confirm(`Delete event "${event.title}"?`)) {
+    return;
+  }
+
+  const calendarIds = state.calendars.map((calendar) => calendar.id);
+  const { error } = await calendarSupabaseClient
+    .from("events")
+    .update(getDeletedStamp())
+    .eq("id", eventId)
+    .in("calendar_id", calendarIds)
+    .eq("deleted", false);
+
+  if (error) {
+    throw error;
+  }
+
+  await softDeleteEventFollowUps(eventId);
   closeEventModal();
   await refreshCalendarData();
 }
@@ -896,11 +1343,7 @@ function escapeHtml(value) {
 async function initializeCalendar() {
   renderWeekdayHeaders();
   renderMiniCalendar();
-  renderEmptyState();
-  renderMonthGrid();
-  if (calendarTitle) {
-    calendarTitle.textContent = MONTH_FORMATTER.format(state.visibleMonth);
-  }
+  renderAll();
   setStatus("Loading calendar...");
 
   if (!calendarSupabaseClient) {
@@ -934,21 +1377,36 @@ document.querySelectorAll("[data-close-event-modal]").forEach((button) => {
 });
 
 document.querySelector("[data-calendar-today]")?.addEventListener("click", () => {
-  state.visibleMonth = startOfMonth(new Date());
-  state.miniMonth = startOfMonth(new Date());
+  setSelectedDate(new Date());
   refreshCalendarData();
 });
 
 document.querySelector("[data-calendar-prev]")?.addEventListener("click", () => {
-  state.visibleMonth = addMonths(state.visibleMonth, -1);
-  state.miniMonth = startOfMonth(state.visibleMonth);
+  shiftActiveView(-1);
   refreshCalendarData();
 });
 
 document.querySelector("[data-calendar-next]")?.addEventListener("click", () => {
-  state.visibleMonth = addMonths(state.visibleMonth, 1);
-  state.miniMonth = startOfMonth(state.visibleMonth);
+  shiftActiveView(1);
   refreshCalendarData();
+});
+
+viewButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const view = button.dataset.calendarView;
+    if (!view || view === state.view) {
+      return;
+    }
+    setCalendarView(view, state.selectedDate);
+    refreshCalendarData();
+  });
+});
+
+sidebarToggle?.addEventListener("click", () => {
+  const isCollapsed = calendarPage?.classList.toggle("is-sidebar-collapsed");
+  const label = isCollapsed ? "Expand mini calendar" : "Collapse mini calendar";
+  sidebarToggle.setAttribute("aria-label", label);
+  sidebarToggle.title = label;
 });
 
 document.querySelector("[data-mini-prev]")?.addEventListener("click", () => {
@@ -961,7 +1419,7 @@ document.querySelector("[data-mini-next]")?.addEventListener("click", () => {
   renderMiniCalendar();
 });
 
-newEventButton?.addEventListener("click", () => openEventModal(new Date()));
+newEventButton?.addEventListener("click", () => openEventModal(state.selectedDate || new Date()));
 
 calendarList?.addEventListener("click", async (event) => {
   const visibilityButton = event.target.closest("[data-calendar-visible]");
@@ -992,10 +1450,26 @@ calendarForm?.addEventListener("submit", async (event) => {
 eventForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    await createEvent(new FormData(eventForm));
+    if (state.editingEventId) {
+      await updateEvent(new FormData(eventForm));
+    } else {
+      await createEvent(new FormData(eventForm));
+    }
   } catch (error) {
     console.error(error);
     setDialogStatus(eventFormStatus, `Could not save event: ${getReadableError(error)}`, "error");
+  }
+});
+
+deleteEventButton?.addEventListener("click", async () => {
+  if (!state.editingEventId) {
+    return;
+  }
+  try {
+    await deleteEvent(state.editingEventId);
+  } catch (error) {
+    console.error(error);
+    setDialogStatus(eventFormStatus, `Could not delete event: ${getReadableError(error)}`, "error");
   }
 });
 
