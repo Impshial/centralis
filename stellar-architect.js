@@ -555,6 +555,7 @@ async function fetchStellarRouteLoadingName(route) {
     .select("name")
     .eq("id", route.id)
     .eq("user_id", stellarState.appUser.id)
+    .eq("deleted", false)
     .maybeSingle();
   if (error) return "";
   return data?.name || "";
@@ -569,6 +570,7 @@ async function fetchSystems() {
     .from("stellar_systems")
     .select("*")
     .eq("user_id", stellarState.appUser.id)
+    .eq("deleted", false)
     .order("created_at", { ascending: false });
   if (error) throw error;
   stellarState.systems = data || [];
@@ -579,16 +581,19 @@ async function fetchLandingChildren() {
     stellarSupabase
       .from("stellar_stars")
       .select("id,system_id,spectral_type,description")
-      .eq("user_id", stellarState.appUser.id),
+      .eq("user_id", stellarState.appUser.id)
+      .eq("deleted", false),
     stellarSupabase
       .from("stellar_planets")
       .select("id,system_id,habitability")
       .eq("user_id", stellarState.appUser.id)
+      .eq("deleted", false)
       .order("planet_number", { ascending: true }),
     stellarSupabase
       .from("stellar_colonies")
       .select("id,system_id")
-      .eq("user_id", stellarState.appUser.id),
+      .eq("user_id", stellarState.appUser.id)
+      .eq("deleted", false),
   ]);
   if (stars.error) throw stars.error;
   if (planets.error) throw planets.error;
@@ -615,12 +620,12 @@ async function fetchSystemGraph(systemId) {
   }
 
   const [stars, planets, moons, lifeforms, colonies, colonists] = await Promise.all([
-    stellarSupabase.from("stellar_stars").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).order("created_at", { ascending: true }),
-    stellarSupabase.from("stellar_planets").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).order("planet_number", { ascending: true }),
-    stellarSupabase.from("stellar_moons").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).order("moon_number", { ascending: true }),
-    stellarSupabase.from("stellar_lifeforms").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).order("name", { ascending: true }),
-    stellarSupabase.from("stellar_colonies").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).order("name", { ascending: true }),
-    stellarSupabase.from("stellar_colonists").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).order("name", { ascending: true }),
+    stellarSupabase.from("stellar_stars").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).eq("deleted", false).order("created_at", { ascending: true }),
+    stellarSupabase.from("stellar_planets").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).eq("deleted", false).order("planet_number", { ascending: true }),
+    stellarSupabase.from("stellar_moons").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).eq("deleted", false).order("moon_number", { ascending: true }),
+    stellarSupabase.from("stellar_lifeforms").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).eq("deleted", false).order("name", { ascending: true }),
+    stellarSupabase.from("stellar_colonies").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).eq("deleted", false).order("name", { ascending: true }),
+    stellarSupabase.from("stellar_colonists").select("*").eq("system_id", systemId).eq("user_id", stellarState.appUser.id).eq("deleted", false).order("name", { ascending: true }),
   ]);
 
   for (const response of [stars, planets, moons, lifeforms, colonies, colonists]) {

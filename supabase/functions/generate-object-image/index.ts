@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
       .from("generation_jobs")
       .select("status")
       .eq("id", jobId)
+      .eq("deleted", false)
       .maybeSingle();
     if (currentJobError) throw currentJobError;
     if (currentJob?.status === "cancelled") {

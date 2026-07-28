@@ -1,12 +1,11 @@
 import {
   createAdminClient,
-  deleteStorageObject,
   describeError,
   getAuthUser,
   handleCors,
   jsonResponse,
 } from "../_shared/image-storage.ts";
-import { getImageGenerationUser, IMAGE_GENERATION_BUCKET, requireImageGenerationSession } from "../_shared/image-generation.ts";
+import { getImageGenerationUser, requireImageGenerationSession } from "../_shared/image-generation.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -19,12 +18,30 @@ Deno.serve(async (req) => {
     if (!sessionId) return jsonResponse({ error: "sessionId is required." }, 400);
     await requireImageGenerationSession(sessionId, appUser.id);
     const supabase = createAdminClient();
-    const { data: assets, error: assetsError } = await supabase.from("image_generation_assets").select("storage_key").eq("session_id", sessionId).eq("user_id", appUser.id);
+    const deletedAt = new Date().toISOString();
+    const deletePayload = { deleted: true, deleted_at: deletedAt, deleted_by: appUser.id };
+    const { error: assetsError } = await supabase
+      .from("image_generation_assets")
+      .update(deletePayload)
+      .eq("session_id", sessionId)
+      .eq("user_id", appUser.id)
+      .eq("deleted", false);
     if (assetsError) throw assetsError;
-    for (const asset of assets || []) {
-      try { await deleteStorageObject(IMAGE_GENERATION_BUCKET(), asset.storage_key); } catch (error) { console.warn("Could not delete image generation object", asset.storage_key, error); }
-    }
-    const { error } = await supabase.from("image_generation_sessions").delete().eq("id", sessionId).eq("user_id", appUser.id);
+
+    const { error: messagesError } = await supabase
+      .from("image_generation_messages")
+      .update(deletePayload)
+      .eq("session_id", sessionId)
+      .eq("user_id", appUser.id)
+      .eq("deleted", false);
+    if (messagesError) throw messagesError;
+
+    const { error } = await supabase
+      .from("image_generation_sessions")
+      .update(deletePayload)
+      .eq("id", sessionId)
+      .eq("user_id", appUser.id)
+      .eq("deleted", false);
     if (error) throw error;
     return jsonResponse({ ok: true });
   } catch (error) {

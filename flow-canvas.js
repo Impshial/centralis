@@ -695,6 +695,7 @@
       .from("universes")
       .select("id,user_id,name,description,canvas_position_x,canvas_position_y,fmt_stroke_color,fmt_stroke_width,fmt_stroke_style,fmt_path_type,fmt_node_bg_opacity,fmt_node_border_width,fmt_node_image_placement,fmt_node_layout_gap")
       .eq("id", universeId)
+      .eq("deleted", false)
       .maybeSingle(), "Loading universe");
 
     if (universeResponse.error && rootElement) {
@@ -731,32 +732,38 @@
           .from("element_types")
           .select("id,name,icon,color")
           .eq("user_id", typeOwnerId)
+          .eq("deleted", false)
           .order("name", { ascending: true }), "Loading element types")
         : Promise.resolve({ data: [], error: null }),
       safeCanvasQuery(window.centralisSupabase
         .from("element_groups")
         .select("*")
         .eq("universe_id", universeId)
+        .eq("deleted", false)
         .order("created_at", { ascending: true }), "Loading element groups"),
       safeCanvasQuery(window.centralisSupabase
         .from("canvas_notes")
         .select("*")
         .eq("universe_id", universeId)
+        .eq("deleted", false)
         .order("created_at", { ascending: true }), "Loading canvas notes"),
       safeCanvasQuery(window.centralisSupabase
         .from("elements")
         .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y")
         .eq("universe_id", universeId)
+        .eq("deleted", false)
         .order("created_at", { ascending: true }), "Loading elements"),
       safeCanvasQuery(window.centralisSupabase
         .from("element_links")
         .select("id,source_element_id,target_element_id,label,stroke_color,stroke_width,stroke_style,path_type")
         .eq("universe_id", universeId)
+        .eq("deleted", false)
         .order("created_at", { ascending: true }), "Loading element links"),
       safeCanvasQuery(window.centralisSupabase
         .from("universe_layers")
         .select("*")
         .eq("universe_id", universeId)
+        .eq("deleted", false)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true }), "Loading overlay layers")
     ]);
@@ -794,12 +801,14 @@
             .from("universe_layer_entries")
             .select("*")
             .in("layer_id", layerIds)
+            .eq("deleted", false)
             .order("sort_order", { ascending: true })
             .order("name", { ascending: true }), "Loading layer entries"),
           withTimeout(window.centralisSupabase
             .from("element_layer_assignments")
             .select("*")
             .eq("universe_id", universeId)
+            .eq("deleted", false)
             .in("layer_id", layerIds), "Loading layer assignments")
         ]);
 
@@ -4420,6 +4429,7 @@
     const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
+    const connectionCompletedRef = React.useRef(false);
 
     React.useEffect(() => {
       let active = true;
@@ -4690,17 +4700,18 @@
       const removedEdgeIds = previousSnapshot.edges
         .filter((edge) => edge.data?.recordId && !String(edge.id).startsWith("proxy:") && !nextEdgeIds.has(edge.data.recordId))
         .map((edge) => edge.data.recordId);
+      const softDeletePayload = { deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null };
       if (removedEdgeIds.length) {
-        await window.centralisSupabase.from("element_links").delete().in("id", removedEdgeIds);
+        await window.centralisSupabase.from("element_links").update(softDeletePayload).in("id", removedEdgeIds);
       }
       if (removedElementIds.length) {
-        await window.centralisSupabase.from("elements").delete().in("id", removedElementIds);
+        await window.centralisSupabase.from("elements").update(softDeletePayload).in("id", removedElementIds);
       }
       if (removedGroupIds.length) {
-        await window.centralisSupabase.from("element_groups").delete().in("id", removedGroupIds);
+        await window.centralisSupabase.from("element_groups").update(softDeletePayload).in("id", removedGroupIds);
       }
       if (removedNoteIds.length) {
-        await window.centralisSupabase.from("canvas_notes").delete().in("id", removedNoteIds);
+        await window.centralisSupabase.from("canvas_notes").update(softDeletePayload).in("id", removedNoteIds);
       }
       if (groupUpserts.length) {
         await window.centralisSupabase.from("element_groups").upsert(groupUpserts);
@@ -4912,7 +4923,7 @@
 
       const { error } = await window.centralisSupabase
         .from("element_links")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("id", edgeId);
 
       if (error) {
@@ -4927,16 +4938,16 @@
       }
 
       const requiredResponses = await Promise.all([
-        window.centralisSupabase.from("element_links").delete().in("source_element_id", ids),
-        window.centralisSupabase.from("element_links").delete().in("target_element_id", ids)
+        window.centralisSupabase.from("element_links").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).in("source_element_id", ids),
+        window.centralisSupabase.from("element_links").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).in("target_element_id", ids)
       ]);
       throwFirstSupabaseError(requiredResponses);
 
       const optionalResponses = await Promise.allSettled([
-        window.centralisSupabase.from("element_layer_assignments").delete().in("element_id", ids),
-        window.centralisSupabase.from("element_template_field_values").delete().in("element_id", ids),
-        window.centralisSupabase.from("element_custom_fields").delete().in("element_id", ids),
-        window.centralisSupabase.from("image_table").delete().in("object_id", ids)
+        window.centralisSupabase.from("element_layer_assignments").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).in("element_id", ids),
+        window.centralisSupabase.from("element_template_field_values").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).in("element_id", ids),
+        window.centralisSupabase.from("element_custom_fields").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).in("element_id", ids),
+        window.centralisSupabase.from("image_table").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).in("object_id", ids)
       ]);
       optionalResponses.forEach((result) => {
         const error = result.value?.error || result.reason;
@@ -4947,7 +4958,7 @@
 
       const { error } = await window.centralisSupabase
         .from("elements")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .in("id", ids);
 
       if (error) {
@@ -4957,7 +4968,8 @@
       const verifyResponse = await window.centralisSupabase
         .from("elements")
         .select("id")
-        .in("id", ids);
+        .in("id", ids)
+        .eq("deleted", false);
       if (verifyResponse.error) {
         throw verifyResponse.error;
       }
@@ -6793,7 +6805,7 @@
           if (updateError) throw updateError;
           const { error: deleteError } = await window.centralisSupabase
             .from("element_types")
-            .delete()
+            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
             .eq("id", typeId)
             .eq("user_id", universe.user_id);
           if (deleteError) throw deleteError;
@@ -7060,7 +7072,7 @@
           if (clearResponse.error) throw clearResponse.error;
           const deleteResponse = await window.centralisSupabase
             .from("element_type_templates")
-            .delete()
+            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
             .eq("id", templateId);
           if (deleteResponse.error) throw deleteResponse.error;
           setNodes((currentNodes) => currentNodes.map((node) => node.data?.richTemplateId === templateId
@@ -7085,7 +7097,10 @@
         }
         if (!window.confirm("Delete this section? Its fields will become unsectioned.")) return;
         try {
-          const response = await window.centralisSupabase.from("element_template_sections").delete().eq("id", sectionId);
+          const response = await window.centralisSupabase
+            .from("element_template_sections")
+            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
+            .eq("id", sectionId);
           if (response.error) throw response.error;
           await refreshTypeTemplateData();
           renderWideTemplateEditor();
@@ -7104,7 +7119,10 @@
         }
         if (!window.confirm("Delete this field and its saved values?")) return;
         try {
-          const response = await window.centralisSupabase.from("element_type_template_fields").delete().eq("id", fieldId);
+          const response = await window.centralisSupabase
+            .from("element_type_template_fields")
+            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
+            .eq("id", fieldId);
           if (response.error) throw response.error;
           await refreshTypeTemplateData();
           renderWideTemplateEditor();
@@ -7367,10 +7385,17 @@
           setTemplateStatus("Template imported.", "success");
         } catch (error) {
           if (createdTemplateId) {
-            await window.centralisSupabase.from("element_type_templates").delete().eq("id", createdTemplateId);
+            await window.centralisSupabase
+              .from("element_type_templates")
+              .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
+              .eq("id", createdTemplateId);
           }
           if (createdTypeId) {
-            await window.centralisSupabase.from("element_types").delete().eq("id", createdTypeId).eq("user_id", universe.user_id);
+            await window.centralisSupabase
+              .from("element_types")
+              .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
+              .eq("id", createdTypeId)
+              .eq("user_id", universe.user_id);
           }
           throw error;
         }
@@ -7995,7 +8020,7 @@
           if (!hasMeaningfulValue(value)) {
             clearResponses.push(window.centralisSupabase
               .from("element_template_field_values")
-              .delete()
+              .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
               .eq("element_id", node.data.recordId)
               .eq("template_field_id", field.id));
             return;
@@ -8164,7 +8189,7 @@
             if (!hasMeaningfulValue(value)) {
               return window.centralisSupabase
                 .from("element_template_field_values")
-                .delete()
+                .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
                 .eq("element_id", node.data.recordId)
                 .eq("template_field_id", field.id);
             }
@@ -8187,7 +8212,7 @@
             const customValue = String(row.querySelector('[name="custom-value"]')?.value || "").trim();
             if (!hasMeaningfulValue(customName) && !hasMeaningfulValue(customValue)) {
               return id
-                ? window.centralisSupabase.from("element_custom_fields").delete().eq("id", id)
+                ? window.centralisSupabase.from("element_custom_fields").update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null }).eq("id", id)
                 : Promise.resolve();
             }
 
@@ -8210,7 +8235,7 @@
           if (deletedCustomFieldIds.length) {
             const { error: deleteCustomError } = await window.centralisSupabase
               .from("element_custom_fields")
-              .delete()
+              .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
               .in("id", deletedCustomFieldIds);
             if (deleteCustomError) throw deleteCustomError;
           }
@@ -8974,6 +8999,8 @@
       if (isGroupNodeId(connection.source) || isGroupNodeId(connection.target) || isNoteNodeId(connection.source) || isNoteNodeId(connection.target)) {
         return;
       }
+      connectionCompletedRef.current = true;
+      window.__centralisConnectionStart = null;
       pushCanvasHistory();
 
       const id = createId();
@@ -9116,7 +9143,7 @@
       pushCanvasHistory();
       const { error } = await window.centralisSupabase
         .from("canvas_notes")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("id", node.data.recordId);
 
       if (error) {
@@ -9261,26 +9288,36 @@
     }
 
     function handleConnectEnd(event) {
+      const state = window.__centralisConnectionStart;
+      window.__centralisConnectionStart = null;
+
+      if (connectionCompletedRef.current) {
+        connectionCompletedRef.current = false;
+        return;
+      }
+
       const targetElement = event.target instanceof Element ? event.target : null;
+      const clientX = event.clientX ?? event.changedTouches?.[0]?.clientX;
+      const clientY = event.clientY ?? event.changedTouches?.[0]?.clientY;
+      const pointElement = typeof clientX === "number" && typeof clientY === "number"
+        ? document.elementFromPoint(clientX, clientY)
+        : null;
+      const concreteSelector = ".element-flow-node, .universe-flow-node, .note-flow-node, .react-flow__handle, .react-flow__node";
       const targetIsPane = Boolean(targetElement?.classList?.contains("react-flow__pane"));
       const targetIsGroupCanvas = Boolean(targetElement?.closest(".group-flow-node"));
-      const targetIsConcreteNode = Boolean(targetElement?.closest(".element-flow-node, .universe-flow-node, .note-flow-node, .react-flow__handle"));
+      const targetIsConcreteNode = Boolean(targetElement?.closest(concreteSelector) || pointElement?.closest(concreteSelector));
       if ((!targetIsPane && !targetIsGroupCanvas) || targetIsConcreteNode || !reactFlowInstance.current || !reactFlowWrapper.current) {
         return;
       }
 
-      const state = window.__centralisConnectionStart;
       if (!state?.sourceNodeId) {
         return;
       }
       if (isGroupNodeId(state.sourceNodeId) || isNoteNodeId(state.sourceNodeId)) {
-        window.__centralisConnectionStart = null;
         return;
       }
 
       const rect = reactFlowWrapper.current.getBoundingClientRect();
-      const clientX = event.clientX ?? event.changedTouches?.[0]?.clientX;
-      const clientY = event.clientY ?? event.changedTouches?.[0]?.clientY;
       if (typeof clientX !== "number" || typeof clientY !== "number") {
         return;
       }
@@ -9316,7 +9353,7 @@
 
       await Promise.all(removedEdges.map((change) => window.centralisSupabase
         .from("element_links")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("id", change.id)));
     }
 
@@ -9956,7 +9993,7 @@
       if (failed?.error) {
         await window.centralisSupabase
           .from("element_groups")
-          .delete()
+          .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
           .eq("id", id);
         setTransferStatus(`Could not add elements to group: ${getReadableError(failed.error)}`, "error");
         return false;
@@ -10132,7 +10169,7 @@
 
       const { error: deleteError } = await window.centralisSupabase
         .from("element_groups")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("id", groupNode.data.recordId);
 
       if (deleteError) {
@@ -10746,6 +10783,7 @@
         .from("universe_layers")
         .select("*")
         .eq("universe_id", universe.id)
+        .eq("deleted", false)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
       if (layerResponse.error) throw layerResponse.error;
@@ -10760,12 +10798,14 @@
             .from("universe_layer_entries")
             .select("*")
             .in("layer_id", layerIds)
+            .eq("deleted", false)
             .order("sort_order", { ascending: true })
             .order("name", { ascending: true }),
           window.centralisSupabase
             .from("element_layer_assignments")
             .select("*")
             .eq("universe_id", universe.id)
+            .eq("deleted", false)
             .in("layer_id", layerIds)
         ]);
         if (entryResponse.error) throw entryResponse.error;
@@ -10835,7 +10875,7 @@
       }
       const { error } = await window.centralisSupabase
         .from("universe_layers")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("id", layerId);
       if (error) throw error;
       if (activeLayerIdRef.current === layerId) {
@@ -10894,7 +10934,7 @@
       }
       const { error } = await window.centralisSupabase
         .from("universe_layer_entries")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("id", entryId);
       if (error) throw error;
       await reloadLayers();
@@ -10918,7 +10958,7 @@
       const now = new Date().toISOString();
       const deleteResponse = await window.centralisSupabase
         .from("element_layer_assignments")
-        .delete()
+        .update({ deleted: true, deleted_at: now, deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("layer_id", layerId)
         .in("element_id", elementIds);
       if (deleteResponse.error) {
@@ -10962,7 +11002,7 @@
       const elementIds = selectedNodes.map((node) => node.data.recordId).filter(Boolean);
       const { error } = await window.centralisSupabase
         .from("element_layer_assignments")
-        .delete()
+        .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
         .eq("layer_id", layerId)
         .in("element_id", elementIds);
       if (error) {
@@ -12081,7 +12121,10 @@
               .from("element_links")
               .insert(linkRows.map(({ sourceNodeId: _sourceNodeId, targetNodeId: _targetNodeId, ...row }) => row));
             if (linkError) {
-              await window.centralisSupabase.from("elements").delete().in("id", elementRows.map((row) => row.id));
+              await window.centralisSupabase
+                .from("elements")
+                .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
+                .in("id", elementRows.map((row) => row.id));
               throw linkError;
             }
           }
@@ -13088,6 +13131,7 @@
         onPaneClick: closeContextMenu,
         onMoveStart: closeContextMenu,
         onConnectStart: (_event, params) => {
+          connectionCompletedRef.current = false;
           if (isGroupNodeId(params.nodeId) || isNoteNodeId(params.nodeId)) {
             window.__centralisConnectionStart = null;
             return;

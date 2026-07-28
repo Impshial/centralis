@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
       .from("image_table")
       .select("id,object_id,image_url,provider,prompt,generation_settings,is_primary,sort_order,created_at")
       .in("object_id", objectIds)
+      .eq("deleted", false)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -48,7 +49,8 @@ Deno.serve(async (req) => {
         const { error: primaryError } = await supabase
           .from("image_table")
           .update({ is_primary: true })
-          .eq("id", group[0].id);
+          .eq("id", group[0].id)
+          .eq("deleted", false);
 
         if (primaryError) {
           throw primaryError;

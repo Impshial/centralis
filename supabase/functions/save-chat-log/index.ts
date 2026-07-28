@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       .select("id,storage_key")
       .eq("id", chatLogId)
       .eq("user_id", appUser.id)
-      .is("deleted_at", null)
+      .eq("deleted", false)
       .maybeSingle();
 
     if (lookupError) {
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", chatLogId)
       .eq("user_id", appUser.id)
-      .is("deleted_at", null)
+      .eq("deleted", false)
       .select("id,user_id,title,summary,original_filename,mime_type,file_size,created_at,updated_at,search_indexed_at")
       .single();
 

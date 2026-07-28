@@ -49,6 +49,7 @@ async function getAppUserId(req: Request) {
     .from("users")
     .select("id")
     .eq("clerk_user_id", authUser.id)
+    .eq("deleted", false)
     .maybeSingle();
   if (error) throw error;
   if (!data?.id) throw new Error("Centralis user profile was not found.");
@@ -140,6 +141,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("id", id)
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .maybeSingle();
     if (sourceError) throw sourceError;
     if (!sourceBody) return jsonResponse({ error: "Stellar body was not found." }, 404);
@@ -151,6 +153,7 @@ Deno.serve(async (req) => {
       .from("stellar_lifeforms")
       .select("*")
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .order("name", { ascending: true });
     if (planetId) existingQuery.eq("planet_id", planetId);
     if (moonId) existingQuery.eq("moon_id", moonId);
@@ -213,7 +216,8 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
-      .eq("user_id", appUserId);
+      .eq("user_id", appUserId)
+      .eq("deleted", false);
     if (updateError) throw updateError;
 
     return jsonResponse({

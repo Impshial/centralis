@@ -40,6 +40,7 @@ async function getAppUserId(req: Request) {
     .from("users")
     .select("id")
     .eq("clerk_user_id", authUser.id)
+    .eq("deleted", false)
     .maybeSingle();
   if (error) throw error;
   if (!data?.id) throw new Error("Centralis user profile was not found.");
@@ -124,6 +125,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("id", planetId)
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .maybeSingle();
     if (planetError) throw planetError;
     if (!planet) return jsonResponse({ error: "Planet was not found." }, 404);
@@ -140,9 +142,14 @@ Deno.serve(async (req) => {
 
     const { error: deleteError } = await supabase
       .from("stellar_moons")
-      .delete()
+      .update({
+        deleted: true,
+        deleted_at: new Date().toISOString(),
+        deleted_by: appUserId,
+      })
       .eq("planet_id", planet.id)
-      .eq("user_id", appUserId);
+      .eq("user_id", appUserId)
+      .eq("deleted", false);
     if (deleteError) throw deleteError;
 
     const moonRows = moons.map((moon: Record<string, unknown>, index: number) => {

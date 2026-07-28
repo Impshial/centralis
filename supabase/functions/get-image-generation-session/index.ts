@@ -19,8 +19,8 @@ Deno.serve(async (req) => {
     const session = await requireImageGenerationSession(sessionId, appUser.id);
     const supabase = createAdminClient();
     const [messagesResult, assetsResult] = await Promise.all([
-      supabase.from("image_generation_messages").select("*").eq("session_id", sessionId).eq("user_id", appUser.id).order("created_at"),
-      supabase.from("image_generation_assets").select("*").eq("session_id", sessionId).eq("user_id", appUser.id).order("created_at").order("sort_order"),
+      supabase.from("image_generation_messages").select("*").eq("session_id", sessionId).eq("user_id", appUser.id).eq("deleted", false).order("created_at"),
+      supabase.from("image_generation_assets").select("*").eq("session_id", sessionId).eq("user_id", appUser.id).eq("deleted", false).order("created_at").order("sort_order"),
     ]);
     if (messagesResult.error) throw messagesResult.error;
     if (assetsResult.error) throw assetsResult.error;

@@ -32,12 +32,14 @@ Deno.serve(async (req) => {
     const { data, error } = await createAdminClient()
       .from("chat_logs")
       .update({
+        deleted: true,
         deleted_at: new Date().toISOString(),
+        deleted_by: appUser.id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", chatLogId)
       .eq("user_id", appUser.id)
-      .is("deleted_at", null)
+      .eq("deleted", false)
       .select("id")
       .maybeSingle();
 

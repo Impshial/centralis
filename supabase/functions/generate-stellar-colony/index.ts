@@ -27,6 +27,7 @@ async function getAppUserId(req: Request) {
     .from("users")
     .select("id")
     .eq("clerk_user_id", authUser.id)
+    .eq("deleted", false)
     .maybeSingle();
   if (error) throw error;
   if (!data?.id) throw new Error("Centralis user profile was not found.");
@@ -52,6 +53,7 @@ async function assertNoActiveJob(
     .eq("job_type", "colony")
     .eq("source_type", sourceType)
     .eq("source_id", sourceId)
+    .eq("deleted", false)
     .in("status", ["queued", "running"])
     .limit(1);
   if (error) throw error;
@@ -158,6 +160,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("id", sourceId)
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .maybeSingle();
     if (sourceError) throw sourceError;
     if (!sourceBody) return jsonResponse({ error: "Stellar body was not found." }, 404);
@@ -169,6 +172,7 @@ Deno.serve(async (req) => {
       .from("stellar_colonies")
       .select("*")
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .order("name", { ascending: true });
     if (planetId) existingColoniesQuery = existingColoniesQuery.eq("planet_id", planetId);
     if (moonId) existingColoniesQuery = existingColoniesQuery.eq("moon_id", moonId);
@@ -179,6 +183,7 @@ Deno.serve(async (req) => {
       .from("stellar_lifeforms")
       .select("*")
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .order("name", { ascending: true });
     if (planetId) lifeformQuery = lifeformQuery.eq("planet_id", planetId);
     if (moonId) lifeformQuery = lifeformQuery.eq("moon_id", moonId);
@@ -240,7 +245,8 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq("id", sourceId)
-      .eq("user_id", appUserId);
+      .eq("user_id", appUserId)
+      .eq("deleted", false);
     if (updateSourceError) throw updateSourceError;
     await updateGenerationJob(colonyJobId, { status: "completed", progressLabel: "Colony generated" });
     colonyJobId = null;
@@ -297,7 +303,8 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", insertedColony.id)
-        .eq("user_id", appUserId);
+        .eq("user_id", appUserId)
+        .eq("deleted", false);
       if (colonyUpdateError) throw colonyUpdateError;
       await updateGenerationJob(colonistJobId, { status: "completed", progressLabel: "Colonists generated" });
     }

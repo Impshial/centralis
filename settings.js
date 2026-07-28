@@ -27,6 +27,23 @@
       label: dataset.label
     }))
   ];
+  const ACTIVITY_MODULES = [
+    { id: "user_account", label: "User Account" },
+    { id: "universes", label: "Universes" },
+    { id: "elements", label: "Elements" },
+    { id: "element_types", label: "Custom Element Types" },
+    { id: "templates", label: "Custom Templates" },
+    { id: "chronicle", label: "Chronicle" },
+    { id: "chat_repositories", label: "Chat Repositories" },
+    { id: "calendars", label: "Calendars" },
+    { id: "todo", label: "ToDo" },
+    { id: "source_documents", label: "Source Material" },
+    { id: "image_generation", label: "Image Generation" },
+    { id: "movies", label: "Movies" },
+    { id: "episode_roulette", label: "Episode Roulette" },
+    { id: "stellar", label: "Stellar Architect" },
+    { id: "generation_jobs", label: "Generation Jobs" }
+  ];
 
   const els = {
     tabs: Array.from(document.querySelectorAll("[data-settings-tab]")),
@@ -47,7 +64,14 @@
     purgeAllDatasets: document.querySelector("[data-settings-purge-all-datasets]"),
     purgeConfirm: document.querySelector("[data-settings-purge-confirm]"),
     purgeSubmit: document.querySelector("[data-settings-purge-submit]"),
-    purgeStatus: document.querySelector("[data-settings-purge-status]")
+    purgeStatus: document.querySelector("[data-settings-purge-status]"),
+    activityOpen: document.querySelector("[data-settings-activity-open]"),
+    activityModal: document.getElementById("settings-activity-modal"),
+    activityCloseButtons: Array.from(document.querySelectorAll("[data-settings-activity-close]")),
+    activityRefresh: document.querySelector("[data-settings-activity-refresh]"),
+    activityUsers: document.querySelector("[data-settings-activity-users]"),
+    activityDetails: document.querySelector("[data-settings-activity-details]"),
+    activityStatus: document.querySelector("[data-settings-activity-status]")
   };
 
   if (!els.form || !els.model || !els.effort || !els.verbosity) {
@@ -62,6 +86,10 @@
   let purgeLoaded = false;
   let purgeBusy = false;
   let purgeActingUserId = null;
+  let activityUsers = [];
+  let activityLoaded = false;
+  let activityBusy = false;
+  let selectedActivityUserId = null;
 
   const settingsSupabase = window.supabase && window.CENTRALIS_SUPABASE_CONFIG
     ? window.supabase.createClient(
@@ -122,6 +150,13 @@
     els.purgeStatus.textContent = message;
     els.purgeStatus.classList.toggle("is-error", kind === "error");
     els.purgeStatus.classList.toggle("is-success", kind === "success");
+  }
+
+  function setActivityStatus(message = "", kind = "") {
+    if (!els.activityStatus) return;
+    els.activityStatus.textContent = message;
+    els.activityStatus.classList.toggle("is-error", kind === "error");
+    els.activityStatus.classList.toggle("is-success", kind === "success");
   }
 
   function setSaving(isSaving) {
@@ -200,6 +235,16 @@
   function formatObjectCount(value) {
     const count = Number(value) || 0;
     return `${count.toLocaleString()} ${count === 1 ? "object" : "objects"}`;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "No activity yet";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "No activity yet";
+    return date.toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
   }
 
   function renderPurgeDatasets() {
@@ -399,6 +444,132 @@
     }
   }
 
+  function getSelectedActivityUser() {
+    return activityUsers.find((user) => String(user.id) === String(selectedActivityUserId)) || null;
+  }
+
+  function renderActivityUsers() {
+    if (!els.activityUsers) return;
+    if (!activityUsers.length) {
+      els.activityUsers.innerHTML = '<p class="settings-activity-empty">No users found.</p>';
+      return;
+    }
+
+    els.activityUsers.innerHTML = activityUsers.map((user) => {
+      const isSelected = String(user.id) === String(selectedActivityUserId);
+      const email = user.email || `User ${user.id}`;
+      const subtitle = user.display_name || "";
+      const badges = [
+        user.is_current_user ? "Current" : "",
+        user.admin ? "Admin" : ""
+      ].filter(Boolean);
+      const badgesHtml = badges.length
+        ? `<span class="settings-activity-user-badges">${badges.map((badge) => `<span class="settings-activity-badge">${escapeHtml(badge)}</span>`).join("")}</span>`
+        : "";
+      return `
+        <button class="settings-activity-user-row ${isSelected ? "is-active" : ""}" type="button" data-settings-activity-user-id="${escapeHtml(user.id)}">
+          <span class="settings-activity-user-main">
+            <strong>${escapeHtml(email)}</strong>
+            ${subtitle ? `<span>${escapeHtml(subtitle)}</span>` : ""}
+          </span>
+          <span class="settings-activity-user-total">${escapeHtml(formatObjectCount(user.object_total))}</span>
+          ${badgesHtml}
+        </button>
+      `;
+    }).join("");
+  }
+
+  function renderActivityDetails() {
+    if (!els.activityDetails) return;
+    const user = getSelectedActivityUser();
+    if (!user) {
+      els.activityDetails.innerHTML = `<p class="settings-activity-empty">${activityLoaded && !activityUsers.length ? "No users found." : "Select a user to view activity."}</p>`;
+      return;
+    }
+
+    const modules = Array.isArray(user.modules) ? user.modules : [];
+    const objectCounts = user.object_counts && typeof user.object_counts === "object" ? user.object_counts : {};
+    const moduleById = new Map(modules.map((module) => [module.id, module]));
+    const orderedModules = [
+      ...ACTIVITY_MODULES,
+      ...modules
+        .filter((module) => module?.id && !ACTIVITY_MODULES.some((knownModule) => knownModule.id === module.id))
+        .map((module) => ({ id: module.id, label: module.label || module.id }))
+    ];
+    els.activityDetails.innerHTML = `
+      <header class="settings-activity-detail-header">
+        <div>
+          <p class="settings-panel-eyebrow">Selected User</p>
+          <h3>${escapeHtml(user.email || `User ${user.id}`)}</h3>
+          ${user.display_name ? `<p>${escapeHtml(user.display_name)}</p>` : ""}
+        </div>
+        <dl class="settings-activity-summary">
+          <div>
+            <dt>Total Objects</dt>
+            <dd>${escapeHtml(formatObjectCount(user.object_total))}</dd>
+          </div>
+          <div>
+            <dt>Latest Activity</dt>
+            <dd>${escapeHtml(formatDateTime(user.last_activity_at))}</dd>
+          </div>
+        </dl>
+      </header>
+      <div class="settings-activity-module-list">
+        ${orderedModules.map((module) => {
+          const activity = moduleById.get(module.id) || {};
+          const count = Number(activity.count ?? objectCounts[module.id]) || 0;
+          return `
+            <article class="settings-activity-module-row">
+              <div>
+                <h4>${escapeHtml(module.label)}</h4>
+                <p>${escapeHtml(count > 0 ? formatDateTime(activity.latest_activity_at) : "No activity yet")}</p>
+              </div>
+              <strong>${escapeHtml(formatObjectCount(count))}</strong>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  async function loadUserActivity({ force = false } = {}) {
+    if ((activityLoaded && !force) || activityBusy || !settingsSupabase) return;
+    activityBusy = true;
+    if (els.activityRefresh) els.activityRefresh.disabled = true;
+    setActivityStatus("Loading user activity...");
+    try {
+      const { data, error } = await settingsSupabase.rpc("list_admin_user_activity");
+      if (error) throw error;
+      activityUsers = Array.isArray(data?.users) ? data.users : [];
+      activityLoaded = true;
+      if (!activityUsers.some((user) => String(user.id) === String(selectedActivityUserId))) {
+        selectedActivityUserId = activityUsers[0]?.id ?? null;
+      }
+      renderActivityUsers();
+      renderActivityDetails();
+      setActivityStatus(`Updated ${formatDateTime(data?.generatedAt)}.`, "success");
+    } catch (error) {
+      setActivityStatus(getReadableError(error), "error");
+      if (els.activityUsers) els.activityUsers.innerHTML = '<p class="settings-activity-empty">Could not load users.</p>';
+      if (els.activityDetails) els.activityDetails.innerHTML = '<p class="settings-activity-empty">Could not load user activity.</p>';
+    } finally {
+      activityBusy = false;
+      if (els.activityRefresh) els.activityRefresh.disabled = false;
+    }
+  }
+
+  async function openActivityDialog() {
+    if (!els.activityModal) return;
+    setActivityStatus("");
+    window.openModal ? window.openModal(els.activityModal) : (els.activityModal.hidden = false);
+    await loadUserActivity();
+  }
+
+  function closeActivityDialog() {
+    if (!els.activityModal) return;
+    window.closeModal ? window.closeModal() : (els.activityModal.hidden = true);
+  }
+
   async function saveSettings() {
     if (saving) return;
 
@@ -458,6 +629,16 @@
   });
   els.purgeConfirm?.addEventListener("input", syncPurgeSubmit);
   els.purgeSubmit?.addEventListener("click", submitPurge);
+  els.activityOpen?.addEventListener("click", openActivityDialog);
+  els.activityCloseButtons.forEach((button) => button.addEventListener("click", closeActivityDialog));
+  els.activityRefresh?.addEventListener("click", () => loadUserActivity({ force: true }));
+  els.activityUsers?.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-settings-activity-user-id]");
+    if (!row) return;
+    selectedActivityUserId = row.dataset.settingsActivityUserId;
+    renderActivityUsers();
+    renderActivityDetails();
+  });
 
   window.addEventListener("centralis:user-settings-changed", (event) => {
     if (!event.detail?.settings) return;

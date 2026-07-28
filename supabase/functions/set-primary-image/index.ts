@@ -25,6 +25,7 @@ Deno.serve(async (req) => {
       .from("image_table")
       .select("id,object_id,user_id")
       .eq("id", imageId)
+      .eq("deleted", false)
       .maybeSingle();
 
     if (findError) {
@@ -40,7 +41,8 @@ Deno.serve(async (req) => {
     const { error: clearError } = await supabase
       .from("image_table")
       .update({ is_primary: false })
-      .eq("object_id", image.object_id);
+      .eq("object_id", image.object_id)
+      .eq("deleted", false);
 
     if (clearError) {
       throw clearError;
@@ -50,6 +52,7 @@ Deno.serve(async (req) => {
       .from("image_table")
       .update({ is_primary: true })
       .eq("id", imageId)
+      .eq("deleted", false)
       .select("id,object_id,image_url,provider,prompt,generation_settings,is_primary,sort_order,created_at")
       .single();
 

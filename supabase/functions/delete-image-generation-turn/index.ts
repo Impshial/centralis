@@ -1,6 +1,5 @@
 import {
   createAdminClient,
-  deleteStorageObject,
   describeError,
   getAuthUser,
   handleCors,
@@ -8,7 +7,6 @@ import {
 } from "../_shared/image-storage.ts";
 import {
   getImageGenerationUser,
-  IMAGE_GENERATION_BUCKET,
   requireImageGenerationSession,
 } from "../_shared/image-generation.ts";
 
@@ -36,6 +34,7 @@ Deno.serve(async (req) => {
       .select("id,role")
       .eq("session_id", sessionId)
       .eq("user_id", appUser.id)
+      .eq("deleted", false)
       .order("created_at", { ascending: true });
     if (messagesError) throw messagesError;
 
@@ -52,39 +51,24 @@ Deno.serve(async (req) => {
       turnMessageIds.push(message.id);
     }
 
-    const { data: outputAssets, error: assetsError } = await supabase
-      .from("image_generation_assets")
-      .select("id,storage_key")
-      .eq("session_id", sessionId)
-      .eq("user_id", appUser.id)
-      .eq("asset_kind", "output")
-      .eq("message_id", messageId);
-    if (assetsError) throw assetsError;
-
-    // Remove storage objects before their metadata. Failed object deletes do not
-    // block removal of the visible turn; they are logged for later storage cleanup.
-    for (const asset of outputAssets || []) {
-      try {
-        await deleteStorageObject(IMAGE_GENERATION_BUCKET(), asset.storage_key);
-      } catch (error) {
-        console.warn("Could not delete image-generation output", asset.storage_key, error);
-      }
-    }
+    const deletedAt = new Date().toISOString();
+    const deletePayload = { deleted: true, deleted_at: deletedAt, deleted_by: appUser.id };
 
     const { error: metadataError } = await supabase
       .from("image_generation_assets")
-      .delete()
+      .update(deletePayload)
       .eq("session_id", sessionId)
       .eq("user_id", appUser.id)
-      .eq("asset_kind", "output")
+      .eq("deleted", false)
       .eq("message_id", messageId);
     if (metadataError) throw metadataError;
 
     const { error: deleteMessagesError } = await supabase
       .from("image_generation_messages")
-      .delete()
+      .update(deletePayload)
       .eq("session_id", sessionId)
       .eq("user_id", appUser.id)
+      .eq("deleted", false)
       .in("id", turnMessageIds);
     if (deleteMessagesError) throw deleteMessagesError;
 

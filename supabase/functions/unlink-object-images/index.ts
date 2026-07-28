@@ -23,11 +23,24 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createAdminClient();
+    const { data: appUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_user_id", user.id)
+      .eq("deleted", false)
+      .maybeSingle();
     let query = supabase
       .from("image_table")
-      .delete({ count: "exact" })
+      .update({
+        deleted: true,
+        deleted_at: new Date().toISOString(),
+        deleted_by: appUser?.id || null,
+        is_primary: false,
+      }, { count: "exact" })
       .eq("object_id", objectId)
-      .eq("user_id", user.id);
+      .eq("deleted", false);
+
+    query = query.eq("user_id", user.id);
 
     if (exceptImageId) {
       query = query.neq("id", exceptImageId);

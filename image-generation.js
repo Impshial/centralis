@@ -392,7 +392,7 @@
     const activeSettings = { provider: selectedModel?.provider || "venice", ...getParams(), hide_watermark: selectedModel?.provider === "venice" };
     const { data, error } = await supabase.from("image_generation_sessions")
       .update({ active_settings: activeSettings, updated_at: new Date().toISOString() })
-      .eq("id", state.session.id).eq("user_id", state.user.id).select("*").single();
+      .eq("id", state.session.id).eq("user_id", state.user.id).eq("deleted", false).select("*").single();
     if (error) throw error;
     state.session = data;
     state.sessions = state.sessions.map((session) => session.id === data.id ? data : session);
@@ -919,7 +919,7 @@
   }
 
   async function loadSessions({ createIfNone = true } = {}) {
-    const { data, error } = await supabase.from("image_generation_sessions").select("*").eq("user_id", state.user.id).order("updated_at", { ascending: false });
+    const { data, error } = await supabase.from("image_generation_sessions").select("*").eq("user_id", state.user.id).eq("deleted", false).order("updated_at", { ascending: false });
     if (error) throw error;
     state.sessions = data || [];
     if (!state.sessions.length && createIfNone) return createSession();
@@ -966,7 +966,7 @@
   }
 
   async function refreshSessions(sessionId = state.session?.id) {
-    const { data, error } = await supabase.from("image_generation_sessions").select("*").eq("user_id", state.user.id).order("updated_at", { ascending: false });
+    const { data, error } = await supabase.from("image_generation_sessions").select("*").eq("user_id", state.user.id).eq("deleted", false).order("updated_at", { ascending: false });
     if (error) throw error;
     state.sessions = data || [];
     if (sessionId) await openSession(sessionId);
@@ -1209,7 +1209,7 @@
           const session = state.sessions.find((item) => item.id === rename.dataset.imageRenameSession);
           const title = window.prompt("Session name", session?.title || "");
           if (!title?.trim()) return;
-          const { error } = await supabase.from("image_generation_sessions").update({ title: title.trim(), updated_at: new Date().toISOString() }).eq("id", rename.dataset.imageRenameSession).eq("user_id", state.user.id);
+          const { error } = await supabase.from("image_generation_sessions").update({ title: title.trim(), updated_at: new Date().toISOString() }).eq("id", rename.dataset.imageRenameSession).eq("user_id", state.user.id).eq("deleted", false);
           if (error) throw error;
           await refreshSessions(rename.dataset.imageRenameSession);
         } else if (remove) {

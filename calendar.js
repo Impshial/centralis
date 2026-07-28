@@ -593,6 +593,7 @@ async function loadSettings() {
     .from("user_settings")
     .select("*")
     .eq("user_id", state.appUser.id)
+    .eq("deleted", false)
     .maybeSingle();
 
   if (error) {
@@ -607,6 +608,7 @@ async function loadCalendars() {
     .from("calendars")
     .select("*")
     .eq("user_id", state.appUser.id)
+    .eq("deleted", false)
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
 
@@ -622,6 +624,7 @@ async function loadCategories() {
     .from("categories")
     .select("*")
     .eq("user_id", state.appUser.id)
+    .eq("deleted", false)
     .order("name", { ascending: true });
 
   if (error) {
@@ -645,6 +648,7 @@ async function loadEvents() {
     .from("events")
     .select("*")
     .in("calendar_id", calendarIds)
+    .eq("deleted", false)
     .lte("start_time", addDays(end, 1).toISOString())
     .order("start_time", { ascending: true });
 
@@ -671,6 +675,7 @@ async function loadTasks() {
     .from("todo_tasks")
     .select("id,title,due_date,status,priority,category")
     .eq("user_id", state.appUser.id)
+    .eq("deleted", false)
     .not("due_date", "is", null)
     .gte("due_date", localInputDate(start))
     .lte("due_date", localInputDate(end))
@@ -867,11 +872,13 @@ async function deleteCalendar(calendarId) {
     return;
   }
 
+  const now = new Date().toISOString();
   const { error } = await calendarSupabaseClient
     .from("calendars")
-    .delete()
+    .update({ deleted: true, deleted_at: now, deleted_by: state.appUser.id, updated_at: now })
     .eq("id", calendar.id)
-    .eq("user_id", state.appUser.id);
+    .eq("user_id", state.appUser.id)
+    .eq("deleted", false);
 
   if (error) {
     throw error;

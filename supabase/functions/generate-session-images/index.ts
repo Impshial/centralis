@@ -210,20 +210,20 @@ Deno.serve(async (req) => {
     const pendingCutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString();
     const { data: activeGeneration, error: activeGenerationError } = await supabase
       .from("image_generation_messages").select("id").eq("session_id", sessionId).eq("user_id", appUser.id)
-      .eq("role", "user").eq("status", "pending").gte("created_at", pendingCutoff).limit(1).maybeSingle();
+      .eq("role", "user").eq("status", "pending").eq("deleted", false).gte("created_at", pendingCutoff).limit(1).maybeSingle();
     if (activeGenerationError) throw activeGenerationError;
     if (activeGeneration) return jsonResponse({ error: "An image generation is already in progress for this session.", pending_message_id: activeGeneration.id }, 409);
 
     const referenceIds = Array.isArray(body.referenceAssetIds) ? body.referenceAssetIds.map(String).filter(Boolean) : [];
     const { data: selectedAssets, error: selectedAssetsError } = referenceIds.length
-      ? await supabase.from("image_generation_assets").select("*").eq("session_id", sessionId).eq("user_id", appUser.id).in("id", referenceIds)
+      ? await supabase.from("image_generation_assets").select("*").eq("session_id", sessionId).eq("user_id", appUser.id).eq("deleted", false).in("id", referenceIds)
       : { data: [], error: null };
     if (selectedAssetsError) throw selectedAssetsError;
     const references = [...(selectedAssets || [])];
     if (body.useLastGenerated) {
       const { data: lastGenerated, error: lastError } = await supabase
         .from("image_generation_assets").select("*").eq("session_id", sessionId).eq("user_id", appUser.id)
-        .eq("asset_kind", "output").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        .eq("asset_kind", "output").eq("deleted", false).order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (lastError) throw lastError;
       if (lastGenerated && !references.some((asset) => asset.id === lastGenerated.id)) references.unshift(lastGenerated);
     }
@@ -262,11 +262,11 @@ Deno.serve(async (req) => {
     if (String(session.title || "").trim().toLowerCase() === "new generation") {
       const { error: titleError } = await supabase.from("image_generation_sessions")
         .update({ title: titleFromPrompt(prompt), active_settings: snapshot, updated_at: new Date().toISOString() })
-        .eq("id", sessionId).eq("user_id", appUser.id);
+        .eq("id", sessionId).eq("user_id", appUser.id).eq("deleted", false);
       if (titleError) throw titleError;
     } else {
       const { error: settingsError } = await supabase.from("image_generation_sessions")
-        .update({ active_settings: snapshot, updated_at: new Date().toISOString() }).eq("id", sessionId).eq("user_id", appUser.id);
+        .update({ active_settings: snapshot, updated_at: new Date().toISOString() }).eq("id", sessionId).eq("user_id", appUser.id).eq("deleted", false);
       if (settingsError) throw settingsError;
     }
 
@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: stillPending, error: stillPendingError } = await supabase.from("image_generation_messages")
-      .select("status").eq("id", messageId).eq("user_id", appUser.id).maybeSingle();
+      .select("status").eq("id", messageId).eq("user_id", appUser.id).eq("deleted", false).maybeSingle();
     if (stillPendingError) throw stillPendingError;
     if (stillPending?.status !== "pending") {
       await updateGenerationJob(jobId, { status: "cancelled", progressLabel: "Cancelled", errorMessage: "This image generation was cancelled." });
@@ -334,16 +334,16 @@ Deno.serve(async (req) => {
       status: "completed", endpoint, settings_snapshot: snapshot,
     }).select("*").single();
     if (assistantError) throw assistantError;
-    await supabase.from("image_generation_messages").update({ status: "completed" }).eq("id", messageId).eq("status", "pending");
+    await supabase.from("image_generation_messages").update({ status: "completed" }).eq("id", messageId).eq("status", "pending").eq("deleted", false);
     await updateGenerationJob(jobId, { status: "completed", progressLabel: "Completed", resultAssetId: assets[0]?.id || null });
-    const { data: finalSession } = await supabase.from("image_generation_sessions").select("*").eq("id", sessionId).single();
+    const { data: finalSession } = await supabase.from("image_generation_sessions").select("*").eq("id", sessionId).eq("deleted", false).single();
     return jsonResponse({ session: finalSession, userMessage: { ...pendingMessage, status: "completed" }, assistantMessage, assets });
   } catch (error) {
     console.error(error);
     const errorDetails = serializeProviderError(error);
     if (supabase && messageId) await supabase.from("image_generation_messages").update({
       status: "failed", error_message: error instanceof Error ? error.message : "Generation failed.", error_details: errorDetails,
-    }).eq("id", messageId).eq("status", "pending");
+    }).eq("id", messageId).eq("status", "pending").eq("deleted", false);
     if (jobId) await updateGenerationJob(jobId, {
       status: "failed",
       progressLabel: "Failed",

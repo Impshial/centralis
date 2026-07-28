@@ -64,6 +64,7 @@ export async function updateGenerationJob(jobId: string | null | undefined, patc
     .from("generation_jobs")
     .update(row)
     .eq("id", jobId)
+    .eq("deleted", false)
     .select("*")
     .maybeSingle();
   if (error) throw error;

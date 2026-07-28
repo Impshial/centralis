@@ -327,7 +327,8 @@ export async function insertImageRow(options: {
   const { count, error: countError } = await supabase
     .from("image_table")
     .select("id", { count: "exact", head: true })
-    .eq("object_id", options.objectId);
+    .eq("object_id", options.objectId)
+    .eq("deleted", false);
 
   if (countError) {
     throw countError;

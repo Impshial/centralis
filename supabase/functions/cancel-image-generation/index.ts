@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
       .eq("session_id", sessionId)
       .eq("user_id", appUser.id)
       .eq("role", "user")
+      .eq("deleted", false)
       .eq("status", "pending")
       .select("id");
     if (error) throw error;
@@ -42,6 +43,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("image_generation_messages")
         .update({ error_details: errorDetails })
+        .eq("deleted", false)
         .in("id", cancelledIds);
       await supabase
         .from("generation_jobs")
@@ -54,6 +56,7 @@ Deno.serve(async (req) => {
         })
         .in("source_message_id", cancelledIds)
         .eq("user_id", appUser.id)
+        .eq("deleted", false)
         .in("status", ["queued", "running"]);
     }
     return jsonResponse({ ok: true, cancelledMessageIds: cancelledIds });

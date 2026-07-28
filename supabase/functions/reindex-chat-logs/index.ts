@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       .from("chat_logs")
       .select("id,storage_key")
       .eq("user_id", appUser.id)
-      .is("deleted_at", null)
+      .eq("deleted", false)
       .is("search_indexed_at", null)
       .order("created_at", { ascending: false })
       .limit(MAX_REINDEX_PER_REQUEST);
@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
           search_indexed_at: new Date().toISOString(),
         })
         .eq("id", chatLog.id)
-        .eq("user_id", appUser.id);
+        .eq("user_id", appUser.id)
+        .eq("deleted", false);
 
       if (updateError) {
         throw updateError;

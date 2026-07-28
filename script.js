@@ -411,8 +411,8 @@ const CENTRALIS_HEADER_MARKUP = `
       </button>
       <div class="dropdown-menu" role="menu">
         <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
-        <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
         <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
+        <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
       </div>
     </div>
 
@@ -857,10 +857,11 @@ async function loadThemesFromDatabase() {
 async function loadUserThemeMenuFromDatabase() {
   if (!supabaseClient || !currentAppUser?.id) return false;
   try {
-    const { data, error } = await withTimeout(supabaseClient
+      const { data, error } = await withTimeout(supabaseClient
       .from("user_theme_menu_items")
       .select("theme_key,position")
       .eq("user_id", currentAppUser.id)
+      .eq("deleted", false)
       .order("position", { ascending: true }), "Loading theme menu");
     if (error) throw error;
     if (Array.isArray(data) && data.length) {
@@ -879,7 +880,7 @@ async function saveUserThemeMenuToDatabase(ids = themeMenuThemeIds) {
   const normalizedIds = normalizeThemeMenuIds(ids);
   const { error: deleteError } = await withTimeout(supabaseClient
     .from("user_theme_menu_items")
-    .delete()
+    .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: currentAppUser.id })
     .eq("user_id", currentAppUser.id), "Clearing theme menu");
   if (deleteError) throw deleteError;
   if (!normalizedIds.length) return;
@@ -1955,7 +1956,8 @@ async function fetchHomeUniversesMetric() {
   const { data, error, count } = await withTimeout(supabaseClient
     .from(UNIVERSE_TABLE)
     .select("id,updated_at,opened_at", { count: "exact" })
-    .eq("user_id", currentAppUser.id), "Loading universe overview");
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false), "Loading universe overview");
 
   if (error) throw error;
 
@@ -1970,7 +1972,8 @@ async function fetchHomeChronicleMetric() {
   const { data, error, count } = await withTimeout(supabaseClient
     .from(ELEMENTS_TABLE)
     .select("id,updated_at", { count: "exact" })
-    .eq("user_id", currentAppUser.id), "Loading Chronicle overview");
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false), "Loading Chronicle overview");
 
   if (error) throw error;
 
@@ -1986,7 +1989,7 @@ async function fetchHomeChatLogMetric() {
     .from("chat_logs")
     .select("id,file_size,updated_at,created_at", { count: "exact" })
     .eq("user_id", currentAppUser.id)
-    .is("deleted_at", null), "Loading chat log overview");
+    .eq("deleted", false), "Loading chat log overview");
 
   if (error) throw error;
 
@@ -2003,6 +2006,7 @@ async function fetchHomeCalendarMetric() {
     .from("calendars")
     .select("id,name,color")
     .eq("user_id", currentAppUser.id)
+    .eq("deleted", false)
     .eq("is_visible", true), "Loading calendar list");
 
   if (calendarsResponse.error) throw calendarsResponse.error;
@@ -2017,6 +2021,7 @@ async function fetchHomeCalendarMetric() {
       .from("events")
       .select("id,title,start_time,end_time,is_all_day,calendar_id,status,color", { count: "exact" })
       .in("calendar_id", calendarIds)
+      .eq("deleted", false)
       .gte("start_time", now)
       .order("start_time", { ascending: true })
       .limit(5), "Loading upcoming calendar events");
@@ -2028,6 +2033,7 @@ async function fetchHomeCalendarMetric() {
     .from("todo_tasks")
     .select("id,title,due_date,status,priority,category", { count: "exact" })
     .eq("user_id", currentAppUser.id)
+    .eq("deleted", false)
     .not("due_date", "is", null)
     .gte("due_date", today)
     .order("due_date", { ascending: true })
@@ -2060,7 +2066,8 @@ async function fetchHomeTodoMetric() {
   const { data, error, count } = await withTimeout(supabaseClient
     .from("todo_tasks")
     .select("id,status,due_date,updated_at,created_at", { count: "exact" })
-    .eq("user_id", currentAppUser.id), "Loading ToDo overview");
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false), "Loading ToDo overview");
 
   if (error) throw error;
 
@@ -2080,7 +2087,8 @@ async function fetchHomeMovieMetric() {
   const { data, error, count } = await withTimeout(supabaseClient
     .from("movies")
     .select("id,downloaded,updated_at,created_at", { count: "exact" })
-    .eq("user_id", currentAppUser.id), "Loading movie overview");
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false), "Loading movie overview");
 
   if (error) throw error;
 
@@ -2096,7 +2104,8 @@ async function fetchHomeImageMetric() {
   const { data, error, count } = await withTimeout(supabaseClient
     .from("image_generation_sessions")
     .select("id,updated_at,created_at", { count: "exact" })
-    .eq("user_id", currentAppUser.id), "Loading image generation overview");
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false), "Loading image generation overview");
 
   if (error) throw error;
 
@@ -3149,7 +3158,7 @@ async function loadRecentChatLogs() {
       .from("chat_logs")
       .select("id,title,summary,file_size,created_at,updated_at")
       .eq("user_id", currentAppUser.id)
-      .is("deleted_at", null)
+      .eq("deleted", false)
       .order("updated_at", { ascending: false })
       .limit(8), "Loading recent chat logs");
 
@@ -3599,6 +3608,8 @@ async function ensureUserElementTypeLibrary(userId) {
 }
 
 async function deleteUniverseAndChildren(universeId) {
+  const now = new Date().toISOString();
+  const deletedBy = currentAppUser?.id || null;
   const deleteSteps = [
     { table: ELEMENT_LINKS_TABLE, column: "universe_id", label: "Deleting universe links" },
     { table: ELEMENTS_TABLE, column: "universe_id", label: "Deleting universe elements" },
@@ -3608,7 +3619,7 @@ async function deleteUniverseAndChildren(universeId) {
   for (const step of deleteSteps) {
     const { error } = await withTimeout(supabaseClient
       .from(step.table)
-      .delete()
+      .update({ deleted: true, deleted_at: now, deleted_by: deletedBy })
       .eq(step.column, universeId), step.label);
 
     if (error) {

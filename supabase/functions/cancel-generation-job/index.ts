@@ -23,6 +23,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("id", jobId)
       .eq("user_id", appUser.id)
+      .eq("deleted", false)
       .maybeSingle();
     if (jobError) throw jobError;
     if (!job) return jsonResponse({ error: "Generation job was not found." }, 404);
@@ -40,6 +41,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", job.source_message_id)
         .eq("user_id", appUser.id)
+        .eq("deleted", false)
         .eq("status", "pending");
     }
 
@@ -54,6 +56,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", jobId)
       .eq("user_id", appUser.id)
+      .eq("deleted", false)
       .select("*")
       .single();
     if (cancelError) throw cancelError;

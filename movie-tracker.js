@@ -193,11 +193,13 @@ async function fetchLookups() {
       .from("franchise")
       .select("*")
       .eq("user_id", movieState.appUser.id)
+      .eq("deleted", false)
       .order("name", { ascending: true }),
     movieSupabase
       .from("collections")
       .select("*")
       .eq("user_id", movieState.appUser.id)
+      .eq("deleted", false)
       .order("name", { ascending: true }),
   ]);
 
@@ -222,7 +224,7 @@ function escapePostgrestOrSearchTerm(term) {
 }
 
 function applyMovieQueryFilters(query) {
-  query = query.eq("user_id", movieState.appUser.id);
+  query = query.eq("user_id", movieState.appUser.id).eq("deleted", false);
   const searchTerms = getMovieSearchTerms(movieState.filters.search);
   if (searchTerms.length) {
     const searchFields = ["title", "director", "actors", "genre"];
@@ -304,7 +306,8 @@ async function fetchMovieStats() {
   const base = () => movieSupabase
     .from("movies")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", movieState.appUser.id);
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
 
   const [totalResponse, downloadedResponse, missingResponse] = await Promise.all([
     base(),
@@ -600,7 +603,8 @@ async function saveMovie(formData) {
     .from("movies")
     .update(payload)
     .eq("id", id)
-    .eq("user_id", movieState.appUser.id);
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
   if (error) throw error;
 }
 
@@ -636,7 +640,8 @@ async function uploadMoviePoster(file) {
     .from("movies")
     .update({ poster_url: posterUrl, updated_at: new Date().toISOString() })
     .eq("id", movieState.activeMovie.id)
-    .eq("user_id", movieState.appUser.id);
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
   if (error) throw error;
 
   movieState.activeMovie = { ...movieState.activeMovie, poster_url: posterUrl };
@@ -659,9 +664,10 @@ async function uploadMoviePoster(file) {
 async function deleteMovie(id) {
   const { error } = await movieSupabase
     .from("movies")
-    .delete()
+    .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: movieState.appUser.id, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("user_id", movieState.appUser.id);
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
   if (error) throw error;
   movieState.selectedIds.delete(id);
 }
@@ -711,7 +717,11 @@ async function saveManagerName(type, name, id = null) {
 
 async function deleteManagerRow(type, id) {
   const table = type === "franchise" ? "franchise" : "collections";
-  const { error } = await movieSupabase.from(table).delete().eq("id", id).eq("user_id", movieState.appUser.id);
+  const { error } = await movieSupabase.from(table)
+    .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: movieState.appUser.id, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
   if (error) throw error;
 }
 
@@ -931,7 +941,8 @@ async function exportMovies() {
         .from("movies")
         .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")
         .in("id", missingSelectedIds)
-        .eq("user_id", movieState.appUser.id);
+        .eq("user_id", movieState.appUser.id)
+        .eq("deleted", false);
       if (error) throw error;
       movies = [...movies, ...(data || [])];
     }
@@ -1173,7 +1184,8 @@ async function saveMovieMissingDetails(movie, payload) {
     .from("movies")
     .update(payload)
     .eq("id", movie.id)
-    .eq("user_id", movieState.appUser.id);
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
   if (error) throw error;
   return true;
 }
@@ -1357,7 +1369,8 @@ async function bulkSetDownloaded() {
     .from("movies")
     .update({ downloaded: true, updated_at: new Date().toISOString() })
     .in("id", ids)
-    .eq("user_id", movieState.appUser.id);
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false);
   if (error) throw error;
   movieState.selectedIds.clear();
   await refreshMovieTracker("Marked selected movies as downloaded.");
@@ -1701,7 +1714,8 @@ els.bulkForm?.addEventListener("submit", async (event) => {
       .from("movies")
       .update({ [column]: normalizeId(new FormData(els.bulkForm).get("lookup_id")), updated_at: new Date().toISOString() })
       .in("id", ids)
-      .eq("user_id", movieState.appUser.id);
+      .eq("user_id", movieState.appUser.id)
+      .eq("deleted", false);
     if (error) throw error;
     closeModal("movie-bulk-modal");
     movieState.selectedIds.clear();

@@ -1,6 +1,5 @@
 import {
   createAdminClient,
-  deleteImageObject,
   describeError,
   getAuthUser,
   handleCors,
@@ -22,10 +21,17 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createAdminClient();
+    const { data: appUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_user_id", user.id)
+      .eq("deleted", false)
+      .maybeSingle();
     const { data: image, error: findError } = await supabase
       .from("image_table")
       .select("id,object_id,image_url,user_id")
       .eq("id", imageId)
+      .eq("deleted", false)
       .maybeSingle();
 
     if (findError) {
@@ -34,17 +40,21 @@ Deno.serve(async (req) => {
     if (!image) {
       return jsonResponse({ error: "Image not found." }, 404);
     }
-    if (image.user_id && image.user_id !== user.id) {
+    if (image.user_id && String(image.user_id) !== String(user.id) && String(image.user_id) !== String(appUser?.id || "")) {
       return jsonResponse({ error: "You do not have permission to delete this image." }, 403);
     }
     const objectId = image.object_id;
 
-    await deleteImageObject(image.image_url);
-
     const { error: deleteError } = await supabase
       .from("image_table")
-      .delete()
-      .eq("id", imageId);
+      .update({
+        deleted: true,
+        deleted_at: new Date().toISOString(),
+        deleted_by: appUser?.id || null,
+        is_primary: false,
+      })
+      .eq("id", imageId)
+      .eq("deleted", false);
 
     if (deleteError) {
       throw deleteError;
@@ -54,6 +64,7 @@ Deno.serve(async (req) => {
       .from("image_table")
       .select("id,is_primary")
       .eq("object_id", objectId)
+      .eq("deleted", false)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 

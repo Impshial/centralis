@@ -17,6 +17,7 @@ export async function getImageGenerationUser(authUserId: string): Promise<AppUse
     .from("users")
     .select("id,clerk_user_id")
     .eq("clerk_user_id", authUserId)
+    .eq("deleted", false)
     .single();
   if (error || !data) throw error || new Error("Centralis user profile was not found.");
   return data as AppUser;
@@ -29,6 +30,7 @@ export async function requireImageGenerationSession(sessionId: string, userId: n
     .select("id,user_id,title,active_settings,created_at,updated_at")
     .eq("id", sessionId)
     .eq("user_id", userId)
+    .eq("deleted", false)
     .maybeSingle();
   if (error || !data) throw error || new Error("Image generation session was not found.");
   return data;

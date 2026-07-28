@@ -25,6 +25,7 @@ async function getAppUserId(req: Request) {
     .from("users")
     .select("id")
     .eq("clerk_user_id", authUser.id)
+    .eq("deleted", false)
     .maybeSingle();
   if (error) throw error;
   if (!data?.id) throw new Error("Centralis user profile was not found.");
@@ -40,6 +41,7 @@ async function assertNoActiveJob(supabase: ReturnType<typeof createAdminClient>,
     .eq("job_type", "colonists")
     .eq("source_type", "stellar_colony")
     .eq("source_id", colonyId)
+    .eq("deleted", false)
     .in("status", ["queued", "running"])
     .limit(1);
   if (error) throw error;
@@ -102,6 +104,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("id", colonyId)
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .maybeSingle();
     if (colonyError) throw colonyError;
     if (!colony) return jsonResponse({ error: "Colony was not found." }, 404);
@@ -111,7 +114,7 @@ Deno.serve(async (req) => {
     const bodyTable = colony.moon_id ? "stellar_moons" : "stellar_planets";
     const bodyId = colony.moon_id || colony.planet_id;
     const { data: parentBody, error: parentError } = bodyId
-      ? await supabase.from(bodyTable).select("*").eq("id", bodyId).eq("user_id", appUserId).maybeSingle()
+      ? await supabase.from(bodyTable).select("*").eq("id", bodyId).eq("user_id", appUserId).eq("deleted", false).maybeSingle()
       : { data: null, error: null };
     if (parentError) throw parentError;
 
@@ -120,6 +123,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("user_id", appUserId)
       .eq("colony_id", colonyId)
+      .eq("deleted", false)
       .order("name", { ascending: true });
     if (existingError) throw existingError;
 
@@ -174,7 +178,8 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq("id", colonyId)
-      .eq("user_id", appUserId);
+      .eq("user_id", appUserId)
+      .eq("deleted", false);
     if (colonyUpdateError) throw colonyUpdateError;
 
     await updateGenerationJob(jobId, { status: "completed", progressLabel: "Colonists generated" });

@@ -1118,7 +1118,7 @@ async function loadChatLogs() {
     .from("chat_logs")
     .select("id,title,summary,original_filename,mime_type,file_size,created_at,updated_at,search_indexed_at")
     .eq("user_id", chatRepositoryState.appUser.id)
-    .is("deleted_at", null)
+    .eq("deleted", false)
     .order("created_at", { ascending: false });
 
   if (chatRepositoryState.searchQuery) {
@@ -1543,7 +1543,7 @@ async function fetchChatLogMetadata(chatLogId) {
     .select("id,title,summary,original_filename,mime_type,file_size,created_at,updated_at,search_indexed_at")
     .eq("id", chatLogId)
     .eq("user_id", chatRepositoryState.appUser.id)
-    .is("deleted_at", null)
+    .eq("deleted", false)
     .limit(1);
 
   if (error) {

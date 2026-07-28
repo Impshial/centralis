@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       .select("id,title,storage_key,mime_type")
       .eq("id", chatLogId)
       .eq("user_id", appUser.id)
-      .is("deleted_at", null)
+      .eq("deleted", false)
       .maybeSingle();
 
     if (error) {

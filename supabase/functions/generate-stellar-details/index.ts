@@ -57,6 +57,7 @@ async function getAppUserId(req: Request) {
     .from("users")
     .select("id")
     .eq("clerk_user_id", authUser.id)
+    .eq("deleted", false)
     .maybeSingle();
   if (error) throw error;
   if (!data?.id) throw new Error("Centralis user profile was not found.");
@@ -175,6 +176,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("id", systemId)
       .eq("user_id", appUserId)
+      .eq("deleted", false)
       .maybeSingle();
     if (systemError) throw systemError;
     if (!system) return jsonResponse({ error: "Star system was not found." }, 404);
@@ -185,6 +187,7 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("system_id", system.id)
         .eq("user_id", appUserId)
+        .eq("deleted", false)
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle(),
@@ -193,6 +196,7 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("system_id", system.id)
         .eq("user_id", appUserId)
+        .eq("deleted", false)
         .order("planet_number", { ascending: true }),
     ]);
     if (starError) throw starError;
@@ -215,7 +219,8 @@ Deno.serve(async (req) => {
           .from("stellar_moons")
           .select("id", { count: "exact", head: true })
           .eq("planet_id", planet.id)
-          .eq("user_id", appUserId);
+          .eq("user_id", appUserId)
+          .eq("deleted", false);
         if (countError) throw countError;
 
         if (!count) {
@@ -265,7 +270,8 @@ Deno.serve(async (req) => {
           .from("stellar_lifeforms")
           .select("id", { count: "exact", head: true })
           .eq("planet_id", planet.id)
-          .eq("user_id", appUserId);
+          .eq("user_id", appUserId)
+          .eq("deleted", false);
         if (countError) throw countError;
 
         if (!count) {
@@ -318,7 +324,8 @@ Deno.serve(async (req) => {
               .from("stellar_planets")
               .update({ lifeform_count: data?.length || 0, updated_at: new Date().toISOString() })
               .eq("id", planet.id)
-              .eq("user_id", appUserId);
+              .eq("user_id", appUserId)
+              .eq("deleted", false);
             if (updateError) throw updateError;
           }
         }
