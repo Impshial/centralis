@@ -1164,18 +1164,23 @@ function buildEventPayload(formData) {
   };
 }
 
-function getDeletedStamp() {
+function getDeletedStamp({ includeUpdatedAt = true } = {}) {
   const now = new Date().toISOString();
-  return {
+  const stamp = {
     deleted: true,
     deleted_at: now,
-    deleted_by: state.appUser.id,
-    updated_at: now
+    deleted_by: state.appUser.id
   };
+
+  if (includeUpdatedAt) {
+    stamp.updated_at = now;
+  }
+
+  return stamp;
 }
 
 async function softDeleteEventFollowUps(eventId) {
-  const stamp = getDeletedStamp();
+  const stamp = getDeletedStamp({ includeUpdatedAt: false });
   const results = await Promise.all([
     calendarSupabaseClient
       .from("event_recurrence_rules")

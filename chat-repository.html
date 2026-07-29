@@ -223,8 +223,15 @@
       <div class="chat-raw-import-body">
         <section class="chat-raw-import-panel">
           <label class="form-field">
-            <span>Raw conversation HTML</span>
-            <textarea rows="12" spellcheck="false" placeholder="Paste the copied message-list HTML here..." data-chat-raw-html></textarea>
+            <span>Raw conversation source</span>
+            <div class="chat-raw-import-upload-row">
+              <button class="secondary-action" type="button" data-chat-raw-upload>
+                <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                Upload Source File
+              </button>
+              <input type="file" accept=".html,.htm,.json,.jsonl,.md,.txt,text/html,text/markdown,text/plain,application/json,application/x-ndjson" data-chat-raw-file hidden>
+            </div>
+            <textarea rows="12" spellcheck="false" placeholder="Paste HTML, JSON, JSONL, Markdown, or plain text chat content here..." data-chat-raw-html></textarea>
           </label>
           <label class="form-field">
             <span>Import Instructions</span>

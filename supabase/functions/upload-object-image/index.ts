@@ -25,6 +25,13 @@ function createUploadImageMetadata(input: {
       note: "Uploaded image",
     });
   }
+  if (input.storageModule === "local-chat" || input.storageModule.startsWith("local-chat/")) {
+    return createCentralisStorageMetadata({
+      module: "Local Chat",
+      context: `Local Chat Character: ${name}`,
+      note: "Uploaded image",
+    });
+  }
 
   const typeText = `${input.objectKind || ""} ${input.elementType || ""}`;
   const label = /universe/i.test(typeText) ? "Universe" : "Element";

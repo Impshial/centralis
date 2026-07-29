@@ -429,6 +429,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu" role="menu">
         <a href="movie-tracker.html" role="menuitem"><ph-film-slate weight="duotone" aria-hidden="true"></ph-film-slate><span>Movie Tracker</span></a>
         <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
+        <a href="local-chat.html" role="menuitem" data-admin-only-nav hidden><ph-robot weight="duotone" aria-hidden="true"></ph-robot><span>Local Chat</span></a>
         <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
         <a href="episode-roulette.html" role="menuitem"><ph-dice-five weight="duotone" aria-hidden="true"></ph-dice-five><span>Episode Roulette</span></a>
       </div>

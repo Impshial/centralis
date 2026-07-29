@@ -1,6 +1,7 @@
 const chatRepositorySupabase = window.centralisSupabase;
 const CHAT_VIEW_KEY = "centralis-chat-repository-view";
 const MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_RAW_IMPORT_SOURCE_BYTES = 50 * 1024 * 1024;
 const CHAT_SEARCH_DEBOUNCE_MS = 250;
 const CHAT_IMAGE_PROMPT_MAX_LENGTH = 3900;
 const CHAT_IMAGE_TEXT_MAX_LENGTH = 2600;
@@ -42,6 +43,8 @@ const chatRepositoryState = {
   rawImporting: false,
   rawImportGeneratedHtml: "",
   rawImportParsed: null,
+  rawImportLayoutConfig: null,
+  rawImportSourceType: "",
   imagePromptRequest: null,
 };
 
@@ -59,6 +62,8 @@ const chatEls = {
   uploadClosers: [...document.querySelectorAll("[data-close-chat-upload]")],
   rawImportOpen: document.querySelector("[data-open-chat-raw-import]"),
   rawImportModal: document.getElementById("chat-raw-import-modal"),
+  rawImportUpload: document.querySelector("[data-chat-raw-upload]"),
+  rawImportFile: document.querySelector("[data-chat-raw-file]"),
   rawImportHtml: document.querySelector("[data-chat-raw-html]"),
   rawImportInstructions: document.querySelector("[data-chat-raw-instructions]"),
   rawImportGenerateImage: document.querySelector("[data-chat-raw-generate-image]"),
@@ -259,11 +264,19 @@ function openChatImage(image) {
 }
 
 function extractVisibleChatText(html) {
-  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+  const doc = new DOMParser().parseFromString(stripBase64ImageData(String(html || "")), "text/html");
   doc.querySelectorAll("script, style, noscript, template, svg, canvas").forEach((node) => node.remove());
   return (doc.body?.textContent || doc.documentElement?.textContent || "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function stripBase64ImageData(html) {
+  return String(html || "")
+    .replace(/<img\b[^>]*\bsrc\s*=\s*(['"])data:image\/[^'"]*\1[^>]*>/gi, "")
+    .replace(/\s(?:src|srcset|href)\s*=\s*(['"])data:image\/[^'"]*\1/gi, "")
+    .replace(/url\(\s*(['"]?)data:image\/.*?\1\s*\)/gis, "none")
+    .replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\r\n]+/gi, "");
 }
 
 function truncateChatPromptText(text, maxLength) {
@@ -703,50 +716,591 @@ function sanitizeRawChatMessage(sourceElement) {
   };
 }
 
-function parseRawChatHtml(rawHtml) {
-  const source = String(rawHtml || "").trim();
+function querySelectorAllSafe(root, selector) {
+  try {
+    return [...root.querySelectorAll(selector)];
+  } catch (error) {
+    return [];
+  }
+}
+
+function matchesSelectorSafe(element, selector) {
+  try {
+    return Boolean(selector && element.matches(selector));
+  } catch (error) {
+    return false;
+  }
+}
+
+function getNodeChatText(node) {
+  return (node?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function prepareRawChatDocument(source) {
+  const doc = new DOMParser().parseFromString(source, "text/html");
+  doc.querySelectorAll("script, style, noscript, template, svg, canvas, iframe, object, embed, img, picture, source").forEach((node) => node.remove());
+  return doc;
+}
+
+function createRawLayoutError(message, candidates = []) {
+  const error = new Error(message);
+  error.needsAiLayout = true;
+  error.candidates = candidates;
+  return error;
+}
+
+function createRawJsonLayoutError(message) {
+  const error = new Error(message);
+  error.needsAiJsonLayout = true;
+  return error;
+}
+
+function createRawTextLayoutError(message) {
+  const error = new Error(message);
+  error.needsAiTextLayout = true;
+  return error;
+}
+
+function inferRawChatUserSide(node) {
+  const signature = [
+    node.className,
+    node.getAttribute("data-message-author-role"),
+    node.getAttribute("data-role"),
+    node.getAttribute("role"),
+    node.getAttribute("aria-label"),
+  ].join(" ");
+  return /\b(user|human|you|me|mine|self|own|outgoing|sent|right|reverse)\b/i.test(signature);
+}
+
+function parseRawChatNode(node, index, layoutConfig) {
+  const contentSelector = String(layoutConfig?.contentSelector || "").trim();
+  const textElement = contentSelector ? querySelectorAllSafe(node, contentSelector)[0] : null;
+  const sanitized = sanitizeRawChatMessage(textElement || node);
+  if (!sanitized) return null;
+
+  const userMode = layoutConfig?.userMode || "auto";
+  const userSelector = String(layoutConfig?.userSelector || "").trim();
+  let isUser = false;
+  if (userMode === "selector") {
+    isUser = matchesSelectorSafe(node, userSelector) || Boolean(querySelectorAllSafe(node, userSelector)[0]);
+  } else if (userMode === "first") {
+    isUser = index % 2 === 0;
+  } else if (userMode === "second") {
+    isUser = index % 2 === 1;
+  } else if (userMode === "auto") {
+    isUser = inferRawChatUserSide(node);
+  }
+
+  const userSpeaker = String(layoutConfig?.userSpeaker || "Adam").trim() || "Adam";
+  const othersSpeaker = String(layoutConfig?.othersSpeaker || "Others").trim() || "Others";
+  return {
+    side: isUser ? "user" : "others",
+    speaker: isUser ? userSpeaker : othersSpeaker,
+    html: sanitized.html,
+    text: sanitized.text,
+  };
+}
+
+function finalizeRawChatEntries(entries) {
+  const cleanEntries = entries.filter(Boolean);
+  if (!cleanEntries.length) {
+    throw new Error("No non-empty chat messages were found.");
+  }
+
+  const userCount = cleanEntries.filter((entry) => entry.side === "user").length;
+  const othersCount = cleanEntries.length - userCount;
+  return {
+    entries: cleanEntries,
+    totalCount: cleanEntries.length,
+    userCount,
+    othersCount,
+  };
+}
+
+function rawJsonTextToChatHtml(text) {
+  const escaped = escapeChatHtml(text);
+  const blocks = escaped
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  if (!blocks.length) {
+    return "";
+  }
+  return blocks
+    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+function parseRawTextEntries(entries) {
+  if (!Array.isArray(entries)) {
+    throw new Error("OpenAI did not return extracted text entries.");
+  }
+  return finalizeRawChatEntries(entries.map((entry) => {
+    const text = normalizeRawJsonText(entry?.text ?? entry?.content ?? entry?.message ?? "");
+    if (!text) return null;
+    const side = entry?.side === "user" ? "user" : "others";
+    const speaker = normalizeRawJsonText(entry?.speaker) || (side === "user" ? "Adam" : "Others");
+    return {
+      side,
+      speaker,
+      html: rawJsonTextToChatHtml(text),
+      text,
+    };
+  }));
+}
+
+function looksLikeRawChatHtml(source) {
+  const text = String(source || "").trim();
+  return /<\/?[a-z][\s\S]*>/i.test(text);
+}
+
+function inferRawUserSpeakerFromInstructions(instructions) {
+  const text = String(instructions || "");
+  const patterns = [
+    /([A-Z][\w' -]{0,80}?)\s+is\s+(?:the\s+)?(?:left-side\/user|left side\/user|user|left-side|left side)\s+speaker/i,
+    /(?:user|left-side|left side)\s+speaker\s+is\s+([A-Z][\w' -]{0,80})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].replace(/[.:\s]+$/g, "").trim();
+    }
+  }
+  return "";
+}
+
+function normalizeRawMarkdownSpeaker(value) {
+  return String(value || "")
+    .replace(/[*_`[\]()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
+function parseRawMarkdownHeadings(source, instructions = "") {
+  const text = String(source || "").replace(/\r\n?/g, "\n").trim();
+  if (!/^#{1,6}\s+\S/m.test(text)) {
+    return null;
+  }
+
+  const userSpeaker = inferRawUserSpeakerFromInstructions(instructions);
+  const userSpeakerKey = userSpeaker.toLowerCase();
+  const entries = [];
+  let currentSpeaker = "";
+  let currentLines = [];
+
+  function flushEntry() {
+    const body = currentLines.join("\n").trim();
+    if (!currentSpeaker || !body) {
+      currentLines = [];
+      return;
+    }
+    const speaker = normalizeRawMarkdownSpeaker(currentSpeaker);
+    const side = userSpeakerKey && speaker.toLowerCase() === userSpeakerKey
+      ? "user"
+      : normalizeRawJsonRole(speaker) || "others";
+    entries.push({
+      side,
+      speaker,
+      html: rawJsonTextToChatHtml(body),
+      text: body,
+    });
+    currentLines = [];
+  }
+
+  for (const line of text.split("\n")) {
+    const headingMatch = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (headingMatch) {
+      flushEntry();
+      currentSpeaker = headingMatch[1];
+      continue;
+    }
+    currentLines.push(line);
+  }
+  flushEntry();
+
+  const speakerCount = new Set(entries.map((entry) => entry.speaker.toLowerCase())).size;
+  if (entries.length < 2 || speakerCount < 2) {
+    return null;
+  }
+  return finalizeRawChatEntries(entries);
+}
+
+function normalizeRawJsonText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.replace(/\r\n?/g, "\n").trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          return normalizeRawJsonText(item.text ?? item.content ?? item.message ?? item.value ?? "");
+        }
+        return normalizeRawJsonText(item);
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (typeof value === "object") {
+    return normalizeRawJsonText(value.text ?? value.content ?? value.message ?? value.mes ?? value.body ?? value.value ?? "");
+  }
+  return "";
+}
+
+function normalizeRawJsonRole(value) {
+  const role = String(value || "").toLowerCase();
+  if (/\b(user|human|me|mine|self|player|owner|adam)\b/.test(role)) return "user";
+  if (/\b(assistant|ai|bot|model|character|npc|system|other|theirs)\b/.test(role)) return "others";
+  return "";
+}
+
+function normalizeRawJsonRoleWithConfig(value, layoutConfig = null) {
+  const rawRole = String(value || "").trim();
+  const normalized = rawRole.toLowerCase();
+  const userValues = Array.isArray(layoutConfig?.userRoleValues) ? layoutConfig.userRoleValues : [];
+  const othersValues = Array.isArray(layoutConfig?.othersRoleValues) ? layoutConfig.othersRoleValues : [];
+  if (userValues.some((role) => String(role || "").trim().toLowerCase() === normalized)) return "user";
+  if (othersValues.some((role) => String(role || "").trim().toLowerCase() === normalized)) return "others";
+  return normalizeRawJsonRole(rawRole);
+}
+
+function normalizeRawJsonPath(path) {
+  return String(path || "")
+    .trim()
+    .replace(/^\$\.?/, "")
+    .replace(/\[(\d+|\*)\]/g, ".$1")
+    .split(".")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function getRawJsonPathValues(root, path) {
+  const parts = normalizeRawJsonPath(path);
+  if (!parts.length) {
+    return [root];
+  }
+
+  let values = [root];
+  for (const part of parts) {
+    const nextValues = [];
+    for (const value of values) {
+      if (value == null) continue;
+      if (part === "*") {
+        if (Array.isArray(value)) nextValues.push(...value);
+        else if (typeof value === "object") nextValues.push(...Object.values(value));
+        continue;
+      }
+      if (Array.isArray(value) && /^\d+$/.test(part)) {
+        nextValues.push(value[Number(part)]);
+        continue;
+      }
+      if (typeof value === "object" && Object.prototype.hasOwnProperty.call(value, part)) {
+        nextValues.push(value[part]);
+      }
+    }
+    values = nextValues;
+  }
+
+  return values.filter((value) => value != null);
+}
+
+function getRawJsonPathValue(root, path) {
+  return getRawJsonPathValues(root, path)[0];
+}
+
+function parseRawJsonMessage(value, index, layoutConfig = null) {
+  if (!value || typeof value !== "object") return null;
+
+  if (Array.isArray(value)) {
+    const speaker = normalizeRawJsonText(value[0]);
+    const text = normalizeRawJsonText(value.slice(1));
+    if (!text) return null;
+    const side = normalizeRawJsonRoleWithConfig(speaker, layoutConfig) || (index % 2 === 0 ? "user" : "others");
+    return {
+      side,
+      speaker: speaker || (side === "user"
+        ? (layoutConfig?.userSpeaker || "Adam")
+        : (layoutConfig?.othersSpeaker || "Others")),
+      html: rawJsonTextToChatHtml(text),
+      text,
+    };
+  }
+
+  const roleValue = layoutConfig?.rolePath
+    ? getRawJsonPathValue(value, layoutConfig.rolePath)
+    : value.is_user ?? value.role ?? value.author?.role ?? value.author ?? value.sender ?? value.from ?? value.speaker ?? value.name ?? value.type;
+  const textValue = layoutConfig?.textPath
+    ? getRawJsonPathValue(value, layoutConfig.textPath)
+    : value.content ?? value.text ?? value.message ?? value.mes ?? value.body ?? value.value ?? value.parts;
+  const text = normalizeRawJsonText(textValue);
+  if (!text) return null;
+
+  const side = typeof roleValue === "boolean"
+    ? (roleValue ? "user" : "others")
+    : normalizeRawJsonRoleWithConfig(roleValue, layoutConfig);
+  const speakerValue = layoutConfig?.speakerPath
+    ? getRawJsonPathValue(value, layoutConfig.speakerPath)
+    : value.speaker ?? value.name ?? value.author?.name ?? value.sender ?? value.from;
+  const speakerText = normalizeRawJsonText(speakerValue);
+  const resolvedSide = side || "others";
+  return {
+    side: resolvedSide,
+    speaker: speakerText || (resolvedSide === "user"
+      ? (layoutConfig?.userSpeaker || "Adam")
+      : (layoutConfig?.othersSpeaker || "Others")),
+    html: rawJsonTextToChatHtml(text),
+    text,
+  };
+}
+
+function scoreRawJsonMessageArray(items) {
+  if (!Array.isArray(items) || items.length < 2) return null;
+  const entries = items
+    .map((item, index) => parseRawJsonMessage(item, index))
+    .filter(Boolean);
+  if (entries.length < 2) return null;
+  const textLength = entries.reduce((sum, entry) => sum + entry.text.length, 0);
+  return {
+    entries,
+    score: entries.length * 100 + Math.min(textLength, 10000),
+  };
+}
+
+function parseRawJsonLines(source, layoutConfig = null) {
+  const lines = String(source || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return null;
+  }
+
+  const values = [];
+  for (const line of lines) {
+    if (!/^[\[{]/.test(line)) {
+      return null;
+    }
+    try {
+      values.push(JSON.parse(line));
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  if (layoutConfig) {
+    const entries = values.map((value, index) => parseRawJsonMessage(value, index, layoutConfig));
+    return finalizeRawChatEntries(entries);
+  }
+
+  const candidate = scoreRawJsonMessageArray(values);
+  if (!candidate) {
+    throw createRawJsonLayoutError("JSON lines were detected, but Centralis needs OpenAI to identify the message structure.");
+  }
+  return finalizeRawChatEntries(candidate.entries);
+}
+
+function collectRawJsonMessageArrays(value, candidates = [], depth = 0) {
+  if (!value || depth > 5) return candidates;
+  if (Array.isArray(value)) {
+    const candidate = scoreRawJsonMessageArray(value);
+    if (candidate) candidates.push(candidate);
+    value.forEach((item) => collectRawJsonMessageArrays(item, candidates, depth + 1));
+    return candidates;
+  }
+  if (typeof value !== "object") return candidates;
+
+  const likelyKeys = ["messages", "conversation", "chat", "transcript", "turns", "entries", "items", "history"];
+  for (const key of likelyKeys) {
+    if (Array.isArray(value[key])) {
+      const candidate = scoreRawJsonMessageArray(value[key]);
+      if (candidate) candidates.push(candidate);
+    }
+  }
+  Object.values(value).forEach((child) => collectRawJsonMessageArrays(child, candidates, depth + 1));
+  return candidates;
+}
+
+function getRawJsonMessagesForConfig(parsedJson, layoutConfig) {
+  const messagePath = String(layoutConfig?.messagePath || "").trim();
+  if (!messagePath) {
+    throw new Error("OpenAI did not return a JSON message path.");
+  }
+  return getRawJsonPathValues(parsedJson, messagePath)
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .filter((value) => value && typeof value === "object");
+}
+
+function parseRawChatJsonWithConfig(parsedJson, layoutConfig) {
+  const messages = getRawJsonMessagesForConfig(parsedJson, layoutConfig);
+  if (!messages.length) {
+    throw new Error(`Could not find JSON messages at path "${layoutConfig.messagePath}".`);
+  }
+  const entries = messages.map((message, index) => parseRawJsonMessage(message, index, layoutConfig));
+  return finalizeRawChatEntries(entries);
+}
+
+function parseOrganizedRawChatJson(source, layoutConfig = null) {
+  const trimmed = String(source || "").trim();
+  if (!/^[\[{]/.test(trimmed)) {
+    return null;
+  }
+
+  let parsedJson;
+  try {
+    parsedJson = JSON.parse(trimmed);
+  } catch (_error) {
+    if (layoutConfig) {
+      return parseRawJsonLines(trimmed, layoutConfig);
+    }
+    return parseRawJsonLines(trimmed);
+  }
+
+  if (layoutConfig) {
+    return parseRawChatJsonWithConfig(parsedJson, layoutConfig);
+  }
+
+  const candidates = collectRawJsonMessageArrays(parsedJson)
+    .sort((left, right) => right.score - left.score);
+  if (!candidates.length) {
+    throw createRawJsonLayoutError("JSON was detected, but Centralis needs OpenAI to identify the message structure.");
+  }
+
+  return finalizeRawChatEntries(candidates[0].entries);
+}
+
+function parseFlexibleRawChatHtml(doc, layoutConfig) {
+  const messageSelector = String(layoutConfig?.messageSelector || "").trim();
+  if (!messageSelector) {
+    throw new Error("Choose a message container before parsing.");
+  }
+  const nodes = querySelectorAllSafe(doc, messageSelector);
+  if (!nodes.length) {
+    throw new Error(`Could not find any messages for selector "${messageSelector}".`);
+  }
+  const entries = nodes.map((node, index) => parseRawChatNode(node, index, layoutConfig));
+  return finalizeRawChatEntries(entries);
+}
+
+function parseStandardRawChatHtml(doc) {
+  const messageNodes = [...doc.querySelectorAll(".message-item")];
+  if (!messageNodes.length) {
+    return null;
+  }
+  const entries = messageNodes.map((node) => parseRawChatNode(node, 0, {
+    messageSelector: ".message-item",
+    contentSelector: ".text",
+    userMode: "selector",
+    userSelector: ".reverse",
+    userSpeaker: "Adam",
+    othersSpeaker: "Others",
+  }));
+  return finalizeRawChatEntries(entries);
+}
+
+function parseRawChatHtml(rawHtml, layoutConfig = null) {
+  const source = stripBase64ImageData(String(rawHtml || "").trim()).trim();
   if (!source) {
     throw new Error("Paste raw chat HTML before parsing.");
   }
 
   const bytes = new TextEncoder().encode(source).byteLength;
   if (bytes > MAX_CHAT_FILE_BYTES) {
-    throw new Error("Raw chat HTML must be 10 MB or smaller.");
+    throw new Error("Raw chat HTML must be 10 MB or smaller after base64 image data is removed.");
   }
 
-  const doc = new DOMParser().parseFromString(source, "text/html");
-  doc.querySelectorAll("script, style, noscript, template, svg, canvas, iframe, object, embed").forEach((node) => node.remove());
-  const messageNodes = [...doc.querySelectorAll(".message-item")];
-  if (!messageNodes.length) {
-    throw new Error("Could not find any .message-item chat entries.");
+  const doc = prepareRawChatDocument(source);
+  if (layoutConfig) {
+    return parseFlexibleRawChatHtml(doc, layoutConfig);
   }
 
-  const entries = [];
-  for (const node of messageNodes) {
-    const textElement = node.querySelector(".text") || node;
-    const sanitized = sanitizeRawChatMessage(textElement);
-    if (!sanitized) continue;
-    const side = node.classList.contains("reverse") ? "user" : "others";
-    entries.push({
-      side,
-      speaker: side === "user" ? "Adam" : "Others",
-      html: sanitized.html,
-      text: sanitized.text,
-    });
+  const standardParsed = parseStandardRawChatHtml(doc);
+  if (standardParsed) {
+    return standardParsed;
   }
 
-  if (!entries.length) {
-    throw new Error("No non-empty chat messages were found.");
+  throw createRawLayoutError("Centralis needs OpenAI to identify this chat layout.");
+}
+
+function parseRawChatSource(source, layoutConfig = null, sourceType = "", instructions = "") {
+  const rawSource = String(source || "").trim();
+  if (layoutConfig?.type === "text") {
+    return parseRawTextEntries(layoutConfig.entries);
+  }
+  const jsonParsed = parseOrganizedRawChatJson(rawSource, layoutConfig?.type === "json" ? layoutConfig : null);
+  if (jsonParsed) {
+    return jsonParsed;
+  }
+  if (layoutConfig?.type === "json") {
+    throw new Error("JSON layout instructions were returned, but the source is not valid JSON.");
+  }
+  const markdownParsed = parseRawMarkdownHeadings(rawSource, instructions);
+  if (markdownParsed) {
+    return markdownParsed;
+  }
+  if (sourceType === "text" || (!layoutConfig && !looksLikeRawChatHtml(rawSource))) {
+    throw createRawTextLayoutError("Centralis needs OpenAI to identify text or Markdown chat entries.");
+  }
+  return parseRawChatHtml(rawSource, layoutConfig?.type === "html" ? layoutConfig : null);
+}
+
+function inferRawImportSourceTypeFromFile(file) {
+  const name = String(file?.name || "").toLowerCase();
+  if (/\.(md|txt)$/.test(name) || ["text/markdown", "text/plain"].includes(file?.type)) return "text";
+  if (/\.(json|jsonl)$/.test(name) || ["application/json", "application/x-ndjson"].includes(file?.type)) return "json";
+  if (/\.html?$/.test(name) || file?.type === "text/html") return "html";
+  return "";
+}
+
+async function loadRawImportFile(file) {
+  if (!(file instanceof File)) {
+    return;
+  }
+  if (!file.name || (!/\.(html?|jsonl?|md|txt)$/i.test(file.name) && !["text/html", "text/markdown", "text/plain", "application/json", "application/x-ndjson"].includes(file.type))) {
+    throw new Error("Choose an .html, .htm, .json, .jsonl, .md, or .txt file to import.");
+  }
+  if (file.size <= 0) {
+    throw new Error("Choose a non-empty HTML file.");
+  }
+  if (file.size > MAX_RAW_IMPORT_SOURCE_BYTES) {
+    throw new Error("Choose an HTML file 50 MB or smaller.");
   }
 
-  const userCount = entries.filter((entry) => entry.side === "user").length;
-  const othersCount = entries.length - userCount;
-  return {
-    entries,
-    totalCount: entries.length,
-    userCount,
-    othersCount,
-  };
+  const source = stripBase64ImageData(await file.text()).trim();
+  if (!source) {
+    throw new Error("The selected file did not contain parseable HTML after image data was removed.");
+  }
+
+  const bytes = new TextEncoder().encode(source).byteLength;
+  if (bytes > MAX_CHAT_FILE_BYTES) {
+    throw new Error("Raw chat HTML must be 10 MB or smaller after base64 image data is removed.");
+  }
+
+  if (chatEls.rawImportHtml) {
+    chatEls.rawImportHtml.value = source;
+  }
+  chatRepositoryState.rawImportLayoutConfig = null;
+  chatRepositoryState.rawImportSourceType = inferRawImportSourceTypeFromFile(file);
+  resetRawImportReview();
+  setRawImportStatus(`Loaded "${file.name}". Base64 image data was skipped.`, "success");
+}
+
+async function handleRawImportFileChange() {
+  const file = chatEls.rawImportFile?.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    await loadRawImportFile(file);
+  } catch (error) {
+    setRawImportStatus(getChatError(error), "error");
+  } finally {
+    if (chatEls.rawImportFile) {
+      chatEls.rawImportFile.value = "";
+    }
+  }
 }
 
 function buildRawChatMetadataText(parsed) {
@@ -784,6 +1338,110 @@ async function generateRawChatMetadata(parsed, instructions) {
   return {
     title: String(payload.title || "").trim().slice(0, 200),
     summary: String(payload.summary || "").trim().slice(0, 2000),
+  };
+}
+
+async function analyzeRawChatLayoutWithAi(rawHtml) {
+  const source = stripBase64ImageData(String(rawHtml || "").trim()).trim();
+  if (!source) {
+    throw new Error("Paste raw chat HTML before asking OpenAI to analyze the layout.");
+  }
+
+  const response = await getFunctionResponse("analyze-chat-log-layout", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ html: source }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "OpenAI could not identify the chat layout.");
+  }
+
+  const config = {
+    messageSelector: String(payload.messageSelector || "").trim(),
+    contentSelector: String(payload.contentSelector || "").trim(),
+    type: "html",
+    userMode: ["auto", "selector", "first", "second", "none"].includes(payload.userMode)
+      ? payload.userMode
+      : "auto",
+    userSelector: String(payload.userSelector || "").trim(),
+    userSpeaker: String(payload.userSpeaker || "Adam").trim() || "Adam",
+    othersSpeaker: String(payload.othersSpeaker || "Others").trim() || "Others",
+    confidence: Number(payload.confidence || 0),
+    notes: String(payload.notes || "").trim(),
+  };
+  if (!config.messageSelector) {
+    throw new Error("OpenAI did not return a message selector.");
+  }
+  if (config.userMode === "selector" && !config.userSelector) {
+    config.userMode = "auto";
+  }
+
+  return config;
+}
+
+async function analyzeRawChatJsonWithAi(rawJson) {
+  const source = String(rawJson || "").trim();
+  if (!source) {
+    throw new Error("Paste raw JSON before asking OpenAI to analyze the structure.");
+  }
+
+  const response = await getFunctionResponse("analyze-chat-log-layout", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceType: "json", json: source }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "OpenAI could not identify the JSON chat structure.");
+  }
+
+  const config = {
+    type: "json",
+    messagePath: String(payload.messagePath || "").trim(),
+    textPath: String(payload.textPath || "").trim(),
+    rolePath: String(payload.rolePath || "").trim(),
+    speakerPath: String(payload.speakerPath || "").trim(),
+    userRoleValues: Array.isArray(payload.userRoleValues) ? payload.userRoleValues : [],
+    othersRoleValues: Array.isArray(payload.othersRoleValues) ? payload.othersRoleValues : [],
+    userSpeaker: String(payload.userSpeaker || "Adam").trim() || "Adam",
+    othersSpeaker: String(payload.othersSpeaker || "Others").trim() || "Others",
+    confidence: Number(payload.confidence || 0),
+    notes: String(payload.notes || "").trim(),
+  };
+  if (!config.textPath) {
+    throw new Error("OpenAI did not return JSON message and text paths.");
+  }
+
+  return config;
+}
+
+async function analyzeRawChatTextWithAi(rawText) {
+  const source = String(rawText || "").trim();
+  if (!source) {
+    throw new Error("Paste text or Markdown before asking OpenAI to extract chat entries.");
+  }
+
+  const response = await getFunctionResponse("analyze-chat-log-layout", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceType: "text", text: source }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (/html is required/i.test(payload.error || "")) {
+      throw new Error("The deployed chat layout analyzer is out of date and only accepts HTML. Redeploy analyze-chat-log-layout, then try this Markdown file again.");
+    }
+    throw new Error(payload.error || "OpenAI could not extract chat entries from the text.");
+  }
+
+  const entries = Array.isArray(payload.entries) ? payload.entries : [];
+  if (!entries.length) {
+    throw new Error("OpenAI did not return any extracted text entries.");
+  }
+
+  return {
+    type: "text",
+    entries,
+    confidence: Number(payload.confidence || 0),
+    notes: String(payload.notes || "").trim(),
   };
 }
 
@@ -1291,7 +1949,10 @@ function closeRawImportModal() {
   resetRawImportReview();
   setRawImportStatus("");
   if (chatEls.rawImportHtml) chatEls.rawImportHtml.value = "";
+  if (chatEls.rawImportFile) chatEls.rawImportFile.value = "";
   if (chatEls.rawImportGenerateImage) chatEls.rawImportGenerateImage.checked = true;
+  chatRepositoryState.rawImportLayoutConfig = null;
+  chatRepositoryState.rawImportSourceType = "";
   chatEls.rawImportModal.hidden = true;
   lockPageForModal(false);
   restoreChatModalFocus();
@@ -1762,10 +2423,37 @@ async function parseRawChatImport() {
   chatRepositoryState.rawImporting = true;
   if (chatEls.rawImportParse) chatEls.rawImportParse.disabled = true;
   if (chatEls.rawImportSave) chatEls.rawImportSave.disabled = true;
-  setRawImportStatus("Parsing raw chat HTML...");
+  setRawImportStatus("Parsing raw conversation source...");
 
   try {
-    const parsed = parseRawChatHtml(rawHtml);
+    let parsed = null;
+    let layoutAnalysis = null;
+    try {
+      parsed = parseRawChatSource(rawHtml, chatRepositoryState.rawImportLayoutConfig, chatRepositoryState.rawImportSourceType, instructions);
+    } catch (error) {
+      if (error?.needsAiJsonLayout) {
+        setRawImportStatus("JSON detected. Asking OpenAI to identify the message structure...");
+        layoutAnalysis = await analyzeRawChatJsonWithAi(rawHtml);
+        chatRepositoryState.rawImportLayoutConfig = layoutAnalysis;
+        setRawImportStatus("OpenAI identified the JSON structure. Building the Centralis HTML preview...");
+        parsed = parseRawChatSource(rawHtml, layoutAnalysis, chatRepositoryState.rawImportSourceType, instructions);
+      } else if (error?.needsAiLayout) {
+        setRawImportStatus("Unknown chat layout. Asking OpenAI to identify the message structure...");
+        layoutAnalysis = await analyzeRawChatLayoutWithAi(rawHtml);
+        chatRepositoryState.rawImportLayoutConfig = layoutAnalysis;
+        setRawImportStatus("OpenAI identified the layout. Building the Centralis HTML preview...");
+        parsed = parseRawChatSource(rawHtml, layoutAnalysis, chatRepositoryState.rawImportSourceType, instructions);
+      } else if (error?.needsAiTextLayout) {
+        setRawImportStatus("Text or Markdown detected. Asking OpenAI to extract chat entries...");
+        layoutAnalysis = await analyzeRawChatTextWithAi(rawHtml);
+        chatRepositoryState.rawImportLayoutConfig = layoutAnalysis;
+        setRawImportStatus("OpenAI extracted the text entries. Building the Centralis HTML preview...");
+        parsed = parseRawChatSource(rawHtml, layoutAnalysis, chatRepositoryState.rawImportSourceType, instructions);
+      } else {
+        throw error;
+      }
+    }
+
     let metadata = createFallbackRawMetadata(parsed);
     let metadataError = null;
     setRawImportStatus("Generating title and summary...");
@@ -1781,6 +2469,12 @@ async function parseRawChatImport() {
     renderRawImportReview(parsed, metadata);
     if (metadataError) {
       setRawImportStatus(`Parsed successfully. Title and summary need review: ${getChatError(metadataError)}`, "error");
+    } else if (layoutAnalysis) {
+      const confidence = Number.isFinite(layoutAnalysis.confidence)
+        ? ` Confidence: ${Math.round(layoutAnalysis.confidence * 100)}%.`
+        : "";
+      const notes = layoutAnalysis.notes ? ` ${layoutAnalysis.notes}` : "";
+      setRawImportStatus(`OpenAI identified the layout and Centralis generated the preview.${confidence}${notes}`, "success");
     } else {
       setRawImportStatus("Parsed and generated. Review the title, summary, and preview before saving.", "success");
     }
@@ -2186,13 +2880,13 @@ function submitImagePrompt(event) {
 function handleModalKeydown(event) {
   const openModal = chatEls.imagePromptModal && !chatEls.imagePromptModal.hidden
     ? chatEls.imagePromptModal
-    : (!chatEls.readerModal.hidden
+    : (chatEls.readerModal && !chatEls.readerModal.hidden
     ? chatEls.readerModal
-    : (!chatEls.editorModal.hidden
+    : (chatEls.editorModal && !chatEls.editorModal.hidden
       ? chatEls.editorModal
-      : (!chatEls.rawImportModal.hidden
-        ? chatEls.rawImportModal
-        : (!chatEls.uploadModal.hidden ? chatEls.uploadModal : null))));
+      : (chatEls.rawImportModal && !chatEls.rawImportModal.hidden
+          ? chatEls.rawImportModal
+          : (chatEls.uploadModal && !chatEls.uploadModal.hidden ? chatEls.uploadModal : null))));
   if (!openModal) return;
 
   if (event.key === "Escape") {
@@ -2246,6 +2940,8 @@ chatEls.rawImportOpen?.addEventListener("click", (event) => {
 chatEls.rawImportParse?.addEventListener("click", parseRawChatImport);
 chatEls.rawImportSave?.addEventListener("click", saveRawChatImport);
 chatEls.rawImportClosers.forEach((button) => button.addEventListener("click", closeRawImportModal));
+chatEls.rawImportUpload?.addEventListener("click", () => chatEls.rawImportFile?.click());
+chatEls.rawImportFile?.addEventListener("change", handleRawImportFileChange);
 chatEls.rawImportTitle?.addEventListener("input", () => {
   if (chatRepositoryState.rawImportParsed) refreshRawImportGeneratedHtmlFromReview();
 });
@@ -2255,7 +2951,11 @@ chatEls.rawImportSummary?.addEventListener("input", () => {
 chatEls.rawImportInstructions?.addEventListener("input", () => {
   localStorage.setItem(CHAT_RAW_IMPORT_INSTRUCTIONS_KEY, chatEls.rawImportInstructions.value);
 });
-chatEls.rawImportHtml?.addEventListener("input", resetRawImportReview);
+chatEls.rawImportHtml?.addEventListener("input", () => {
+  chatRepositoryState.rawImportLayoutConfig = null;
+  chatRepositoryState.rawImportSourceType = "";
+  resetRawImportReview();
+});
 chatEls.uploadForm?.addEventListener("submit", uploadChatLog);
 chatEls.uploadClosers.forEach((button) => button.addEventListener("click", closeUploadModal));
 chatEls.readerClosers.forEach((button) => button.addEventListener("click", closeReaderModal));
@@ -2298,21 +2998,6 @@ chatEls.grid?.addEventListener("click", (event) => {
   }
 });
 
-chatEls.uploadModal?.addEventListener("click", (event) => {
-  if (event.target === chatEls.uploadModal) closeUploadModal();
-});
-chatEls.rawImportModal?.addEventListener("click", (event) => {
-  if (event.target === chatEls.rawImportModal) closeRawImportModal();
-});
-chatEls.readerModal?.addEventListener("click", (event) => {
-  if (event.target === chatEls.readerModal) closeReaderModal();
-});
-chatEls.editorModal?.addEventListener("click", (event) => {
-  if (event.target === chatEls.editorModal) closeEditorModal();
-});
-chatEls.imagePromptModal?.addEventListener("click", (event) => {
-  if (event.target === chatEls.imagePromptModal) closeImagePromptModal(null);
-});
 document.addEventListener("keydown", handleModalKeydown);
 window.addEventListener("beforeunload", () => {
   clearReaderObjectUrl();
