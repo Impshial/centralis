@@ -881,7 +881,7 @@ async function saveUserThemeMenuToDatabase(ids = themeMenuThemeIds) {
   const normalizedIds = normalizeThemeMenuIds(ids);
   const { error: deleteError } = await withTimeout(supabaseClient
     .from("user_theme_menu_items")
-    .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: currentAppUser.id })
+    .delete()
     .eq("user_id", currentAppUser.id), "Clearing theme menu");
   if (deleteError) throw deleteError;
   if (!normalizedIds.length) return;

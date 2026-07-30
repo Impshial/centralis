@@ -6,7 +6,7 @@
   <title>Local Chat | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=local-chat-19">
+  <link rel="stylesheet" href="styles.css?v=local-chat-21">
   <link rel="stylesheet" href="tailwind.generated.css?v=local-chat-6">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -20,22 +20,15 @@
           <p class="settings-eyebrow">Entertainment</p>
           <h1 id="local-chat-title">Local Chat</h1>
         </div>
-        <div class="menu-wrap local-chat-tools-menu">
-          <button class="primary-action menu-trigger" type="button" aria-label="Local Chat actions" title="Local Chat actions" aria-expanded="false" aria-haspopup="menu" data-local-chat-tools>
-            <ph-toolbox weight="bold" aria-hidden="true"></ph-toolbox>
-            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+        <div class="local-chat-header-actions">
+          <button class="primary-action local-chat-create-character-button" type="button" data-local-chat-create-character>
+            <ph-plus-circle weight="bold" aria-hidden="true"></ph-plus-circle>
+            <span>Create Character</span>
           </button>
-          <div class="dropdown-menu align-right" role="menu">
-            <button type="button" role="menuitem" data-local-chat-create-character>
-              <ph-plus-circle weight="duotone" aria-hidden="true"></ph-plus-circle>
-              <span>Create a New Character</span>
-            </button>
-            <hr>
-            <button type="button" role="menuitem" data-local-chat-personas>
-              <ph-user-switch weight="duotone" aria-hidden="true"></ph-user-switch>
-              <span>My Personas</span>
-            </button>
-          </div>
+          <button class="secondary-action local-chat-personas-button" type="button" data-local-chat-personas>
+            <ph-user-switch weight="bold" aria-hidden="true"></ph-user-switch>
+            <span>Personas</span>
+          </button>
         </div>
       </header>
 
@@ -139,6 +132,19 @@
           <span class="local-chat-editor-kicker" data-local-chat-character-modal-title>Edit Character</span>
           <div class="local-chat-editor-header-actions">
             <button class="secondary-action" type="button" data-local-chat-close-character>Cancel</button>
+            <label class="secondary-action local-chat-import-character-button">
+              <ph-file-arrow-up weight="bold" aria-hidden="true"></ph-file-arrow-up>
+              <span>Import JSON</span>
+              <input class="sr-only" type="file" accept="application/json,.json" data-local-chat-character-json-input>
+            </label>
+            <a class="secondary-action local-chat-schema-download" href="local-chat-character.schema.json" download>
+              <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+              <span>JSON Schema</span>
+            </a>
+            <button class="secondary-action local-chat-ai-vibe-button" type="button" data-local-chat-ai-vibe-open>
+              <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+              <span>AI Vibe</span>
+            </button>
             <button class="primary-action local-chat-character-save-button" type="submit" form="local-chat-character-form">
               <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
               <span data-local-chat-character-save-text>Save Character</span>
@@ -160,6 +166,10 @@
                   Upload Image
                   <input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-local-chat-character-image-input>
                 </label>
+                <button class="secondary-action local-chat-generate-image-button" type="button" data-local-chat-generate-character-image disabled>
+                  <ph-image-square weight="bold" aria-hidden="true"></ph-image-square>
+                  <span>Generate Image</span>
+                </button>
                 <button class="ghost-action" type="button" data-local-chat-character-image-clear hidden>
                   <ph-x weight="bold" aria-hidden="true"></ph-x>
                   Clear
@@ -240,22 +250,25 @@
           </div>
         </form>
       </section>
-    </main>
 
-    <div class="modal-backdrop local-chat-modal-backdrop" data-local-chat-persona-modal hidden>
-      <div class="modal-dialog local-chat-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="local-chat-persona-title">
-        <div class="modal-header">
-          <div>
-            <p class="settings-eyebrow">Local Chat</p>
-            <h2 id="local-chat-persona-title">My Personas</h2>
+      <section class="local-chat-persona-page" data-local-chat-persona-page hidden>
+        <header class="local-chat-editor-page-header">
+          <span class="local-chat-editor-kicker">My Personas</span>
+          <div class="local-chat-editor-header-actions">
+            <button class="secondary-action local-chat-new-persona-button" type="button" data-local-chat-new-persona>
+              <ph-plus-circle weight="bold" aria-hidden="true"></ph-plus-circle>
+              <span>New Persona</span>
+            </button>
+            <button class="secondary-action" type="button" data-local-chat-close-personas>Cancel</button>
+            <button class="primary-action local-chat-persona-save-button" type="submit" form="local-chat-persona-form">
+              <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
+              <span>Save Persona</span>
+            </button>
           </div>
-          <button class="icon-button" type="button" aria-label="Close" data-local-chat-close-personas>
-            <ph-x weight="bold" aria-hidden="true"></ph-x>
-          </button>
-        </div>
+        </header>
         <div class="local-chat-persona-layout">
           <div class="local-chat-persona-list" data-local-chat-persona-list></div>
-          <form class="local-chat-editor-form" data-local-chat-persona-form>
+          <form class="local-chat-editor-form" id="local-chat-persona-form" data-local-chat-persona-form>
             <input type="hidden" name="id">
             <div class="local-chat-form-grid">
               <label>
@@ -296,22 +309,26 @@
               </label>
             </div>
             <p class="dialog-status" data-local-chat-persona-status></p>
-          <div class="local-chat-dialog-actions">
+            <div class="local-chat-dialog-actions">
               <button class="danger-action" type="button" data-local-chat-archive-persona hidden>
                 <ph-archive weight="bold" aria-hidden="true"></ph-archive>
                 Archive Persona
               </button>
               <span class="local-chat-dialog-spacer" aria-hidden="true"></span>
-              <button class="secondary-action" type="button" data-local-chat-new-persona>New Persona</button>
-              <button class="primary-action" type="submit">
+              <button class="secondary-action local-chat-new-persona-button" type="button" data-local-chat-new-persona>
+                <ph-plus-circle weight="bold" aria-hidden="true"></ph-plus-circle>
+                <span>New Persona</span>
+              </button>
+              <button class="secondary-action" type="button" data-local-chat-close-personas>Cancel</button>
+              <button class="primary-action local-chat-persona-save-button" type="submit">
                 <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
-                Save Persona
+                <span>Save Persona</span>
               </button>
             </div>
           </form>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
 
     <div class="modal-backdrop local-chat-modal-backdrop" data-local-chat-settings-modal hidden>
       <div class="modal-dialog local-chat-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="local-chat-settings-title">
@@ -326,6 +343,10 @@
           </button>
         </div>
         <form data-local-chat-settings-form>
+          <label class="local-chat-field">
+            <span>Model</span>
+            <select data-local-chat-settings-model></select>
+          </label>
           <label class="local-chat-slider-field">
             <span>Length of reply</span>
             <strong data-local-chat-reply-length-label>Standard</strong>
@@ -350,11 +371,91 @@
         </form>
       </div>
     </div>
+
+    <div class="modal-backdrop local-chat-modal-backdrop" data-local-chat-ai-vibe-modal hidden>
+      <div class="modal-dialog local-chat-ai-vibe-dialog" role="dialog" aria-modal="true" aria-labelledby="local-chat-ai-vibe-title">
+        <div class="modal-header">
+          <div>
+            <p class="settings-eyebrow">Local Chat</p>
+            <h2 id="local-chat-ai-vibe-title">AI Vibe</h2>
+            <p class="modal-subtitle">Give the model optional notes. Empty character fields will be filled, and anything already typed will stay untouched.</p>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close AI Vibe" data-local-chat-ai-vibe-close>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </div>
+        <form data-local-chat-ai-vibe-form>
+          <div class="local-chat-form-grid local-chat-ai-vibe-grid">
+            <label>
+              <span>Gender</span>
+              <input type="text" name="gender" placeholder="Woman, man, nonbinary, etc.">
+            </label>
+            <label>
+              <span>Orientation</span>
+              <input type="text" name="orientation" placeholder="Straight, bi, lesbian, gay, pan, etc.">
+            </label>
+            <label>
+              <span>Age</span>
+              <input type="text" name="age" placeholder="College-aged adult, late-20s, 30s, 40s, older...">
+            </label>
+            <label>
+              <span>General Vibe</span>
+              <input type="text" name="general_vibe" placeholder="Fun and flirty, sullen, shy, geek, jock...">
+            </label>
+            <label>
+              <span>Immediate Relationship to User</span>
+              <input type="text" name="relationship_to_user" placeholder="Friend, step-relative, employee, employer, student...">
+            </label>
+            <label>
+              <span>Scenario Vibe</span>
+              <input type="text" name="scenario_vibe" placeholder="Steamy situation, uncomfortable situation, scary situation...">
+            </label>
+            <label>
+              <span>Background Vibe</span>
+              <input type="text" name="background_vibe" placeholder="Wealthy family, loving parents, military, science nerd...">
+            </label>
+            <label>
+              <span>Name Vibe</span>
+              <input type="text" name="name_vibe" placeholder="Modern, southern, elegant, punk, fantasy...">
+            </label>
+            <label>
+              <span>Setting / Era</span>
+              <input type="text" name="setting_era" placeholder="Modern suburb, space station, 1990s, fantasy city...">
+            </label>
+            <label>
+              <span>Speech Vibe</span>
+              <input type="text" name="speech_vibe" placeholder="Casual, teasing, blunt, poetic, awkward...">
+            </label>
+            <label>
+              <span>Must Include</span>
+              <input type="text" name="must_include" placeholder="Specific traits, dynamics, jobs, secrets...">
+            </label>
+            <label>
+              <span>Must Avoid</span>
+              <input type="text" name="must_avoid" placeholder="Anything you do not want in the character.">
+            </label>
+            <label class="is-wide">
+              <span>Other</span>
+              <textarea name="other" rows="3" placeholder="Any miscellaneous notes for the generator."></textarea>
+            </label>
+          </div>
+          <p class="dialog-status" data-local-chat-ai-vibe-status></p>
+          <div class="local-chat-dialog-actions">
+            <span class="local-chat-dialog-spacer" aria-hidden="true"></span>
+            <button class="secondary-action" type="button" data-local-chat-ai-vibe-close>Cancel</button>
+            <button class="primary-action local-chat-ai-vibe-generate-button" type="submit" data-local-chat-ai-vibe-generate>
+              <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+              <span>Generate Vibe</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=generation-activity-1"></script>
-  <script src="local-chat.js?v=local-chat-30"></script>
+  <script src="local-chat.js?v=local-chat-37"></script>
 </body>
 </html>

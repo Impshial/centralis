@@ -40,6 +40,7 @@ const featherlessDefaultTemperature = Number(process.env.FEATHERLESS_TEMPERATURE
 const featherlessDefaultTopP = Number(process.env.FEATHERLESS_TOP_P || 0.92);
 const featherlessPreferredModels = [
   process.env.FEATHERLESS_MODEL,
+  process.env.FEATHERLESS_VIBE_FALLBACK_MODEL,
   "anthracite-org/magnum-v4-9b",
   "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated"
 ].filter(Boolean);
@@ -50,6 +51,8 @@ const featherlessStopSequences = [
   "<|endoftext|>",
   "</s>"
 ];
+const openAiImageBaseUrl = "https://api.openai.com/v1/images";
+const veniceImageBaseUrl = "https://api.venice.ai/api/v1/image";
 const types = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -176,6 +179,28 @@ function featherlessHeaders(extraHeaders = {}) {
   };
 }
 
+function requireOpenAiKey() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required for GPT Image 2.");
+  }
+}
+
+function requireVeniceKey() {
+  if (!process.env.VENICE_API_KEY) {
+    throw new Error("VENICE_API_KEY is required for Nano Banana Pro fallback.");
+  }
+}
+
+function isCapacityError(status, message) {
+  const text = String(message || "").toLowerCase();
+  return status === 429
+    || text.includes("temporarily at capacity")
+    || text.includes("capacity")
+    || text.includes("concurrency limit")
+    || text.includes("concurrent requests")
+    || text.includes("over limit");
+}
+
 async function fetchFeatherless(pathname, init = {}, timeoutMs = Number(process.env.FEATHERLESS_TIMEOUT_MS || 120000)) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -213,6 +238,246 @@ function cleanChatPayload(body) {
   }
 
   return { model, messages: cleanedMessages };
+}
+
+function parseJsonFromModelText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) throw new Error("Featherless returned an empty character draft.");
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(raw.slice(start, end + 1));
+    }
+    throw new Error("Featherless did not return valid JSON for the character draft.");
+  }
+}
+
+function parseImageBase64List(payload, providerName) {
+  const candidates = Array.isArray(payload?.data)
+    ? payload.data.map((image) => image?.b64_json || image?.base64 || image?.image).filter(Boolean)
+    : Array.isArray(payload?.images)
+      ? payload.images.filter(Boolean)
+      : [];
+  const base64 = String(candidates[0] || "").trim();
+  if (!base64) throw new Error(`${providerName} did not return image data.`);
+  return base64.replace(/^data:image\/[a-z0-9+.-]+;base64,/i, "");
+}
+
+function buildCharacterImagePrompt(character) {
+  const parts = [
+    character?.name ? `Name: ${character.name}` : "",
+    character?.short_description ? `Short description: ${character.short_description}` : "",
+    character?.description ? `Description: ${character.description}` : "",
+    character?.appearance ? `Appearance: ${character.appearance}` : "",
+    character?.personality ? `Personality: ${character.personality}` : "",
+    character?.background ? `Background: ${character.background}` : "",
+    Array.isArray(character?.tags) && character.tags.length ? `Tags: ${character.tags.join(", ")}` : ""
+  ].filter(Boolean).join("\n");
+
+  return [
+    "Create a hyperrealistic vertical portrait image for this fictional Centralis Local Chat character.",
+    "Use the character details as visual guidance, prioritizing appearance, age, style, vibe, and setting clues.",
+    "Show only the character. Do not include text, captions, watermarks, logos, UI, speech bubbles, or multiple panels.",
+    "Keep the image non-explicit and clearly adult when age is relevant.",
+    "",
+    parts
+  ].join("\n").trim();
+}
+
+async function callOpenAiCharacterImage(prompt) {
+  requireOpenAiKey();
+  const response = await fetch(`${openAiImageBaseUrl}/generations`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "gpt-image-2",
+      prompt,
+      n: 1,
+      size: "1440x2560",
+      quality: "medium",
+      output_format: "png",
+      moderation: "low"
+    })
+  });
+  const payload = await response.json().catch(async () => ({ text: await response.text().catch(() => "") }));
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || payload?.message || `OpenAI returned HTTP ${response.status}.`);
+  }
+  return {
+    base64: parseImageBase64List(payload, "OpenAI"),
+    contentType: "image/png",
+    provider: "openai",
+    model: "gpt-image-2"
+  };
+}
+
+async function callVeniceCharacterImage(prompt) {
+  requireVeniceKey();
+  const response = await fetch(`${veniceImageBaseUrl}/generate`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.VENICE_API_KEY}`,
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    },
+    body: JSON.stringify({
+      model: "nano-banana-pro",
+      prompt,
+      format: "png",
+      variants: 1,
+      return_binary: false,
+      hide_watermark: true,
+      safe_mode: false,
+      aspect_ratio: "9:16",
+      resolution: "2K",
+      style_preset: "Hyperrealism"
+    })
+  });
+  const payload = await response.json().catch(async () => ({ text: await response.text().catch(() => "") }));
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error?.message || payload?.error || `Venice returned HTTP ${response.status}.`);
+  }
+  return {
+    base64: parseImageBase64List(payload, "Venice"),
+    contentType: "image/png",
+    provider: "venice",
+    model: "nano-banana-pro"
+  };
+}
+
+function cleanGeneratedCharacterDraft(value) {
+  const draft = value && typeof value === "object" ? value : {};
+  const aliases = {
+    short_description: ["shortDescription", "short_description", "summary"],
+    core_identity: ["coreIdentity", "core_identity", "identity"],
+    speech_style: ["speechStyle", "speech_style", "voice"],
+    behavior_instructions: ["behaviorInstructions", "behavior_instructions", "behavior"],
+    drift_guardrails: ["driftGuardrails", "drift_guardrails", "guardrails"],
+    system_prompt: ["systemPrompt", "system_prompt", "prompt"],
+    first_message: ["firstMessage", "first_message", "opening_message", "openingMessage", "starter", "first_scene"]
+  };
+  const fields = [
+    "name",
+    "short_description",
+    "description",
+    "core_identity",
+    "personality",
+    "appearance",
+    "background",
+    "speech_style",
+    "scenario",
+    "behavior_instructions",
+    "drift_guardrails",
+    "system_prompt",
+    "first_message"
+  ];
+  const result = {};
+  for (const field of fields) {
+    const keys = aliases[field] || [field];
+    const value = keys.map((key) => draft[key]).find((item) => String(item || "").trim());
+    result[field] = String(value || "").trim();
+  }
+  result.tags = Array.isArray(draft.tags)
+    ? draft.tags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 12)
+    : String(draft.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
+  return result;
+}
+
+function assertAdultLegalFictionBoundary(value) {
+  const text = JSON.stringify(value || {}).toLowerCase();
+  const boundaryPatterns = [
+    /\b(underage|minor|child|kid|toddler|preteen|teen|teenager|teenage)\b/,
+    /\b(high school|middle school|schoolgirl|schoolboy|loli|shota)\b/,
+    /\b(under\s*18|younger than\s*18|(?:[0-9]|1[0-7])\s*year\s*old|(?:[0-9]|1[0-7])-year-old)\b/,
+    /\b(bestiality|zoophilia|animal sex|sex with animals?)\b/,
+    /\b(trafficking|sex slave|sexual exploitation|exploitative sex)\b/,
+    /\b(rape|rapist|non[-\s]?consensual|forced sex|coerced sex|sexual coercion)\b/,
+    /\b(real person|celebrity|public figure)\b.*\b(sex|sexual|nude|naked|erotic)\b/
+  ];
+  if (boundaryPatterns.some((pattern) => pattern.test(text))) {
+    throw new Error("AI Vibe can generate adult fictional taboo themes, but not underage, animal, trafficking, exploitation, non-consent, coercive sexual violence, or real-person sexualized content.");
+  }
+}
+
+function ensureAdultCharacterMarker(character) {
+  const text = [
+    character.description,
+    character.core_identity,
+    character.background,
+    character.scenario
+  ].join(" ").toLowerCase();
+  if (/\b(18\+|adult|grown|late-20s|late 20s|20s|30s|40s|50s|older)\b/.test(text)) {
+    return character;
+  }
+  character.core_identity = character.core_identity
+    ? `${character.core_identity} They are an adult, 18+.`
+    : "They are an adult, 18+.";
+  return character;
+}
+
+function validateGeneratedCharacterDraft(character) {
+  const requiredFields = [
+    "name",
+    "short_description",
+    "description",
+    "core_identity",
+    "personality",
+    "appearance",
+    "background",
+    "speech_style",
+    "scenario",
+    "behavior_instructions",
+    "drift_guardrails",
+    "system_prompt",
+    "first_message"
+  ];
+  const missing = requiredFields.filter((field) => !String(character?.[field] || "").trim());
+  if (missing.length) {
+    throw new Error(`Featherless returned an incomplete character draft. Missing: ${missing.join(", ")}.`);
+  }
+  if (!Array.isArray(character.tags) || !character.tags.length) {
+    throw new Error("Featherless returned an incomplete character draft. Missing: tags.");
+  }
+}
+
+function buildCharacterVibePrompt(vibe, existingCharacter) {
+  return [
+    "Create a fictional AI roleplay character draft for Centralis Local Chat.",
+    "Return only strict JSON. Do not include markdown, prose outside JSON, or comments.",
+    "",
+    "The JSON object must have exactly these keys:",
+    "name, short_description, description, core_identity, personality, appearance, background, speech_style, scenario, behavior_instructions, drift_guardrails, system_prompt, first_message, tags.",
+    "Every listed key is required and must be non-empty. Do not omit first_message.",
+    "tags must be an array of short strings.",
+    "first_message must be the character's opening in-character message or scene-setting action, 1 to 3 paragraphs, written by the character/narrator only.",
+    "first_message must not include user dialogue, user actions, user thoughts, user feelings, or choices for the user.",
+    "",
+    "Style goals:",
+    "- Build a vivid, internally consistent adult character.",
+    "- Socially taboo adult fictional themes are allowed as context, tension, backstory, or relationship framing.",
+    "- Do not avoid an adult theme merely because it is socially uncomfortable.",
+    "- Keep the template non-explicit; focus on personality, story, relationship context, emotional tension, and roleplay hooks.",
+    "- The character must not speak, act, decide, feel, think, notice, or respond for the user.",
+    "- Include strong drift guardrails that keep the character grounded in the generated baseline.",
+    "",
+    "Hard Centralis V1 boundaries:",
+    "- Every generated character must be explicitly adult, 18+.",
+    "- If age is college-aged, make clear they are an adult college student, 18+.",
+    "- Do not generate underage, age-ambiguous, school-minor, childlike sexualized, animal sexual/harm, trafficking, exploitation, non-consent, coercive sexual violence, or real-person sexualization.",
+    "- If the user asks for a hard-boundary concept, return JSON with an error key and a concise adult-safe explanation instead of a character draft.",
+    "",
+    "Existing character form values. Preserve the user's intent and avoid contradicting these:",
+    JSON.stringify(existingCharacter || {}, null, 2),
+    "",
+    "Optional vibe notes from the user:",
+    JSON.stringify(vibe || {}, null, 2)
+  ].join("\n");
 }
 
 function normalizeFeatherlessModel(model) {
@@ -412,6 +677,237 @@ async function handleModelRoute(request, response, pathname) {
     return;
   }
 
+  if (modelPathname === "/api/ollama/character-vibe" && request.method === "POST") {
+    let logRequest = null;
+    try {
+      const body = await readJsonBody(request);
+      const model = String(body.model || featherlessDefaultModel || "").trim();
+      const vibe = body.vibe && typeof body.vibe === "object" ? body.vibe : {};
+      const existingCharacter = body.existingCharacter && typeof body.existingCharacter === "object" ? body.existingCharacter : {};
+      if (!model) {
+        throw new Error("No Featherless model is configured for AI Vibe.");
+      }
+      if (!Object.values(vibe).some((value) => String(value || "").trim())) {
+        throw new Error("At least one AI Vibe note is required.");
+      }
+      assertAdultLegalFictionBoundary(vibe);
+
+      const messages = [
+        {
+          role: "system",
+          content: "You generate adult fictional roleplay character drafts as strict JSON for Centralis. Follow the user's adult legal fiction boundary exactly."
+        },
+        {
+          role: "user",
+          content: buildCharacterVibePrompt(vibe, existingCharacter)
+        }
+      ];
+      const vibeModels = [
+        model,
+        ...featherlessPreferredModels
+      ].filter((item, index, list) => item && list.indexOf(item) === index);
+      const attempts = [];
+      logRequest = {
+        endpoint: pathname,
+        providerEndpoint: "/chat/completions",
+        model,
+        fallbackModels: vibeModels.slice(1),
+        messages,
+        stream: false
+      };
+
+      let payload = null;
+      let responseStatus = 0;
+      let usedModel = "";
+      for (let index = 0; index < vibeModels.length; index += 1) {
+        const attemptModel = vibeModels[index];
+        const featherlessResponse = await fetchFeatherless("/chat/completions", {
+          method: "POST",
+          headers: featherlessHeaders(),
+          body: JSON.stringify({
+            model: attemptModel,
+            messages,
+            stream: false,
+            max_tokens: Number(process.env.FEATHERLESS_VIBE_MAX_TOKENS || 1400),
+            temperature: Number(process.env.FEATHERLESS_VIBE_TEMPERATURE || 0.88),
+            top_p: Number(process.env.FEATHERLESS_VIBE_TOP_P || 0.94),
+            stop: featherlessStopSequences,
+            chat_template_kwargs: {
+              enable_thinking: false
+            }
+          })
+        }, Number(process.env.FEATHERLESS_TIMEOUT_MS || 120000));
+        const attemptPayload = await featherlessResponse.json().catch(() => ({}));
+        responseStatus = featherlessResponse.status;
+        if (featherlessResponse.ok) {
+          payload = attemptPayload;
+          usedModel = attemptModel;
+          attempts.push({ model: attemptModel, status: "complete" });
+          break;
+        }
+
+        const error = attemptPayload.error?.message || attemptPayload.error || `Featherless returned HTTP ${featherlessResponse.status}.`;
+        attempts.push({ model: attemptModel, status: "error", responseStatus: featherlessResponse.status, error });
+        if (!isCapacityError(featherlessResponse.status, error) || index === vibeModels.length - 1) {
+          appendPhysicalModelLog({
+            type: "featherless.character_vibe",
+            status: "error",
+            request: logRequest,
+            responseStatus: featherlessResponse.status,
+            error,
+            attempts
+          });
+          sendJson(response, featherlessResponse.status, { error, attempts });
+          return;
+        }
+      }
+
+      const text = String(payload.choices?.[0]?.message?.content || "").trim();
+      const parsed = parseJsonFromModelText(text);
+      if (parsed.error) {
+        const error = String(parsed.error || "AI Vibe could not generate that character safely.").trim();
+        appendPhysicalModelLog({
+          type: "featherless.character_vibe",
+          status: "blocked",
+          request: logRequest,
+          responseStatus: 422,
+          response: parsed,
+          error,
+          attempts
+        });
+        sendJson(response, 422, { error, attempts });
+        return;
+      }
+
+      const character = ensureAdultCharacterMarker(cleanGeneratedCharacterDraft(parsed));
+      assertAdultLegalFictionBoundary(character);
+      validateGeneratedCharacterDraft(character);
+      if (!character.name && !character.description && !character.personality) {
+        throw new Error("Featherless returned a character draft without usable character fields.");
+      }
+      const result = {
+        character,
+        model: usedModel || model,
+        requestedModel: model,
+        fallbackUsed: Boolean(usedModel && usedModel !== model),
+        attempts,
+        metadata: {
+          model: payload.model || usedModel || model,
+          id: payload.id,
+          finish_reason: payload.choices?.[0]?.finish_reason || null,
+          usage: payload.usage || null,
+          provider: "featherless"
+        }
+      };
+      appendPhysicalModelLog({
+        type: "featherless.character_vibe",
+        status: "complete",
+        request: logRequest,
+        responseStatus,
+        response: result
+      });
+      sendJson(response, 200, result);
+    } catch (error) {
+      appendPhysicalModelLog({
+        type: "featherless.character_vibe",
+        status: "error",
+        request: logRequest,
+        error: error.message || "Could not generate character vibe."
+      });
+      const message = error.message || "Could not generate character vibe.";
+      const status = message.includes("required")
+        ? 400
+        : message.startsWith("AI Vibe can generate adult fictional taboo themes")
+          ? 422
+          : 500;
+      sendJson(response, status, { error: message });
+    }
+    return;
+  }
+
+  if (modelPathname === "/api/ollama/character-image" && request.method === "POST") {
+    let logRequest = null;
+    const attempts = [];
+    try {
+      const body = await readJsonBody(request);
+      const character = body.character && typeof body.character === "object" ? body.character : {};
+      const hasPromptSource = ["short_description", "description", "appearance"]
+        .some((field) => String(character[field] || "").trim());
+      if (!hasPromptSource) {
+        throw new Error("Add a short description, description, or appearance before generating an image.");
+      }
+
+      const prompt = buildCharacterImagePrompt(character);
+      logRequest = {
+        endpoint: pathname,
+        prompt,
+        openai: {
+          model: "gpt-image-2",
+          size: "1440x2560",
+          quality: "medium",
+          moderation: "low",
+          format: "png"
+        },
+        veniceFallback: {
+          model: "nano-banana-pro",
+          size: "1440x2560",
+          resolution: "2K",
+          aspect_ratio: "9:16",
+          format: "png",
+          style_preset: "Hyperrealism",
+          moderation: "low"
+        }
+      };
+
+      let generated = null;
+      try {
+        generated = await callOpenAiCharacterImage(prompt);
+        attempts.push({ provider: "openai", model: "gpt-image-2", status: "complete" });
+      } catch (openAiError) {
+        attempts.push({ provider: "openai", model: "gpt-image-2", status: "error", error: openAiError.message || "OpenAI image generation failed." });
+        try {
+          generated = await callVeniceCharacterImage(prompt);
+          attempts.push({ provider: "venice", model: "nano-banana-pro", status: "complete" });
+        } catch (veniceError) {
+          attempts.push({ provider: "venice", model: "nano-banana-pro", status: "error", error: veniceError.message || "Venice image generation failed." });
+          throw veniceError;
+        }
+      }
+
+      const result = {
+        image: generated,
+        prompt,
+        attempts
+      };
+      appendPhysicalModelLog({
+        type: "local_chat.character_image",
+        status: "complete",
+        request: logRequest,
+        response: {
+          provider: generated.provider,
+          model: generated.model,
+          contentType: generated.contentType,
+          base64Length: generated.base64.length,
+          attempts
+        }
+      });
+      sendJson(response, 200, result);
+    } catch (error) {
+      appendPhysicalModelLog({
+        type: "local_chat.character_image",
+        status: "error",
+        request: logRequest,
+        error: error.message || "Could not generate character image.",
+        attempts
+      });
+      sendJson(response, error.message?.startsWith("Add a short description") ? 400 : 500, {
+        error: error.message || "Could not generate character image.",
+        attempts
+      });
+    }
+    return;
+  }
+
   if (modelPathname === "/api/ollama/chat-stream-json" && request.method === "POST") {
     const controller = new AbortController();
     const streamTimeoutMs = Number(process.env.OLLAMA_STREAM_TIMEOUT_MS || 600000);
@@ -512,6 +1008,9 @@ async function handleModelRoute(request, response, pathname) {
         for (const line of lines) {
           const payload = parseFeatherlessStreamLine(line);
           if (!payload) continue;
+          if (payload.error) {
+            throw new Error(payload.error.message || payload.error || "Featherless stream failed.");
+          }
           const delta = extractFeatherlessText(payload);
           if (delta) {
             extractedAnyText = true;
@@ -538,6 +1037,9 @@ async function handleModelRoute(request, response, pathname) {
         for (const line of lines) {
           const payload = parseFeatherlessStreamLine(line);
           if (!payload) continue;
+          if (payload.error) {
+            throw new Error(payload.error.message || payload.error || "Featherless stream failed.");
+          }
           const delta = extractFeatherlessText(payload);
           if (delta) {
             extractedAnyText = true;
@@ -707,6 +1209,9 @@ async function handleModelRoute(request, response, pathname) {
         for (const line of lines) {
           const payload = parseFeatherlessStreamLine(line);
           if (!payload) continue;
+          if (payload.error) {
+            throw new Error(payload.error.message || payload.error || "Featherless stream failed.");
+          }
           const delta = extractFeatherlessText(payload);
           if (delta) {
             streamedText += delta;
@@ -720,6 +1225,9 @@ async function handleModelRoute(request, response, pathname) {
         for (const line of lines) {
           const payload = parseFeatherlessStreamLine(line);
           if (!payload) continue;
+          if (payload.error) {
+            throw new Error(payload.error.message || payload.error || "Featherless stream failed.");
+          }
           const delta = extractFeatherlessText(payload);
           if (delta) {
             streamedText += delta;

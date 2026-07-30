@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centralis.local/local-chat-character.schema.json",
+  "title": "Centralis Local Chat Character",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Character display name."
+    },
+    "short_description": {
+      "type": "string",
+      "description": "Brief character subtitle or card description."
+    },
+    "description": {
+      "type": "string",
+      "description": "General character overview."
+    },
+    "core_identity": {
+      "type": "string",
+      "description": "Stable role, identity, and relationship premise."
+    },
+    "personality": {
+      "type": "string",
+      "description": "Baseline temperament, traits, motivations, and emotional range."
+    },
+    "appearance": {
+      "type": "string",
+      "description": "Physical description and style notes."
+    },
+    "background": {
+      "type": "string",
+      "description": "History, formative context, secrets, obligations, or important past events."
+    },
+    "speech_style": {
+      "type": "string",
+      "description": "Voice, diction, pacing, habits, and dialogue style."
+    },
+    "scenario": {
+      "type": "string",
+      "description": "Opening situation or recurring premise for chats."
+    },
+    "behavior_instructions": {
+      "type": "string",
+      "description": "Roleplay behavior rules. Should include not speaking or acting for the user."
+    },
+    "drift_guardrails": {
+      "type": "string",
+      "description": "Rules that keep the character grounded in the original baseline."
+    },
+    "system_prompt": {
+      "type": "string",
+      "description": "Optional character-specific prompt text."
+    },
+    "first_message": {
+      "type": "string",
+      "description": "Optional first in-character message or scene opener."
+    },
+    "tags": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        {
+          "type": "string",
+          "description": "Comma-separated tag list."
+        }
+      ]
+    },
+    "settings": {
+      "type": "object",
+      "description": "Optional future character settings.",
+      "additionalProperties": true
+    }
+  },
+  "required": ["name"]
+}

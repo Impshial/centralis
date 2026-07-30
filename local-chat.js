@@ -67,6 +67,8 @@
       instruction: "Use an extended response: 5 or more paragraphs when the scene supports it, while still leaving room for the user. Expand only the character, NPCs, atmosphere, and world; never expand by making the user/persona act, speak, feel, think, react, notice, move, or decide."
     }
   ];
+  const DEFAULT_BEHAVIOR_INSTRUCTIONS = "Never speak, act, decide, feel, or think for the user.";
+  const DEFAULT_DRIFT_GUARDRAILS = "Preserve the character's baseline unless a major event justifies change.";
   const ENGINE_RULES = [
     "You are the selected character in a text-only roleplay conversation inside Centralis.",
     "Only portray the character, non-user NPCs when necessary, and the surrounding world.",
@@ -129,21 +131,30 @@
     characterForm: document.querySelector("[data-local-chat-character-form]"),
     characterStatus: document.querySelector("[data-local-chat-character-status]"),
     archiveCharacter: document.querySelector("[data-local-chat-archive-character]"),
+    characterJsonInput: document.querySelector("[data-local-chat-character-json-input]"),
     characterImageInput: document.querySelector("[data-local-chat-character-image-input]"),
     characterImagePreview: document.querySelector("[data-local-chat-character-image-preview]"),
     characterImageName: document.querySelector("[data-local-chat-character-image-name]"),
     characterImageClear: document.querySelector("[data-local-chat-character-image-clear]"),
+    generateCharacterImage: document.querySelector("[data-local-chat-generate-character-image]"),
     closeCharacterButtons: document.querySelectorAll("[data-local-chat-close-character]"),
-    personaModal: document.querySelector("[data-local-chat-persona-modal]"),
+    aiVibeOpen: document.querySelector("[data-local-chat-ai-vibe-open]"),
+    aiVibeModal: document.querySelector("[data-local-chat-ai-vibe-modal]"),
+    aiVibeForm: document.querySelector("[data-local-chat-ai-vibe-form]"),
+    aiVibeStatus: document.querySelector("[data-local-chat-ai-vibe-status]"),
+    aiVibeGenerate: document.querySelector("[data-local-chat-ai-vibe-generate]"),
+    aiVibeCloseButtons: document.querySelectorAll("[data-local-chat-ai-vibe-close]"),
+    personaPage: document.querySelector("[data-local-chat-persona-page]"),
     personaForm: document.querySelector("[data-local-chat-persona-form]"),
     personaStatus: document.querySelector("[data-local-chat-persona-status]"),
     personaList: document.querySelector("[data-local-chat-persona-list]"),
-    newPersona: document.querySelector("[data-local-chat-new-persona]"),
+    newPersonaButtons: document.querySelectorAll("[data-local-chat-new-persona]"),
     archivePersona: document.querySelector("[data-local-chat-archive-persona]"),
     closePersonaButtons: document.querySelectorAll("[data-local-chat-close-personas]"),
     settingsModal: document.querySelector("[data-local-chat-settings-modal]"),
     settingsForm: document.querySelector("[data-local-chat-settings-form]"),
     settingsStatus: document.querySelector("[data-local-chat-settings-status]"),
+    settingsModel: document.querySelector("[data-local-chat-settings-model]"),
     replyLength: document.querySelector("[data-local-chat-reply-length]"),
     replyLengthLabel: document.querySelector("[data-local-chat-reply-length-label]"),
     closeSettingsButtons: document.querySelectorAll("[data-local-chat-settings-close]")
@@ -179,6 +190,8 @@
     modelLog: [],
     modelLogCollapsed: false,
     nextModelLogId: 1,
+    aiVibeBusy: false,
+    characterImageBusy: false,
     repairEnabled: false
   };
 
@@ -227,11 +240,17 @@
       });
 
     cleaned = normalizeText(lines.join("\n"));
+    const userNamePattern = "(?:adam|you|the user|the persona)";
+    const redundantLeadIn = new RegExp(
+      `^${userNamePattern}\\s*,?\\s*(?:you\\s+)?(?:say|said|reply|replied|respond|responded|ask|asked|tell|told|mutter|muttered|whisper|whispered|shout|shouted)\\b[^.!?\\n]*(?:[.!?]+|\\n+)\\s*`,
+      "i"
+    );
+    cleaned = normalizeText(cleaned.replace(redundantLeadIn, ""));
     const onlyEcho = !cleaned && userEcho && normalizeModelEchoText(original).startsWith(userEcho);
     if (hadTemplateArtifact || onlyEcho) {
       return cleaned;
     }
-    return original;
+    return cleaned || original;
   }
 
   function textSimilarityFingerprint(value) {
@@ -262,6 +281,28 @@
       .map((tag) => tag.trim())
       .filter(Boolean)
       .slice(0, 20);
+  }
+
+  function safeFilenamePart(value, fallback = "character") {
+    const clean = String(value || "")
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase()
+      .slice(0, 80);
+    return clean || fallback;
+  }
+
+  function base64ToFile(base64, filename, contentType = "image/png") {
+    const binary = atob(String(base64 || "").replace(/^data:image\/[a-z0-9+.-]+;base64,/i, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new File([bytes], filename, { type: contentType });
   }
 
   function formatDate(value) {
@@ -469,6 +510,7 @@
     if (els.library) els.library.hidden = false;
     if (els.detail) els.detail.hidden = true;
     if (els.characterEditor) els.characterEditor.hidden = true;
+    if (els.personaPage) els.personaPage.hidden = true;
     if (els.controls) els.controls.hidden = false;
     state.selectedCharacterId = null;
     state.selectedSessionId = null;
@@ -484,6 +526,7 @@
     if (els.library) els.library.hidden = true;
     if (els.detail) els.detail.hidden = false;
     if (els.characterEditor) els.characterEditor.hidden = true;
+    if (els.personaPage) els.personaPage.hidden = true;
     if (els.controls) els.controls.hidden = true;
     if (!state.busy) {
       refreshReadiness();
@@ -512,8 +555,32 @@
     if (els.library) els.library.hidden = true;
     if (els.detail) els.detail.hidden = true;
     if (els.characterEditor) els.characterEditor.hidden = false;
+    if (els.personaPage) els.personaPage.hidden = true;
     if (els.controls) els.controls.hidden = true;
     updateChatUrl();
+  }
+
+  function showPersonasPage() {
+    state.editorMode = "personas";
+    els.page?.classList.add("is-local-chat-editor-view");
+    els.page?.classList.remove("is-local-chat-detail-view");
+    if (els.header) els.header.hidden = true;
+    if (els.library) els.library.hidden = true;
+    if (els.detail) els.detail.hidden = true;
+    if (els.characterEditor) els.characterEditor.hidden = true;
+    if (els.personaPage) els.personaPage.hidden = false;
+    if (els.controls) els.controls.hidden = true;
+    updateChatUrl();
+  }
+
+  function closePersonasPage() {
+    if (state.selectedCharacterId) {
+      showCharacterPage();
+      updateChatUrl();
+      renderAll();
+      return;
+    }
+    showLibrary();
   }
 
   function openModal(modal) {
@@ -554,10 +621,7 @@
     }
     if (!els.characterGrid) return;
     els.characterGrid.innerHTML = characters.map((character) => {
-      const summary = [
-        character.short_description || character.description || "No description yet.",
-        character.core_identity
-      ].map(normalizeText).filter(Boolean).join(" - ");
+      const summary = normalizeText(character.short_description || character.description) || "No description yet.";
       return `
         <article class="local-chat-character-card" data-character-id="${escapeHtml(character.id)}" tabindex="0">
           <div class="local-chat-character-avatar" aria-hidden="true">${characterAvatarHtml(character)}</div>
@@ -607,14 +671,7 @@
     ].join("");
   }
 
-  function renderModelOptions() {
-    if (!els.model) return;
-    if (!state.models.length) {
-      els.model.innerHTML = '<option value="">No Featherless models found</option>';
-      els.model.disabled = true;
-      return;
-    }
-
+  function ensurePreferredModelsInList() {
     const knownModelNames = new Set(state.models.map((model) => model.name));
     for (const preferredModel of PREFERRED_FEATHERLESS_MODELS.slice().reverse()) {
       if (!knownModelNames.has(preferredModel)) {
@@ -622,25 +679,41 @@
         knownModelNames.add(preferredModel);
       }
     }
+  }
 
-    const storedModelStillAvailable = state.models.some((model) => model.name === state.selectedModel);
-    if (!storedModelStillAvailable) {
-      if (PREFERRED_FEATHERLESS_MODELS.includes(state.selectedModel)) {
-        state.models = [{ name: state.selectedModel }, ...state.models.filter((model) => model.name !== state.selectedModel)];
-      } else {
-        state.selectedModel = state.models[0].name;
-        localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
-      }
+  function renderModelSelect(select, selectedValue = state.selectedModel) {
+    if (!select) return;
+    if (!state.models.length) {
+      select.innerHTML = '<option value="">No Featherless models found</option>';
+      select.disabled = true;
+      return;
     }
 
-    els.model.innerHTML = state.models.map((model) => {
+    select.innerHTML = state.models.map((model) => {
       const detail = model.context_length
         ? `${Number(model.context_length).toLocaleString()} context`
         : formatSize(model.size);
       const label = detail ? `${model.name} (${detail})` : model.name;
-      return `<option value="${escapeHtml(model.name)}"${model.name === state.selectedModel ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      return `<option value="${escapeHtml(model.name)}"${model.name === selectedValue ? " selected" : ""}>${escapeHtml(label)}</option>`;
     }).join("");
-    els.model.disabled = false;
+    select.disabled = false;
+  }
+
+  function renderModelOptions() {
+    ensurePreferredModelsInList();
+    if (state.models.length) {
+      const storedModelStillAvailable = state.models.some((model) => model.name === state.selectedModel);
+      if (!storedModelStillAvailable) {
+        if (PREFERRED_FEATHERLESS_MODELS.includes(state.selectedModel)) {
+          state.models = [{ name: state.selectedModel }, ...state.models.filter((model) => model.name !== state.selectedModel)];
+        } else {
+          state.selectedModel = state.models[0].name;
+          localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
+        }
+      }
+    }
+    renderModelSelect(els.model, state.selectedModel);
+    renderModelSelect(els.settingsModel, selectedSession()?.model_name || state.selectedModel);
   }
 
   function renderSessions() {
@@ -804,7 +877,9 @@
   }
 
   function openChatSettings() {
-    if (!selectedSession()) return;
+    const session = selectedSession();
+    if (!session) return;
+    renderModelSelect(els.settingsModel, session.model_name || state.selectedModel);
     renderReplyLengthControl();
     setDialogStatus(els.settingsStatus, "");
     openModal(els.settingsModal);
@@ -817,6 +892,7 @@
 
     const index = Math.min(REPLY_LENGTH_OPTIONS.length - 1, Math.max(0, Number(els.replyLength?.value || 2)));
     const replyLength = REPLY_LENGTH_OPTIONS[index] || REPLY_LENGTH_OPTIONS[2];
+    const modelName = normalizeText(els.settingsModel?.value) || state.selectedModel;
     const settings = {
       ...selectedSessionSettings(),
       reply_length: replyLength.key
@@ -826,7 +902,7 @@
     try {
       const { data, error } = await requireSupabase()
         .from("local_chat_sessions")
-        .update({ settings })
+        .update({ settings, model_name: modelName })
         .eq("id", session.id)
         .eq("user_id", state.user.id)
         .select()
@@ -835,6 +911,8 @@
       if (data) {
         state.sessions = state.sessions.map((item) => item.id === data.id ? data : item);
       }
+      state.selectedModel = modelName;
+      localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
       closeModal(els.settingsModal);
       setFormStatus("Chat settings saved.");
       renderAll();
@@ -855,9 +933,29 @@
     return Boolean(state.selectedSessionId && state.statusOk && state.selectedModel && !state.busy);
   }
 
+  function canGenerateCharacterImage() {
+    const character = characterFormSnapshot();
+    return Boolean(
+      !state.characterImageBusy
+      && (
+        character.short_description
+        || character.description
+        || character.appearance
+      )
+    );
+  }
+
   function renderControls() {
     const modelReady = state.statusOk && Boolean(state.selectedModel);
     if (els.startSession) els.startSession.disabled = !state.selectedCharacterId || !modelReady || state.busy;
+    if (els.aiVibeOpen) els.aiVibeOpen.disabled = state.aiVibeBusy;
+    if (els.aiVibeGenerate) els.aiVibeGenerate.disabled = state.aiVibeBusy;
+    if (els.generateCharacterImage) {
+      els.generateCharacterImage.disabled = !canGenerateCharacterImage();
+      els.generateCharacterImage.innerHTML = state.characterImageBusy
+        ? '<ph-spinner-gap weight="bold" aria-hidden="true"></ph-spinner-gap><span>Generating...</span>'
+        : '<ph-image-square weight="bold" aria-hidden="true"></ph-image-square><span>Generate Image</span>';
+    }
     if (els.input) els.input.disabled = !canSend();
     if (els.send) {
       els.send.disabled = !state.busy && !canSend();
@@ -1359,11 +1457,327 @@
     });
     if (form.elements.tags) form.elements.tags.value = (character?.tags || []).join(", ");
     if (!character) {
-      form.elements.behavior_instructions.value = "Never speak, act, decide, feel, or think for the user.";
-      form.elements.drift_guardrails.value = "Preserve the character's baseline unless a major event justifies change.";
+      form.elements.behavior_instructions.value = DEFAULT_BEHAVIOR_INSTRUCTIONS;
+      form.elements.drift_guardrails.value = DEFAULT_DRIFT_GUARDRAILS;
     }
     renderCharacterImageEditor(character);
     setDialogStatus(els.characterStatus, "");
+    renderControls();
+  }
+
+  function openAiVibeModal() {
+    if (!els.aiVibeForm) return;
+    els.aiVibeForm.reset();
+    prefillAiVibeFormFromCharacter();
+    setDialogStatus(els.aiVibeStatus, "");
+    openModal(els.aiVibeModal);
+  }
+
+  function characterFormSnapshot() {
+    const form = els.characterForm;
+    if (!form) return {};
+    return {
+      name: normalizeText(form.elements.name?.value),
+      short_description: normalizeText(form.elements.short_description?.value),
+      description: normalizeText(form.elements.description?.value),
+      core_identity: normalizeText(form.elements.core_identity?.value),
+      personality: normalizeText(form.elements.personality?.value),
+      appearance: normalizeText(form.elements.appearance?.value),
+      background: normalizeText(form.elements.background?.value),
+      speech_style: normalizeText(form.elements.speech_style?.value),
+      scenario: normalizeText(form.elements.scenario?.value),
+      behavior_instructions: normalizeText(form.elements.behavior_instructions?.value),
+      drift_guardrails: normalizeText(form.elements.drift_guardrails?.value),
+      system_prompt: normalizeText(form.elements.system_prompt?.value),
+      first_message: normalizeText(form.elements.first_message?.value),
+      tags: splitTags(form.elements.tags?.value || "")
+    };
+  }
+
+  function firstImportValue(source, keys) {
+    for (const key of keys) {
+      const value = source?.[key];
+      if (Array.isArray(value)) {
+        const joined = value.map((item) => String(item || "").trim()).filter(Boolean).join(", ");
+        if (joined) return joined;
+      } else if (value && typeof value === "object") {
+        const text = Object.values(value).map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+        if (text) return text;
+      } else {
+        const text = normalizeText(value);
+        if (text) return text;
+      }
+    }
+    return "";
+  }
+
+  function normalizeImportedCharacterJson(raw) {
+    const root = raw && typeof raw === "object" ? raw : {};
+    const data = root.data && typeof root.data === "object" ? root.data : {};
+    const source = { ...root, ...data };
+    const result = {
+      name: firstImportValue(source, ["name", "char_name", "character_name", "display_name"]),
+      short_description: firstImportValue(source, ["short_description", "shortDescription", "summary", "subtitle", "tagline"]),
+      description: firstImportValue(source, ["description", "desc", "creator_notes", "creatorNotes", "notes"]),
+      core_identity: firstImportValue(source, ["core_identity", "coreIdentity", "identity", "role", "definition"]),
+      personality: firstImportValue(source, ["personality", "personality_summary"]),
+      appearance: firstImportValue(source, ["appearance", "physical_description", "physicalDescription", "looks"]),
+      background: firstImportValue(source, ["background", "backstory", "history"]),
+      speech_style: firstImportValue(source, ["speech_style", "speechStyle", "voice", "speaking_style", "dialogue_style"]),
+      scenario: firstImportValue(source, ["scenario", "setting", "premise"]),
+      behavior_instructions: firstImportValue(source, ["behavior_instructions", "behaviorInstructions", "behavior", "instructions"]),
+      drift_guardrails: firstImportValue(source, ["drift_guardrails", "driftGuardrails", "guardrails"]),
+      system_prompt: firstImportValue(source, ["system_prompt", "systemPrompt", "system", "prompt"]),
+      first_message: firstImportValue(source, ["first_message", "firstMessage", "first_mes", "firstMes", "opening_message", "openingMessage", "starter"])
+    };
+    const tagsValue = source.tags ?? source.tag_list ?? source.tagList;
+    result.tags = Array.isArray(tagsValue)
+      ? tagsValue.map(normalizeText).filter(Boolean)
+      : splitTags(tagsValue || "");
+    return result;
+  }
+
+  function applyImportedCharacter(character) {
+    const form = els.characterForm;
+    if (!form) return 0;
+    const fields = [
+      "name",
+      "short_description",
+      "description",
+      "core_identity",
+      "personality",
+      "appearance",
+      "background",
+      "speech_style",
+      "scenario",
+      "behavior_instructions",
+      "drift_guardrails",
+      "system_prompt",
+      "first_message"
+    ];
+    let appliedCount = 0;
+    for (const field of fields) {
+      const element = form.elements[field];
+      const value = normalizeText(character?.[field]);
+      if (element && value) {
+        element.value = value;
+        appliedCount += 1;
+      }
+    }
+    if (form.elements.tags && Array.isArray(character?.tags)) {
+      form.elements.tags.value = character.tags.join(", ");
+      if (character.tags.length) appliedCount += 1;
+    }
+    return appliedCount;
+  }
+
+  async function importCharacterJsonFile(file) {
+    if (!file) return;
+    if (!/\.json$/i.test(file.name || "") && file.type && file.type !== "application/json") {
+      setDialogStatus(els.characterStatus, "Choose a JSON character file.", true);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      const character = normalizeImportedCharacterJson(parsed);
+      if (!character.name && !character.description && !character.first_message) {
+        throw new Error("That JSON does not look like a character file.");
+      }
+      const appliedCount = applyImportedCharacter(character);
+      setDialogStatus(els.characterStatus, `Imported ${appliedCount} character field${appliedCount === 1 ? "" : "s"} from ${file.name}. Review before saving.`);
+      renderControls();
+    } catch (error) {
+      setDialogStatus(els.characterStatus, error.message || "Could not import character JSON.", true);
+    } finally {
+      if (els.characterJsonInput) els.characterJsonInput.value = "";
+    }
+  }
+
+  function prefillAiVibeFormFromCharacter() {
+    const form = els.aiVibeForm;
+    if (!form) return;
+    const character = characterFormSnapshot();
+    const fill = (field, value) => {
+      const element = form.elements[field];
+      if (element && !normalizeText(element.value)) element.value = normalizeText(value);
+    };
+
+    fill("general_vibe", [
+      character.short_description,
+      character.personality
+    ].filter(Boolean).join(" - "));
+    fill("relationship_to_user", character.core_identity);
+    fill("scenario_vibe", character.scenario);
+    fill("background_vibe", character.background);
+    fill("name_vibe", character.name);
+    fill("speech_vibe", character.speech_style);
+    fill("must_include", character.tags?.length ? character.tags.join(", ") : "");
+    fill("must_avoid", character.drift_guardrails);
+    fill("other", [
+      character.description ? `Description: ${character.description}` : "",
+      character.appearance ? `Appearance: ${character.appearance}` : "",
+      character.behavior_instructions ? `Behavior instructions: ${character.behavior_instructions}` : "",
+      character.system_prompt ? `System prompt: ${character.system_prompt}` : "",
+      character.first_message ? `First message: ${character.first_message}` : ""
+    ].filter(Boolean).join("\n\n"));
+  }
+
+  function aiVibeFormPayload() {
+    const form = els.aiVibeForm;
+    if (!form) return {};
+    const payload = {};
+    [
+      "gender",
+      "orientation",
+      "age",
+      "general_vibe",
+      "relationship_to_user",
+      "scenario_vibe",
+      "background_vibe",
+      "name_vibe",
+      "setting_era",
+      "speech_vibe",
+      "must_include",
+      "must_avoid",
+      "other"
+    ].forEach((field) => {
+      const value = normalizeText(form.elements[field]?.value);
+      if (value) payload[field] = value;
+    });
+    return payload;
+  }
+
+  function applyAiVibeDraft(draft) {
+    const form = els.characterForm;
+    if (!form || !draft || typeof draft !== "object") return 0;
+    const aliases = {
+      short_description: ["shortDescription", "short_description", "summary"],
+      core_identity: ["coreIdentity", "core_identity", "identity"],
+      speech_style: ["speechStyle", "speech_style", "voice"],
+      behavior_instructions: ["behaviorInstructions", "behavior_instructions", "behavior"],
+      drift_guardrails: ["driftGuardrails", "drift_guardrails", "guardrails"],
+      system_prompt: ["systemPrompt", "system_prompt", "prompt"],
+      first_message: ["firstMessage", "first_message", "opening_message", "openingMessage", "starter", "first_scene"]
+    };
+    const draftValue = (field) => {
+      const keys = aliases[field] || [field];
+      return normalizeText(keys.map((key) => draft[key]).find((item) => normalizeText(item)));
+    };
+    let appliedCount = 0;
+    [
+      "name",
+      "short_description",
+      "description",
+      "core_identity",
+      "personality",
+      "appearance",
+      "background",
+      "speech_style",
+      "scenario",
+      "behavior_instructions",
+      "drift_guardrails",
+      "system_prompt",
+      "first_message"
+    ].forEach((field) => {
+      const element = form.elements[field];
+      const value = draftValue(field);
+      const currentValue = normalizeText(element?.value);
+      const isReplaceableDefault = (field === "behavior_instructions" && currentValue === DEFAULT_BEHAVIOR_INSTRUCTIONS)
+        || (field === "drift_guardrails" && currentValue === DEFAULT_DRIFT_GUARDRAILS);
+      if (element && (!currentValue || isReplaceableDefault) && value) {
+        element.value = value;
+        appliedCount += 1;
+      }
+    });
+
+    const tagElement = form.elements.tags;
+    const tags = Array.isArray(draft.tags)
+      ? draft.tags.map(normalizeText).filter(Boolean)
+      : splitTags(draft.tags || "");
+    if (tagElement && !normalizeText(tagElement.value) && tags.length) {
+      tagElement.value = tags.join(", ");
+      appliedCount += 1;
+    }
+    return appliedCount;
+  }
+
+  async function generateAiVibe(event) {
+    event.preventDefault();
+    if (state.aiVibeBusy) return;
+    const vibe = aiVibeFormPayload();
+    if (!Object.keys(vibe).length) {
+      setDialogStatus(els.aiVibeStatus, "Add at least one vibe note before generating.", true);
+      return;
+    }
+
+    state.aiVibeBusy = true;
+    setDialogStatus(els.aiVibeStatus, "Generating character vibe...");
+    renderControls();
+    try {
+      const payload = await fetchJson("/api/featherless/character-vibe", {
+        method: "POST",
+        body: JSON.stringify({
+          model: state.selectedModel,
+          vibe,
+          existingCharacter: characterFormSnapshot()
+        })
+      });
+      const appliedCount = applyAiVibeDraft(payload.character || {});
+      if (!appliedCount) {
+        setDialogStatus(els.aiVibeStatus, "AI generated a draft, but every matching character field already had text.", true);
+        return;
+      }
+      const fallbackNote = payload.fallbackUsed
+        ? ` Selected model was at capacity, so AI Vibe used ${payload.model}.`
+        : "";
+      setDialogStatus(els.aiVibeStatus, `Applied ${appliedCount} empty field${appliedCount === 1 ? "" : "s"}. Review before saving.${fallbackNote}`);
+      setDialogStatus(els.characterStatus, `AI Vibe filled empty fields. Review before saving.${fallbackNote}`);
+      renderControls();
+    } catch (error) {
+      setDialogStatus(els.aiVibeStatus, readableError(error) || "Could not generate character vibe.", true);
+    } finally {
+      state.aiVibeBusy = false;
+      renderControls();
+    }
+  }
+
+  async function generateCharacterImage() {
+    if (state.characterImageBusy || !canGenerateCharacterImage()) return;
+    state.characterImageBusy = true;
+    setDialogStatus(els.characterStatus, "Generating character image...");
+    renderControls();
+    try {
+      const character = characterFormSnapshot();
+      const payload = await fetchJson("/api/featherless/character-image", {
+        method: "POST",
+        body: JSON.stringify({ character })
+      });
+      const image = payload.image || {};
+      if (!image.base64) throw new Error("The image generator did not return image data.");
+
+      revokePendingCharacterImagePreview();
+      const filename = `${safeFilenamePart(character.name || character.short_description)}-generated.png`;
+      state.pendingCharacterImageFile = base64ToFile(image.base64, filename, image.contentType || "image/png");
+      state.pendingCharacterImagePreviewUrl = `data:${image.contentType || "image/png"};base64,${image.base64}`;
+      setCharacterImagePreview({
+        src: state.pendingCharacterImagePreviewUrl,
+        label: `${image.provider === "venice" ? "Generated with Nano Banana Pro" : "Generated with GPT Image 2"} - save to attach`,
+        showClear: true
+      });
+      const usedFallback = image.provider === "venice";
+      setDialogStatus(
+        els.characterStatus,
+        usedFallback
+          ? "GPT Image 2 failed, so Nano Banana Pro generated the image. Save to attach it."
+          : "Generated image ready. Save to attach it."
+      );
+    } catch (error) {
+      setDialogStatus(els.characterStatus, readableError(error) || "Could not generate character image.", true);
+    } finally {
+      state.characterImageBusy = false;
+      renderControls();
+    }
   }
 
   function fillPersonaForm(persona = null) {
@@ -1504,6 +1918,7 @@
       await loadPersonas();
       state.selectedPersonaId = data.is_archived ? "" : data.id;
       fillPersonaForm(data);
+      showPersonasPage();
       renderAll();
       setDialogStatus(els.personaStatus, "Persona saved.");
     } catch (error) {
@@ -1785,6 +2200,9 @@
     addSection(parts, "Conversation Summary", session.conversation_summary);
     addSection(parts, "Response Shape", [
       "- Respond as the character in a grounded, coherent way.",
+      "- Return only the character/NPC/environment side of the interaction.",
+      "- The user's latest message is already visible in the chat. Do not repeat, quote, paraphrase, summarize, or narrate it back.",
+      "- Do not begin with phrases like \"you say\", \"you reply\", \"Adam says\", \"the user says\", or any restatement of the user's action/dialogue.",
       "- Use the character's speech style and current emotional context without drifting from their baseline.",
       `- Reply length: ${replyLengthOption.instruction}`,
       "- Longer replies must never create user/persona actions, dialogue, emotions, thoughts, choices, body movement, facial expressions, memories, realizations, or reactions.",
@@ -1988,9 +2406,13 @@
       }
     }
     const finalResponse = {
-      text: normalizeText(assistantMessage.content) || "(No text returned.)",
+      text: normalizeText(assistantMessage.content),
       metadata: metadata || { model: state.selectedModel }
     };
+    if (!finalResponse.text) {
+      updateModelLogEntry(logId, { status: "error", error: "Featherless completed the stream without returning text." });
+      throw new Error("Featherless completed the stream without returning text.");
+    }
     updateModelLogEntry(logId, { status: "complete", response: finalResponse });
     return { ...finalResponse, logId };
   }
@@ -2318,6 +2740,15 @@
           "Do not narrate any action, thought, feeling, decision, or dialogue for the user/persona."
         ].join("\n")
       });
+    } else {
+      promptMessages.push({
+        role: "user",
+        content: [
+          "Respond only as the character/NPC/environment side of the interaction.",
+          "Do not repeat, quote, paraphrase, or narrate my latest message back to me.",
+          "Do not start with what I said or did. Start with the character's direct response or the scene's next non-user beat."
+        ].join("\n")
+      });
     }
 
     await recordMemoryRecall(state.lastRecalledMemoryIds);
@@ -2535,6 +2966,9 @@
         state.selectedCharacterId = urlState.characterId;
         fillCharacterForm(state.characters.find((character) => character.id === urlState.characterId) || null);
         showCharacterEditor();
+      } else if (urlState.editorMode === "personas") {
+        fillPersonaForm(state.personas.find((persona) => !persona.is_archived && persona.is_default) || state.personas.find((persona) => !persona.is_archived) || null);
+        showPersonasPage();
       } else if (urlState.characterId && state.characters.some((character) => character.id === urlState.characterId)) {
         state.selectedCharacterId = urlState.characterId;
         await loadSessions(urlState.characterId);
@@ -2570,8 +3004,8 @@
     showCharacterEditor();
   });
   els.personas?.addEventListener("click", () => {
-    fillPersonaForm(state.personas.find((persona) => persona.is_default) || state.personas[0] || null);
-    openModal(els.personaModal);
+    fillPersonaForm(state.personas.find((persona) => !persona.is_archived && persona.is_default) || state.personas.find((persona) => !persona.is_archived) || null);
+    showPersonasPage();
   });
   els.refresh?.addEventListener("click", async () => {
     try {
@@ -2621,6 +3055,9 @@
   els.replyLength?.addEventListener("input", () => {
     const index = Math.min(REPLY_LENGTH_OPTIONS.length - 1, Math.max(0, Number(els.replyLength.value || 2)));
     if (els.replyLengthLabel) els.replyLengthLabel.textContent = (REPLY_LENGTH_OPTIONS[index] || REPLY_LENGTH_OPTIONS[2]).label;
+  });
+  els.settingsModel?.addEventListener("change", () => {
+    setDialogStatus(els.settingsStatus, "");
   });
   els.closeSettingsButtons.forEach((button) => button.addEventListener("click", () => closeModal(els.settingsModal)));
   els.characterGrid?.addEventListener("click", (event) => {
@@ -2726,6 +3163,9 @@
     event.preventDefault();
     if (canSend()) els.form?.requestSubmit();
   });
+  els.characterJsonInput?.addEventListener("change", () => {
+    importCharacterJsonFile(els.characterJsonInput.files?.[0] || null);
+  });
   els.characterImageInput?.addEventListener("change", () => {
     const file = els.characterImageInput.files?.[0] || null;
     if (!file) {
@@ -2754,6 +3194,11 @@
     renderCharacterImageEditor(state.characters.find((character) => character.id === state.editingCharacterId) || null);
   });
   els.characterForm?.addEventListener("submit", saveCharacter);
+  els.characterForm?.addEventListener("input", renderControls);
+  els.generateCharacterImage?.addEventListener("click", generateCharacterImage);
+  els.aiVibeOpen?.addEventListener("click", openAiVibeModal);
+  els.aiVibeForm?.addEventListener("submit", generateAiVibe);
+  els.aiVibeCloseButtons.forEach((button) => button.addEventListener("click", () => closeModal(els.aiVibeModal)));
   els.personaForm?.addEventListener("submit", savePersona);
   els.archiveCharacter?.addEventListener("click", archiveSelectedCharacter);
   els.archivePersona?.addEventListener("click", archiveEditingPersona);
@@ -2767,15 +3212,15 @@
       showLibrary();
     }
   }));
-  els.closePersonaButtons.forEach((button) => button.addEventListener("click", () => closeModal(els.personaModal)));
-  [els.personaModal, els.settingsModal].forEach((modal) => {
+  els.closePersonaButtons.forEach((button) => button.addEventListener("click", closePersonasPage));
+  [els.settingsModal, els.aiVibeModal].forEach((modal) => {
     modal?.addEventListener("click", (event) => {
       if (event.target === modal) {
         event.stopImmediatePropagation();
       }
     }, true);
   });
-  els.newPersona?.addEventListener("click", () => fillPersonaForm());
+  els.newPersonaButtons.forEach((button) => button.addEventListener("click", () => fillPersonaForm()));
   els.personaList?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-persona-id]");
     if (!button) return;

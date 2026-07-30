@@ -225,7 +225,7 @@
 
 .settings-database-card-icon ph-shield-check,
 .settings-database-card-icon ph-trash,
-.settings-database-card-icon ph-activity {
+.settings-database-card-icon ph-chart-line-up {
   font-size: 1.35rem;
 }
 
@@ -20821,6 +20821,24 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   margin-bottom: 20px;
 }
 
+.local-chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.local-chat-create-character-button,
+.local-chat-personas-button {
+  gap: 8px;
+}
+
+.local-chat-create-character-button ph-plus-circle,
+.local-chat-personas-button ph-user-switch {
+  flex: 0 0 auto;
+}
+
 .local-chat-header h1 {
   margin: 0;
   color: var(--ink);
@@ -20828,14 +20846,6 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0;
-}
-
-.local-chat-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 .local-chat-controls {
@@ -21093,11 +21103,14 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   margin-top: 4px;
 }
 
-.local-chat-image-upload-button {
+.local-chat-image-upload-button,
+.local-chat-generate-image-button {
   gap: 8px;
 }
 
-.local-chat-image-upload-button ph-upload-simple {
+.local-chat-image-upload-button ph-upload-simple,
+.local-chat-generate-image-button ph-image-square,
+.local-chat-generate-image-button ph-spinner-gap {
   flex: 0 0 auto;
 }
 
@@ -21144,6 +21157,15 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   display: none;
 }
 
+.local-chat-persona-page {
+  display: grid;
+  gap: 16px;
+}
+
+.local-chat-persona-page[hidden] {
+  display: none;
+}
+
 .local-chat-editor-page-header {
   display: flex;
   align-items: center;
@@ -21177,6 +21199,27 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
 }
 
 .local-chat-character-save-button ph-floppy-disk {
+  flex: 0 0 auto;
+}
+
+.local-chat-persona-save-button,
+.local-chat-new-persona-button,
+.local-chat-import-character-button,
+.local-chat-schema-download,
+.local-chat-ai-vibe-button,
+.local-chat-ai-vibe-generate-button,
+.local-chat-generate-image-button {
+  gap: 8px;
+}
+
+.local-chat-persona-save-button ph-floppy-disk,
+.local-chat-new-persona-button ph-plus-circle,
+.local-chat-import-character-button ph-file-arrow-up,
+.local-chat-schema-download ph-download-simple,
+.local-chat-ai-vibe-button ph-sparkle,
+.local-chat-ai-vibe-generate-button ph-sparkle,
+.local-chat-generate-image-button ph-image-square,
+.local-chat-generate-image-button ph-spinner-gap {
   flex: 0 0 auto;
 }
 
@@ -22091,6 +22134,12 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow: hidden;
 }
 
+.modal-dialog.local-chat-ai-vibe-dialog {
+  width: min(920px, calc(100vw - 36px));
+  max-height: calc(100vh - var(--header-height) - 42px);
+  overflow: hidden;
+}
+
 .local-chat-editor-dialog .modal-header {
   display: flex;
   align-items: flex-start;
@@ -22107,6 +22156,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
 }
 
 .local-chat-editor-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px 20px;
+  overflow-y: auto;
+}
+
+.local-chat-ai-vibe-dialog form {
   display: grid;
   gap: 14px;
   padding: 18px 22px 20px;
@@ -22184,6 +22240,10 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   display: grid;
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .local-chat-persona-list {
