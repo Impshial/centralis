@@ -411,6 +411,7 @@ const CENTRALIS_HEADER_MARKUP = `
       </button>
       <div class="dropdown-menu" role="menu">
         <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
+        <a href="god-engine.html" role="menuitem"><ph-dna weight="duotone" aria-hidden="true"></ph-dna><span>God Engine</span></a>
         <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
         <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
       </div>
@@ -504,6 +505,7 @@ syncThemeSelects();
 
 const GENERATION_ACTIVITY_POLL_MS = 5000;
 const GENERATION_ACTIVE_STATUSES = new Set(["queued", "running"]);
+const GENERATION_FAILURE_SEEN_KEY = "centralis-generation-failure-seen-at";
 let generationActivityModal = null;
 let generationActivityList = null;
 let generationActivityStatus = null;
@@ -511,6 +513,7 @@ let generationActivityPoll = null;
 let generationActivityJobs = [];
 let generationActivityLoading = false;
 let generationActivityExpandedJobIds = new Set();
+let generationActivityFailureSeenAt = Number(localStorage.getItem(GENERATION_FAILURE_SEEN_KEY) || 0);
 
 function ensureGenerationActivityModal() {
   if (generationActivityModal) return generationActivityModal;
@@ -554,6 +557,7 @@ function formatGenerationModule(moduleName) {
     image_generation: "Image Generation",
     universe_builder: "Universe Builder",
     stellar_architect: "Stellar Architect",
+    god_engine: "God Engine",
   })[moduleName] || "Centralis";
 }
 
@@ -571,11 +575,41 @@ function formatGenerationElapsed(job) {
   return `${minutes}m ${remainder}s`;
 }
 
+function getGenerationJobTimestamp(job) {
+  return new Date(job?.updated_at || job?.completed_at || job?.created_at || 0).getTime() || 0;
+}
+
+function unseenFailedGenerationJobs() {
+  return generationActivityJobs.filter((job) => job.status === "failed" && getGenerationJobTimestamp(job) > generationActivityFailureSeenAt);
+}
+
+function markGenerationFailuresSeen() {
+  const failedTimes = generationActivityJobs
+    .filter((job) => job.status === "failed")
+    .map(getGenerationJobTimestamp)
+    .filter(Boolean);
+  const seenAt = Math.max(Date.now(), generationActivityFailureSeenAt, ...failedTimes);
+  generationActivityFailureSeenAt = seenAt;
+  localStorage.setItem(GENERATION_FAILURE_SEEN_KEY, String(seenAt));
+}
+
 function getGenerationJobLink(job) {
   if (job.module === "image_generation") {
     return job.source_id ? `image-generation.html?session_id=${encodeURIComponent(job.source_id)}` : "image-generation.html";
   }
   return "";
+}
+
+function formatGenerationErrorDetails(job) {
+  if (!job?.error_details || typeof job.error_details !== "object") return "";
+  const body = JSON.stringify(job.error_details, null, 2);
+  if (!body || body === "{}") return "";
+  return `
+    <details class="generation-job-error-details">
+      <summary>Error details</summary>
+      <pre>${escapeHtml(body)}</pre>
+    </details>
+  `;
 }
 
 function renderGenerationActivityJobs() {
@@ -597,6 +631,7 @@ function renderGenerationActivityJobs() {
         ${job.possibly_stalled ? '<span class="is-warning">Possibly stalled</span>' : ""}
       </div>
       ${job.error_message ? `<p class="generation-job-error">${escapeHtml(job.error_message)}</p>` : ""}
+      ${formatGenerationErrorDetails(job)}
     </div>
     <div class="generation-job-actions">
       ${link ? `<a class="secondary-action" href="${link}">Open</a>` : ""}
@@ -613,6 +648,7 @@ function renderGenerationActivityJobs() {
         ${job.possibly_stalled ? '<span class="is-warning">Possibly stalled</span>' : ""}
       </div>
       ${job.error_message ? `<p class="generation-job-error">${escapeHtml(job.error_message)}</p>` : ""}
+      ${formatGenerationErrorDetails(job)}
     </div>
     <div class="generation-job-actions">
       ${link ? `<a class="secondary-action" href="${link}">Open</a>` : ""}
@@ -666,14 +702,16 @@ function renderGenerationActivityJobs() {
   `;
 }
 
-function syncGenerationActivityCount(activeCount = 0) {
+function syncGenerationActivityCount(activeCount = 0, failedCount = 0) {
   document.querySelectorAll("[data-generation-activity-count]").forEach((badge) => {
-    badge.hidden = activeCount <= 0;
-    badge.textContent = activeCount > 99 ? "99+" : String(activeCount);
+    badge.classList.toggle("is-error", failedCount > 0);
+    badge.classList.toggle("is-active-count", failedCount <= 0 && activeCount > 0);
+    badge.hidden = activeCount <= 0 && failedCount <= 0;
+    badge.textContent = failedCount > 0 ? "!" : activeCount > 99 ? "99+" : String(activeCount);
   });
 }
 
-async function refreshGenerationActivity({ quiet = false } = {}) {
+async function refreshGenerationActivity({ quiet = false, collapseFailed = false } = {}) {
   if (!supabaseClient || generationActivityLoading) return;
   generationActivityLoading = true;
   if (generationActivityStatus && !quiet) generationActivityStatus.textContent = "Loading activity...";
@@ -683,8 +721,18 @@ async function refreshGenerationActivity({ quiet = false } = {}) {
     });
     if (error) throw error;
     generationActivityJobs = data?.jobs || [];
-    syncGenerationActivityCount(Number(data?.activeCount || 0));
+    if (collapseFailed) {
+      generationActivityJobs
+        .filter((job) => job.status === "failed")
+        .forEach((job) => generationActivityExpandedJobIds.delete(String(job.id)));
+    }
+    const activeCount = Number(data?.activeCount || 0);
+    syncGenerationActivityCount(activeCount, unseenFailedGenerationJobs().length);
     renderGenerationActivityJobs();
+    if (generationActivityModal && !generationActivityModal.hidden && generationActivityJobs.some((job) => job.status === "failed")) {
+      markGenerationFailuresSeen();
+      syncGenerationActivityCount(activeCount, 0);
+    }
     if (generationActivityStatus) generationActivityStatus.textContent = "";
   } catch (error) {
     if (generationActivityStatus) generationActivityStatus.textContent = `Could not load activity: ${getReadableError(error)}`;
@@ -708,7 +756,7 @@ function stopGenerationActivityPolling() {
 async function openGenerationActivity() {
   ensureGenerationActivityModal();
   generationActivityModal.hidden = false;
-  await refreshGenerationActivity();
+  await refreshGenerationActivity({ collapseFailed: true });
 }
 
 function closeGenerationActivity() {

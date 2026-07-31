@@ -5,7 +5,7 @@ export type GenerationJobType = "image" | "colony" | "colonists";
 
 export async function createGenerationJob(input: {
   userId: number;
-  module: "image_generation" | "universe_builder" | "stellar_architect";
+  module: "image_generation" | "universe_builder" | "stellar_architect" | "god_engine";
   jobType?: GenerationJobType;
   sourceType?: string;
   sourceId?: string | null;

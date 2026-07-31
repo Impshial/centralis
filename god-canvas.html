@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>God Canvas | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=god-engine-52">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="god-canvas">
+  <div class="app-shell god-canvas-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+    <main class="god-canvas-page" aria-label="God Engine evolution canvas">
+      <div class="god-canvas-toolbar">
+        <a class="toolbar-back god-canvas-back" href="god-engine.html"><ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left> Back to Evolutions</a>
+        <strong class="god-canvas-module-name">God Engine</strong>
+        <div class="god-canvas-actions">
+          <button class="secondary-action god-evolution-status-launch" type="button" data-god-evolution-status-open>
+            <ph-hourglass-medium weight="bold" aria-hidden="true"></ph-hourglass-medium>
+            Evolution Status
+            <span class="god-status-count" data-god-evolution-status-count hidden>0</span>
+          </button>
+          <a class="secondary-action god-autopilot-launch" href="god-autopilot.html" data-god-autopilot-launch><ph-play weight="bold" aria-hidden="true"></ph-play> Autopilot</a>
+          <p class="canvas-transfer-status" data-god-canvas-status role="status"></p>
+        </div>
+      </div>
+      <div class="god-workspace" data-god-workspace>
+        <div class="god-flow-canvas" id="god-flow"></div>
+        <aside class="god-context-panel" data-god-context-panel hidden></aside>
+        <aside class="god-inspector" data-god-inspector hidden aria-label="Species Inspector"></aside>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=god-engine-52"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="centralis-image-viewer.js?v=image-viewer-prompt-1"></script>
+  <script src="god-canvas.js?v=god-engine-52"></script>
+</body>
+</html>

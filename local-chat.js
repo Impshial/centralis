@@ -650,10 +650,16 @@
           ${character.scenario ? `<section><strong>Scenario</strong><p>${escapeHtml(character.scenario)}</p></section>` : ""}
         </div>
       </div>
-      <button class="primary-action local-chat-detail-edit-button" type="button" data-local-chat-edit-character>
-        <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
-        <span>Edit Character</span>
-      </button>
+      <div class="local-chat-detail-actions">
+        <button class="primary-action local-chat-detail-edit-button" type="button" data-local-chat-edit-character>
+          <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
+          <span>Edit Character</span>
+        </button>
+        <button class="danger-action local-chat-detail-delete-button" type="button" data-local-chat-delete-character>
+          <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+          <span>Delete Character</span>
+        </button>
+      </div>
     `;
   }
 
@@ -1878,6 +1884,53 @@
     }
   }
 
+  async function deleteSelectedCharacter() {
+    if (state.busy) return;
+    const character = selectedCharacter();
+    if (!character) return;
+    const sessionCount = state.sessions.filter((session) => session.character_id === character.id).length;
+    const message = [
+      `Delete ${character.name}?`,
+      sessionCount
+        ? `This will permanently delete ${sessionCount} chat${sessionCount === 1 ? "" : "s"} for this character.`
+        : "This character has no chats.",
+      "This cannot be undone."
+    ].join("\n\n");
+    if (!confirm(message)) return;
+
+    setLandingStatus("Deleting character...");
+    try {
+      const supabase = requireSupabase();
+      const { error: sessionError } = await supabase
+        .from("local_chat_sessions")
+        .delete()
+        .eq("character_id", character.id)
+        .eq("user_id", state.user.id);
+      if (sessionError) throw sessionError;
+
+      const { error: characterError } = await supabase
+        .from("local_chat_characters")
+        .delete()
+        .eq("id", character.id)
+        .eq("user_id", state.user.id);
+      if (characterError) throw characterError;
+
+      state.selectedCharacterId = null;
+      state.selectedSessionId = null;
+      state.sessions = [];
+      state.messages = [];
+      state.memories = [];
+      state.modelLog = [];
+      await loadCharacters();
+      showLibrary();
+      renderAll();
+      setLandingStatus("Character deleted.");
+    } catch (error) {
+      setLandingStatus(error.message || "Could not delete character.", true);
+      setFormStatus(error.message || "Could not delete character.", true);
+    }
+  }
+
   async function savePersona(event) {
     event.preventDefault();
     const form = els.personaForm;
@@ -3082,6 +3135,10 @@
       event.target.closest(".local-chat-tools-menu")?.querySelector("[data-local-chat-tools]")?.setAttribute("aria-expanded", "false");
       fillCharacterForm(selectedCharacter());
       showCharacterEditor();
+      return;
+    }
+    if (event.target.closest("[data-local-chat-delete-character]")) {
+      deleteSelectedCharacter();
       return;
     }
     if (event.target.closest("[data-local-chat-archive-character-detail]")) {

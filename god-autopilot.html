@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>God Engine Autopilot | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=god-engine-33">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="god-canvas">
+  <div class="app-shell god-canvas-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+    <main class="god-autopilot-page" aria-label="God Engine autopilot">
+      <section class="god-autopilot-panel">
+        <p class="settings-eyebrow">God Engine</p>
+        <h1>Autopilot Evolution</h1>
+        <p class="god-muted">Runs ten unattended evolution cycles on the latest generated batch, then stops.</p>
+        <div class="god-autopilot-actions">
+          <button class="primary-action" type="button" data-god-autopilot-start>Start 10 Cycles</button>
+          <button class="secondary-action" type="button" data-god-autopilot-stop disabled>Stop</button>
+          <a class="secondary-action" href="god-canvas.html" data-god-autopilot-canvas>Back to Canvas</a>
+        </div>
+        <p class="canvas-transfer-status" data-god-autopilot-status role="status"></p>
+        <ol class="god-autopilot-log" data-god-autopilot-log></ol>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=god-engine-33"></script>
+  <script src="god-autopilot.js?v=god-engine-1"></script>
+</body>
+</html>

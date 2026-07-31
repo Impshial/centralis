@@ -41,6 +41,10 @@
                   <span>Upload</span>
                 </button>
                 <input type="file" accept="image/*" data-centralis-image-viewer-upload-input hidden>
+                <button class="secondary-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-prompt hidden>
+                  <ph-text-align-left weight="bold" aria-hidden="true"></ph-text-align-left>
+                  <span>View Prompt</span>
+                </button>
                 <button class="secondary-action centralis-image-viewer-action" type="button" data-centralis-image-viewer-open>
                   <ph-arrow-square-out weight="bold" aria-hidden="true"></ph-arrow-square-out>
                   <span>Open in New Tab</span>
@@ -117,6 +121,7 @@
       fitView: modal.querySelector("[data-centralis-image-viewer-fit-view]"),
       upload: modal.querySelector("[data-centralis-image-viewer-upload]"),
       uploadInput: modal.querySelector("[data-centralis-image-viewer-upload-input]"),
+      prompt: modal.querySelector("[data-centralis-image-viewer-prompt]"),
       open: modal.querySelector("[data-centralis-image-viewer-open]"),
       download: modal.querySelector("[data-centralis-image-viewer-download]"),
       delete: modal.querySelector("[data-centralis-image-viewer-delete]"),
@@ -274,12 +279,17 @@
       return;
     }
     viewer.details.innerHTML = sections.map((section) => {
+      const isPromptSection = section.title === "Prompt";
       const rows = Array.isArray(section.rows) && section.rows.length
         ? `<dl>${section.rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`
         : "";
-      const body = section.body ? `<p>${escapeHtml(section.body)}</p>` : "";
+      const body = section.body
+        ? isPromptSection
+          ? `<pre class="centralis-image-viewer-prompt-text">${escapeHtml(section.body)}</pre>`
+          : `<p>${escapeHtml(section.body)}</p>`
+        : "";
       return `
-        <article class="centralis-image-viewer-detail-section">
+        <article class="centralis-image-viewer-detail-section" ${isPromptSection ? "data-centralis-image-viewer-prompt-section" : ""}>
           <h3>${escapeHtml(section.title || "Details")}</h3>
           ${rows}
           ${body}
@@ -352,6 +362,7 @@
       viewer.upload.querySelector("span").textContent = capabilities.uploadLabel;
     }
     if (viewer.uploadInput) viewer.uploadInput.accept = capabilities.uploadAccept;
+    if (viewer.prompt) viewer.prompt.hidden = !Boolean(image.prompt);
     if (viewer.open) viewer.open.hidden = !capabilities.canOpen;
     if (viewer.download) viewer.download.hidden = !capabilities.canDownload;
     if (viewer.delete) viewer.delete.hidden = !capabilities.canDelete;
@@ -547,6 +558,18 @@
     requestAnimationFrame(resetImageTransform);
   }
 
+  function openPromptDetails() {
+    const image = getCurrentImage();
+    if (!image?.prompt) return;
+    state.drawerOpen = true;
+    if (viewer.drawer) viewer.drawer.classList.remove("is-collapsed");
+    if (viewer.drawerToggle) viewer.drawerToggle.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      viewer.details?.querySelector("[data-centralis-image-viewer-prompt-section]")?.scrollIntoView({ block: "nearest" });
+      resetImageTransform();
+    });
+  }
+
   function handleWheel(event) {
     if (!state.currentConfig || !viewer?.frame) return;
     event.preventDefault();
@@ -606,6 +629,7 @@
     viewer.fitView?.addEventListener("click", setImageFitToView);
     viewer.upload?.addEventListener("click", handleUploadButtonClick);
     viewer.uploadInput?.addEventListener("change", handleUploadImage);
+    viewer.prompt?.addEventListener("click", openPromptDetails);
     viewer.open?.addEventListener("click", handleOpenImage);
     viewer.download?.addEventListener("click", handleDownloadImage);
     viewer.delete?.addEventListener("click", handleDeleteImage);

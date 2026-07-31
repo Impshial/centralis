@@ -184,6 +184,21 @@ function buildVeniceGeneratePayload(settings: ReturnType<typeof normalizeVeniceI
   return payload;
 }
 
+function createGenerationTimingSnapshot(snapshot: Record<string, unknown>, generationStartedAt: unknown) {
+  const completedAt = new Date();
+  const startedMs = Date.parse(String(generationStartedAt || ""));
+  const hasStartedAt = Number.isFinite(startedMs);
+  const durationSeconds = hasStartedAt
+    ? Math.max(0, Math.round(((completedAt.getTime() - startedMs) / 1000) * 10) / 10)
+    : null;
+  return {
+    ...snapshot,
+    generation_started_at: hasStartedAt ? new Date(startedMs).toISOString() : null,
+    generation_completed_at: completedAt.toISOString(),
+    generation_duration_seconds: durationSeconds,
+  };
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -196,6 +211,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const sessionId = String(body.sessionId || "").trim();
     const prompt = String(body.prompt || "").trim();
+    const generationStartedAt = body.generationStartedAt;
     if (!sessionId || !prompt) return jsonResponse({ error: "A session and prompt are required." }, 400);
     if (prompt.length > 32000) return jsonResponse({ error: "Prompts may not exceed 32,000 characters." }, 400);
     const session = await requireImageGenerationSession(sessionId, appUser.id);
@@ -293,6 +309,7 @@ Deno.serve(async (req) => {
       if (!base64s.length) throw new Error("Venice did not return image data.");
       generated = base64s.map((base64) => ({ bytes: base64ToBytes(base64), contentType: settings.format === "jpeg" ? "image/jpeg" : `image/${settings.format}` }));
     }
+    const timedSnapshot = createGenerationTimingSnapshot(snapshot, generationStartedAt);
 
     const { data: stillPending, error: stillPendingError } = await supabase.from("image_generation_messages")
       .select("status").eq("id", messageId).eq("user_id", appUser.id).eq("deleted", false).maybeSingle();
@@ -321,7 +338,7 @@ Deno.serve(async (req) => {
       const { data, error } = await supabase.from("image_generation_assets").insert({
         id, session_id: sessionId, message_id: messageId, user_id: appUser.id, asset_kind: "output", storage_key: key,
         original_filename: `${id}.${extension}`, content_type: image.contentType, byte_size: image.bytes.byteLength,
-        sort_order: index, generation_settings: snapshot,
+        sort_order: index, generation_settings: timedSnapshot,
       }).select("*").single();
       if (error || !data) throw error || new Error("Could not save generated image metadata.");
       if (index === 0) {
@@ -331,7 +348,7 @@ Deno.serve(async (req) => {
     }
     const { data: assistantMessage, error: assistantError } = await supabase.from("image_generation_messages").insert({
       session_id: sessionId, user_id: appUser.id, role: "assistant", content: `Generated ${assets.length} image${assets.length === 1 ? "" : "s"}.`,
-      status: "completed", endpoint, settings_snapshot: snapshot,
+      status: "completed", endpoint, settings_snapshot: timedSnapshot,
     }).select("*").single();
     if (assistantError) throw assistantError;
     await supabase.from("image_generation_messages").update({ status: "completed" }).eq("id", messageId).eq("status", "pending").eq("deleted", false);

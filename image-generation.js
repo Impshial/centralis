@@ -564,6 +564,12 @@
   function getAssetGenerationSettings(asset, fallbackMessage) {
     return normalizeSettingsSnapshot(asset?.generation_settings) || normalizeSettingsSnapshot(fallbackMessage?.settings_snapshot);
   }
+  function formatGenerationDuration(settings) {
+    const value = settings?.generation_duration_seconds ?? settings?.generationDurationSeconds;
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds < 0) return "";
+    return `${seconds.toLocaleString(undefined, { maximumFractionDigits: seconds < 10 ? 1 : 0 })} seconds`;
+  }
   function getOutputAssets() {
     return state.assets.filter((asset) => asset.asset_kind === "output" && asset.preview_url);
   }
@@ -581,6 +587,7 @@
     const cfgScale = settings.cfgScale ?? settings.cfg_scale;
     const rows = [
       ["Model", getSettingsModelLabel(settings)],
+      ["Generation Time", formatGenerationDuration(settings)],
       ["Provider", settings.provider],
       ["Endpoint", settings.endpoint],
       ["Size", settings.size],
@@ -611,6 +618,7 @@
     const cfgScale = settings.cfgScale ?? settings.cfg_scale;
     const parts = [
       getSettingsModelLabel(settings),
+      formatGenerationDuration(settings),
       settings.provider,
       settings.size,
       settings.quality,
@@ -985,6 +993,7 @@
 
   async function sendPrompt(event) {
     event.preventDefault();
+    const generationStartedAt = new Date().toISOString();
     if (state.busy) return;
     const prompt = els.prompt.value.trim();
     els.error.textContent = "";
@@ -1017,7 +1026,7 @@
     renderConversation(); setBusy(true); setStatus("Generating images…");
     try {
       const selectedModel = getCurrentModel();
-      const requestBody = { sessionId: generation.sessionId, prompt, settings: { provider: selectedModel?.provider || "venice", ...params, hide_watermark: selectedModel?.provider === "venice" }, referenceAssetIds, useLastGenerated };
+      const requestBody = { sessionId: generation.sessionId, prompt, generationStartedAt, settings: { provider: selectedModel?.provider || "venice", ...params, hide_watermark: selectedModel?.provider === "venice" }, referenceAssetIds, useLastGenerated };
       const payload = shouldUseHighQualityRoute(model, params)
         ? await invokeHighQualityOpenAi(requestBody)
         : await invoke("generate-session-images", requestBody);

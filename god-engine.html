@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>God Engine | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=god-engine-21">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="god-engine">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="god-engine-page" aria-labelledby="god-engine-title">
+      <section class="god-engine-toolbar">
+        <div>
+          <p class="god-engine-eyebrow">World Building</p>
+          <h1 id="god-engine-title">God Engine</h1>
+        </div>
+        <button class="primary-action" type="button" data-open-god-create>
+          <ph-dna weight="bold" aria-hidden="true"></ph-dna>
+          New Evolution
+        </button>
+      </section>
+
+      <section class="god-engine-controls" aria-label="Evolution display options">
+        <p class="god-engine-count" data-god-count>Loading evolutions...</p>
+        <label class="god-engine-search">
+          <span class="sr-only">Search evolutions</span>
+          <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+          <input type="search" placeholder="Search evolutions..." autocomplete="off" data-god-search>
+        </label>
+      </section>
+
+      <p class="form-status god-engine-status" data-god-status role="status"></p>
+      <div class="god-evolution-grid" data-god-list aria-label="Your evolutions">
+        <p class="empty-state">Loading evolutions...</p>
+      </div>
+    </main>
+
+    <div class="modal-backdrop" id="god-create-modal" hidden>
+      <section class="modal-dialog god-create-dialog" role="dialog" aria-modal="true" aria-labelledby="god-create-title">
+        <div class="modal-header">
+          <div>
+            <p class="settings-eyebrow">God Engine</p>
+            <h2 id="god-create-title">New Evolution</h2>
+            <p class="modal-subtitle">Start with a guided seed, instant organism, or manual starter.</p>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close" data-god-create-close>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </div>
+
+        <form class="god-create-form" data-god-create-form>
+          <label class="form-field">
+            <span>Name <em>(optional)</em></span>
+            <input type="text" name="name" placeholder="Leave blank and the engine will decide" autocomplete="off">
+          </label>
+          <label class="form-field is-wide">
+            <span>World or environment <em>(optional)</em></span>
+            <textarea name="worldSummary" placeholder="A warm shallow sea, a volcanic moon, an oxygen-rich forest floor..."></textarea>
+          </label>
+          <label class="form-field">
+            <span>Starting path</span>
+            <select name="startingMode">
+              <option value="guided">Guided seed</option>
+              <option value="instant" selected>Instant organism</option>
+              <option value="manual">Manual starter</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Starting organism</span>
+            <select name="starterKind">
+              <option value="single_cell">Single-celled organism</option>
+              <option value="multicellular">Simple multicellular organism</option>
+              <option value="random" selected>Random starting organism</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Habitat preference <em>(optional)</em></span>
+            <select name="habitat">
+              <option value="">Let the engine choose</option>
+              <option value="aquatic">Aquatic</option>
+              <option value="terrestrial">Terrestrial</option>
+              <option value="aerial">Aerial</option>
+              <option value="subterranean">Subterranean</option>
+            </select>
+          </label>
+          <label class="form-field is-wide">
+            <span>Starter notes <em>(optional)</em></span>
+            <textarea name="manualNotes" placeholder="Use this for guided or manual seeds. Example: translucent swimmer with chemical sensing."></textarea>
+          </label>
+          <p class="form-status" data-god-create-status role="status"></p>
+          <div class="modal-actions">
+            <button class="secondary-action" type="button" data-god-create-cancel>Cancel</button>
+            <button class="primary-action" type="submit" data-god-create-submit>Create Evolution</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=god-engine-21"></script>
+  <script src="god-engine.js?v=god-engine-21"></script>
+</body>
+</html>

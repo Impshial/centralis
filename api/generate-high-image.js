@@ -371,6 +371,21 @@ function parseOpenAiImages(result, settings) {
   return base64s.map((base64) => ({ bytes: Buffer.from(base64, "base64"), contentType }));
 }
 
+function createGenerationTimingSnapshot(snapshot, generationStartedAt) {
+  const completedAt = new Date();
+  const startedMs = Date.parse(String(generationStartedAt || ""));
+  const hasStartedAt = Number.isFinite(startedMs);
+  const durationSeconds = hasStartedAt
+    ? Math.max(0, Math.round(((completedAt.getTime() - startedMs) / 1000) * 10) / 10)
+    : null;
+  return {
+    ...snapshot,
+    generation_started_at: hasStartedAt ? new Date(startedMs).toISOString() : null,
+    generation_completed_at: completedAt.toISOString(),
+    generation_duration_seconds: durationSeconds,
+  };
+}
+
 function serializeAsset(asset) {
   return {
     ...asset,
@@ -478,6 +493,7 @@ module.exports = async function handler(req, res) {
 
     const result = await callOpenAi(settings, prompt, references);
     const generated = parseOpenAiImages(result, settings);
+    const timedSnapshot = createGenerationTimingSnapshot(snapshot, body.generationStartedAt);
     const stillPending = await supabaseFetch(`/rest/v1/image_generation_messages?select=status&id=eq.${encodeURIComponent(messageId)}&user_id=eq.${appUser.id}&limit=1`);
     if (stillPending?.[0]?.status !== "pending") {
       if (jobId) await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {
@@ -507,7 +523,7 @@ module.exports = async function handler(req, res) {
         content_type: image.contentType,
         byte_size: image.bytes.byteLength,
         sort_order: index,
-        generation_settings: snapshot,
+        generation_settings: timedSnapshot,
       });
       if (index === 0 && jobId) {
         await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {
@@ -524,7 +540,7 @@ module.exports = async function handler(req, res) {
       content: `Generated ${assets.length} image${assets.length === 1 ? "" : "s"}.`,
       status: "completed",
       endpoint,
-      settings_snapshot: snapshot,
+      settings_snapshot: timedSnapshot,
     });
     await updateRows("image_generation_messages", `?id=eq.${encodeURIComponent(messageId)}&status=eq.pending`, { status: "completed" });
     if (jobId) await updateRows("generation_jobs", `?id=eq.${encodeURIComponent(jobId)}`, {

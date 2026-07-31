@@ -32,6 +32,13 @@ function createUploadImageMetadata(input: {
       note: "Uploaded image",
     });
   }
+  if (input.storageModule === "god-engine" || input.storageModule.startsWith("god-engine/")) {
+    return createCentralisStorageMetadata({
+      module: "God Engine",
+      context: `Species: ${name}`,
+      note: "Uploaded image",
+    });
+  }
 
   const typeText = `${input.objectKind || ""} ${input.elementType || ""}`;
   const label = /universe/i.test(typeText) ? "Universe" : "Element";
