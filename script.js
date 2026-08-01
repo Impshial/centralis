@@ -411,6 +411,7 @@ const CENTRALIS_HEADER_MARKUP = `
       </button>
       <div class="dropdown-menu" role="menu">
         <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
+        <a href="arc-studio.html" role="menuitem"><ph-git-branch weight="duotone" aria-hidden="true"></ph-git-branch><span>Arc Studio</span></a>
         <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
         <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
       </div>

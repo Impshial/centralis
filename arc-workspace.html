@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arc Studio Workspace | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=arc-studio-2">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="arc-workspace">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="arc-workspace-page" aria-label="Arc Studio workspace">
+      <header class="arc-workspace-topbar">
+        <div class="arc-workspace-nav">
+          <a class="arc-workspace-back" href="arc-studio.html">
+            <ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left>
+            Back to Projects
+          </a>
+          <strong class="arc-workspace-module-name">Arc Studio</strong>
+        </div>
+        <div class="arc-workspace-actions">
+          <button class="secondary-action" type="button" data-arc-open-unit>
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            Add Unit
+          </button>
+          <button class="secondary-action" type="button" data-arc-open-thread>
+            <ph-git-branch weight="bold" aria-hidden="true"></ph-git-branch>
+            Thread
+          </button>
+          <button class="secondary-action" type="button" data-arc-open-setup>
+            <ph-link weight="bold" aria-hidden="true"></ph-link>
+            Setup/Payoff
+          </button>
+          <button class="secondary-action" type="button" data-arc-analyze-story>
+            <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
+            Analyze Story
+          </button>
+        </div>
+      </header>
+
+      <section class="arc-workspace-grid">
+        <aside class="arc-outline-panel" aria-label="Story outline">
+          <div class="arc-panel-header">
+            <div>
+              <h2>Outline</h2>
+              <p data-arc-outline-count>Loading units...</p>
+            </div>
+            <button class="icon-button" type="button" data-arc-open-unit aria-label="Add story unit">
+              <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            </button>
+          </div>
+          <div class="arc-filter-row">
+            <select data-arc-status-filter aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="idea">Idea</option>
+              <option value="planned">Planned</option>
+              <option value="outlined">Outlined</option>
+              <option value="drafting">Drafting</option>
+              <option value="revising">Revising</option>
+              <option value="complete">Complete</option>
+              <option value="cut">Cut</option>
+            </select>
+            <input type="search" placeholder="Search outline..." data-arc-unit-search>
+          </div>
+          <div class="arc-outline-list" data-arc-outline-list></div>
+        </aside>
+
+        <section class="arc-main-surface" aria-label="Story planning surface">
+          <div class="arc-view-tabs" role="tablist" aria-label="Arc Studio views">
+            <button class="is-active" type="button" data-arc-view="outline">Outline</button>
+            <button type="button" data-arc-view="corkboard">Corkboard</button>
+            <button type="button" data-arc-view="timeline">Timeline</button>
+            <button type="button" data-arc-view="arc-map">Arc Map</button>
+            <button type="button" data-arc-view="diagnostics">Diagnostics</button>
+          </div>
+          <p class="form-status arc-status" data-arc-workspace-status role="status"></p>
+          <div class="arc-story-surface" data-arc-story-surface></div>
+        </section>
+
+        <aside class="arc-inspector" aria-label="Scene inspector">
+          <div class="arc-inspector-header">
+            <div>
+              <p class="settings-eyebrow" data-arc-inspector-type>Project</p>
+              <h2 data-arc-inspector-title>Arc Studio</h2>
+            </div>
+          </div>
+          <nav class="arc-inspector-tabs" aria-label="Inspector sections">
+            <button class="is-active" type="button" data-arc-inspector-tab="overview">Overview</button>
+            <button type="button" data-arc-inspector-tab="cast">Cast</button>
+            <button type="button" data-arc-inspector-tab="story">Story</button>
+            <button type="button" data-arc-inspector-tab="arcs">Arcs</button>
+            <button type="button" data-arc-inspector-tab="causality">Causality</button>
+            <button type="button" data-arc-inspector-tab="continuity">Continuity</button>
+            <button type="button" data-arc-inspector-tab="chronicle">Chronicle</button>
+            <button type="button" data-arc-inspector-tab="notes">Notes</button>
+          </nav>
+          <div class="arc-inspector-content" data-arc-inspector-content></div>
+        </aside>
+      </section>
+    </main>
+
+    <div class="modal-backdrop" id="arc-unit-modal" hidden>
+      <section class="modal-dialog arc-create-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-unit-title">
+        <div class="modal-header">
+          <div>
+            <p class="settings-eyebrow">Arc Studio</p>
+            <h2 id="arc-unit-title" data-arc-unit-title>Add Story Unit</h2>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close" data-arc-unit-close>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </div>
+        <form class="arc-create-form" data-arc-unit-form>
+          <input type="hidden" name="id">
+          <label class="form-field">
+            <span>Type</span>
+            <select name="unit_type">
+              <option value="part">Part</option>
+              <option value="act">Act</option>
+              <option value="sequence">Sequence</option>
+              <option value="episode">Episode</option>
+              <option value="chapter">Chapter</option>
+              <option value="scene" selected>Scene</option>
+              <option value="beat">Beat</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Parent</span>
+            <select name="parent_unit_id" data-arc-parent-select>
+              <option value="">Top level</option>
+            </select>
+          </label>
+          <label class="form-field is-wide">
+            <span>Title</span>
+            <input type="text" name="title" maxlength="180" required placeholder="The Failed Negotiation">
+          </label>
+          <label class="form-field is-wide">
+            <span>Synopsis</span>
+            <textarea name="summary" placeholder="What happens in this unit?"></textarea>
+          </label>
+          <p class="form-status" data-arc-unit-status role="status"></p>
+          <div class="modal-actions">
+            <button class="secondary-action" type="button" data-arc-unit-cancel>Cancel</button>
+            <button class="primary-action" type="submit">Save Unit</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="arc-thread-modal" hidden>
+      <section class="modal-dialog arc-create-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-thread-title">
+        <div class="modal-header">
+          <div>
+            <p class="settings-eyebrow">Arc Studio</p>
+            <h2 id="arc-thread-title">Add Plot Thread</h2>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close" data-arc-thread-close>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </div>
+        <form class="arc-create-form" data-arc-thread-form>
+          <label class="form-field">
+            <span>Name</span>
+            <input type="text" name="name" maxlength="160" required placeholder="Main conflict">
+          </label>
+          <label class="form-field">
+            <span>Type</span>
+            <select name="thread_type">
+              <option value="plot">Plot</option>
+              <option value="subplot">Subplot</option>
+              <option value="mystery">Mystery</option>
+              <option value="romance">Romance</option>
+              <option value="antagonist">Antagonist Plan</option>
+              <option value="theme">Theme</option>
+              <option value="relationship">Relationship</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="form-field is-wide">
+            <span>Description</span>
+            <textarea name="description" placeholder="What this thread tracks."></textarea>
+          </label>
+          <div class="modal-actions">
+            <button class="secondary-action" type="button" data-arc-thread-cancel>Cancel</button>
+            <button class="primary-action" type="submit">Save Thread</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="arc-setup-modal" hidden>
+      <section class="modal-dialog arc-create-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-setup-title">
+        <div class="modal-header">
+          <div>
+            <p class="settings-eyebrow">Arc Studio</p>
+            <h2 id="arc-setup-title">Add Setup / Payoff</h2>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close" data-arc-setup-close>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </div>
+        <form class="arc-create-form" data-arc-setup-form>
+          <label class="form-field is-wide">
+            <span>Label</span>
+            <input type="text" name="label" maxlength="180" required placeholder="The recording device">
+          </label>
+          <label class="form-field">
+            <span>Setup Scene</span>
+            <select name="setup_unit_id" data-arc-setup-unit-select>
+              <option value="">Not assigned</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Payoff Scene</span>
+            <select name="payoff_unit_id" data-arc-payoff-unit-select>
+              <option value="">Not assigned</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Setup Type</span>
+            <select name="setup_type">
+              <option value="setup">Setup</option>
+              <option value="clue">Clue</option>
+              <option value="promise">Promise</option>
+              <option value="foreshadowing">Foreshadowing</option>
+              <option value="question">Question</option>
+              <option value="misdirection">Misdirection</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Status</span>
+            <select name="status">
+              <option value="unresolved">Unresolved</option>
+              <option value="prepared">Prepared</option>
+              <option value="paid_off">Paid Off</option>
+              <option value="cut">Cut</option>
+            </select>
+          </label>
+          <label class="form-field is-wide">
+            <span>Description</span>
+            <textarea name="description" placeholder="What is being prepared, revealed, answered, or reversed?"></textarea>
+          </label>
+          <div class="modal-actions">
+            <button class="secondary-action" type="button" data-arc-setup-cancel>Cancel</button>
+            <button class="primary-action" type="submit">Save Link</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=arc-studio-2"></script>
+  <script src="arc-studio.js?v=arc-studio-2"></script>
+</body>
+</html>

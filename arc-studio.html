@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arc Studio | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=arc-studio-2">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="arc-studio">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="arc-page" aria-labelledby="arc-title">
+      <section class="arc-landing-header">
+        <div>
+          <p class="settings-eyebrow">World Building</p>
+          <h1 id="arc-title">Arc Studio</h1>
+        </div>
+        <button class="primary-action" type="button" data-arc-open-create>
+          <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+          New Story Project
+        </button>
+      </section>
+
+      <section class="arc-controls" aria-label="Story project filters">
+        <p class="arc-count" data-arc-count>Loading projects...</p>
+        <label class="arc-search">
+          <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+          <span class="sr-only">Search story projects</span>
+          <input type="search" placeholder="Search stories..." autocomplete="off" data-arc-search>
+        </label>
+      </section>
+
+      <p class="form-status arc-status" data-arc-status role="status"></p>
+      <section class="arc-project-grid" data-arc-project-list aria-label="Story projects">
+        <p class="empty-state">Loading story projects...</p>
+      </section>
+    </main>
+
+    <div class="modal-backdrop" id="arc-create-modal" hidden>
+      <section class="modal-dialog arc-create-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-create-title">
+        <div class="modal-header">
+          <div>
+            <p class="settings-eyebrow">Arc Studio</p>
+            <h2 id="arc-create-title">New Story Project</h2>
+            <p class="modal-subtitle">Create a story workspace for structure, scenes, arcs, threads, and payoffs.</p>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close" data-arc-create-close>
+            <ph-x weight="bold" aria-hidden="true"></ph-x>
+          </button>
+        </div>
+
+        <form class="arc-create-form" data-arc-create-form>
+          <label class="form-field">
+            <span>Title</span>
+            <input type="text" name="title" required maxlength="180" placeholder="The Ash Gate">
+          </label>
+          <label class="form-field">
+            <span>Universe <em>(optional)</em></span>
+            <select name="universe_id" data-arc-universe-select>
+              <option value="">Standalone story project</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Genre</span>
+            <input type="text" name="genre" placeholder="Fantasy, mystery, sci-fi...">
+          </label>
+          <label class="form-field">
+            <span>Format</span>
+            <select name="format">
+              <option value="novel">Novel</option>
+              <option value="short_story">Short Story</option>
+              <option value="series">Series</option>
+              <option value="screenplay">Screenplay</option>
+              <option value="tv_episode">TV Episode</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="form-field is-wide">
+            <span>Logline</span>
+            <textarea name="logline" placeholder="A compact sentence for the story's central promise."></textarea>
+          </label>
+          <label class="form-field is-wide">
+            <span>Premise</span>
+            <textarea name="premise" placeholder="The broader story engine, conflict, and creative direction."></textarea>
+          </label>
+          <label class="form-field">
+            <span>Status</span>
+            <select name="status">
+              <option value="idea">Idea</option>
+              <option value="planning" selected>Planning</option>
+              <option value="outlined">Outlined</option>
+              <option value="drafting">Drafting</option>
+              <option value="revising">Revising</option>
+              <option value="complete">Complete</option>
+              <option value="paused">Paused</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Target length</span>
+            <input type="text" name="target_length" placeholder="90k words, 12 episodes...">
+          </label>
+          <label class="form-field is-wide">
+            <span>Notes</span>
+            <textarea name="notes" placeholder="Private project notes, constraints, or intent."></textarea>
+          </label>
+          <p class="form-status" data-arc-create-status role="status"></p>
+          <div class="modal-actions">
+            <button class="secondary-action" type="button" data-arc-create-cancel>Cancel</button>
+            <button class="primary-action" type="submit" data-arc-create-submit>Create Project</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=arc-studio-2"></script>
+  <script src="arc-studio.js?v=arc-studio-2"></script>
+</body>
+</html>
