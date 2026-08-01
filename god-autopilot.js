@@ -271,6 +271,16 @@
     }).join("");
   }
 
+  function updateSpeciesSelection(input) {
+    if (!input) return;
+    selectedStartSpeciesId = input.dataset.godAutopilotSpecies || "";
+    input.checked = true;
+    if (randomStartInput) randomStartInput.checked = false;
+    speciesListElement?.querySelectorAll(".god-autopilot-species-option").forEach((option) => {
+      option.classList.toggle("is-selected", option.contains(input));
+    });
+  }
+
   async function persistLayout(rows) {
     const positions = layoutSpecies(rows);
     await Promise.all(rows.map((row) => {
@@ -529,10 +539,7 @@
   speciesListElement?.addEventListener("change", (event) => {
     const input = event.target.closest("[data-god-autopilot-species]");
     if (!input) return;
-    selectedStartSpeciesId = input.dataset.godAutopilotSpecies || "";
-    speciesListElement.querySelectorAll(".god-autopilot-species-option").forEach((option) => {
-      option.classList.toggle("is-selected", option.contains(input));
-    });
+    updateSpeciesSelection(input);
   });
 
   cycleSlider?.addEventListener("input", updateCycleControls);
