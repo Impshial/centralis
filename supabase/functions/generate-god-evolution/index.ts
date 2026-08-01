@@ -207,16 +207,8 @@ function cleanSpecies(value: unknown, index: number, totalSteps: number, stepYea
   };
 }
 
-function enforceSynchronizedBranches(species: ReturnType<typeof cleanSpecies>[], totalSteps: number, stepYears: number[]) {
-  const byParent = new Map<string, ReturnType<typeof cleanSpecies>[]>();
+function normalizeTimeline(species: ReturnType<typeof cleanSpecies>[], totalSteps: number, stepYears: number[]) {
   const byId = new Map(species.map((item) => [item.temp_id, item]));
-  for (const item of species) {
-    if (!item.parent_temp_id) continue;
-    const siblings = byParent.get(item.parent_temp_id) || [];
-    siblings.push(item);
-    byParent.set(item.parent_temp_id, siblings);
-  }
-
   for (const item of species) {
     if (item.step_index < 1) item.step_index = 1;
     if (item.step_index > totalSteps) item.step_index = totalSteps;
@@ -224,22 +216,6 @@ function enforceSynchronizedBranches(species: ReturnType<typeof cleanSpecies>[],
     item.years_since_parent = stepYears[Math.max(0, item.step_index - 1)] || item.years_since_parent;
     item.elapsed_years = stepYears.slice(0, item.step_index).reduce((sum, years) => sum + years, 0);
   }
-
-  for (const siblings of byParent.values()) {
-    if (siblings.length < 2) continue;
-    for (const sibling of siblings) {
-      if (sibling.status === "extinct" || sibling.can_evolve === false) continue;
-      const hasContinuation = species.some((candidate) => candidate.parent_temp_id === sibling.temp_id && candidate.step_index > sibling.step_index);
-      if (sibling.step_index < totalSteps && !hasContinuation) {
-        sibling.can_evolve = false;
-        sibling.population_condition = {
-          ...sibling.population_condition,
-          timeline_note: "This branch reached its current time step but did not receive a valid continuation from the generator.",
-        };
-      }
-    }
-  }
-
   return species.filter((item) => !item.parent_temp_id || byId.has(item.parent_temp_id));
 }
 
@@ -265,7 +241,7 @@ function cleanPayload(payload: unknown, branchOnly = false, existingSpecies: unk
     total_years: stepYears.reduce((sum, years) => sum + years, 0),
     summary: cleanText(record.summary, 1800),
     environment_shift: asRecord(record.environment_shift || record.environmentShift),
-    species: enforceSynchronizedBranches(species, totalSteps, stepYears),
+    species: normalizeTimeline(species, totalSteps, stepYears),
   };
 }
 
@@ -412,6 +388,7 @@ function buildPrompt(input: {
   pressures: string[];
   adaptationBias: string;
   customEvolutionTraits: string[];
+  randomSeed: string;
 }) {
   return [
     "Generate a God Engine evolution from the selected parent species.",
@@ -426,14 +403,29 @@ function buildPrompt(input: {
       : "The first descendant should use parent_temp_id null because it descends directly from the selected existing parent. Later descendants must use another generated temp_id.",
     input.branchOnly
       ? "Each branch-only descendant should represent a plausible alternate path starting from this species at the same point in time."
-      : "If a branch starts at step N and total_steps is greater than N, each surviving branch must continue with one descendant at every later step until total_steps so branches remain synchronized in elapsed time. A branch may stop early only if it is extinct or can_evolve is false for a biological reason.",
+      : "Choose a varied evolutionary topology. The response may be a straight line, a short burst, a single side branch, multiple branches, an extinct dead end, or an uneven set of branch depths. Do not force every branch to continue to the final step.",
     input.branchOnly
       ? "Branch-only mode should always create side-branch alternatives, not a continuation of the existing trunk."
-      : "Normal evolution should usually include a meaningful side branch at one generated step unless there is a strong biological reason for a single unbranched lineage. Do not default to a straight line. Continue each surviving branch to the synchronized final step.",
-    "For a branch, give the branch starter a branch_group that is not main, and keep all later descendants on that branch using the same branch_group. The trunk continuation may use the parent's branch_group or main.",
-    "Use the corresponding step_years value as years_since_parent for species at that step. Do not leave living branch tips behind the deepest living branch.",
+      : "Randomness requirement: avoid repeating the same structure between calls. Vary total species count, branch timing, branch count, survival outcomes, and whether evolution remains unbranched. The number of species returned should commonly range from 2 to 9, rarely up to 14, and should not default to 5.",
+    "A branch may stop before total_steps because it remains a side lineage, stagnates, becomes isolated, goes extinct, or simply is not the focus of this generated interval. Living branch tips may end at different step_index values.",
+    "For a branch, give the branch starter and its descendants a consistent branch_group. branch_group is metadata only; do not use it to imply any branch is the main trunk.",
+    "Use the corresponding step_years value as years_since_parent for species at that step. Step indexes may skip some branches; they only need to be plausible relative milestones.",
+    "Do not produce the same topology every time. Avoid the pattern: one direct descendant, then two branches, then one continuation from each branch.",
+    `Random topology seed for this call: ${input.randomSeed}. Use it to vary total_steps, total species count, branching timing, branch count, branch depth, and survival outcomes.`,
     "Every generated species name must be unique across existing species and this response. Do not reuse any exact existing name, even on a different branch.",
     creatureNamingRules(input.parentSpecies),
+    "LINEAGE CONTINUITY RULES",
+    "The selected parent species is the immediate ancestor. Base every descendant on that parent's complete_traits, habitat, ecology, reproduction, visual_genome, overview, and image_prompt.",
+    "Do not reset descendants to primitive, larval, aquatic, bottom-feeding, worm-like, slug-like, or limbless forms unless the selected parent already has those traits or the generated lineage explicitly evolves toward that state through plausible intermediate steps.",
+    "Preserve the parent's core body plan by default: limb count and limb placement, posture, locomotion strategy, respiratory mode, major sensory organs, mouth/feeding apparatus, reproductive strategy, scale, and primary habitat must remain recognizable unless a listed newly_evolved_trait or lost_trait explains the change.",
+    "Major reversals such as losing functional legs, leaving land for water, becoming sessile, abandoning air breathing, or collapsing into a simpler body form require strong environmental pressure, clear evolutionary advantage, biological cost, and must be listed in lost_traits and evolution_reason.",
+    "Evolution can reduce, specialize, or repurpose structures, but it must not read as de-evolution or as a different unrelated creature. Descendants should look like modified relatives of the parent, not new creatures generated from scratch.",
+    "complete_traits must include physical_description for every descendant: a concise but complete natural-language description of the creature's visible body plan, silhouette, head/front end, body covering, limbs/appendages, eyes/sensory organs, mouthparts, tail/rear end, coloration, size, posture, and locomotion.",
+    "complete_traits must include an anatomy object for every descendant with explicit visible bookkeeping: eye_count, eye_arrangement, limb_count, limb_pairs, limb_type, digits_per_limb_or_pad_count, tail_present, tail_description, body_axis, posture, symmetry, mouthparts, respiratory_structures, body_covering, approximate_size, and notes.",
+    "For complete_traits.anatomy, inherit the parent's values by default. Change counts such as eye_count, limb_count, digit/pad count, or tail_present only when newly_evolved_traits, lost_traits, and evolution_reason explicitly explain the anatomical change.",
+    "For complete_traits.physical_description, start from the parent's physical description if present and update only the visible changes that evolved in this step. Do not replace it with a generic description.",
+    "For complete_traits, carry forward all parent traits that remain true. Only remove or rewrite a parent trait when lost_traits and evolution_reason explicitly justify it.",
+    "For visual_genome and image_prompt, preserve the parent's visible family resemblance and appendage logic. Add new visible traits on top of the inherited body plan.",
     "image_prompt must describe only the creature and natural scene. It must explicitly avoid text, titles, labels, diagrams, inset panels, arrows, callouts, trait lists, scientific poster layouts, field guide pages, cutaways, cross-sections, and multi-view sheets.",
     "Evolution should be biologically plausible but imaginative. Radical novelty can be strange, but every trait needs origin, advantage, cost, and failure risk in the text fields.",
     "Use statuses only from: thriving, stable, specialized, vulnerable, declining, endangered, unstable, extinct.",
@@ -480,6 +472,7 @@ Deno.serve(async (req) => {
       .filter(Boolean);
     const legacyCustomTrait = cleanText(body.customEvolutionTrait, 1000);
     if (legacyCustomTrait && !customEvolutionTraits.length) customEvolutionTraits.push(legacyCustomTrait);
+    const randomSeed = cleanText(body.randomSeed, 120) || crypto.randomUUID();
     const prompt = buildPrompt({
       evolutionName: cleanText(body.evolutionName, 180),
       worldSummary: cleanText(body.worldSummary, 3000),
@@ -490,6 +483,7 @@ Deno.serve(async (req) => {
       pressures,
       adaptationBias,
       customEvolutionTraits,
+      randomSeed,
     });
     const job = await createGenerationJob({
       userId: appUser.id,
@@ -515,7 +509,7 @@ Deno.serve(async (req) => {
 
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
     const generatedText = await generateJsonText(openai, {
-      system: "You generate strict JSON for synchronized, biologically plausible fictional evolution trees. Return only valid JSON.",
+      system: "You generate strict JSON for varied, biologically plausible fictional evolution trees. Return only valid JSON.",
       prompt,
       maxOutputTokens: 12000,
     });

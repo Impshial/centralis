@@ -102,6 +102,9 @@ function buildPrompt(input: {
     "If the user describes an organism that has already evolved for millions of years, lives on land, breathes oxygen, lays eggs, has fur, has legs, or has other advanced traits, create exactly that kind of organism as the starter species.",
     "Do not make it extinct. Do not include game stats, currency, levels, points, UI labels, markdown, comments, or extra prose.",
     "Potential trait hints should be broad biological directions, not exact future outcomes.",
+    "complete_traits must include physical_description: a concise but complete natural-language description of the creature's visible body plan, silhouette, head/front end, body covering, limbs/appendages, eyes/sensory organs, mouthparts, tail/rear end, coloration, size, posture, and locomotion.",
+    "complete_traits must include an anatomy object with explicit visible bookkeeping: eye_count, eye_arrangement, limb_count, limb_pairs, limb_type, digits_per_limb_or_pad_count, tail_present, tail_description, body_axis, posture, symmetry, mouthparts, respiratory_structures, body_covering, approximate_size, and notes. Use null only when the trait truly cannot be determined.",
+    "When the user specifies anatomy such as legs, fingers, eyes, tails, wings, fur, gills, lungs, or egg laying, record it explicitly in complete_traits.anatomy and keep it consistent with visual_genome.",
     "The visual_genome must describe inherited visual continuity: bodyPlan, symmetry, surface, appendages, coloration, sensoryFeatures, and scale.",
     creatureNamingRules(),
     input.projectName

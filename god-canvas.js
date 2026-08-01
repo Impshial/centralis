@@ -368,6 +368,19 @@
     ];
   }
 
+  function removeImageRow(imageId, speciesId) {
+    imageRows = imageRows.filter((image) => image.id !== imageId);
+    const remaining = imagesForSpecies(speciesId);
+    if (remaining.length && !remaining.some((image) => image.is_primary)) {
+      const primaryId = remaining[0].id;
+      imageRows = imageRows.map((image) => (
+        String(image.object_id) === String(speciesId)
+          ? { ...image, is_primary: image.id === primaryId }
+          : image
+      ));
+    }
+  }
+
   function traitsPreview(row) {
     const traits = Array.isArray(row.newly_evolved_traits) ? row.newly_evolved_traits : [];
     return traits.slice(0, 3).map((trait) => typeof trait === "string" ? trait : trait?.name || trait?.trait || "").filter(Boolean);
@@ -867,8 +880,28 @@
     if (!entries.length) return '<p class="god-muted">None recorded.</p>';
     return `<dl>${entries.map(([key, item]) => `
       <dt>${escapeHtml(normalizeLabel(key))}</dt>
-      <dd>${escapeHtml(Array.isArray(item) ? item.join(", ") : typeof item === "object" ? JSON.stringify(item) : item)}</dd>
+      <dd>${formatRecordValue(item)}</dd>
     `).join("")}</dl>`;
+  }
+
+  function formatRecordValue(item) {
+    if (Array.isArray(item)) return escapeHtml(item.join(", "));
+    if (item && typeof item === "object") {
+      const entries = Object.entries(item);
+      if (!entries.length) return '<span class="god-muted">None recorded.</span>';
+      return `<dl class="god-nested-record">${entries.map(([key, value]) => `
+        <dt>${escapeHtml(normalizeLabel(key))}</dt>
+        <dd>${formatRecordValue(value)}</dd>
+      `).join("")}</dl>`;
+    }
+    return escapeHtml(item ?? "");
+  }
+
+  function physicalDescriptionFor(row) {
+    const traits = row?.complete_traits && typeof row.complete_traits === "object" && !Array.isArray(row.complete_traits)
+      ? row.complete_traits
+      : {};
+    return String(traits.physical_description || traits.physicalDescription || "").trim();
   }
 
   function customTraitsFor(row) {
@@ -941,6 +974,7 @@
       </div>
       <button class="secondary-action god-jump-evolve" type="button" data-god-jump-evolve><ph-arrow-down weight="bold" aria-hidden="true"></ph-arrow-down> Jump to Evolve</button>
       <section class="god-section"><h3>Overview</h3><p>${escapeHtml(row.overview || "No overview yet.")}</p></section>
+      ${physicalDescriptionFor(row) ? `<section class="god-section"><h3>Physical Description</h3><p>${escapeHtml(physicalDescriptionFor(row))}</p></section>` : ""}
       <section class="god-section"><h3>Newly Evolved Traits</h3>${formatValueList(row.newly_evolved_traits)}</section>
       <section class="god-section"><h3>Complete Traits</h3>${formatRecord(row.complete_traits)}</section>
       <section class="god-section"><h3>Habitat And Ecology</h3>${formatRecord(row.ecology)}</section>
@@ -1745,7 +1779,7 @@
         canShowThumbnails: true,
         canDownload: true,
         canOpen: true,
-        canDelete: false,
+        canDelete: true,
         canSetPrimary: true,
         canUpload: true,
         uploadMode: "add",
@@ -1777,6 +1811,24 @@
           refreshCanvas();
           renderInspector();
           return { images: normalizeViewerImages(row), activeImageId: data?.image?.id };
+        },
+        delete: async (image, index) => {
+          if (!image?.id || !window.confirm("Delete this image?")) return false;
+          const previousImages = normalizeViewerImages(row);
+          const { error } = await window.centralisSupabase.functions.invoke("delete-object-image", {
+            body: { imageId: image.id },
+          });
+          if (error) throw error;
+          removeImageRow(image.id, row.id);
+          refreshCanvas();
+          renderInspector();
+          const nextImages = normalizeViewerImages(row);
+          if (!nextImages.length) return { close: true };
+          const nextIndex = Math.min(index, Math.max(0, previousImages.length - 2));
+          return {
+            images: nextImages,
+            activeImageId: nextImages[nextIndex]?.id || nextImages[0]?.id,
+          };
         },
       },
       details: (image) => ({

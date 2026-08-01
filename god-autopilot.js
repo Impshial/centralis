@@ -4,14 +4,23 @@
   const statusElement = document.querySelector("[data-god-autopilot-status]");
   const logElement = document.querySelector("[data-god-autopilot-log]");
   const canvasLink = document.querySelector("[data-god-autopilot-canvas]");
+  const randomStartInput = document.querySelector("[data-god-autopilot-random]");
+  const speciesListElement = document.querySelector("[data-god-autopilot-species-list]");
+  const setupElement = document.querySelector("[data-god-autopilot-setup]");
+  const progressElement = document.querySelector("[data-god-autopilot-progress]");
+  const progressTitleElement = document.querySelector("[data-god-autopilot-progress-title]");
+  const cycleSlider = document.querySelector("[data-god-autopilot-cycle-slider]");
+  const cycleValueElement = document.querySelector("[data-god-autopilot-cycle-value]");
   const params = new URLSearchParams(window.location.search);
   const evolutionId = params.get("evolution_id") || sessionStorage.getItem("centralis-current-god-evolution-id") || "";
-  const MAX_CYCLES = 10;
 
   let currentUser = window.centralisCurrentAppUser || null;
   let shouldStop = false;
   let isRunning = false;
   let lastLayoutColumns = new Map();
+  let imageRows = [];
+  let selectedStartSpeciesId = "";
+  let selectedCycleCount = 10;
 
   if (evolutionId) {
     sessionStorage.setItem("centralis-current-god-evolution-id", evolutionId);
@@ -25,12 +34,49 @@
     statusElement.classList.toggle("is-success", type === "success");
   }
 
+  function normalizeCycleCount(value) {
+    const numberValue = Math.round(Number(value));
+    if (!Number.isFinite(numberValue)) return 10;
+    return Math.min(10, Math.max(2, numberValue));
+  }
+
+  function updateCycleControls() {
+    selectedCycleCount = normalizeCycleCount(cycleSlider?.value || selectedCycleCount);
+    if (cycleSlider) cycleSlider.value = String(selectedCycleCount);
+    if (cycleValueElement) cycleValueElement.textContent = String(selectedCycleCount);
+    if (startButton) startButton.textContent = `Start ${selectedCycleCount} Cycles`;
+  }
+
+  function showSetupView() {
+    if (setupElement) setupElement.hidden = false;
+    if (progressElement) progressElement.hidden = true;
+  }
+
+  function showProgressView(cycleCount) {
+    if (setupElement) setupElement.hidden = true;
+    if (progressElement) progressElement.hidden = false;
+    if (progressTitleElement) progressTitleElement.textContent = `Running autopilot: 0 of ${cycleCount} cycles`;
+  }
+
+  function updateProgressTitle(current, total) {
+    if (progressTitleElement) progressTitleElement.textContent = `Running autopilot cycle ${current} of ${total}`;
+  }
+
   function log(message, type = "") {
     if (!logElement) return;
     const item = document.createElement("li");
     item.textContent = message;
     if (type) item.className = `is-${type}`;
     logElement.prepend(item);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
   }
 
   function createId() {
@@ -156,22 +202,73 @@
     return data || [];
   }
 
-  function pickFromLatestBatch(rows) {
-    const viable = rows.filter((row) => row.status !== "extinct" && row.can_evolve !== false);
-    if (!viable.length) return null;
-    const eventIds = viable
-      .map((row) => row.origin_event_id)
-      .filter(Boolean);
-    if (eventIds.length) {
-      const latestEventId = viable
-        .filter((row) => row.origin_event_id)
-        .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))[0]?.origin_event_id;
-      const latestBatch = viable.filter((row) => row.origin_event_id === latestEventId);
-      if (latestBatch.length) return latestBatch[Math.floor(Math.random() * latestBatch.length)];
+  async function loadImages(rows) {
+    const ids = rows.map((row) => row.id).filter(Boolean);
+    if (!ids.length) {
+      imageRows = [];
+      return;
     }
-    const leafRows = viable.filter((row) => !rows.some((child) => child.parent_species_id === row.id));
-    const candidates = leafRows.length ? leafRows : viable;
+    try {
+      const { data, error } = await window.centralisSupabase.functions.invoke("list-object-images", { body: { objectIds: ids } });
+      if (error) throw error;
+      imageRows = data?.images || [];
+    } catch (error) {
+      console.warn("Could not load God Engine autopilot images:", error);
+      imageRows = [];
+    }
+  }
+
+  function imageForSpecies(speciesId) {
+    const rows = imageRows.filter((image) => String(image.object_id) === String(speciesId));
+    return rows.find((image) => image.is_primary) || rows[0] || null;
+  }
+
+  function viableSpecies(rows) {
+    return rows.filter((row) => row.status !== "extinct" && row.can_evolve !== false);
+  }
+
+  function terminalSpecies(rows) {
+    const viable = rows.filter((row) => row.status !== "extinct" && row.can_evolve !== false);
+    const viableIds = new Set(viable.map((row) => row.id));
+    const parentIds = new Set(rows
+      .filter((row) => row.parent_species_id && viableIds.has(row.parent_species_id) && row.deleted !== true)
+      .map((row) => row.parent_species_id));
+    return viable.filter((row) => !parentIds.has(row.id));
+  }
+
+  function pickRandomTerminal(rows) {
+    const leaves = terminalSpecies(rows);
+    const candidates = leaves.length ? leaves : viableSpecies(rows);
+    if (!candidates.length) return null;
     return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function renderSpeciesPicker(rows) {
+    if (!speciesListElement) return;
+    const viable = viableSpecies(rows);
+    const leaves = new Set(terminalSpecies(rows).map((row) => row.id));
+    if (!viable.length) {
+      speciesListElement.innerHTML = `<p class="god-muted">No living evolvable species are available.</p>`;
+      return;
+    }
+    speciesListElement.innerHTML = viable.map((row) => {
+      const image = imageForSpecies(row.id);
+      const isSelected = selectedStartSpeciesId === row.id;
+      const leafLabel = leaves.has(row.id) ? "End of line" : "Has descendants";
+      return `
+        <label class="god-autopilot-species-option ${isSelected ? "is-selected" : ""}">
+          <input type="radio" name="god-autopilot-start-mode" value="${escapeHtml(row.id)}" data-god-autopilot-species="${escapeHtml(row.id)}" ${isSelected ? "checked" : ""}>
+          <span class="god-autopilot-species-thumb">
+            ${image?.image_url ? `<img src="${escapeHtml(image.image_url)}" alt="">` : `<ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>`}
+          </span>
+          <span class="god-autopilot-species-copy">
+            <strong>${escapeHtml(row.name || "Unnamed species")}</strong>
+            <span>${escapeHtml(row.scientific_name || leafLabel)}</span>
+            <small>${escapeHtml(leafLabel)} - ${escapeHtml(row.status || "stable")}</small>
+          </span>
+        </label>
+      `;
+    }).join("");
   }
 
   async function persistLayout(rows) {
@@ -229,9 +326,13 @@
     if (error) throw error;
   }
 
-  async function runCycle(cycleNumber, evolution, rows) {
-    const parent = pickFromLatestBatch(rows);
+  async function runCycle(cycleNumber, evolution, rows, forcedParentId = "") {
+    const selectedParent = forcedParentId ? viableSpecies(rows).find((row) => row.id === forcedParentId) || null : null;
+    const parent = selectedParent || pickRandomTerminal(rows);
     if (!parent) throw new Error("No living evolvable species found.");
+    if (forcedParentId && !selectedParent) {
+      log("Selected starting species is no longer available; using a random end-of-line species.", "error");
+    }
     const branchOnly = rows.some((row) => row.parent_species_id === parent.id);
     log(`Cycle ${cycleNumber}: ${branchOnly ? "adding branch from" : "evolving"} ${parent.name}.`);
 
@@ -372,28 +473,40 @@
     }
     shouldStop = false;
     isRunning = true;
+    const cycleCount = normalizeCycleCount(selectedCycleCount);
     startButton.disabled = true;
     stopButton.disabled = false;
+    if (logElement) logElement.innerHTML = "";
+    showProgressView(cycleCount);
     setStatus("Loading latest God Engine tree...");
     try {
       const evolution = await loadEvolution();
       let rows = await loadSpecies();
-      for (let index = 1; index <= MAX_CYCLES; index += 1) {
+      await loadImages(rows);
+      renderSpeciesPicker(rows);
+      const firstParentId = randomStartInput?.checked ? "" : selectedStartSpeciesId;
+      for (let index = 1; index <= cycleCount; index += 1) {
         if (shouldStop) break;
-        setStatus(`Running autopilot cycle ${index} of ${MAX_CYCLES}...`);
-        rows = await runCycle(index, evolution, rows);
+        updateProgressTitle(index, cycleCount);
+        setStatus(`Running autopilot cycle ${index} of ${cycleCount}...`);
+        rows = await runCycle(index, evolution, rows, index === 1 ? firstParentId : "");
+        await loadImages(rows);
+        renderSpeciesPicker(rows);
         await sleep(2500);
       }
-      setStatus(shouldStop ? "Autopilot stopped." : "Autopilot completed 10 cycles.", shouldStop ? "" : "success");
-      log(shouldStop ? "Stopped by user." : "Completed all 10 cycles.", shouldStop ? "" : "success");
+      setStatus(shouldStop ? "Autopilot stopped." : `Autopilot completed ${cycleCount} cycles.`, shouldStop ? "" : "success");
+      if (progressTitleElement) progressTitleElement.textContent = shouldStop ? "Autopilot stopped" : "Autopilot complete";
+      log(shouldStop ? "Stopped by user." : `Completed all ${cycleCount} cycles.`, shouldStop ? "" : "success");
     } catch (error) {
       console.error(error);
       setStatus(`Autopilot failed: ${error.message || error}`, "error");
+      if (progressTitleElement) progressTitleElement.textContent = "Autopilot failed";
       log(`Error: ${error.message || error}`, "error");
     } finally {
       isRunning = false;
       startButton.disabled = false;
       stopButton.disabled = true;
+      updateCycleControls();
     }
   }
 
@@ -404,14 +517,56 @@
     setStatus("Stopping after the current cycle settles...");
   });
 
+  randomStartInput?.addEventListener("change", () => {
+    if (randomStartInput.checked) {
+      selectedStartSpeciesId = "";
+      speciesListElement?.querySelectorAll(".god-autopilot-species-option").forEach((option) => {
+        option.classList.remove("is-selected");
+      });
+    }
+  });
+
+  speciesListElement?.addEventListener("change", (event) => {
+    const input = event.target.closest("[data-god-autopilot-species]");
+    if (!input) return;
+    selectedStartSpeciesId = input.dataset.godAutopilotSpecies || "";
+    speciesListElement.querySelectorAll(".god-autopilot-species-option").forEach((option) => {
+      option.classList.toggle("is-selected", option.contains(input));
+    });
+  });
+
+  cycleSlider?.addEventListener("input", updateCycleControls);
+
+  async function prepareSpeciesPicker() {
+    if (!currentUser?.id || !evolutionId) return;
+    try {
+      const rows = await loadSpecies();
+      await loadImages(rows);
+      renderSpeciesPicker(rows);
+    } catch (error) {
+      console.warn("Could not prepare autopilot species picker:", error);
+      if (speciesListElement) speciesListElement.innerHTML = `<p class="god-muted">Could not load species choices.</p>`;
+    }
+  }
+
   window.addEventListener("centralis:current-user-changed", (event) => {
     currentUser = event.detail?.user || window.centralisCurrentAppUser;
     if (params.get("autorun") === "1" && currentUser?.id && !isRunning) {
       void runAutopilot();
+    } else {
+      void prepareSpeciesPicker();
     }
   });
 
   if (params.get("autorun") === "1" && currentUser?.id) {
+    updateCycleControls();
     void runAutopilot();
+  } else if (currentUser?.id && evolutionId) {
+    updateCycleControls();
+    showSetupView();
+    void prepareSpeciesPicker();
+  } else {
+    updateCycleControls();
+    showSetupView();
   }
 })();

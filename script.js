@@ -411,9 +411,29 @@ const CENTRALIS_HEADER_MARKUP = `
       </button>
       <div class="dropdown-menu" role="menu">
         <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
-        <a href="god-engine.html" role="menuitem"><ph-dna weight="duotone" aria-hidden="true"></ph-dna><span>God Engine</span></a>
         <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
         <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
+      </div>
+    </div>
+
+    <div class="menu-wrap">
+      <button class="category-button menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu" aria-label="AI tools">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v18"></path>
+          <path d="M8 5.2a3 3 0 0 0-3 3v7.6a3 3 0 0 0 3 3"></path>
+          <path d="M16 5.2a3 3 0 0 1 3 3v7.6a3 3 0 0 1-3 3"></path>
+          <path d="M5 10h5"></path>
+          <path d="M14 10h5"></path>
+          <path d="M5 14h5"></path>
+          <path d="M14 14h5"></path>
+        </svg>
+        <span>AI Tools</span>
+      </button>
+      <div class="dropdown-menu" role="menu">
+        <a href="god-engine.html" role="menuitem"><ph-dna weight="duotone" aria-hidden="true"></ph-dna><span>God Engine</span></a>
+        <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
+        <a href="local-chat.html" role="menuitem" data-admin-only-nav hidden><ph-robot weight="duotone" aria-hidden="true"></ph-robot><span>Local Chat</span></a>
+        <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
       </div>
     </div>
 
@@ -429,9 +449,6 @@ const CENTRALIS_HEADER_MARKUP = `
       </button>
       <div class="dropdown-menu" role="menu">
         <a href="movie-tracker.html" role="menuitem"><ph-film-slate weight="duotone" aria-hidden="true"></ph-film-slate><span>Movie Tracker</span></a>
-        <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
-        <a href="local-chat.html" role="menuitem" data-admin-only-nav hidden><ph-robot weight="duotone" aria-hidden="true"></ph-robot><span>Local Chat</span></a>
-        <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
         <a href="episode-roulette.html" role="menuitem"><ph-dice-five weight="duotone" aria-hidden="true"></ph-dice-five><span>Episode Roulette</span></a>
       </div>
     </div>

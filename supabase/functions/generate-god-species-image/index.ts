@@ -69,6 +69,8 @@ function buildPrompt(body: Record<string, unknown>) {
   const inheritedTraits = compactList(body.inheritedTraits, 6);
   const lostTraits = compactList(body.lostTraits, 4);
   const completeTraits = compactJson(body.completeTraits, 1600);
+  const completeTraitRecord = asRecord(body.completeTraits);
+  const physicalDescription = cleanText(completeTraitRecord.physical_description || completeTraitRecord.physicalDescription, 1400);
   const ecology = compactJson(body.ecology, 900);
   const populationCondition = compactJson(body.populationCondition, 700);
   const visualGenome = compactJson(body.visualGenome, 2200);
@@ -78,6 +80,8 @@ function buildPrompt(body: Record<string, unknown>) {
   const parentHabitat = cleanText(parentSpecies.habitat, 400);
   const parentOverview = cleanText(parentSpecies.overview, 800);
   const parentTraits = compactJson(parentSpecies.completeTraits, 1300);
+  const parentTraitRecord = asRecord(parentSpecies.completeTraits);
+  const parentPhysicalDescription = cleanText(parentTraitRecord.physical_description || parentTraitRecord.physicalDescription, 1000);
   const parentNewTraits = compactList(parentSpecies.newlyEvolvedTraits, 4);
   const parentVisualGenome = compactJson(parentSpecies.visualGenome, 1800);
   const parentImagePrompt = cleanText(parentSpecies.imagePrompt, 1000);
@@ -89,6 +93,7 @@ function buildPrompt(body: Record<string, unknown>) {
     habitat ? `Habitat: ${habitat}.` : "",
     overview ? `Ecological overview: ${overview}.` : "",
     newTraits ? `Newly evolved traits to emphasize: ${newTraits}.` : "",
+    physicalDescription ? `Current full physical description to depict: ${physicalDescription}.` : "",
     inheritedTraits ? `Inherited visible traits to preserve: ${inheritedTraits}.` : "",
     lostTraits ? `Traits reduced or absent compared with ancestors: ${lostTraits}.` : "",
     completeTraits ? `Current complete trait record for visual grounding: ${completeTraits}.` : "",
@@ -104,6 +109,7 @@ function buildPrompt(body: Record<string, unknown>) {
       parentHabitat ? `Parent habitat: ${parentHabitat}.` : "",
       parentOverview ? `Parent overview: ${parentOverview}.` : "",
       parentNewTraits ? `Parent recently evolved visible traits: ${parentNewTraits}.` : "",
+      parentPhysicalDescription ? `Parent full physical description to inherit from: ${parentPhysicalDescription}.` : "",
       parentTraits ? `Parent trait record to inherit from or modify: ${parentTraits}.` : "",
       parentVisualGenome ? `Parent visual genome to preserve as family resemblance: ${parentVisualGenome}.` : "",
       parentImagePrompt ? `Parent image prompt style/subject continuity: ${parentImagePrompt}.` : "",
@@ -118,6 +124,9 @@ function buildPrompt(body: Record<string, unknown>) {
     specialInstructions ? `User special instructions for this image: ${specialInstructions}.` : "",
     "Show one complete creature clearly in a single natural scene.",
     "Preserve lineage continuity: keep the parent's recognizable body plan, proportions, appendage logic, surface texture, coloration family, sensory organs, and scale unless the current species traits explicitly changed them.",
+    "Do not simplify the creature into a primitive, larval, worm-like, slug-like, bottom-feeding, or limbless form unless the current species traits and lost traits explicitly say that happened.",
+    "If the parent has legs, paired limbs, land locomotion, air-breathing anatomy, or a specific posture, keep those features recognizable unless the prompt explicitly describes a plausible evolutionary loss or repurposing.",
+    "The image should look like a descendant of the immediate parent, not a fresh unrelated species concept.",
     "Make the new traits visible as natural anatomical adaptations, not labels or diagrams. If a trait is internal or behavioral, imply it through pose, habitat, body condition, or environmental interaction.",
     "Use naturalistic evolutionary concept art with specimen clarity.",
     "This must be a single landscape natural scene, not a designed information graphic.",

@@ -14,16 +14,50 @@
     <header class="site-header" aria-label="Centralis main header"></header>
     <main class="god-autopilot-page" aria-label="God Engine autopilot">
       <section class="god-autopilot-panel">
-        <p class="settings-eyebrow">God Engine</p>
-        <h1>Autopilot Evolution</h1>
-        <p class="god-muted">Runs ten unattended evolution cycles on the latest generated batch, then stops.</p>
-        <div class="god-autopilot-actions">
+        <header class="god-autopilot-panel-header">
+          <p class="settings-eyebrow">God Engine</p>
+          <h1>Autopilot Evolution</h1>
+          <p class="god-muted">Runs two to ten unattended evolution cycles from a selected creature or a random living end-of-line species, then stops.</p>
+        </header>
+        <div class="god-autopilot-scroll" data-god-autopilot-scroll>
+          <section class="god-autopilot-setup" data-god-autopilot-setup>
+            <section class="god-autopilot-cycle-control" aria-labelledby="god-autopilot-cycles-title">
+              <div>
+                <h2 id="god-autopilot-cycles-title">Cycles</h2>
+                <p class="god-muted">Choose how long autopilot should run.</p>
+              </div>
+              <label class="god-autopilot-slider">
+                <span><strong data-god-autopilot-cycle-value>10</strong> cycles</span>
+                <input type="range" min="2" max="10" step="1" value="10" data-god-autopilot-cycle-slider>
+              </label>
+            </section>
+            <section class="god-autopilot-picker" aria-labelledby="god-autopilot-picker-title">
+              <div class="god-autopilot-picker-header">
+                <div>
+                  <h2 id="god-autopilot-picker-title">Starting Creature</h2>
+                  <p class="god-muted">Choose where the first cycle begins.</p>
+                </div>
+                <label class="god-autopilot-random">
+                  <input type="radio" name="god-autopilot-start-mode" value="random" data-god-autopilot-random checked>
+                  <span>Random end-of-line species</span>
+                </label>
+              </div>
+              <div class="god-autopilot-species-list" data-god-autopilot-species-list>
+                <p class="god-muted">Loading species...</p>
+              </div>
+            </section>
+          </section>
+          <section class="god-autopilot-progress" data-god-autopilot-progress hidden>
+            <h2 data-god-autopilot-progress-title>Running autopilot</h2>
+            <p class="canvas-transfer-status" data-god-autopilot-status role="status"></p>
+            <ol class="god-autopilot-log" data-god-autopilot-log></ol>
+          </section>
+        </div>
+        <footer class="god-autopilot-actions">
           <button class="primary-action" type="button" data-god-autopilot-start>Start 10 Cycles</button>
           <button class="secondary-action" type="button" data-god-autopilot-stop disabled>Stop</button>
           <a class="secondary-action" href="god-canvas.html" data-god-autopilot-canvas>Back to Canvas</a>
-        </div>
-        <p class="canvas-transfer-status" data-god-autopilot-status role="status"></p>
-        <ol class="god-autopilot-log" data-god-autopilot-log></ol>
+        </footer>
       </section>
     </main>
   </div>

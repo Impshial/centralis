@@ -22801,18 +22801,27 @@ body[data-page="god-canvas"] .app-shell.god-canvas-shell {
   display: grid;
   place-items: center;
   padding: 32px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--god-canvas-bg);
 }
 
 .god-autopilot-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(760px, 100%);
+  height: min(760px, calc(100vh - var(--header-height, 76px) - 64px));
+  min-height: 520px;
+  overflow: hidden;
   border: 1px solid var(--god-line);
   border-radius: 8px;
-  padding: 24px;
   background: var(--god-panel);
   color: var(--god-ink);
   box-shadow: 0 24px 64px rgb(0 0 0 / 24%);
+}
+
+.god-autopilot-panel-header {
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid var(--god-line);
 }
 
 .god-autopilot-panel h1 {
@@ -22820,20 +22829,173 @@ body[data-page="god-canvas"] .app-shell.god-canvas-shell {
   letter-spacing: 0;
 }
 
+.god-autopilot-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
 .god-autopilot-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
-  margin: 18px 0;
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--god-line);
+}
+
+.god-autopilot-setup,
+.god-autopilot-progress {
+  display: grid;
+  gap: 16px;
+}
+
+.god-autopilot-cycle-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--god-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--god-panel) 82%, var(--god-canvas-bg));
+}
+
+.god-autopilot-cycle-control h2,
+.god-autopilot-progress h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+}
+
+.god-autopilot-slider {
+  display: grid;
+  min-width: min(280px, 100%);
+  gap: 8px;
+  color: var(--god-ink);
+}
+
+.god-autopilot-slider input {
+  width: 100%;
+  accent-color: var(--god-accent);
+}
+
+.god-autopilot-picker {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--god-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--god-panel) 82%, var(--god-canvas-bg));
+}
+
+.god-autopilot-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.god-autopilot-picker h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+}
+
+.god-autopilot-random {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--god-line);
+  border-radius: 7px;
+  color: var(--god-ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.god-autopilot-species-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.god-autopilot-species-option {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 88px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--god-line) 86%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--god-canvas-bg) 58%, var(--god-panel));
+  color: var(--god-ink);
+  cursor: pointer;
+}
+
+.god-autopilot-species-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.god-autopilot-species-option.is-selected,
+.god-autopilot-species-option:has(input:checked) {
+  border-color: var(--god-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--god-accent) 62%, transparent), 0 0 0 3px color-mix(in srgb, var(--god-accent) 12%, transparent);
+}
+
+.god-autopilot-species-thumb {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--god-line);
+  border-radius: 6px;
+  background: var(--god-canvas-bg);
+  color: var(--god-accent);
+}
+
+.god-autopilot-species-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.god-autopilot-species-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.god-autopilot-species-copy strong,
+.god-autopilot-species-copy span,
+.god-autopilot-species-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.god-autopilot-species-copy span,
+.god-autopilot-species-copy small {
+  color: var(--god-muted);
+}
+
+.god-autopilot-species-copy small {
+  font-size: 0.78rem;
 }
 
 .god-autopilot-log {
   display: grid;
-  max-height: min(460px, 48vh);
   gap: 8px;
-  margin: 18px 0 0;
+  margin: 0;
   padding: 0 0 0 22px;
-  overflow: auto;
   color: var(--god-muted);
 }
 
@@ -23425,6 +23587,14 @@ body[data-page="god-canvas"] .app-shell.god-canvas-shell {
   grid-template-columns: minmax(90px, 0.42fr) minmax(0, 1fr);
   gap: 8px 10px;
   margin: 0;
+}
+
+.god-section .god-nested-record {
+  grid-template-columns: minmax(118px, 0.46fr) minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 4px 0;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--god-line) 48%, transparent);
 }
 
 .god-section dt,
