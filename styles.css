@@ -22651,7 +22651,9 @@ body[data-page="god-engine"] {
 }
 
 body[data-page="god-canvas"],
-body[data-page="god-canvas"] .app-shell.god-canvas-shell {
+body[data-page="god-autopilot"],
+body[data-page="god-canvas"] .app-shell.god-canvas-shell,
+body[data-page="god-autopilot"] .app-shell.god-canvas-shell {
   height: 100vh;
   overflow: hidden;
 }
@@ -22805,6 +22807,10 @@ body[data-page="god-canvas"] .app-shell.god-canvas-shell {
   background: var(--god-canvas-bg);
 }
 
+body[data-page="god-autopilot"] {
+  overflow: hidden;
+}
+
 .god-autopilot-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -22925,6 +22931,7 @@ body[data-page="god-canvas"] .app-shell.god-canvas-shell {
 }
 
 .god-autopilot-species-option {
+  position: relative;
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 10px;
@@ -22940,6 +22947,10 @@ body[data-page="god-canvas"] .app-shell.god-canvas-shell {
 
 .god-autopilot-species-option input {
   position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 1px;
+  height: 1px;
   opacity: 0;
   pointer-events: none;
 }
