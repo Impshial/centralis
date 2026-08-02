@@ -47,41 +47,70 @@
     setStatus(formStatus, "");
   }
 
+  function inferManualStarterName(notes) {
+    const explicit = notes.match(/(?:called|named|name is)\s+([A-Z][A-Za-z '-]{2,60})/i)?.[1]?.trim();
+    if (explicit) return explicit;
+    const lower = notes.toLowerCase();
+    const creature = [
+      ["lizard", "lizard"],
+      ["reptile", "reptile"],
+      ["mammal", "mammal"],
+      ["insect", "insect"],
+      ["amphibian", "amphibian"],
+      ["bird", "bird"],
+      ["fish", "fish"],
+      ["slug", "slug"],
+      ["worm", "worm"],
+    ].find(([needle]) => lower.includes(needle))?.[1] || "organism";
+    const prefix = lower.includes("six") || /\b6\s+legs?\b/.test(lower)
+      ? "hexapod"
+      : lower.includes("four") || /\b4\s+legs?\b/.test(lower)
+        ? "quadruped"
+        : lower.includes("fur") || lower.includes("hair")
+          ? "furred"
+          : lower.includes("land") || lower.includes("terrestrial")
+            ? "terrestrial"
+            : "established";
+    return `${prefix.charAt(0).toUpperCase()}${prefix.slice(1)} ${creature}`;
+  }
+
   function fallbackStarter(values) {
     const manualNotes = String(values.manualNotes || "").trim();
     if (values.startingMode === "manual" && manualNotes) {
-      const nameMatch = manualNotes.match(/(?:called|named|name is)\s+([A-Z][A-Za-z '-]{2,60})/i);
       const isLand = /\b(land|terrestrial|forest|grassland|desert|mountain|soil|burrow|tree|arboreal)\b/i.test(manualNotes);
       const breathesOxygen = /\b(oxygen|air[- ]?breath|lungs?|tracheae?)\b/i.test(manualNotes);
       const laysEggs = /\b(egg|eggs|oviparous|lays?)\b/i.test(manualNotes);
       const hasFur = /\b(fur|hair|pelt|coat)\b/i.test(manualNotes);
       const legMatch = manualNotes.match(/\b(\d+|six|four|eight|two)\s+legs?\b/i);
-      const legText = legMatch ? `${legMatch[1].toLowerCase()} legs` : "defined locomotor limbs";
-      const speciesName = nameMatch?.[1]?.trim() || "Manual Starter Species";
+      const legText = legMatch ? `${legMatch[1].toLowerCase()} legs` : "locomotor limbs matching the user's description";
+      const speciesName = inferManualStarterName(manualNotes);
+      const respiratoryTrait = breathesOxygen ? "oxygen respiration" : "respiration matching the described organism";
+      const bodyCovering = hasFur ? "furred body covering" : "body covering matching the described organism";
       return {
         projectName: values.projectName || `${speciesName} Lineage`,
         species: {
           name: speciesName,
-          scientific_name: speciesName === "Manual Starter Species" ? "Species manualis" : "",
-          classification: "User-defined evolved starter organism",
+          scientific_name: "",
+          classification: "Established evolved starter organism",
           category: "Established evolved organism",
           status: "stable",
           can_evolve: true,
           overview: manualNotes,
-          habitat: values.habitat || (isLand ? "User-defined terrestrial habitat" : "User-defined habitat"),
-          ecology: { niche: "user-defined starter ecology", notes: manualNotes },
-          reproduction: { method: laysEggs ? "egg-laying reproduction" : "user-defined reproduction" },
+          habitat: values.habitat || (isLand ? "terrestrial habitat described by the user" : "habitat described by the user"),
+          ecology: { niche: "starter ecology described by the user", notes: manualNotes },
+          reproduction: { method: laysEggs ? "egg-laying reproduction" : "reproduction matching the described organism" },
           population_condition: { suitability: "stable", advantages: ["already adapted to its stated environment"], risks: ["future environmental pressures"] },
           newly_evolved_traits: [
-            isLand ? "terrestrial habitat adaptation" : "user-defined habitat adaptation",
-            breathesOxygen ? "oxygen respiration" : "user-defined physiology",
+            isLand ? "terrestrial habitat adaptation" : "habitat specialization from starter notes",
+            respiratoryTrait,
             hasFur ? "furred body covering" : legText,
           ].filter(Boolean).slice(0, 3),
           complete_traits: {
-            body_structure: [hasFur ? "furred body covering" : "user-defined body covering", legText],
-            respiration: [breathesOxygen ? "oxygen breathing" : "user-defined respiration"],
-            reproduction: [laysEggs ? "egg laying" : "user-defined reproduction"],
-            habitat_adaptation: [isLand ? "land-adapted" : "user-defined habitat"],
+            body_structure: [bodyCovering, legText],
+            respiration: [breathesOxygen ? "oxygen breathing" : "respiration matching the described organism"],
+            reproduction: [laysEggs ? "egg laying" : "reproduction matching the described organism"],
+            habitat_adaptation: [isLand ? "land-adapted" : "habitat described by the user"],
+            physical_description: manualNotes,
           },
           inherited_traits: [],
           lost_traits: [],
@@ -89,12 +118,12 @@
           pressures: [],
           visual_genome: {
             bodyPlan: manualNotes,
-            symmetry: "user-defined",
-            surface: hasFur ? "furred outer covering" : "user-defined outer covering",
+            symmetry: "based on described organism",
+            surface: hasFur ? "furred outer covering" : "outer covering from starter notes",
             appendages: [legText],
             coloration: [],
             sensoryFeatures: [],
-            scale: "user-defined evolved organism",
+            scale: "established evolved organism",
           },
           image_prompt: `A realistic biological specimen concept image of ${speciesName}, matching these user constraints: ${manualNotes}. Natural habitat scene, landscape composition, no diagrams, no charts, no text, no labels, no captions, no annotations, no callouts, no title.`,
           evolution_reason: "This starter preserves the user's manual organism as an already-evolved root for future divergence.",
@@ -345,10 +374,25 @@
     document.querySelector("[data-god-create-close]")?.addEventListener("click", closeModal);
     document.querySelector("[data-god-create-cancel]")?.addEventListener("click", closeModal);
     form?.addEventListener("submit", createEvolution);
+    form?.querySelector("select[name='startingMode']")?.addEventListener("change", syncStartingModeCopy);
     searchInput?.addEventListener("input", render);
   }
 
+  function syncStartingModeCopy() {
+    const mode = form?.querySelector("select[name='startingMode']")?.value || "instant";
+    const notes = form?.querySelector("textarea[name='manualNotes']");
+    if (!notes) return;
+    if (mode === "manual") {
+      notes.placeholder = "Describe the already-evolved root creature. Example: a six-legged land reptile with rough scales, a long tail, oxygen-breathing lungs, egg laying, and dry gully habitat.";
+    } else if (mode === "guided") {
+      notes.placeholder = "Guide the early starter species. Example: translucent swimmer with chemical sensing, soft fins, and mineral-rich shallows.";
+    } else {
+      notes.placeholder = "Optional hints for the engine. Example: desert-adapted, nocturnal, shell-bearing, airborne spores, forest canopy.";
+    }
+  }
+
   bind();
+  syncStartingModeCopy();
   if (currentUser?.id) {
     loadEvolutions();
   } else {

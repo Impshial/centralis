@@ -18,6 +18,34 @@
   const page = document.body?.dataset.page || "";
   if (!["arc-studio", "arc-workspace"].includes(page)) return;
 
+  const ARC_TUTORIAL_PAGES = [
+    {
+      key: "tripod",
+      title: "The Story Tripod",
+      copy: "Universe Builder maps the world and its connections. Chronicle stores the deep lore. Arc Studio turns that material into story movement: scenes, arcs, threads, setups, payoffs, and progression.",
+    },
+    {
+      key: "outline",
+      title: "Build From The Outline",
+      copy: "Organize parts, acts, sequences, chapters, scenes, beats, or custom units. The outline is the spine of the project, so you can shape the story before worrying about prose.",
+    },
+    {
+      key: "scenes",
+      title: "Scenes Do The Work",
+      copy: "Use the inspector to track each scene's purpose, conflict, outcome, point of view, cast, location, tone, notes, and ordered beats.",
+    },
+    {
+      key: "threads",
+      title: "Threads And Arcs",
+      copy: "Plot threads and character arcs show what develops, pauses, turns, or resolves across the story. Attach scenes to them so nothing important goes quiet by accident.",
+    },
+    {
+      key: "intelligence",
+      title: "Story Intelligence",
+      copy: "Timeline, Arc Map, causality, continuity, setups, payoffs, and diagnostics help you see how the story moves and where it needs attention.",
+    },
+  ];
+
   const state = {
     user: window.centralisCurrentAppUser || null,
     projects: [],
@@ -39,6 +67,8 @@
     view: "outline",
     search: "",
     statusFilter: "",
+    tutorialIndex: 0,
+    tutorialSessionDismissed: false,
   };
 
   const dom = {};
@@ -91,6 +121,14 @@
     dom.setupForm = document.querySelector("[data-arc-setup-form]");
     dom.setupUnitSelect = document.querySelector("[data-arc-setup-unit-select]");
     dom.payoffUnitSelect = document.querySelector("[data-arc-payoff-unit-select]");
+    dom.tutorialModal = document.getElementById("arc-tutorial-modal");
+    dom.tutorialTitle = document.querySelector("[data-arc-tutorial-title]");
+    dom.tutorialCopy = document.querySelector("[data-arc-tutorial-copy]");
+    dom.tutorialArt = document.querySelector("[data-arc-tutorial-art]");
+    dom.tutorialDots = document.querySelector("[data-arc-tutorial-dots]");
+    dom.tutorialDismiss = document.querySelector("[data-arc-tutorial-dismiss]");
+    dom.tutorialPrev = document.querySelector("[data-arc-tutorial-prev]");
+    dom.tutorialNext = document.querySelector("[data-arc-tutorial-next]");
   }
 
   function bindEvents() {
@@ -121,6 +159,16 @@
     document.querySelector("[data-arc-setup-cancel]")?.addEventListener("click", closeSetupModal);
     dom.setupForm?.addEventListener("submit", handleSaveSetup);
     document.querySelector("[data-arc-analyze-story]")?.addEventListener("click", analyzeStory);
+    document.querySelector("[data-arc-tutorial-close]")?.addEventListener("click", closeTutorial);
+    dom.tutorialPrev?.addEventListener("click", () => moveTutorial(-1));
+    dom.tutorialNext?.addEventListener("click", () => moveTutorial(1));
+    dom.tutorialDots?.addEventListener("click", (event) => {
+      const dot = event.target.closest("[data-arc-tutorial-dot]");
+      if (!dot) return;
+      state.tutorialIndex = Number(dot.dataset.arcTutorialDot) || 0;
+      renderTutorial();
+    });
+    document.addEventListener("keydown", handleTutorialKeydown);
 
     dom.outlineList?.addEventListener("click", handleWorkspaceClick);
     dom.storySurface?.addEventListener("click", handleWorkspaceClick);
@@ -156,6 +204,7 @@
       } else {
         await loadWorkspace();
         renderWorkspace();
+        await maybeShowTutorial();
       }
     } catch (error) {
       console.error("Could not initialize Arc Studio.", error);
@@ -273,6 +322,83 @@
       return [];
     }
     return data || [];
+  }
+
+  async function maybeShowTutorial() {
+    if (page !== "arc-workspace" || !dom.tutorialModal || state.tutorialSessionDismissed) return;
+    try {
+      const settings = await window.centralisGetUserSettings?.();
+      if (settings?.arc_studio_tutorial_dismissed === true) return;
+      openTutorial();
+    } catch (error) {
+      console.warn("Could not load Arc Studio tutorial setting.", error);
+    }
+  }
+
+  function openTutorial() {
+    if (!dom.tutorialModal) return;
+    state.tutorialIndex = 0;
+    if (dom.tutorialDismiss) dom.tutorialDismiss.checked = true;
+    renderTutorial();
+    dom.tutorialModal.hidden = false;
+    document.querySelector("[data-arc-tutorial-close]")?.focus();
+  }
+
+  async function closeTutorial() {
+    if (!dom.tutorialModal || dom.tutorialModal.hidden) return;
+    const shouldDismiss = dom.tutorialDismiss?.checked !== false;
+    dom.tutorialModal.hidden = true;
+    state.tutorialSessionDismissed = true;
+    if (!shouldDismiss) return;
+    try {
+      await window.centralisUpdateUserSettings?.({ arc_studio_tutorial_dismissed: true });
+    } catch (error) {
+      console.warn("Could not save Arc Studio tutorial setting.", error);
+      setStatus(dom.workspaceStatus, "Tutorial closed, but the preference could not be saved.", "error");
+    }
+  }
+
+  function moveTutorial(direction) {
+    if (!dom.tutorialModal || dom.tutorialModal.hidden) return;
+    const nextIndex = state.tutorialIndex + direction;
+    if (nextIndex < 0) return;
+    if (nextIndex >= ARC_TUTORIAL_PAGES.length) {
+      closeTutorial();
+      return;
+    }
+    state.tutorialIndex = nextIndex;
+    renderTutorial();
+  }
+
+  function renderTutorial() {
+    const pageData = ARC_TUTORIAL_PAGES[state.tutorialIndex] || ARC_TUTORIAL_PAGES[0];
+    if (dom.tutorialTitle) dom.tutorialTitle.textContent = pageData.title;
+    if (dom.tutorialCopy) dom.tutorialCopy.textContent = pageData.copy;
+    if (dom.tutorialArt) dom.tutorialArt.dataset.arcTutorialArt = pageData.key;
+    if (dom.tutorialPrev) dom.tutorialPrev.disabled = state.tutorialIndex === 0;
+    if (dom.tutorialNext) {
+      const isLast = state.tutorialIndex === ARC_TUTORIAL_PAGES.length - 1;
+      dom.tutorialNext.setAttribute("aria-label", isLast ? "Finish tutorial" : "Next tutorial page");
+    }
+    if (dom.tutorialDots) {
+      dom.tutorialDots.innerHTML = ARC_TUTORIAL_PAGES.map((item, index) => `
+        <button type="button" class="${index === state.tutorialIndex ? "is-active" : ""}" data-arc-tutorial-dot="${index}" aria-label="Show ${escapeAttribute(item.title)}" aria-current="${index === state.tutorialIndex ? "step" : "false"}"></button>
+      `).join("");
+    }
+  }
+
+  function handleTutorialKeydown(event) {
+    if (!dom.tutorialModal || dom.tutorialModal.hidden) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeTutorial();
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      moveTutorial(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      moveTutorial(1);
+    }
   }
 
   function renderLanding() {

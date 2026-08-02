@@ -6,7 +6,7 @@
   <title>Arc Studio Workspace | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=arc-studio-2">
+  <link rel="stylesheet" href="styles.css?v=arc-studio-3">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -103,6 +103,37 @@
         </aside>
       </section>
     </main>
+
+    <div class="modal-backdrop arc-tutorial-backdrop" id="arc-tutorial-modal" hidden>
+      <section class="modal-dialog arc-tutorial-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-tutorial-title" aria-describedby="arc-tutorial-copy">
+        <button class="modal-close arc-tutorial-close" type="button" aria-label="Close" data-arc-tutorial-close>
+          <ph-x weight="bold" aria-hidden="true"></ph-x>
+        </button>
+        <button class="arc-tutorial-arrow arc-tutorial-arrow-prev" type="button" aria-label="Previous tutorial page" data-arc-tutorial-prev>
+          <ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>
+        </button>
+        <button class="arc-tutorial-arrow arc-tutorial-arrow-next" type="button" aria-label="Next tutorial page" data-arc-tutorial-next>
+          <ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>
+        </button>
+        <div class="arc-tutorial-art" data-arc-tutorial-art>
+          <div class="arc-tutorial-shape arc-tutorial-shape-one"></div>
+          <div class="arc-tutorial-shape arc-tutorial-shape-two"></div>
+          <div class="arc-tutorial-shape arc-tutorial-shape-three"></div>
+        </div>
+        <div class="arc-tutorial-content">
+          <p class="settings-eyebrow">Arc Studio</p>
+          <h2 id="arc-tutorial-title" data-arc-tutorial-title>Arc Studio</h2>
+          <p id="arc-tutorial-copy" data-arc-tutorial-copy></p>
+        </div>
+        <div class="arc-tutorial-footer">
+          <label class="arc-tutorial-checkbox">
+            <input type="checkbox" data-arc-tutorial-dismiss checked>
+            <span>do not show this again</span>
+          </label>
+          <div class="arc-tutorial-dots" data-arc-tutorial-dots aria-label="Tutorial pages"></div>
+        </div>
+      </section>
+    </div>
 
     <div class="modal-backdrop" id="arc-unit-modal" hidden>
       <section class="modal-dialog arc-create-dialog" role="dialog" aria-modal="true" aria-labelledby="arc-unit-title">
@@ -257,7 +288,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=arc-studio-2"></script>
-  <script src="arc-studio.js?v=arc-studio-2"></script>
+  <script src="script.js?v=arc-studio-3"></script>
+  <script src="arc-studio.js?v=arc-studio-3"></script>
 </body>
 </html>

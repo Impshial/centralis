@@ -27,6 +27,15 @@
   const contextPanel = document.querySelector("[data-god-context-panel]");
   const workspace = document.querySelector("[data-god-workspace]");
   const autopilotLink = document.querySelector("[data-god-autopilot-launch]");
+  const actionsToggle = document.querySelector("[data-god-actions-toggle]");
+  const actionsMenu = document.querySelector("[data-god-actions-menu]");
+  const cleanImagesButton = document.querySelector("[data-god-clean-images]");
+  const godSettingsOpenButton = document.querySelector("[data-god-settings-open]");
+  const godSettingsModal = document.getElementById("god-settings-modal");
+  const godSettingsForm = document.querySelector("[data-god-settings-form]");
+  const godSettingsStatus = document.querySelector("[data-god-settings-status]");
+  const godSettingsResetButton = document.querySelector("[data-god-settings-reset]");
+  const godSettingsCloseButtons = document.querySelectorAll("[data-god-settings-close]");
   const evolutionStatusOpenButton = document.querySelector("[data-god-evolution-status-open]");
   const evolutionStatusCount = document.querySelector("[data-god-evolution-status-count]");
   if (autopilotLink && evolutionId) {
@@ -79,9 +88,27 @@
     ["2560x1440", "2K Resolution (2560x1440)"],
     ["3840x2160", "4K Resolution (3840x2160)"],
   ];
+  const GOD_FORMAT_COLORS = new Set([
+    "#78d5c8",
+    "#94a3b8",
+    "#fb7185",
+    "#fb923c",
+    "#fbbf24",
+    "#4ade80",
+    "#60a5fa",
+    "#a78bfa",
+    "#f472b6",
+  ]);
+  const DEFAULT_GOD_FORMAT = {
+    connectionColor: "#78d5c8",
+    connectionWidth: 2,
+    connectionCurve: "curve",
+    nodeBorderWidth: 1,
+  };
 
   let currentUser = window.centralisCurrentAppUser || null;
   let evolution = null;
+  let godFormat = { ...DEFAULT_GOD_FORMAT };
   let speciesRows = [];
   let imageRows = [];
   let selectedSpeciesId = null;
@@ -99,6 +126,7 @@
   let evolutionStatusLoading = false;
   let suppressPositionSavesUntil = 0;
   let statusClearTimer = null;
+  let cleaningImages = false;
   const EVOLUTION_STATUS_POLL_MS = 4000;
   const EVOLUTION_JOB_SOURCE_TYPES = ["god_species_evolution", "god_species_branch_evolution"];
   const EVOLUTION_ACTIVE_STATUSES = new Set(["queued", "running"]);
@@ -126,6 +154,112 @@
     }
   }
 
+  function normalizeGodFormat(value = {}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const connectionWidth = Math.min(4, Math.max(1, Number.parseInt(source.connectionWidth, 10) || DEFAULT_GOD_FORMAT.connectionWidth));
+    const nodeBorderWidth = Math.min(4, Math.max(1, Number.parseInt(source.nodeBorderWidth, 10) || DEFAULT_GOD_FORMAT.nodeBorderWidth));
+    const connectionCurve = ["step", "curve", "line"].includes(source.connectionCurve)
+      ? source.connectionCurve
+      : DEFAULT_GOD_FORMAT.connectionCurve;
+    const connectionColor = GOD_FORMAT_COLORS.has(String(source.connectionColor || "").toLowerCase())
+      ? String(source.connectionColor).toLowerCase()
+      : DEFAULT_GOD_FORMAT.connectionColor;
+    return {
+      connectionColor,
+      connectionWidth,
+      connectionCurve,
+      nodeBorderWidth,
+    };
+  }
+
+  function applyGodFormatToDocument() {
+    const target = workspace || document.documentElement;
+    target.style.setProperty("--god-edge-color", godFormat.connectionColor);
+    target.style.setProperty("--god-edge-width", String(godFormat.connectionWidth));
+    target.style.setProperty("--god-node-border-width", `${godFormat.nodeBorderWidth}px`);
+  }
+
+  function setGodSettingsStatus(message, type = "") {
+    if (!godSettingsStatus) return;
+    godSettingsStatus.textContent = message || "";
+    godSettingsStatus.classList.toggle("is-error", type === "error");
+    godSettingsStatus.classList.toggle("is-success", type === "success");
+  }
+
+  function setGodColorValue(value) {
+    if (!godSettingsForm) return;
+    const nextValue = GOD_FORMAT_COLORS.has(String(value || "").toLowerCase())
+      ? String(value).toLowerCase()
+      : DEFAULT_GOD_FORMAT.connectionColor;
+    const input = godSettingsForm.elements.connectionColor;
+    if (input) input.value = nextValue;
+    godSettingsForm.querySelectorAll("[data-god-format-colors] [data-god-format-value]").forEach((button) => {
+      button.classList.toggle("is-selected", String(button.dataset.godFormatValue || "").toLowerCase() === nextValue);
+    });
+  }
+
+  function setGodSegmentValue(name, value) {
+    if (!godSettingsForm) return;
+    const input = godSettingsForm.elements[name];
+    if (input) input.value = value;
+    const group = godSettingsForm.querySelector(`[data-god-format-segment="${name}"]`);
+    group?.querySelectorAll("[data-god-format-value]").forEach((button) => {
+      button.classList.toggle("is-selected", String(button.dataset.godFormatValue) === String(value));
+    });
+  }
+
+  function populateGodSettingsForm(format = godFormat) {
+    const normalized = normalizeGodFormat(format);
+    setGodColorValue(normalized.connectionColor);
+    setGodSegmentValue("connectionWidth", normalized.connectionWidth);
+    setGodSegmentValue("connectionCurve", normalized.connectionCurve);
+    setGodSegmentValue("nodeBorderWidth", normalized.nodeBorderWidth);
+    setGodSettingsStatus("");
+  }
+
+  function readGodSettingsForm() {
+    if (!godSettingsForm) return normalizeGodFormat(godFormat);
+    return normalizeGodFormat({
+      connectionColor: godSettingsForm.elements.connectionColor?.value,
+      connectionWidth: godSettingsForm.elements.connectionWidth?.value,
+      connectionCurve: godSettingsForm.elements.connectionCurve?.value,
+      nodeBorderWidth: godSettingsForm.elements.nodeBorderWidth?.value,
+    });
+  }
+
+  async function saveGodFormat(nextFormat) {
+    godFormat = normalizeGodFormat(nextFormat);
+    applyGodFormatToDocument();
+    refreshCanvas({ preservePositions: true });
+    if (!evolution?.id || !currentUser?.id || !window.centralisSupabase) return;
+    setGodSettingsStatus("Saving...");
+    const nextCanvasSettings = {
+      ...(evolution.canvas_settings && typeof evolution.canvas_settings === "object" ? evolution.canvas_settings : {}),
+      godFormat,
+    };
+    const { error } = await window.centralisSupabase
+      .from("god_evolutions")
+      .update({ canvas_settings: nextCanvasSettings })
+      .eq("id", evolution.id)
+      .eq("user_id", currentUser.id);
+    if (error) {
+      setGodSettingsStatus(`Could not save settings: ${error.message}`, "error");
+      return;
+    }
+    evolution = { ...evolution, canvas_settings: nextCanvasSettings };
+    setGodSettingsStatus("Settings saved.", "success");
+  }
+
+  function openGodSettingsDialog() {
+    setActionsMenuOpen(false);
+    populateGodSettingsForm(godFormat);
+    if (godSettingsModal) godSettingsModal.hidden = false;
+  }
+
+  function closeGodSettingsDialog() {
+    if (godSettingsModal) godSettingsModal.hidden = true;
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -133,6 +267,10 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value).replaceAll("`", "&#096;");
   }
 
   function createId() {
@@ -463,6 +601,7 @@
     const minLaneGap = 0.92;
     const laneById = new Map();
     let nextLeafLane = 0;
+    let nextRootLane = 0;
     const placeNode = (row, lane) => {
       const column = columnById.get(row.id) ?? 0;
       laneById.set(row.id, lane);
@@ -492,8 +631,8 @@
       return { minLane, maxLane, nextLane: cursorLane };
     };
     roots.forEach((rootRow) => {
-      const result = assignSubtree(rootRow, nextLeafLane);
-      nextLeafLane = Math.max(result.nextLane, result.maxLane + 1);
+      const result = assignSubtree(rootRow, nextRootLane);
+      nextRootLane = Math.max(result.nextLane, result.maxLane + 1);
     });
 
     const rowsByColumn = new Map();
@@ -573,6 +712,7 @@
           selected: row.id === selectedSpeciesId,
           inLineage: !selectedSpeciesId || lineage.has(row.id),
           menuOpen: openSpeciesMenuId === row.id,
+          format: godFormat,
           onInfo: () => openInspector(row.id),
           onSelect: () => selectSpecies(row.id),
           onToggleMenu: () => toggleSpeciesMenu(row.id),
@@ -586,6 +726,12 @@
   function toEdges() {
     const lineage = selectedLineageIds();
     const ancestry = selectedAncestryIds();
+    const connectionWidth = Number(godFormat.connectionWidth || DEFAULT_GOD_FORMAT.connectionWidth);
+    const edgeType = godFormat.connectionCurve === "step"
+      ? "smoothstep"
+      : godFormat.connectionCurve === "line"
+        ? "straight"
+        : "default";
     return speciesRows
       .filter((row) => row.parent_species_id)
       .sort((left, right) => {
@@ -599,21 +745,17 @@
           id: `edge:${row.parent_species_id}:${row.id}`,
           source: row.parent_species_id,
           target: row.id,
-          type: "smoothstep",
+          type: edgeType,
           animated: inAncestry,
           zIndex: inAncestry ? 20 : inLineage ? 5 : 1,
-          pathOptions: {
-            borderRadius: 16,
-            offset: 24,
-          },
           className: [
             "god-edge",
             selectedSpeciesId && !inLineage ? "is-muted" : "",
             inAncestry ? "is-ancestry" : "",
           ].filter(Boolean).join(" "),
           style: {
-            strokeWidth: inAncestry ? 4.5 : inLineage ? 2.8 : 2,
-            stroke: inAncestry ? "#9ef8ee" : row.status === "extinct" ? "#8d7f75" : "#78d5c8",
+            strokeWidth: inAncestry ? Math.max(connectionWidth + 2.5, 4.5) : inLineage ? connectionWidth + 0.8 : connectionWidth,
+            stroke: inAncestry ? "#9ef8ee" : row.status === "extinct" ? "#8d7f75" : godFormat.connectionColor,
           },
         };
       });
@@ -631,6 +773,7 @@
     ].filter(Boolean).join(" ");
     return React.createElement("article", {
       className: classes,
+      style: { borderWidth: `${Number(props.data.format?.nodeBorderWidth || DEFAULT_GOD_FORMAT.nodeBorderWidth)}px` },
       onDoubleClick: (event) => {
         event.stopPropagation();
         props.data.onInfo();
@@ -779,7 +922,7 @@
   }
 
   async function persistLayout({ fit = false } = {}) {
-    const positions = layoutSpecies(speciesRows);
+    const positions = await layoutSpecies(speciesRows);
     speciesRows = speciesRows.map((row) => {
       const position = positions.get(row.id) || { x: Number(row.position_x || 0), y: Number(row.position_y || 0) };
       return { ...row, position_x: position.x, position_y: position.y, depth_index: lastLayoutColumns.get(row.id) ?? row.depth_index };
@@ -855,6 +998,8 @@
       return;
     }
     evolution = evolutionRow;
+    godFormat = normalizeGodFormat(evolution?.canvas_settings?.godFormat);
+    applyGodFormatToDocument();
     speciesRows = species || [];
     if (titleElement) titleElement.textContent = evolution.name || "God Engine";
     await loadImages();
@@ -947,7 +1092,12 @@
         <button type="button" data-god-context="custom" aria-pressed="${contextMode === "custom"}">Custom</button>
       </div>
       <header class="god-inspector-header">
-        <h2>${escapeHtml(row.name || "Unnamed species")}</h2>
+        <div class="god-inspector-name-row">
+          <h2>${escapeHtml(row.name || "Unnamed species")}</h2>
+          <button class="icon-button god-rename-species" type="button" aria-label="Rename species" title="Rename species" data-god-rename-species>
+            <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
+          </button>
+        </div>
         <button class="modal-close" type="button" aria-label="Close Species Inspector" data-god-close-inspector><ph-x weight="bold" aria-hidden="true"></ph-x></button>
       </header>
       <div class="god-inspector-title">
@@ -1052,6 +1202,28 @@
     refreshCanvas({ preservePositions: true });
   }
 
+  function closeSpeciesMenuOnOutsideClick(event) {
+    if (!openSpeciesMenuId) return;
+    const target = event.target;
+    if (target?.closest?.(".god-node-menu, .god-node-menu-button")) return;
+    openSpeciesMenuId = "";
+    suppressPositionSavesUntil = Date.now() + 500;
+    refreshCanvas({ preservePositions: true });
+  }
+
+  function setActionsMenuOpen(isOpen) {
+    if (!actionsMenu || !actionsToggle) return;
+    actionsMenu.hidden = !isOpen;
+    actionsToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  }
+
+  function closeActionsMenuOnOutsideClick(event) {
+    if (!actionsMenu || actionsMenu.hidden) return;
+    const target = event.target;
+    if (target?.closest?.("[data-god-actions-menu], [data-god-actions-toggle]")) return;
+    setActionsMenuOpen(false);
+  }
+
   function closeInspector() {
     inspectedSpeciesId = null;
     contextMode = "";
@@ -1145,6 +1317,7 @@
 
   function bindInspector(row) {
     inspector.querySelector("[data-god-close-inspector]")?.addEventListener("click", closeInspector);
+    inspector.querySelector("[data-god-rename-species]")?.addEventListener("click", () => renameSpecies(row));
     setupInspectorResize();
     inspector.querySelectorAll("[data-god-context]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1237,6 +1410,43 @@
       document.addEventListener("pointermove", handlePointerMove);
       document.addEventListener("pointerup", handlePointerUp);
     });
+  }
+
+  async function renameSpecies(row) {
+    const currentName = row.name || "";
+    const nextName = window.prompt("Rename this creature. The AI will generate a new Latin name to match.", currentName);
+    if (nextName === null) return;
+    const cleanName = String(nextName || "").replace(/\s+/g, " ").trim();
+    if (!cleanName || cleanName === currentName) return;
+    setStatus(`Renaming ${currentName || "species"}...`);
+    try {
+      const { data, error } = await window.centralisSupabase.functions.invoke("generate-god-species-name", {
+        body: {
+          name: cleanName,
+          species: row,
+        },
+      });
+      if (error) throw error;
+      const scientificName = String(data?.scientific_name || data?.scientificName || "").trim();
+      if (!scientificName) throw new Error("The AI did not return a scientific name.");
+      const patch = {
+        name: cleanName,
+        scientific_name: scientificName,
+      };
+      const { error: updateError } = await window.centralisSupabase
+        .from("god_species")
+        .update(patch)
+        .eq("id", row.id)
+        .eq("user_id", currentUser.id);
+      if (updateError) throw updateError;
+      speciesRows = speciesRows.map((item) => item.id === row.id ? { ...item, ...patch } : item);
+      refreshCanvas({ preservePositions: true });
+      renderInspector();
+      setStatus(`${cleanName} renamed. Latin name updated.`, "success");
+    } catch (error) {
+      console.error(error);
+      setStatus(`Could not rename species: ${error.message || error}`, "error");
+    }
   }
 
   function renderContextPanel() {
@@ -1695,7 +1905,9 @@
 
   async function generateSpeciesImage(row, options = {}) {
     if (!options.force && imageForSpecies(row.id)) return;
-    setStatus(options.highResolution ? `Generating high-resolution image for ${row.name}...` : `Generating image for ${row.name}...`);
+    if (!options.suppressStatus) {
+      setStatus(options.highResolution ? `Generating high-resolution image for ${row.name}...` : `Generating image for ${row.name}...`);
+    }
     const sourceType = options.highResolution ? "god_species_high_image" : "god_species_image";
     const parentSpecies = row.parent_species_id ? speciesRows.find((item) => item.id === row.parent_species_id) || null : null;
     try {
@@ -1737,7 +1949,10 @@
       if (data?.image) mergeImageRow(data.image);
       refreshCanvas();
       renderInspector();
-      setStatus(options.highResolution ? "High-resolution image generated and set as primary." : "Species thumbnail generated and set as primary.", "success");
+      if (!options.suppressStatus) {
+        setStatus(options.highResolution ? "High-resolution image generated and set as primary." : "Species thumbnail generated and set as primary.", "success");
+      }
+      return true;
     } catch (error) {
       console.warn("Could not generate species image:", error);
       await window.centralisSupabase.functions.invoke("fail-generation-job", {
@@ -1754,7 +1969,10 @@
           },
         },
       }).catch((cleanupError) => console.warn("Could not mark failed generation job:", cleanupError));
-      setStatus(`Image generation failed: ${error.message || error}`, "error", { autoClear: 8000 });
+      if (!options.suppressStatus) {
+        setStatus(`Image generation failed: ${error.message || error}`, "error", { autoClear: 8000 });
+      }
+      return false;
     }
   }
 
@@ -1763,6 +1981,51 @@
       if (row.status !== "extinct" && !imageForSpecies(row.id)) {
         await generateSpeciesImage(row, { highResolution: false, force: false });
       }
+    }
+  }
+
+  async function cleanUpMissingImages() {
+    if (cleaningImages) return;
+    if (!window.centralisSupabase || !currentUser?.id) {
+      setStatus("You must be signed in before cleaning up images.", "error");
+      return;
+    }
+    cleaningImages = true;
+    if (cleanImagesButton) cleanImagesButton.disabled = true;
+    setActionsMenuOpen(false);
+    setStatus("Checking this evolution for missing thumbnails...");
+    try {
+      await loadImages();
+      const missingRows = speciesRows.filter((row) => !imageForSpecies(row.id));
+      if (!missingRows.length) {
+        setStatus("Every creature in this evolution already has an image.", "success");
+        return;
+      }
+      setStatus(`Starting ${missingRows.length} missing thumbnail job${missingRows.length === 1 ? "" : "s"} at once...`);
+      const results = await Promise.allSettled(missingRows.map((row) => {
+        return generateSpeciesImage(row, {
+          highResolution: false,
+          force: true,
+          makePrimary: true,
+          suppressStatus: true,
+        });
+      }));
+      await loadImages();
+      refreshCanvas();
+      renderInspector();
+      const failedCount = results.filter((result) => result.status === "rejected" || result.value === false).length;
+      const successCount = missingRows.length - failedCount;
+      if (failedCount) {
+        setStatus(`Clean up started ${successCount} thumbnail${successCount === 1 ? "" : "s"}; ${failedCount} failed.`, "error");
+      } else {
+        setStatus(`Clean up started ${missingRows.length} thumbnail job${missingRows.length === 1 ? "" : "s"}.`, "success");
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus(`Could not clean up images: ${error.message || error}`, "error");
+    } finally {
+      cleaningImages = false;
+      if (cleanImagesButton) cleanImagesButton.disabled = false;
     }
   }
 
@@ -1850,6 +2113,37 @@
   evolutionStatusOpenButton?.addEventListener("click", () => {
     void openEvolutionStatus();
   });
+  godSettingsOpenButton?.addEventListener("click", openGodSettingsDialog);
+  godSettingsCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeGodSettingsDialog);
+  });
+  godSettingsResetButton?.addEventListener("click", () => {
+    populateGodSettingsForm(DEFAULT_GOD_FORMAT);
+    void saveGodFormat(DEFAULT_GOD_FORMAT);
+  });
+  godSettingsForm?.addEventListener("click", (event) => {
+    const button = event.target?.closest?.("[data-god-format-value]");
+    if (!button) return;
+    const colorGroup = button.closest("[data-god-format-colors]");
+    const segmentGroup = button.closest("[data-god-format-segment]");
+    if (colorGroup) {
+      setGodColorValue(button.dataset.godFormatValue);
+    } else if (segmentGroup) {
+      setGodSegmentValue(segmentGroup.dataset.godFormatSegment, button.dataset.godFormatValue);
+    } else {
+      return;
+    }
+    void saveGodFormat(readGodSettingsForm());
+  });
+  actionsToggle?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setActionsMenuOpen(actionsMenu?.hidden !== false);
+  });
+  cleanImagesButton?.addEventListener("click", () => {
+    void cleanUpMissingImages();
+  });
+  document.addEventListener("pointerdown", closeSpeciesMenuOnOutsideClick);
+  document.addEventListener("pointerdown", closeActionsMenuOnOutsideClick);
 
   if (currentUser?.id) {
     loadData();

@@ -22581,6 +22581,238 @@ body[data-page="arc-workspace"] {
   min-height: 100px;
 }
 
+.arc-tutorial-backdrop {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.arc-tutorial-dialog {
+  position: relative;
+  width: min(760px, calc(100vw - 40px));
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, var(--accent));
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+}
+
+.arc-tutorial-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+}
+
+.arc-tutorial-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--page) 88%, transparent), color-mix(in srgb, var(--surface) 28%, transparent)),
+    radial-gradient(circle at 28% 30%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--surface) 86%, var(--page)), color-mix(in srgb, var(--page) 82%, var(--accent)));
+}
+
+.arc-tutorial-art::before,
+.arc-tutorial-art::after,
+.arc-tutorial-shape {
+  content: "";
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--surface) 54%, transparent);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+}
+
+.arc-tutorial-art::before {
+  right: 56px;
+  top: 76px;
+  width: 230px;
+  height: 300px;
+  border-radius: 8px;
+  transform: rotate(7deg);
+}
+
+.arc-tutorial-art::after {
+  right: 210px;
+  bottom: 66px;
+  width: 180px;
+  height: 112px;
+  border-radius: 999px;
+  transform: rotate(-18deg);
+}
+
+.arc-tutorial-shape-one {
+  right: 100px;
+  top: 136px;
+  width: 154px;
+  height: 3px;
+  background: var(--accent);
+  transform: rotate(8deg);
+}
+
+.arc-tutorial-shape-two {
+  right: 112px;
+  top: 208px;
+  width: 132px;
+  height: 3px;
+  background: var(--accent);
+  transform: rotate(8deg);
+}
+
+.arc-tutorial-shape-three {
+  right: 134px;
+  top: 280px;
+  width: 96px;
+  height: 3px;
+  background: var(--accent);
+  transform: rotate(8deg);
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="outline"]::before {
+  clip-path: polygon(0 0, 82% 0, 100% 18%, 100% 100%, 0 100%);
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="outline"]::after {
+  width: 260px;
+  height: 2px;
+  border: 0;
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, var(--accent), var(--accent) 24px, transparent 24px, transparent 38px);
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="scenes"]::before {
+  width: 270px;
+  height: 190px;
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="scenes"]::after {
+  right: 88px;
+  bottom: 88px;
+  width: 220px;
+  height: 150px;
+  border-radius: 8px;
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="threads"]::before,
+.arc-tutorial-art[data-arc-tutorial-art="threads"]::after {
+  border-radius: 999px;
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="threads"] .arc-tutorial-shape {
+  height: 2px;
+}
+
+.arc-tutorial-art[data-arc-tutorial-art="intelligence"]::before {
+  background:
+    linear-gradient(color-mix(in srgb, var(--accent) 24%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface) 54%, transparent);
+  background-size: 28px 28px;
+}
+
+.arc-tutorial-content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  min-height: 430px;
+  max-width: 500px;
+  padding: 72px 76px 88px;
+}
+
+.arc-tutorial-content h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(2.3rem, 4vw, 3.7rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.arc-tutorial-content p:last-child {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.55;
+}
+
+.arc-tutorial-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 86%, var(--page));
+  color: var(--ink);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.arc-tutorial-arrow:disabled {
+  cursor: default;
+  opacity: 0.36;
+}
+
+.arc-tutorial-arrow-prev {
+  left: 18px;
+}
+
+.arc-tutorial-arrow-next {
+  right: 18px;
+}
+
+.arc-tutorial-footer {
+  position: absolute;
+  right: 28px;
+  bottom: 22px;
+  left: 28px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.arc-tutorial-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.arc-tutorial-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.arc-tutorial-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arc-tutorial-dots button {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--line));
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.arc-tutorial-dots button.is-active {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
 .arc-workspace-page {
   position: fixed;
   top: var(--header-height, 76px);
@@ -23263,6 +23495,25 @@ body[data-page="arc-workspace"] {
     justify-content: flex-start;
   }
 
+  .arc-tutorial-dialog {
+    min-height: 560px;
+  }
+
+  .arc-tutorial-content {
+    max-width: none;
+    min-height: 470px;
+    padding: 72px 58px 118px;
+  }
+
+  .arc-tutorial-content h2 {
+    font-size: 2.3rem;
+  }
+
+  .arc-tutorial-footer {
+    display: grid;
+    justify-items: center;
+  }
+
   .arc-workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -23500,6 +23751,15 @@ body[data-page="god-engine"] {
   gap: 16px;
 }
 
+.god-field-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .god-create-form .form-field:first-child,
 .god-create-form .form-field.is-wide,
 .god-create-form .form-status,
@@ -23570,7 +23830,8 @@ body[data-page="god-autopilot"] .app-shell.god-canvas-shell {
   margin-left: auto;
 }
 
-.god-autopilot-launch {
+.god-autopilot-launch,
+.god-header-menu-toggle {
   min-height: 30px;
   gap: 7px;
   padding: 0 12px;
@@ -23578,9 +23839,70 @@ body[data-page="god-autopilot"] .app-shell.god-canvas-shell {
   text-decoration: none;
 }
 
-.god-autopilot-launch ph-play {
+.god-autopilot-launch ph-play,
+.god-header-menu-toggle ph-dots-three-outline-vertical {
   width: 15px;
   height: 15px;
+}
+
+.god-header-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.god-header-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 190px;
+  overflow: hidden;
+  border: 1px solid var(--god-line);
+  border-radius: 8px;
+  background: var(--god-panel);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 28%);
+}
+
+.god-header-menu[hidden] {
+  display: none;
+}
+
+.god-header-menu a,
+.god-header-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  padding: 11px 12px;
+  background: transparent;
+  color: var(--god-ink);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.god-header-menu a:hover,
+.god-header-menu button:hover,
+.god-header-menu a:focus-visible,
+.god-header-menu button:focus-visible {
+  background: color-mix(in srgb, var(--god-accent) 16%, transparent);
+}
+
+.god-header-menu ph-play,
+.god-header-menu ph-image-square,
+.god-header-menu ph-sliders-horizontal {
+  width: 16px;
+  height: 16px;
+  color: var(--god-accent);
+}
+
+.format-actions [data-god-settings-reset] {
+  color: var(--muted);
+  background: transparent;
 }
 
 .god-evolution-status-launch {
@@ -23611,19 +23933,37 @@ body[data-page="god-autopilot"] .app-shell.god-canvas-shell {
 }
 
 .god-evolution-status-dialog {
+  max-width: none;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(760px, calc(100vw - 36px));
-  height: min(680px, calc(100vh - 36px));
+  width: min(940px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - var(--header-height, 76px) - 40px));
+  max-height: calc(100vh - var(--header-height, 76px) - 40px);
   padding: 0;
   overflow: hidden;
+  background: var(--surface);
+}
+
+.god-evolution-status-dialog > .generation-activity-header,
+.god-evolution-status-dialog > .generation-activity-footer {
+  flex: 0 0 auto;
+  padding: 18px 24px;
+}
+
+.god-evolution-status-dialog > .generation-activity-header {
+  align-items: flex-start;
+}
+
+.god-evolution-status-dialog > .generation-activity-footer {
+  align-items: center;
 }
 
 .god-evolution-status-list {
   display: grid;
+  align-content: start;
   gap: 18px;
   min-height: 0;
-  padding: 18px;
+  padding: 20px 24px;
   overflow: auto;
 }
 
@@ -23658,6 +23998,18 @@ body[data-page="god-autopilot"] .app-shell.god-canvas-shell {
   color: var(--ink);
   font-size: 1rem;
   letter-spacing: 0;
+}
+
+.god-evolution-status-dialog .generation-activity-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.god-evolution-status-dialog .generation-activity-actions > button {
+  min-height: 38px;
 }
 
 .god-autopilot-page {
@@ -23794,6 +24146,8 @@ body[data-page="god-autopilot"] {
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 10px;
   padding-right: 4px;
+  max-height: min(420px, 42vh);
+  overflow-y: auto;
 }
 
 .god-autopilot-species-option {
@@ -23825,6 +24179,16 @@ body[data-page="god-autopilot"] {
 .god-autopilot-species-option:has(input:checked) {
   border-color: var(--god-accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--god-accent) 62%, transparent), 0 0 0 3px color-mix(in srgb, var(--god-accent) 12%, transparent);
+}
+
+.god-autopilot-species-option.is-disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.god-autopilot-species-option:not(.is-disabled):hover {
+  border-color: color-mix(in srgb, var(--god-accent) 72%, var(--god-line));
+  background: color-mix(in srgb, var(--god-canvas-bg) 42%, var(--god-panel));
 }
 
 .god-autopilot-species-thumb {
@@ -23873,7 +24237,12 @@ body[data-page="god-autopilot"] {
   gap: 8px;
   margin: 0;
   padding: 0 0 0 22px;
+  list-style: disc;
   color: var(--god-muted);
+}
+
+.god-autopilot-log-status {
+  font-weight: 800;
 }
 
 .god-autopilot-log li::marker {
@@ -24260,6 +24629,29 @@ body[data-page="god-autopilot"] {
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.god-inspector-name-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.god-inspector-name-row h2 {
+  min-width: 0;
+}
+
+.god-rename-species {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  color: var(--god-muted);
+}
+
+.god-rename-species:hover {
+  border-color: var(--god-line);
+  color: var(--god-accent);
 }
 
 .god-inspector-title {

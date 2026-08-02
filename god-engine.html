@@ -6,7 +6,7 @@
   <title>God Engine | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=god-engine-21">
+  <link rel="stylesheet" href="styles.css?v=god-engine-22">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -47,7 +47,7 @@
           <div>
             <p class="settings-eyebrow">God Engine</p>
             <h2 id="god-create-title">New Evolution</h2>
-            <p class="modal-subtitle">Start with a guided seed, instant organism, or manual starter.</p>
+            <p class="modal-subtitle">Start at the beginning, let the engine decide, or describe an already-evolved creature as the root.</p>
           </div>
           <button class="modal-close" type="button" aria-label="Close" data-god-create-close>
             <ph-x weight="bold" aria-hidden="true"></ph-x>
@@ -66,18 +66,20 @@
           <label class="form-field">
             <span>Starting path</span>
             <select name="startingMode">
-              <option value="guided">Guided seed</option>
-              <option value="instant" selected>Instant organism</option>
-              <option value="manual">Manual starter</option>
+              <option value="instant" selected>Engine creates a starter organism</option>
+              <option value="guided">Guide an early starter species</option>
+              <option value="manual">Describe an already-evolved creature</option>
             </select>
+            <small class="god-field-hint">Choose “already-evolved” when the root creature should already live on land, breathe air, have limbs, fur, eggs, or other advanced traits.</small>
           </label>
           <label class="form-field">
-            <span>Starting organism</span>
+            <span>Starting organism template</span>
             <select name="starterKind">
               <option value="single_cell">Single-celled organism</option>
               <option value="multicellular">Simple multicellular organism</option>
-              <option value="random" selected>Random starting organism</option>
+              <option value="random" selected>Engine decides from your starting path</option>
             </select>
+            <small class="god-field-hint">For an already-evolved creature, this becomes background guidance. The description below is authoritative.</small>
           </label>
           <label class="form-field">
             <span>Habitat preference <em>(optional)</em></span>
@@ -90,8 +92,8 @@
             </select>
           </label>
           <label class="form-field is-wide">
-            <span>Starter notes <em>(optional)</em></span>
-            <textarea name="manualNotes" placeholder="Use this for guided or manual seeds. Example: translucent swimmer with chemical sensing."></textarea>
+            <span>Creature description or starter notes <em>(optional)</em></span>
+            <textarea name="manualNotes" placeholder="For an already-evolved root, describe the creature directly. Example: a six-legged land reptile with rough scales, a long tail, oxygen-breathing lungs, egg laying, and dry gully habitat."></textarea>
           </label>
           <p class="form-status" data-god-create-status role="status"></p>
           <div class="modal-actions">
@@ -106,6 +108,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=god-engine-21"></script>
-  <script src="god-engine.js?v=god-engine-21"></script>
+  <script src="god-engine.js?v=god-engine-23"></script>
 </body>
 </html>

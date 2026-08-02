@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=god-engine-52">
+  <link rel="stylesheet" href="styles.css?v=god-engine-55">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -24,7 +24,17 @@
             Evolution Status
             <span class="god-status-count" data-god-evolution-status-count hidden>0</span>
           </button>
-          <a class="secondary-action god-autopilot-launch" href="god-autopilot.html" data-god-autopilot-launch><ph-play weight="bold" aria-hidden="true"></ph-play> Autopilot</a>
+          <div class="god-header-menu-wrap">
+            <button class="secondary-action god-header-menu-toggle" type="button" aria-haspopup="true" aria-expanded="false" data-god-actions-toggle>
+              <ph-dots-three-outline-vertical weight="bold" aria-hidden="true"></ph-dots-three-outline-vertical>
+              Actions
+            </button>
+            <div class="god-header-menu" data-god-actions-menu hidden>
+              <a href="god-autopilot.html" data-god-autopilot-launch><ph-play weight="bold" aria-hidden="true"></ph-play> Autopilot</a>
+              <button type="button" data-god-clean-images><ph-image-square weight="bold" aria-hidden="true"></ph-image-square> Clean Up Images</button>
+              <button type="button" data-god-settings-open><ph-sliders-horizontal weight="bold" aria-hidden="true"></ph-sliders-horizontal> Settings</button>
+            </div>
+          </div>
           <p class="canvas-transfer-status" data-god-canvas-status role="status"></p>
         </div>
       </div>
@@ -36,6 +46,80 @@
     </main>
   </div>
 
+  <div class="modal-backdrop" id="god-settings-modal" hidden>
+    <section class="modal-dialog format-dialog god-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="god-settings-title">
+      <div class="modal-header">
+        <div>
+          <h2 id="god-settings-title">God Engine Settings</h2>
+          <p class="modal-subtitle">Default styling for species connections and nodes on this evolution.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Close dialog" data-god-settings-close>
+          <ph-x weight="bold" aria-hidden="true"></ph-x>
+        </button>
+      </div>
+
+      <form class="format-form" data-god-settings-form>
+        <section class="format-section">
+          <h3>Connections</h3>
+          <label class="format-field">
+            <span>Color</span>
+            <div class="format-color-row" data-god-format-colors>
+              <button type="button" data-god-format-value="#78d5c8" style="--swatch-color: #78d5c8" aria-label="Aqua"></button>
+              <button type="button" data-god-format-value="#94a3b8" style="--swatch-color: #94a3b8" aria-label="Slate"></button>
+              <button type="button" data-god-format-value="#fb7185" style="--swatch-color: #fb7185" aria-label="Rose"></button>
+              <button type="button" data-god-format-value="#fb923c" style="--swatch-color: #fb923c" aria-label="Orange"></button>
+              <button type="button" data-god-format-value="#fbbf24" style="--swatch-color: #fbbf24" aria-label="Amber"></button>
+              <button type="button" data-god-format-value="#4ade80" style="--swatch-color: #4ade80" aria-label="Green"></button>
+              <button type="button" data-god-format-value="#60a5fa" style="--swatch-color: #60a5fa" aria-label="Sky"></button>
+              <button type="button" data-god-format-value="#a78bfa" style="--swatch-color: #a78bfa" aria-label="Violet"></button>
+              <button type="button" data-god-format-value="#f472b6" style="--swatch-color: #f472b6" aria-label="Pink"></button>
+            </div>
+            <input type="hidden" name="connectionColor">
+          </label>
+          <label class="format-field">
+            <span>Width</span>
+            <div class="format-segmented" data-god-format-segment="connectionWidth">
+              <button type="button" data-god-format-value="1">1</button>
+              <button type="button" data-god-format-value="2">2</button>
+              <button type="button" data-god-format-value="3">3</button>
+              <button type="button" data-god-format-value="4">4</button>
+            </div>
+            <input type="hidden" name="connectionWidth">
+          </label>
+          <label class="format-field">
+            <span>Curve</span>
+            <div class="format-segmented" data-god-format-segment="connectionCurve">
+              <button type="button" data-god-format-value="step">Step</button>
+              <button type="button" data-god-format-value="curve">Curve</button>
+              <button type="button" data-god-format-value="line">Line</button>
+            </div>
+            <input type="hidden" name="connectionCurve">
+          </label>
+        </section>
+
+        <section class="format-section">
+          <h3>Nodes</h3>
+          <label class="format-field">
+            <span>Border</span>
+            <div class="format-segmented" data-god-format-segment="nodeBorderWidth">
+              <button type="button" data-god-format-value="1">1</button>
+              <button type="button" data-god-format-value="2">2</button>
+              <button type="button" data-god-format-value="3">3</button>
+              <button type="button" data-god-format-value="4">4</button>
+            </div>
+            <input type="hidden" name="nodeBorderWidth">
+          </label>
+        </section>
+
+        <p class="form-status" data-god-settings-status role="status"></p>
+        <div class="modal-actions format-actions">
+          <button class="secondary-action" type="button" data-god-settings-reset>Reset to defaults</button>
+          <button class="secondary-action" type="button" data-god-settings-close>Close</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=god-engine-52"></script>
@@ -44,6 +128,6 @@
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-prompt-1"></script>
-  <script src="god-canvas.js?v=god-engine-52"></script>
+  <script src="god-canvas.js?v=god-engine-64"></script>
 </body>
 </html>

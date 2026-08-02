@@ -80,6 +80,7 @@ function creatureNamingRules() {
     "Avoid occupational or behavioral endings such as Creeper, Walker, Grazer, Lurker, Drifter, Sifter, Clasper, Settler, Hunter, or Stalker unless they are the most natural plain-language name.",
     "If using a common name plus binomial, put the common name in name and the binomial in scientific_name. If using a scientific name alone, put the binomial in both name and scientific_name.",
     "The name field must contain only the selected display name, not an explanation of the naming style.",
+    "Never use placeholder names such as Manual Starter Species, First Organism, First Species, Starter Creature, Species manualis, User-defined Organism, or any name based on the UI mode.",
   ].join("\n");
 }
 
@@ -101,6 +102,9 @@ function buildPrompt(input: {
       : "The species is the root of a future evolutionary tree. It may be simple, early, and evolvable, but it still needs a distinctive body plan.",
     "If the user describes an organism that has already evolved for millions of years, lives on land, breathes oxygen, lays eggs, has fur, has legs, or has other advanced traits, create exactly that kind of organism as the starter species.",
     "Do not make it extinct. Do not include game stats, currency, levels, points, UI labels, markdown, comments, or extra prose.",
+    "Do not use vague placeholder text such as user-defined physiology, user-defined habitat, user-defined body covering, defined locomotor limbs, manual starter, or starter species. Convert the user's notes into concrete biological traits.",
+    "If the user leaves naming blank, choose a natural common name and a matching Latinized binomial. The name should describe the organism's biological identity, not the fact that it came from manual starter mode.",
+    "newly_evolved_traits must contain 2 to 3 concrete biological traits visible or functionally relevant in the starter organism, not generic setup phrases.",
     "Potential trait hints should be broad biological directions, not exact future outcomes.",
     "complete_traits must include physical_description: a concise but complete natural-language description of the creature's visible body plan, silhouette, head/front end, body covering, limbs/appendages, eyes/sensory organs, mouthparts, tail/rear end, coloration, size, posture, and locomotion.",
     "complete_traits must include an anatomy object with explicit visible bookkeeping: eye_count, eye_arrangement, limb_count, limb_pairs, limb_type, digits_per_limb_or_pad_count, tail_present, tail_description, body_axis, posture, symmetry, mouthparts, respiratory_structures, body_covering, approximate_size, and notes. Use null only when the trait truly cannot be determined.",

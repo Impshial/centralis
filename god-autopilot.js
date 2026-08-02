@@ -65,9 +65,20 @@
   function log(message, type = "") {
     if (!logElement) return;
     const item = document.createElement("li");
-    item.textContent = message;
-    if (type) item.className = `is-${type}`;
+    const messageElement = document.createElement("span");
+    messageElement.textContent = message;
+    item.append(messageElement);
+    if (type) appendLogStatus(item, type);
     logElement.prepend(item);
+    return item;
+  }
+
+  function appendLogStatus(item, type) {
+    if (!item || item.querySelector(".god-autopilot-log-status")) return;
+    const status = document.createElement("strong");
+    status.className = `god-autopilot-log-status is-${type}`;
+    status.textContent = ` - ${type === "success" ? "Success" : "Failed"}`;
+    item.append(status);
   }
 
   function escapeHtml(value) {
@@ -245,26 +256,27 @@
 
   function renderSpeciesPicker(rows) {
     if (!speciesListElement) return;
-    const viable = viableSpecies(rows);
     const leaves = new Set(terminalSpecies(rows).map((row) => row.id));
-    if (!viable.length) {
-      speciesListElement.innerHTML = `<p class="god-muted">No living evolvable species are available.</p>`;
+    if (!rows.length) {
+      speciesListElement.innerHTML = `<p class="god-muted">No species are available in this evolution.</p>`;
       return;
     }
-    speciesListElement.innerHTML = viable.map((row) => {
+    speciesListElement.innerHTML = rows.map((row) => {
       const image = imageForSpecies(row.id);
       const isSelected = selectedStartSpeciesId === row.id;
+      const canSelect = row.status !== "extinct" && row.can_evolve !== false;
       const leafLabel = leaves.has(row.id) ? "End of line" : "Has descendants";
+      const availabilityLabel = canSelect ? `${leafLabel} - ${row.status || "stable"}` : `Cannot evolve - ${row.status || "blocked"}`;
       return `
-        <label class="god-autopilot-species-option ${isSelected ? "is-selected" : ""}">
-          <input type="radio" name="god-autopilot-start-mode" value="${escapeHtml(row.id)}" data-god-autopilot-species="${escapeHtml(row.id)}" ${isSelected ? "checked" : ""}>
+        <label class="god-autopilot-species-option ${isSelected ? "is-selected" : ""} ${canSelect ? "" : "is-disabled"}">
+          <input type="radio" name="god-autopilot-start-mode" value="${escapeHtml(row.id)}" data-god-autopilot-species="${escapeHtml(row.id)}" ${isSelected ? "checked" : ""} ${canSelect ? "" : "disabled"}>
           <span class="god-autopilot-species-thumb">
             ${image?.image_url ? `<img src="${escapeHtml(image.image_url)}" alt="">` : `<ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>`}
           </span>
           <span class="god-autopilot-species-copy">
             <strong>${escapeHtml(row.name || "Unnamed species")}</strong>
             <span>${escapeHtml(row.scientific_name || leafLabel)}</span>
-            <small>${escapeHtml(leafLabel)} - ${escapeHtml(row.status || "stable")}</small>
+            <small>${escapeHtml(availabilityLabel)}</small>
           </span>
         </label>
       `;
@@ -344,45 +356,46 @@
       log("Selected starting species is no longer available; using a random end-of-line species.", "error");
     }
     const branchOnly = rows.some((row) => row.parent_species_id === parent.id);
-    log(`Cycle ${cycleNumber}: ${branchOnly ? "adding branch from" : "evolving"} ${parent.name}.`);
+    const cycleLogItem = log(`Cycle ${cycleNumber}: ${branchOnly ? "adding branch from" : "evolving"} ${parent.name}`);
 
-    const { data, error } = await window.centralisSupabase.functions.invoke("generate-god-evolution", {
-      body: {
-        evolutionId: evolution.id,
-        evolutionName: evolution.name,
-        worldSummary: evolution.world_summary,
-        parentSpecies: parent,
-        branchOnly,
-        existingSpecies: rows.map((row) => ({
-          id: row.id,
-          name: row.name,
-          status: row.status,
-          step_index: row.step_index,
-          elapsed_years: Number(row.elapsed_years || 0),
-        })),
-        novelty: parent.novelty,
-        environmentalPressures: Array.isArray(parent.pressures) ? parent.pressures : [],
-        adaptationBias: parent.adaptation_bias || "",
-        customEvolutionTraits: customTraitsFor(parent),
-        customEvolutionTrait: customTraitsFor(parent)[0] || "",
-      },
-    });
-    if (error) throw error;
-    const generated = data?.evolution;
-    if (!generated?.species?.length) throw new Error("No descendants were generated.");
-    if (Array.isArray(data?.speciesRows) && data.speciesRows.length) {
-      const nextRows = [...rows, ...data.speciesRows];
-      await persistLayout(nextRows);
-      await Promise.allSettled(data.speciesRows.map((row) => generateImage(row, nextRows)));
-      log(`Cycle ${cycleNumber}: added ${data.speciesRows.length} species from ${parent.name}.`, "success");
-      return nextRows;
-    }
+    try {
+      const { data, error } = await window.centralisSupabase.functions.invoke("generate-god-evolution", {
+        body: {
+          evolutionId: evolution.id,
+          evolutionName: evolution.name,
+          worldSummary: evolution.world_summary,
+          parentSpecies: parent,
+          branchOnly,
+          existingSpecies: rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            status: row.status,
+            step_index: row.step_index,
+            elapsed_years: Number(row.elapsed_years || 0),
+          })),
+          novelty: parent.novelty,
+          environmentalPressures: Array.isArray(parent.pressures) ? parent.pressures : [],
+          adaptationBias: parent.adaptation_bias || "",
+          customEvolutionTraits: customTraitsFor(parent),
+          customEvolutionTrait: customTraitsFor(parent)[0] || "",
+        },
+      });
+      if (error) throw error;
+      const generated = data?.evolution;
+      if (!generated?.species?.length) throw new Error("No descendants were generated.");
+      if (Array.isArray(data?.speciesRows) && data.speciesRows.length) {
+        const nextRows = [...rows, ...data.speciesRows];
+        await persistLayout(nextRows);
+        await Promise.allSettled(data.speciesRows.map((row) => generateImage(row, nextRows)));
+        appendLogStatus(cycleLogItem, "success");
+        return nextRows;
+      }
 
-    const eventId = createId();
-    const totalSteps = Number(generated.total_steps || 3);
-    const stepYears = normalizeStepYears(generated.step_years, totalSteps);
-    const totalYears = stepYears.reduce((sum, value) => sum + value, 0);
-    const { error: eventError } = await window.centralisSupabase.from("god_evolution_events").insert({
+      const eventId = createId();
+      const totalSteps = Number(generated.total_steps || 3);
+      const stepYears = normalizeStepYears(generated.step_years, totalSteps);
+      const totalYears = stepYears.reduce((sum, value) => sum + value, 0);
+      const { error: eventError } = await window.centralisSupabase.from("god_evolution_events").insert({
       id: eventId,
       evolution_id: evolution.id,
       user_id: currentUser.id,
@@ -399,12 +412,12 @@
       environment_shift: generated.environment_shift || {},
       generated_payload: generated,
     });
-    if (eventError) throw eventError;
+      if (eventError) throw eventError;
 
-    const idByTemp = new Map();
-    const baseDepth = Number(parent.depth_index || parent.step_index || 0);
-    const baseElapsedYears = Number(parent.elapsed_years || 0);
-    const insertRows = generated.species.map((item, index) => {
+      const idByTemp = new Map();
+      const baseDepth = Number(parent.depth_index || parent.step_index || 0);
+      const baseElapsedYears = Number(parent.elapsed_years || 0);
+      const insertRows = generated.species.map((item, index) => {
       const id = createId();
       idByTemp.set(item.temp_id, id);
       const relativeStep = Math.max(1, Number(item.step_index || index + 1));
@@ -451,24 +464,28 @@
         evolution_reason: item.evolution_reason || generated.summary || "",
       };
     });
-    insertRows.forEach((row, index) => {
-      const source = generated.species[index];
-      if (source.parent_temp_id && idByTemp.has(source.parent_temp_id)) {
-        row.parent_species_id = idByTemp.get(source.parent_temp_id);
-      }
-    });
+      insertRows.forEach((row, index) => {
+        const source = generated.species[index];
+        if (source.parent_temp_id && idByTemp.has(source.parent_temp_id)) {
+          row.parent_species_id = idByTemp.get(source.parent_temp_id);
+        }
+      });
 
-    const { data: inserted, error: insertError } = await window.centralisSupabase
-      .from("god_species")
-      .insert(insertRows)
-      .select("*");
-    if (insertError) throw insertError;
+      const { data: inserted, error: insertError } = await window.centralisSupabase
+        .from("god_species")
+        .insert(insertRows)
+        .select("*");
+      if (insertError) throw insertError;
 
-    const nextRows = [...rows, ...(inserted || [])];
-    await persistLayout(nextRows);
-    await Promise.allSettled((inserted || []).map((row) => generateImage(row, nextRows)));
-    log(`Cycle ${cycleNumber}: added ${inserted?.length || 0} species from ${parent.name}.`, "success");
-    return nextRows;
+      const nextRows = [...rows, ...(inserted || [])];
+      await persistLayout(nextRows);
+      await Promise.allSettled((inserted || []).map((row) => generateImage(row, nextRows)));
+      appendLogStatus(cycleLogItem, "success");
+      return nextRows;
+    } catch (error) {
+      appendLogStatus(cycleLogItem, "error");
+      throw error;
+    }
   }
 
   async function runAutopilot() {
@@ -506,7 +523,6 @@
       }
       setStatus(shouldStop ? "Autopilot stopped." : `Autopilot completed ${cycleCount} cycles.`, shouldStop ? "" : "success");
       if (progressTitleElement) progressTitleElement.textContent = shouldStop ? "Autopilot stopped" : "Autopilot complete";
-      log(shouldStop ? "Stopped by user." : `Completed all ${cycleCount} cycles.`, shouldStop ? "" : "success");
     } catch (error) {
       console.error(error);
       setStatus(`Autopilot failed: ${error.message || error}`, "error");

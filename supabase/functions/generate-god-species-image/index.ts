@@ -47,6 +47,29 @@ function compactList(value: unknown, limit = 5) {
     .join("; ");
 }
 
+function anatomySummary(record: Record<string, unknown>) {
+  const anatomy = asRecord(record.anatomy);
+  if (!Object.keys(anatomy).length) return "";
+  const fields = [
+    ["eye_count", "eye count"],
+    ["eye_arrangement", "eye arrangement"],
+    ["limb_count", "limb count"],
+    ["limb_pairs", "limb pairs"],
+    ["limb_type", "limb type"],
+    ["digits_per_limb_or_pad_count", "digits or pads per limb"],
+    ["tail_present", "tail present"],
+    ["tail_description", "tail"],
+    ["posture", "posture"],
+    ["mouthparts", "mouthparts"],
+    ["respiratory_structures", "respiratory structures"],
+    ["body_covering", "body covering"],
+  ];
+  return fields
+    .map(([key, label]) => anatomy[key] === undefined || anatomy[key] === null || anatomy[key] === "" ? "" : `${label}: ${String(anatomy[key])}`)
+    .filter(Boolean)
+    .join("; ");
+}
+
 function base64ToBytes(base64: string) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -71,6 +94,7 @@ function buildPrompt(body: Record<string, unknown>) {
   const completeTraits = compactJson(body.completeTraits, 1600);
   const completeTraitRecord = asRecord(body.completeTraits);
   const physicalDescription = cleanText(completeTraitRecord.physical_description || completeTraitRecord.physicalDescription, 1400);
+  const anatomy = anatomySummary(completeTraitRecord);
   const ecology = compactJson(body.ecology, 900);
   const populationCondition = compactJson(body.populationCondition, 700);
   const visualGenome = compactJson(body.visualGenome, 2200);
@@ -82,6 +106,7 @@ function buildPrompt(body: Record<string, unknown>) {
   const parentTraits = compactJson(parentSpecies.completeTraits, 1300);
   const parentTraitRecord = asRecord(parentSpecies.completeTraits);
   const parentPhysicalDescription = cleanText(parentTraitRecord.physical_description || parentTraitRecord.physicalDescription, 1000);
+  const parentAnatomy = anatomySummary(parentTraitRecord);
   const parentNewTraits = compactList(parentSpecies.newlyEvolvedTraits, 4);
   const parentVisualGenome = compactJson(parentSpecies.visualGenome, 1800);
   const parentImagePrompt = cleanText(parentSpecies.imagePrompt, 1000);
@@ -94,6 +119,7 @@ function buildPrompt(body: Record<string, unknown>) {
     overview ? `Ecological overview: ${overview}.` : "",
     newTraits ? `Newly evolved traits to emphasize: ${newTraits}.` : "",
     physicalDescription ? `Current full physical description to depict: ${physicalDescription}.` : "",
+    anatomy ? `Current explicit anatomy to preserve exactly unless changed by traits: ${anatomy}.` : "",
     inheritedTraits ? `Inherited visible traits to preserve: ${inheritedTraits}.` : "",
     lostTraits ? `Traits reduced or absent compared with ancestors: ${lostTraits}.` : "",
     completeTraits ? `Current complete trait record for visual grounding: ${completeTraits}.` : "",
@@ -110,6 +136,7 @@ function buildPrompt(body: Record<string, unknown>) {
       parentOverview ? `Parent overview: ${parentOverview}.` : "",
       parentNewTraits ? `Parent recently evolved visible traits: ${parentNewTraits}.` : "",
       parentPhysicalDescription ? `Parent full physical description to inherit from: ${parentPhysicalDescription}.` : "",
+      parentAnatomy ? `Parent explicit anatomy to inherit from or plausibly modify: ${parentAnatomy}.` : "",
       parentTraits ? `Parent trait record to inherit from or modify: ${parentTraits}.` : "",
       parentVisualGenome ? `Parent visual genome to preserve as family resemblance: ${parentVisualGenome}.` : "",
       parentImagePrompt ? `Parent image prompt style/subject continuity: ${parentImagePrompt}.` : "",
