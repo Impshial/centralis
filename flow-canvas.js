@@ -2205,7 +2205,7 @@
       return {
         key: "syncing",
         label: "Syncing",
-        description: "Building the canon knowledge document, indexing current universe details, and preparing the AI Expert to answer with up-to-date context."
+        description: "The AI Expert is synching the canon document with new details"
       };
     }
     if (state.error || state.source?.sync_status === "error") {
@@ -2321,6 +2321,10 @@
     `;
   }
 
+  function getUniverseAiSyncOverlayMessage(state = {}) {
+    return "The AI Expert is synching the canon document with new details";
+  }
+
   function getUniverseAiReadyStatusLine(status) {
     return `Knowledge Status - ${status.label}`;
   }
@@ -2372,7 +2376,7 @@
             <div>
               <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
               <strong>Syncing New Changes...</strong>
-              <p>The AI Expert is creating the canon document, indexing universe details, and preparing a fresh knowledge source before answering.</p>
+              <p>${escapeHtml(getUniverseAiSyncOverlayMessage(state))}</p>
             </div>
           </div>
         ` : ""}
@@ -3267,20 +3271,20 @@
       return;
     }
 
-    const payload = {
-      updated_at: new Date().toISOString()
-    };
+    const payload = {};
 
     let tableName = "universes";
     if (node.data.kind === "universe") {
       payload.canvas_position_x = Number(node.position.x);
       payload.canvas_position_y = Number(node.position.y);
+      payload.updated_at = new Date().toISOString();
     } else if (node.data.kind === "note") {
       tableName = "canvas_notes";
       payload.position_x = Number(node.position.x);
       payload.position_y = Number(node.position.y);
       payload.width = Number(node.style?.width || node.measured?.width || node.width || DEFAULT_NOTE_WIDTH);
       payload.height = Number(node.style?.height || node.measured?.height || node.height || DEFAULT_NOTE_HEIGHT);
+      payload.updated_at = new Date().toISOString();
     } else if (node.data.kind === "group") {
       tableName = "element_groups";
       if (node.parentId || node.data?.parentGroupId) {
@@ -3298,6 +3302,7 @@
         payload.width = Number(node.style.width);
         payload.height = Number(node.style.height);
       }
+      payload.updated_at = new Date().toISOString();
     } else {
       tableName = "elements";
       if (node.data.groupId) {
@@ -11639,6 +11644,7 @@
       let lastGeneratedDraft = { elements: [], links: [] };
       let activeReviewMode = "generate";
       let activeAiProposal = null;
+      let activeSourceCanonReviewId = "";
 
       function setGenerateElementsOverlay(visible) {
         if (!generationOverlay) return;
@@ -11716,10 +11722,11 @@
       function openReviewModal(options = {}) {
         activeReviewMode = options.mode || "generate";
         activeAiProposal = options.proposal || null;
+        activeSourceCanonReviewId = options.sourceReviewId || "";
         closeGenerateElementsModal();
         setGeneratedElementsReviewStatus("");
         if (regenerateButton) {
-          regenerateButton.hidden = activeReviewMode === "ai-proposal";
+          regenerateButton.hidden = activeReviewMode === "ai-proposal" || activeReviewMode === "source-canon";
         }
         reviewModal.hidden = false;
       }
@@ -11733,6 +11740,7 @@
         const shouldReturnToOptions = returnToOptions && activeReviewMode === "generate";
         activeReviewMode = "generate";
         activeAiProposal = null;
+        activeSourceCanonReviewId = "";
         if (shouldReturnToOptions) {
           modal.hidden = false;
         }
@@ -12164,6 +12172,7 @@
           let finalNodes = nextNodes;
           let layoutWarning = "";
           const finalizedAiProposal = activeAiProposal;
+          const finalizedSourceCanonReviewId = activeSourceCanonReviewId;
           try {
             setGeneratedElementsReviewStatus("Adding generated elements and laying out canvas...");
             finalNodes = await createAutoLayout(nextNodes, nextEdges, universeFormatRef.current);
@@ -12189,8 +12198,23 @@
               layoutWarning = `${layoutWarning} Proposal status could not be updated.`;
             }
           }
+          if (finalizedSourceCanonReviewId) {
+            try {
+              await window.centralisSupabase
+                .from("universe_source_canon_reviews")
+                .update({
+                  status: "finalized",
+                  finalized_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", finalizedSourceCanonReviewId);
+            } catch (sourceReviewStatusError) {
+              console.error("Could not mark source canon review finalized:", sourceReviewStatusError);
+              layoutWarning = `${layoutWarning} Source review status could not be updated.`;
+            }
+          }
           closeReviewModal(false);
-          if (finalizedAiProposal?.id) {
+          if (finalizedAiProposal?.id || finalizedSourceCanonReviewId) {
             showCanvasToast("AI knowledge sync started.", "success");
             void syncUniverseAiSource()
               .then((knowledgeSynced) => {
@@ -12202,6 +12226,11 @@
                 console.error("Could not sync AI knowledge after finalizing proposal:", syncError);
                 showCanvasToast("Elements were saved, but AI knowledge could not be synced.", "error");
               });
+          }
+          if (finalizedSourceCanonReviewId) {
+            window.dispatchEvent(new CustomEvent("centralis:source-canon-elements-finalized", {
+              detail: { reviewId: finalizedSourceCanonReviewId }
+            }));
           }
           window.setTimeout(() => {
             fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 });
@@ -12244,6 +12273,26 @@
         openReviewModal({ mode: "ai-proposal", proposal });
       }
 
+      function handleReviewSourceCanonElementsEvent(event) {
+        activeUniverseNodeId = `universe:${universe.id}`;
+        activeSourceElement = null;
+        lastGenerateOptions = {
+          sourceElement: null,
+          allowedElementTypes: elementTypes.map((type) => ({ id: type.id, name: type.name || "Untitled Type" })),
+          density: "balanced",
+          count: Array.isArray(event.detail?.payload?.elements) ? event.detail.payload.elements.length : 0,
+          instructions: "Source canon document review"
+        };
+        const draft = normalizeGeneratedElementsPayload(event.detail?.payload || {}, null);
+        if (!draft.elements.length) {
+          setTransferStatus("This source review does not contain any usable element suggestions.", "error");
+          return;
+        }
+        lastGeneratedDraft = draft;
+        renderGeneratedElementsReview(draft);
+        openReviewModal({ mode: "source-canon", sourceReviewId: event.detail?.reviewId || "" });
+      }
+
       function handleReviewCancel() {
         closeReviewModal(true);
       }
@@ -12268,6 +12317,7 @@
 
       window.addEventListener("centralis:generate-elements", handleGenerateElementsEvent);
       window.addEventListener("centralis:review-ai-element-proposal", handleReviewAiProposalEvent);
+      window.addEventListener("centralis:review-source-canon-elements", handleReviewSourceCanonElementsEvent);
       form.addEventListener("submit", handleGenerateSubmit);
       typeToggle?.addEventListener("click", handleTypeToggle);
       typeList?.addEventListener("change", handleTypeListChange);
@@ -12283,6 +12333,7 @@
       return () => {
         window.removeEventListener("centralis:generate-elements", handleGenerateElementsEvent);
         window.removeEventListener("centralis:review-ai-element-proposal", handleReviewAiProposalEvent);
+        window.removeEventListener("centralis:review-source-canon-elements", handleReviewSourceCanonElementsEvent);
         form.removeEventListener("submit", handleGenerateSubmit);
         typeToggle?.removeEventListener("click", handleTypeToggle);
         typeList?.removeEventListener("change", handleTypeListChange);

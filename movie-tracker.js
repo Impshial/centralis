@@ -19,7 +19,6 @@ const movieState = {
   filters: {
     search: "",
     sort: "title-asc",
-    status: "all",
     franchise: "all",
     collection: "all",
   },
@@ -32,8 +31,17 @@ const movieState = {
 window.centralisMovieTrackerLoaded = true;
 
 const MOVIE_IMPORT_LOOKUP_DELAY_MS = 1200;
+const MOVIE_EMPTY_LOOKUP_FILTER = "__none";
+const MOVIE_SORT_FIELDS = {
+  title: { asc: "title-asc", desc: "title-desc", defaultDirection: "asc" },
+  year: { asc: "year-asc", desc: "year-desc", defaultDirection: "desc" },
+  director: { asc: "director-asc", desc: "director-desc", defaultDirection: "asc" },
+  actors: { asc: "actors-asc", desc: "actors-desc", defaultDirection: "asc" },
+  writers: { asc: "writers-asc", desc: "writers-desc", defaultDirection: "asc" },
+};
 
 const els = {
+  page: document.querySelector("[data-movie-page]"),
   rows: document.querySelector("[data-movie-rows]"),
   count: document.querySelector("[data-movie-count]"),
   status: document.querySelector("[data-movie-status]"),
@@ -41,14 +49,13 @@ const els = {
   selectAll: document.querySelector("[data-select-all-movies]"),
   pagination: Array.from(document.querySelectorAll("[data-movie-pagination]")),
   search: document.querySelector("[data-search-movies]"),
-  sort: document.querySelector("[data-sort-movies]"),
-  statusFilter: document.querySelector("[data-filter-status]"),
   franchiseFilter: document.querySelector("[data-filter-franchise]"),
   collectionFilter: document.querySelector("[data-filter-collection]"),
   addFranchise: document.querySelector("[data-add-franchise]"),
   actionsToggle: document.querySelector("[data-actions-toggle]"),
   actionsMenu: document.querySelector("[data-actions-menu]"),
-  statisticsToggle: document.querySelector("[data-statistics-toggle]"),
+  sidebarToggle: document.querySelector("[data-sidebar-toggle]"),
+  sidebarResizer: document.querySelector("[data-sidebar-resizer]"),
   addForm: document.querySelector("[data-add-movie-form]"),
   addStatus: document.querySelector("[data-add-movie-status]"),
   viewContent: document.querySelector("[data-movie-view-content]"),
@@ -171,6 +178,12 @@ function posterMarkup(movie, size = "thumb") {
   return `<div class="movie-poster movie-poster-${size} is-empty"><ph-film-slate weight="bold"></ph-film-slate></div>`;
 }
 
+function compactMoviePeople(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > 96 ? `${text.slice(0, 93).trim()}...` : text;
+}
+
 function getSelectedMovies() {
   return movieState.movies.filter((movie) => movieState.selectedIds.has(movie.id));
 }
@@ -227,17 +240,23 @@ function applyMovieQueryFilters(query) {
   query = query.eq("user_id", movieState.appUser.id).eq("deleted", false);
   const searchTerms = getMovieSearchTerms(movieState.filters.search);
   if (searchTerms.length) {
-    const searchFields = ["title", "director", "actors", "genre"];
+    const searchFields = ["title", "director", "actors", "writers", "genre"];
     const conditions = searchTerms.flatMap((term) => {
       const safe = escapePostgrestOrSearchTerm(term);
       return searchFields.map((field) => `${field}.ilike.%${safe}%`);
     });
     query = query.or(conditions.join(","));
   }
-  if (movieState.filters.status === "downloaded") query = query.eq("downloaded", true);
-  if (movieState.filters.status === "missing") query = query.eq("downloaded", false);
-  if (movieState.filters.franchise !== "all") query = query.eq("franchise_id", normalizeId(movieState.filters.franchise));
-  if (movieState.filters.collection !== "all") query = query.eq("collection_id", normalizeId(movieState.filters.collection));
+  if (movieState.filters.franchise === MOVIE_EMPTY_LOOKUP_FILTER) {
+    query = query.is("franchise_id", null);
+  } else if (movieState.filters.franchise !== "all") {
+    query = query.eq("franchise_id", normalizeId(movieState.filters.franchise));
+  }
+  if (movieState.filters.collection === MOVIE_EMPTY_LOOKUP_FILTER) {
+    query = query.is("collection_id", null);
+  } else if (movieState.filters.collection !== "all") {
+    query = query.eq("collection_id", normalizeId(movieState.filters.collection));
+  }
   return query;
 }
 
@@ -245,6 +264,18 @@ function applyMovieSort(query) {
   switch (movieState.filters.sort) {
     case "title-desc":
       return query.order("title", { ascending: false });
+    case "director-asc":
+      return query.order("director", { ascending: true, nullsFirst: false }).order("title", { ascending: true });
+    case "director-desc":
+      return query.order("director", { ascending: false, nullsFirst: false }).order("title", { ascending: true });
+    case "actors-asc":
+      return query.order("actors", { ascending: true, nullsFirst: false }).order("title", { ascending: true });
+    case "actors-desc":
+      return query.order("actors", { ascending: false, nullsFirst: false }).order("title", { ascending: true });
+    case "writers-asc":
+      return query.order("writers", { ascending: true, nullsFirst: false }).order("title", { ascending: true });
+    case "writers-desc":
+      return query.order("writers", { ascending: false, nullsFirst: false }).order("title", { ascending: true });
     case "year-desc":
       return query.order("year_released", { ascending: false }).order("title", { ascending: true });
     case "year-asc":
@@ -328,9 +359,10 @@ async function fetchMovieStats() {
   };
 }
 
-function optionMarkup(items, label, selected = "all") {
+function optionMarkup(items, label, selected = "all", emptyLabel = "") {
   return [
     `<option value="all">${label}</option>`,
+    emptyLabel ? `<option value="${MOVIE_EMPTY_LOOKUP_FILTER}" ${selected === MOVIE_EMPTY_LOOKUP_FILTER ? "selected" : ""}>${emptyLabel}</option>` : "",
     ...items.map((item) => `<option value="${item.id}" ${String(selected) === String(item.id) ? "selected" : ""}>${escapeHtml(item.name)}</option>`),
   ].join("");
 }
@@ -343,15 +375,15 @@ function noneOptionMarkup(items, label, selected = "") {
 }
 
 function renderLookups() {
-  if (els.franchiseFilter) els.franchiseFilter.innerHTML = optionMarkup(movieState.franchises, "All Franchises", movieState.filters.franchise);
-  if (els.collectionFilter) els.collectionFilter.innerHTML = optionMarkup(movieState.collections, "All Collections", movieState.filters.collection);
+  if (els.franchiseFilter) els.franchiseFilter.innerHTML = optionMarkup(movieState.franchises, "All Franchises", movieState.filters.franchise, "No Franchise");
+  if (els.collectionFilter) els.collectionFilter.innerHTML = optionMarkup(movieState.collections, "All Collections", movieState.filters.collection, "No Collection");
   if (els.addFranchise) els.addFranchise.innerHTML = noneOptionMarkup(movieState.franchises, "No Franchise");
 }
 
 function renderMovies() {
   if (!els.rows) return;
   if (!movieState.movies.length) {
-    els.rows.innerHTML = '<tr><td colspan="8" class="movie-empty-row">No movies found.</td></tr>';
+    els.rows.innerHTML = '<tr><td colspan="9" class="movie-empty-row">No movies found.</td></tr>';
   } else {
     els.rows.innerHTML = movieState.movies.map((movie) => `
       <tr class="movie-clickable-row" data-movie-id="${movie.id}" tabindex="0" aria-label="View ${escapeHtml(movie.title)}">
@@ -360,9 +392,10 @@ function renderMovies() {
         <td class="movie-title-cell">${escapeHtml(movie.title)}</td>
         <td>${escapeHtml(movie.year_released)}</td>
         <td>${escapeHtml(movie.director || "")}</td>
+        <td class="movie-muted movie-people-cell" title="${escapeHtml(movie.writers || "")}">${escapeHtml(compactMoviePeople(movie.writers))}</td>
+        <td class="movie-muted movie-people-cell" title="${escapeHtml(movie.actors || "")}">${escapeHtml(compactMoviePeople(movie.actors))}</td>
         <td class="movie-muted">${escapeHtml(movie.franchise?.name || "None")}</td>
         <td class="movie-muted">${escapeHtml(movie.collection?.name || "None")}</td>
-        <td>${statusBadge(movie)}</td>
       </tr>
     `).join("");
   }
@@ -376,7 +409,26 @@ function renderMovies() {
     els.selectAll.indeterminate = movieState.movies.some((movie) => movieState.selectedIds.has(movie.id)) && !els.selectAll.checked;
   }
   renderActionsState();
+  renderSortHeaders();
   renderStats();
+}
+
+function getActiveSortField() {
+  return Object.entries(MOVIE_SORT_FIELDS).find(([, config]) => (
+    config.asc === movieState.filters.sort || config.desc === movieState.filters.sort
+  ));
+}
+
+function renderSortHeaders() {
+  const active = getActiveSortField();
+  const activeField = active?.[0] || "";
+  const activeDirection = active?.[1]?.desc === movieState.filters.sort ? "desc" : "asc";
+  document.querySelectorAll("[data-sort-header]").forEach((button) => {
+    const isActive = button.dataset.sortHeader === activeField;
+    button.classList.toggle("is-active", isActive);
+    button.dataset.sortDirection = isActive ? activeDirection : "";
+    button.setAttribute("aria-sort", isActive ? (activeDirection === "asc" ? "ascending" : "descending") : "none");
+  });
 }
 
 function getMovieTotalPages() {
@@ -1422,13 +1474,6 @@ els.actionsToggle?.addEventListener("click", () => {
   els.actionsToggle.setAttribute("aria-expanded", String(!els.actionsMenu.hidden));
 });
 
-els.statisticsToggle?.addEventListener("click", () => {
-  const statsBody = document.getElementById(els.statisticsToggle.getAttribute("aria-controls"));
-  const willExpand = statsBody?.hidden;
-  if (statsBody) statsBody.hidden = !willExpand;
-  els.statisticsToggle.setAttribute("aria-expanded", String(Boolean(willExpand)));
-});
-
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".movie-actions-wrap") && els.actionsMenu) {
     els.actionsMenu.hidden = true;
@@ -1490,11 +1535,9 @@ els.selectAll?.addEventListener("change", () => {
   renderMovies();
 });
 
-[els.search, els.sort, els.statusFilter, els.franchiseFilter, els.collectionFilter].forEach((input) => {
+[els.search, els.franchiseFilter, els.collectionFilter].forEach((input) => {
   input?.addEventListener(input === els.search ? "input" : "change", () => {
     movieState.filters.search = els.search?.value || "";
-    movieState.filters.sort = els.sort?.value || "title-asc";
-    movieState.filters.status = els.statusFilter?.value || "all";
     movieState.filters.franchise = els.franchiseFilter?.value || "all";
     movieState.filters.collection = els.collectionFilter?.value || "all";
     movieState.page = 1;
@@ -1549,6 +1592,60 @@ document.querySelector("[data-bulk-downloaded]")?.addEventListener("click", asyn
 });
 document.querySelector("[data-bulk-franchise]")?.addEventListener("click", () => openBulkDialog("franchise"));
 document.querySelector("[data-bulk-collection]")?.addEventListener("click", () => openBulkDialog("collection"));
+
+document.querySelectorAll("[data-sort-header]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const field = button.dataset.sortHeader;
+    const config = MOVIE_SORT_FIELDS[field];
+    if (!config) return;
+    const current = movieState.filters.sort;
+    const nextSort = current === config.asc
+      ? config.desc
+      : current === config.desc
+        ? config.asc
+        : config[config.defaultDirection];
+    movieState.filters.sort = nextSort;
+    movieState.page = 1;
+    refreshMovieTracker();
+  });
+});
+
+function setMovieSidebarCollapsed(collapsed) {
+  if (!els.page) return;
+  els.page.classList.toggle("is-sidebar-collapsed", collapsed);
+  if (els.sidebarToggle) {
+    els.sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+    els.sidebarToggle.setAttribute("aria-label", collapsed ? "Expand movie tools" : "Collapse movie tools");
+  }
+}
+
+els.sidebarToggle?.addEventListener("click", () => {
+  setMovieSidebarCollapsed(!els.page?.classList.contains("is-sidebar-collapsed"));
+});
+
+els.sidebarResizer?.addEventListener("pointerdown", (event) => {
+  if (!els.page?.classList.contains("is-sidebar-collapsed")) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const currentWidth = Number.parseFloat(getComputedStyle(els.page).getPropertyValue("--movie-sidebar-width")) || 378;
+    document.body.classList.add("is-resizing-movie-sidebar");
+    els.sidebarResizer.setPointerCapture?.(event.pointerId);
+
+    function handlePointerMove(moveEvent) {
+      const nextWidth = Math.min(620, Math.max(280, currentWidth + (startX - moveEvent.clientX)));
+      els.page.style.setProperty("--movie-sidebar-width", `${Math.round(nextWidth)}px`);
+    }
+
+    function handlePointerUp() {
+      document.body.classList.remove("is-resizing-movie-sidebar");
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+  }
+});
 
 els.viewContent?.addEventListener("click", (event) => {
   if (event.target.closest("[data-edit-current-movie]") && movieState.activeMovie) {

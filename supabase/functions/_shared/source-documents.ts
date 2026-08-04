@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
 } from "npm:@aws-sdk/client-s3";
 import {
@@ -72,6 +73,19 @@ export async function uploadUniverseSourceDocumentObject(options: {
     ContentType: options.contentType || "application/octet-stream",
     Metadata: normalizeStorageMetadata(options.metadata),
   }));
+}
+
+export async function readUniverseSourceDocumentObject(key: string) {
+  const response = await createS3Client().send(new GetObjectCommand({
+    Bucket: getEnv("IDRIVE_E2_BUCKET"),
+    Key: key,
+  }));
+
+  if (!response.Body) {
+    throw new Error("The stored source document is empty.");
+  }
+
+  return new Uint8Array(await response.Body.transformToByteArray());
 }
 
 export async function deleteUniverseSourceDocumentObject(key: string) {

@@ -451,6 +451,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu" role="menu">
         <a href="movie-tracker.html" role="menuitem"><ph-film-slate weight="duotone" aria-hidden="true"></ph-film-slate><span>Movie Tracker</span></a>
         <a href="episode-roulette.html" role="menuitem"><ph-dice-five weight="duotone" aria-hidden="true"></ph-dice-five><span>Episode Roulette</span></a>
+        <a href="fusion.html" role="menuitem"><ph-atom weight="duotone" aria-hidden="true"></ph-atom><span>Fusion</span></a>
       </div>
     </div>
 
@@ -1598,11 +1599,400 @@ function getSourceDocumentTitle(document) {
   return document?.display_name || document?.original_filename || "Untitled document";
 }
 
+function isSourceDocumentCompareEligible(document) {
+  const mimeType = String(document?.mime_type || "").toLowerCase();
+  const filename = String(document?.original_filename || document?.display_name || "").toLowerCase();
+  return !mimeType.startsWith("image/") && !/\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(filename);
+}
+
 function setSourceDocumentsStatus(message, type = "") {
   if (!sourceDocumentsStatus) return;
   sourceDocumentsStatus.textContent = message || "";
   sourceDocumentsStatus.classList.toggle("is-error", type === "error");
   sourceDocumentsStatus.classList.toggle("is-success", type === "success");
+}
+
+function getSourceCanonReviewModal(id, markup) {
+  let modal = document.getElementById(id);
+  if (!modal) {
+    document.body.insertAdjacentHTML("beforeend", markup);
+    modal = document.getElementById(id);
+  }
+  return modal;
+}
+
+function ensureSourceCanonReviewModals() {
+  getSourceCanonReviewModal("source-canon-compare-modal", `
+    <div class="modal-backdrop universe-modal-backdrop" id="source-canon-compare-modal" data-strict-modal hidden>
+      <section class="modal-dialog source-canon-dialog" role="dialog" aria-modal="true" aria-labelledby="source-canon-compare-title">
+        <div class="modal-header">
+          <div>
+            <p class="modal-subtitle">Universe Builder</p>
+            <h2 id="source-canon-compare-title">Compare to Canon</h2>
+            <p class="modal-subtitle">Choose which newly uploaded documents should be reviewed against source canon.</p>
+          </div>
+          <button class="modal-close" type="button" aria-label="Close dialog" data-source-canon-close>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </div>
+        <div class="source-canon-document-list" data-source-canon-documents></div>
+        <p class="form-status" data-source-canon-compare-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-source-canon-skip>Skip</button>
+          <button class="primary-action" type="button" data-source-canon-start>Compare Selected</button>
+        </div>
+      </section>
+    </div>
+  `);
+
+  getSourceCanonReviewModal("source-canon-conflict-modal", `
+    <div class="modal-backdrop universe-modal-backdrop" id="source-canon-conflict-modal" data-strict-modal hidden>
+      <section class="modal-dialog source-canon-dialog source-canon-conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="source-canon-conflict-title">
+        <div class="modal-header">
+          <div>
+            <p class="modal-subtitle" data-source-canon-conflict-kicker>Source Canon Review</p>
+            <h2 id="source-canon-conflict-title">Review Conflicts</h2>
+            <p class="modal-subtitle" data-source-canon-conflict-summary></p>
+          </div>
+        </div>
+        <div class="source-canon-conflict-list" data-source-canon-conflicts></div>
+        <p class="form-status" data-source-canon-conflict-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-source-canon-stop>Stop</button>
+          <button class="primary-action" type="button" data-source-canon-save-decisions>Save Decisions</button>
+        </div>
+      </section>
+    </div>
+  `);
+
+  getSourceCanonReviewModal("source-canon-suggestions-modal", `
+    <div class="modal-backdrop universe-modal-backdrop" id="source-canon-suggestions-modal" data-strict-modal hidden>
+      <section class="modal-dialog source-canon-dialog source-canon-suggestions-dialog" role="dialog" aria-modal="true" aria-labelledby="source-canon-suggestions-title">
+        <div class="modal-header">
+          <div>
+            <p class="modal-subtitle">Source Canon Review</p>
+            <h2 id="source-canon-suggestions-title">Suggested Elements</h2>
+            <p class="modal-subtitle">Select the new elements to review and create.</p>
+          </div>
+        </div>
+        <label class="source-canon-select-all">
+          <input type="checkbox" data-source-canon-select-all checked>
+          <span>Select All/None</span>
+        </label>
+        <div class="source-canon-suggestion-list" data-source-canon-suggestions></div>
+        <p class="form-status" data-source-canon-suggestions-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-source-canon-next-document>Skip Elements</button>
+          <button class="primary-action" type="button" data-source-canon-review-elements>Review Selected Elements</button>
+        </div>
+      </section>
+    </div>
+  `);
+}
+
+const sourceCanonReviewState = {
+  universe: null,
+  queue: [],
+  current: null,
+  currentComparison: null,
+  currentSuggestions: null,
+  processing: false,
+};
+
+function closeSourceCanonModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.hidden = true;
+  }
+  if (activeModal === modal) {
+    activeModal = null;
+    document.body.classList.remove("centralis-modal-open");
+  }
+}
+
+function setSourceCanonStatus(selector, message, type = "") {
+  const status = document.querySelector(selector);
+  if (!status) return;
+  status.textContent = message || "";
+  status.classList.toggle("is-error", type === "error");
+  status.classList.toggle("is-success", type === "success");
+}
+
+function openSourceCanonCompareWindow(universe, documents = []) {
+  ensureSourceCanonReviewModals();
+  const eligibleDocuments = documents.filter(isSourceDocumentCompareEligible);
+  if (!eligibleDocuments.length) {
+    return;
+  }
+
+  if (sourceDocumentsModal && !sourceDocumentsModal.hidden) {
+    sourceDocumentsModal.hidden = true;
+    if (activeModal === sourceDocumentsModal) {
+      activeModal = null;
+    }
+  }
+
+  sourceCanonReviewState.universe = universe;
+  sourceCanonReviewState.queue = eligibleDocuments;
+  sourceCanonReviewState.current = null;
+  sourceCanonReviewState.currentComparison = null;
+  sourceCanonReviewState.currentSuggestions = null;
+
+  const list = document.querySelector("[data-source-canon-documents]");
+  if (list) {
+    list.innerHTML = eligibleDocuments.map((document, index) => `
+      <label class="source-canon-document-option">
+        <input type="checkbox" value="${escapeHtml(document.id)}" checked data-source-canon-document-option>
+        <span class="source-canon-document-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
+        <span>
+          <strong>${escapeHtml(getSourceDocumentTitle(document))}</strong>
+          <em>${escapeHtml([formatDocumentType(document.mime_type, document.original_filename), formatFileSize(document.file_size)].filter(Boolean).join(" - "))}</em>
+        </span>
+      </label>
+    `).join("");
+  }
+  setSourceCanonStatus("[data-source-canon-compare-status]", "");
+  openModal(document.getElementById("source-canon-compare-modal"));
+}
+
+async function startSourceCanonComparison() {
+  if (sourceCanonReviewState.processing) return;
+  const selectedIds = new Set([...(document.querySelectorAll("[data-source-canon-document-option]:checked") || [])].map((input) => input.value));
+  sourceCanonReviewState.queue = sourceCanonReviewState.queue.filter((document) => selectedIds.has(String(document.id)));
+  if (!sourceCanonReviewState.queue.length) {
+    setSourceCanonStatus("[data-source-canon-compare-status]", "Select at least one document to compare.", "error");
+    return;
+  }
+  closeSourceCanonModal("source-canon-compare-modal");
+  await processNextSourceCanonDocument();
+}
+
+async function processNextSourceCanonDocument() {
+  const nextDocument = sourceCanonReviewState.queue.shift();
+  if (!nextDocument) {
+    sourceCanonReviewState.current = null;
+    sourceCanonReviewState.currentComparison = null;
+    sourceCanonReviewState.currentSuggestions = null;
+    setSourceDocumentsStatus("Source canon review complete.", "success");
+    return;
+  }
+
+  if (!supabaseClient || !sourceCanonReviewState.universe?.id) {
+    setSourceDocumentsStatus("Supabase is not available yet. Refresh the page and try again.", "error");
+    return;
+  }
+
+  sourceCanonReviewState.current = nextDocument;
+  sourceCanonReviewState.processing = true;
+  ensureSourceCanonReviewModals();
+  const conflictList = document.querySelector("[data-source-canon-conflicts]");
+  if (conflictList) {
+    conflictList.innerHTML = `
+      <div class="source-canon-loading" role="status" aria-live="polite">
+        <div class="source-canon-loading-stage" aria-hidden="true">
+          <div class="source-canon-loading-stack">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="source-canon-loading-beam"></div>
+          <div class="source-canon-loading-core">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="source-canon-loading-beam is-reverse"></div>
+          <div class="source-canon-loading-stack is-document">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+        <strong>Comparing source document to canon...</strong>
+        <span>Reading the uploaded source, checking reviewed canon notes, and looking for conflicts.</span>
+      </div>
+    `;
+  }
+  document.querySelector("[data-source-canon-conflict-kicker]").textContent = getSourceDocumentTitle(nextDocument);
+  document.querySelector("[data-source-canon-conflict-summary]").textContent = "";
+  setSourceCanonStatus("[data-source-canon-conflict-status]", "Reading document and comparing against canon...");
+  openModal(document.getElementById("source-canon-conflict-modal"));
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("compare-universe-source-document", {
+      body: {
+        universeId: sourceCanonReviewState.universe.id,
+        documentId: nextDocument.id,
+      },
+    });
+    if (error) throw error;
+    sourceCanonReviewState.currentComparison = data;
+    renderSourceCanonConflicts(data);
+  } catch (error) {
+    setSourceCanonStatus("[data-source-canon-conflict-status]", `Could not compare document: ${getReadableError(error)}`, "error");
+  } finally {
+    sourceCanonReviewState.processing = false;
+  }
+}
+
+function renderSourceCanonConflicts(comparison) {
+  const conflicts = Array.isArray(comparison?.conflicts) ? comparison.conflicts : [];
+  const list = document.querySelector("[data-source-canon-conflicts]");
+  const summary = document.querySelector("[data-source-canon-conflict-summary]");
+  if (summary) {
+    summary.textContent = comparison?.review?.new_information_summary || comparison?.review?.document_summary || "Review each conflict, then save decisions.";
+  }
+  if (!list) return;
+  if (!conflicts.length) {
+    list.innerHTML = '<p class="empty-state">No direct conflicts found. New information can still become source canon and element suggestions.</p>';
+    setSourceCanonStatus("[data-source-canon-conflict-status]", "No conflicts found. Continue to save the new source information.", "success");
+    return;
+  }
+  list.innerHTML = conflicts.map((conflict, index) => `
+    <article class="source-canon-conflict" data-source-canon-conflict data-conflict-id="${escapeHtml(conflict.id)}">
+      <header>
+        <span>${index + 1}</span>
+        <strong>${escapeHtml(conflict.title || `Conflict ${index + 1}`)}</strong>
+        <em>${escapeHtml(conflict.conflict_type || "Canon conflict")}</em>
+      </header>
+      <div class="source-canon-diff">
+        <section>
+          <h3>Canon</h3>
+          <p>${escapeHtml(conflict.canon_summary || "No canon summary returned.")}</p>
+        </section>
+        <section>
+          <h3>Document</h3>
+          <p>${escapeHtml(conflict.document_summary || "No document summary returned.")}</p>
+        </section>
+      </div>
+      <label class="form-field compact-field">
+        <span>Decision</span>
+        <select data-source-canon-decision>
+          <option value="keep_canon">Keep Canon</option>
+          <option value="use_document">Use Document</option>
+          <option value="merge" selected>Merge Intelligently</option>
+        </select>
+      </label>
+      <label class="form-field compact-field">
+        <span>Accepted Source Canon Note</span>
+        <textarea data-source-canon-accepted-text>${escapeHtml(conflict.suggested_merge || conflict.document_summary || conflict.canon_summary || "")}</textarea>
+      </label>
+    </article>
+  `).join("");
+  setSourceCanonStatus("[data-source-canon-conflict-status]", "");
+}
+
+async function saveSourceCanonDecisionsAndSuggestElements() {
+  if (sourceCanonReviewState.processing) return;
+  const comparison = sourceCanonReviewState.currentComparison;
+  if (!comparison?.review?.id) {
+    setSourceCanonStatus("[data-source-canon-conflict-status]", "No source review is ready yet.", "error");
+    return;
+  }
+  sourceCanonReviewState.processing = true;
+  setSourceCanonStatus("[data-source-canon-conflict-status]", "Saving source canon notes and generating element suggestions...");
+  const decisions = [...(document.querySelectorAll("[data-source-canon-conflict]") || [])].map((row) => ({
+    conflictId: row.dataset.conflictId,
+    decision: row.querySelector("[data-source-canon-decision]")?.value || "merge",
+    acceptedText: row.querySelector("[data-source-canon-accepted-text]")?.value || "",
+  }));
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("generate-source-canon-elements", {
+      body: {
+        reviewId: comparison.review.id,
+        decisions,
+      },
+    });
+    if (error) throw error;
+    sourceCanonReviewState.currentSuggestions = data;
+    closeSourceCanonModal("source-canon-conflict-modal");
+    renderSourceCanonSuggestions(data);
+    void syncCurrentUniverseCanonAfterSourceReview();
+  } catch (error) {
+    setSourceCanonStatus("[data-source-canon-conflict-status]", `Could not save decisions: ${getReadableError(error)}`, "error");
+  } finally {
+    sourceCanonReviewState.processing = false;
+  }
+}
+
+function renderSourceCanonSuggestions(payload) {
+  ensureSourceCanonReviewModals();
+  const list = document.querySelector("[data-source-canon-suggestions]");
+  const elements = Array.isArray(payload?.elements) ? payload.elements : [];
+  if (list) {
+    list.innerHTML = elements.length ? elements.map((element) => `
+      <label class="source-canon-suggestion-option">
+        <input type="checkbox" data-source-canon-suggestion value="${escapeHtml(element.temp_id)}" checked>
+        <span>
+          <strong>${escapeHtml(element.name)}</strong>
+          <em>${escapeHtml(element.element_type_name || "Element")}</em>
+          <small>${escapeHtml(createBlurb(element.description, 180))}</small>
+        </span>
+      </label>
+    `).join("") : '<p class="empty-state">No new element suggestions were found for this document.</p>';
+  }
+  setSourceCanonStatus("[data-source-canon-suggestions-status]", elements.length ? "" : "Continue to the next document when ready.", elements.length ? "" : "success");
+  openModal(document.getElementById("source-canon-suggestions-modal"));
+}
+
+async function syncCurrentUniverseCanonAfterSourceReview() {
+  if (!supabaseClient || !sourceCanonReviewState.universe?.id) return;
+  try {
+    await supabaseClient.functions.invoke("sync-universe-ai-source", {
+      body: { universeId: sourceCanonReviewState.universe.id },
+    });
+  } catch (error) {
+    console.error("Could not sync source canon review:", error);
+    setSourceCanonStatus("[data-source-canon-suggestions-status]", "Source notes were saved, but AI canon sync failed. You can sync again from the AI Expert.", "error");
+  }
+}
+
+async function finalizeCurrentSourceCanonReview() {
+  const reviewId = sourceCanonReviewState.currentComparison?.review?.id || "";
+  if (!supabaseClient || !reviewId) return;
+  try {
+    await supabaseClient
+      .from("universe_source_canon_reviews")
+      .update({
+        status: "finalized",
+        finalized_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", reviewId);
+    await syncCurrentUniverseCanonAfterSourceReview();
+  } catch (error) {
+    console.error("Could not finalize source canon review:", error);
+    setSourceCanonStatus("[data-source-canon-suggestions-status]", "Review was saved, but finalizing the review failed.", "error");
+  }
+}
+
+function reviewSelectedSourceCanonElements() {
+  const suggestions = sourceCanonReviewState.currentSuggestions || {};
+  const selected = new Set([...(document.querySelectorAll("[data-source-canon-suggestion]:checked") || [])].map((input) => input.value));
+  const elements = (Array.isArray(suggestions.elements) ? suggestions.elements : []).filter((element) => selected.has(String(element.temp_id)));
+  const tempIds = new Set(elements.map((element) => String(element.temp_id)));
+  const links = (Array.isArray(suggestions.links) ? suggestions.links : []).filter((link) => tempIds.has(String(link.source)) || tempIds.has(String(link.target)));
+  if (!elements.length) {
+    setSourceCanonStatus("[data-source-canon-suggestions-status]", "Select at least one element, or skip element creation.", "error");
+    return;
+  }
+  if (document.body.dataset.page !== "universe-canvas") {
+    setSourceCanonStatus("[data-source-canon-suggestions-status]", "Open this universe canvas to review and create selected elements.", "error");
+    return;
+  }
+  closeSourceCanonModal("source-canon-suggestions-modal");
+  window.dispatchEvent(new CustomEvent("centralis:review-source-canon-elements", {
+    detail: {
+      reviewId: sourceCanonReviewState.currentComparison?.review?.id || "",
+      payload: { elements, links },
+    },
+  }));
+}
+
+function skipSourceCanonElements() {
+  closeSourceCanonModal("source-canon-suggestions-modal");
+  void finalizeCurrentSourceCanonReview().then(() => processNextSourceCanonDocument());
 }
 
 function setHomeCount(element, count, noun) {
@@ -1957,29 +2347,45 @@ async function uploadUniverseSourceDocument(event) {
 
   const formData = new FormData(sourceDocumentsForm);
   const file = formData.get("file");
-  if (!(file instanceof File) || !file.name) {
-    setSourceDocumentsStatus("Choose a document to upload.", "error");
+  const fileInput = sourceDocumentsForm.querySelector('input[type="file"][name="file"]');
+  const selectedFiles = fileInput?.files?.length ? [...fileInput.files] : (file instanceof File && file.name ? [file] : []);
+  if (!selectedFiles.length) {
+    setSourceDocumentsStatus("Choose at least one document to upload.", "error");
     return;
   }
 
-  formData.set("universeId", activeSourceDocumentsUniverse.id);
   sourceDocumentsUploading = true;
   if (sourceDocumentsSubmit) sourceDocumentsSubmit.disabled = true;
   sourceDocumentsClosers.forEach((button) => { button.disabled = true; });
-  setSourceDocumentsStatus("Uploading document...");
+  setSourceDocumentsStatus(selectedFiles.length === 1 ? "Uploading document..." : `Uploading ${selectedFiles.length} documents...`);
 
   try {
-    const { data, error } = await supabaseClient.functions.invoke("upload-universe-source-document", {
-      body: formData,
-    });
-    if (error) throw error;
+    const uploadedDocuments = [];
+    for (const selectedFile of selectedFiles) {
+      const uploadData = new FormData(sourceDocumentsForm);
+      uploadData.set("universeId", activeSourceDocumentsUniverse.id);
+      uploadData.set("file", selectedFile);
+      const { data, error } = await supabaseClient.functions.invoke("upload-universe-source-document", {
+        body: uploadData,
+      });
+      if (error) throw error;
+      if (data?.document) {
+        uploadedDocuments.push(data.document);
+      }
+    }
 
     sourceDocumentsForm.reset();
-    setSourceDocumentsStatus(`Uploaded "${getSourceDocumentTitle(data?.document)}".`, "success");
+    setSourceDocumentsStatus(
+      uploadedDocuments.length === 1
+        ? `Uploaded "${getSourceDocumentTitle(uploadedDocuments[0])}".`
+        : `Uploaded ${uploadedDocuments.length} documents.`,
+      "success",
+    );
     await loadUniverseSourceDocuments(activeSourceDocumentsUniverse.id);
     if (document.body.dataset.page === "home") {
       await loadRecentSourceDocuments();
     }
+    openSourceCanonCompareWindow(activeSourceDocumentsUniverse, uploadedDocuments);
   } catch (error) {
     setSourceDocumentsStatus(`Could not upload document: ${getReadableError(error)}`, "error");
   } finally {
@@ -4519,7 +4925,7 @@ sourceDocumentsClosers.forEach((button) => {
   button.addEventListener("click", closeSourceDocumentsDialog);
 });
 sourceDocumentsModal?.addEventListener("click", (event) => {
-  if (event.target === sourceDocumentsModal) {
+  if (event.target === sourceDocumentsModal && !sourceDocumentsModal.hasAttribute("data-strict-modal")) {
     closeSourceDocumentsDialog();
   }
 });
@@ -4532,6 +4938,53 @@ currentUniverseDocumentsButtons.forEach((button) => {
     }
     openSourceDocumentsDialog(universe);
   });
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  if (target.closest("[data-source-canon-close], [data-source-canon-skip]")) {
+    closeSourceCanonModal("source-canon-compare-modal");
+    return;
+  }
+  if (target.closest("[data-source-canon-start]")) {
+    void startSourceCanonComparison();
+    return;
+  }
+  if (target.closest("[data-source-canon-stop]")) {
+    closeSourceCanonModal("source-canon-conflict-modal");
+    sourceCanonReviewState.queue = [];
+    sourceCanonReviewState.current = null;
+    return;
+  }
+  if (target.closest("[data-source-canon-save-decisions]")) {
+    void saveSourceCanonDecisionsAndSuggestElements();
+    return;
+  }
+  if (target.closest("[data-source-canon-next-document]")) {
+    skipSourceCanonElements();
+    return;
+  }
+  if (target.closest("[data-source-canon-review-elements]")) {
+    reviewSelectedSourceCanonElements();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.matches("[data-source-canon-select-all]")) {
+    document.querySelectorAll("[data-source-canon-suggestion]").forEach((checkbox) => {
+      if (checkbox instanceof HTMLInputElement) {
+        checkbox.checked = target.checked;
+      }
+    });
+  }
+});
+
+window.addEventListener("centralis:source-canon-elements-finalized", () => {
+  void processNextSourceCanonDocument();
 });
 
 document.querySelectorAll(".universe-form").forEach((form) => {

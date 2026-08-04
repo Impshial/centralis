@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fusion | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=fusion-15">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="fusion">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="fusion-page" data-fusion-app>
+      <section class="fusion-shell">
+        <header class="fusion-topbar">
+          <div>
+            <p class="module-kicker">Entertainment</p>
+            <h1>Fusion</h1>
+          </div>
+          <label class="fusion-search" aria-label="Search Fusion items">
+            <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+            <input type="search" data-fusion-search placeholder="Search" autocomplete="off">
+          </label>
+          <div class="fusion-stats" aria-label="Fusion statistics">
+            <span><strong data-fusion-discovery-count>100</strong> Items</span>
+            <span><strong data-fusion-recipe-count>0</strong> Recipes</span>
+            <span><strong data-fusion-max-level>0</strong> Max Level</span>
+          </div>
+          <div class="fusion-actions">
+            <button class="secondary-action" type="button" data-fusion-sort title="Sort fusions">
+              <ph-stack weight="bold" aria-hidden="true"></ph-stack>
+              <span>Sort Fusions</span>
+            </button>
+            <button class="secondary-action" type="button" data-fusion-export title="Export save">
+              <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+              <span>Export</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="fusion-board-wrap" aria-label="Fusion workspace">
+          <div class="fusion-board" data-fusion-board>
+            <div class="fusion-world" data-fusion-world></div>
+          </div>
+          <div class="fusion-hud">
+            <div class="fusion-hud-row">
+              <button type="button" data-fusion-zoom-out aria-label="Zoom out" title="Zoom out"><ph-minus weight="bold" aria-hidden="true"></ph-minus></button>
+              <span data-fusion-zoom-label>100%</span>
+              <button type="button" data-fusion-zoom-in aria-label="Zoom in" title="Zoom in"><ph-plus weight="bold" aria-hidden="true"></ph-plus></button>
+            </div>
+            <p data-fusion-status role="status" aria-live="polite"></p>
+          </div>
+        </section>
+      </section>
+
+      <aside class="fusion-panel" data-fusion-panel hidden aria-label="Discovery details"></aside>
+      <div class="fusion-tooltip" data-fusion-tooltip hidden></div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=fusion-nav-1"></script>
+  <script src="fusion.js?v=fusion-15"></script>
+</body>
+</html>

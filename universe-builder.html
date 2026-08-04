@@ -215,7 +215,7 @@
     </section>
   </div>
 
-  <div class="modal-backdrop universe-modal-backdrop" id="universe-source-documents-modal" hidden>
+  <div class="modal-backdrop universe-modal-backdrop" id="universe-source-documents-modal" data-strict-modal hidden>
     <section class="modal-dialog universe-source-documents-dialog" role="dialog" aria-modal="true" aria-labelledby="universe-source-documents-title">
       <div class="modal-header">
         <div>
@@ -238,14 +238,15 @@
 
         <label class="form-field">
           <span>Document</span>
-          <input type="file" name="file" accept=".pdf,.txt,.md,.markdown,.html,.htm,.rtf,.doc,.docx,.csv,.tsv,.json,.yaml,.yml,.xml,application/pdf,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <input class="source-documents-file-input" type="file" name="file" multiple accept=".pdf,.txt,.md,.markdown,.html,.htm,.rtf,.doc,.docx,.csv,.tsv,.json,.yaml,.yml,.xml,application/pdf,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <small>PDF, Word, text, markdown, HTML, CSV, JSON, YAML, and XML files are supported.</small>
         </label>
 
         <p class="form-status" data-source-documents-status role="status"></p>
 
         <div class="modal-actions">
           <button class="secondary-action" type="button" data-source-documents-close>Close</button>
-          <button class="primary-action" type="submit" data-source-documents-submit>Upload Document</button>
+          <button class="primary-action" type="submit" data-source-documents-submit>Upload Documents</button>
         </div>
       </form>
 

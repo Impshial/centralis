@@ -124,39 +124,46 @@
       </div>
     </header>
 
-    <main class="movie-page">
+    <main class="movie-page" data-movie-page>
       <section class="movie-main">
-        <section class="movie-list-card">
-          <div class="movie-list-header">
-            <div>
-              <h2>Your Movies</h2>
-              <p data-movie-count></p>
-            </div>
-            <p class="movie-status" data-movie-status role="status">Loading movies...</p>
-            <nav class="movie-pagination movie-pagination-top" data-movie-pagination aria-label="Movie list pagination"></nav>
+        <header class="movie-tracker-header">
+          <div class="movie-tracker-title-group">
+            <span class="module-kicker">Entertainment</span>
+            <h1>Movie Tracker</h1>
+            <p data-movie-count></p>
           </div>
+          <p class="movie-status" data-movie-status role="status">Loading movies...</p>
+          <nav class="movie-pagination movie-pagination-top" data-movie-pagination aria-label="Movie list pagination"></nav>
+        </header>
+        <section class="movie-list-card">
           <div class="movie-table-shell">
             <table class="movie-table">
               <thead>
                 <tr>
                   <th><input type="checkbox" data-select-all-movies aria-label="Select all movies on page"></th>
                   <th>Poster</th>
-                  <th>Title</th>
-                  <th>Year</th>
-                  <th>Director</th>
+                  <th><button class="movie-sort-header" type="button" data-sort-header="title">Title <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
+                  <th><button class="movie-sort-header" type="button" data-sort-header="year">Year <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
+                  <th><button class="movie-sort-header" type="button" data-sort-header="director">Directors <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
+                  <th><button class="movie-sort-header" type="button" data-sort-header="writers">Writers <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
+                  <th><button class="movie-sort-header" type="button" data-sort-header="actors">Actors <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
                   <th>Franchise</th>
                   <th>Collection</th>
-                  <th>Status</th>
                 </tr>
               </thead>
               <tbody data-movie-rows></tbody>
             </table>
           </div>
-          <footer class="movie-pagination" data-movie-pagination aria-label="Movie list pagination"></footer>
         </section>
       </section>
 
+      <div class="movie-sidebar-resizer" data-sidebar-resizer aria-hidden="true"></div>
       <aside class="movie-side-panel" aria-label="Movie tools">
+        <div class="movie-side-panel-header">
+          <button class="movie-sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="true" aria-label="Collapse movie tools">
+            <ph-sidebar-simple weight="bold" aria-hidden="true"></ph-sidebar-simple>
+          </button>
+        </div>
         <div class="movie-sidebar-actions">
           <button class="primary-action movie-wide-action" type="button" data-open-add-movie>
             <ph-plus weight="bold" aria-hidden="true"></ph-plus>
@@ -174,6 +181,7 @@
             <button type="button" data-bulk-franchise disabled><ph-film-slate weight="bold"></ph-film-slate>Set Franchise (0)</button>
             <button type="button" data-bulk-collection disabled><ph-film-slate weight="bold"></ph-film-slate>Set Collection (0)</button>
             <hr>
+            <button type="button" data-refresh-movies><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Refresh Movies</button>
             <button type="button" data-open-missing-details><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Get Missing Details</button>
             <button type="button" data-open-franchises><ph-gear weight="bold"></ph-gear>Manage Franchises</button>
             <button type="button" data-open-collections><ph-gear weight="bold"></ph-gear>Manage Collections</button>
@@ -182,34 +190,12 @@
         </div>
         <hr>
         <section class="movie-tool-section">
-          <div class="movie-tool-heading">
-            <h2>Tools</h2>
-            <button type="button" data-refresh-movies aria-label="Refresh movies" title="Refresh movies">
-              <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
-            </button>
-          </div>
           <label class="movie-filter-field">
             <span><ph-magnifying-glass weight="bold"></ph-magnifying-glass>Search</span>
-            <input type="search" data-search-movies placeholder="Title, director, actors...">
+            <input type="search" data-search-movies placeholder="Title, director, actors, writers...">
           </label>
-          <label class="movie-filter-field">
-            <span><ph-sort-ascending weight="bold"></ph-sort-ascending>Sort</span>
-            <select data-sort-movies>
-              <option value="title-asc">A-Z</option>
-              <option value="title-desc">Z-A</option>
-              <option value="year-desc">Newest</option>
-              <option value="year-asc">Oldest</option>
-            </select>
-          </label>
+          <hr class="movie-sidebar-separator">
           <h3><ph-funnel weight="bold"></ph-funnel>Filters</h3>
-          <label class="movie-filter-field">
-            <span>Download Status</span>
-            <select data-filter-status>
-              <option value="all">All Movies</option>
-              <option value="downloaded">Downloaded</option>
-              <option value="missing">Not Downloaded</option>
-            </select>
-          </label>
           <label class="movie-filter-field">
             <span>Franchise</span>
             <select data-filter-franchise></select>
@@ -221,11 +207,7 @@
         </section>
         <hr>
         <section class="movie-statistics">
-          <button class="movie-section-toggle" type="button" data-statistics-toggle aria-expanded="false" aria-controls="movie-statistics-content">
-            <span>Statistics</span>
-            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
-          </button>
-          <dl id="movie-statistics-content" data-movie-stats hidden></dl>
+          <dl id="movie-statistics-content" data-movie-stats></dl>
         </section>
       </aside>
     </main>
