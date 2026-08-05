@@ -8589,7 +8589,14 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
   width: min(460px, calc(100vw - 32px));
 }
 
-.modal-dialog.movie-view-dialog,
+.modal-dialog.movie-view-dialog {
+  width: min(1080px, calc(100vw - 32px));
+  height: min(840px, calc(100vh - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  overflow: hidden;
+}
+
 .modal-dialog.movie-edit-dialog {
   width: min(760px, calc(100vw - 32px));
   height: min(760px, calc(100vh - 32px));
@@ -8723,8 +8730,17 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
 
 .movie-detail-list {
   display: grid;
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
   margin: 0;
+}
+
+.movie-detail-list div {
+  min-width: 0;
+}
+
+.movie-detail-list .movie-detail-wide {
+  grid-column: 1 / -1;
 }
 
 .movie-detail-list dd {
@@ -8733,6 +8749,7 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
   font-size: 16px;
   font-weight: 400;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .danger-action {
@@ -8827,8 +8844,6 @@ body[data-page="movie-tracker"] .movie-page {
 
 body[data-page="movie-tracker"] .movie-list-header p,
 body[data-page="movie-tracker"] .movie-muted,
-body[data-page="movie-tracker"] .movie-statistics dt,
-body[data-page="movie-tracker"] .movie-detail-list dt,
 body[data-page="movie-tracker"] .movie-empty-row,
 body[data-page="movie-tracker"] .movie-process-movie-details li span,
 body[data-page="movie-tracker"] .movie-process-failure-details li span,
@@ -8874,14 +8889,20 @@ body[data-page="movie-tracker"] .movie-manager-row {
 
 body[data-page="movie-tracker"] .movie-table td,
 body[data-page="movie-tracker"] .movie-statistics dd,
+body[data-page="movie-tracker"] .movie-detail-list dd,
 body[data-page="movie-tracker"] .movie-process-movie-details li,
 body[data-page="movie-tracker"] .movie-process-failure-details li {
   color: color-mix(in srgb, var(--ink) 82%, var(--muted));
 }
 
+body[data-page="movie-tracker"] .movie-statistics dt,
+body[data-page="movie-tracker"] .movie-detail-list dt {
+  color: var(--ink);
+  font-weight: 820;
+}
+
 body[data-page="movie-tracker"] .movie-title-cell,
 body[data-page="movie-tracker"] .movie-filter-field,
-body[data-page="movie-tracker"] .movie-detail-list dd,
 body[data-page="movie-tracker"] .movie-dialog-header h2,
 body[data-page="movie-tracker"] .movie-actions-menu button,
 body[data-page="movie-tracker"] .movie-manager-row button,
@@ -8999,6 +9020,10 @@ body[data-page="movie-tracker"] .movie-sort-header.is-active {
     border-right: 0;
     border-bottom: 1px solid #303842;
     padding: 16px 24px;
+  }
+
+  .movie-detail-list {
+    grid-template-columns: 1fr;
   }
 
   .movie-dialog-footer-split {
@@ -21915,6 +21940,15 @@ body:is(
   [data-page="designer"]
 ) *:not([class*="avatar"]):not([class*="badge"]):not([class*="chip"]):not([class*="dot"]):not([class*="icon-button"]):not([class*="pill"]):not([class*="profile"]):not([class*="radio"]):not([class*="swatch"]):not([class*="user-button"]) {
   border-radius: min(var(--module-corner-radius), 6px);
+}
+
+body[data-page="movie-tracker"] .movie-table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+}
+
+body[data-page="movie-tracker"] .movie-table :is(thead, tbody, tr, th, td) {
+  border-radius: 0 !important;
 }
 
 body[data-page="stellar-architect"] .stellar-colony-dialog {

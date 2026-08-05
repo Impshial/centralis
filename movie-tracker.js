@@ -541,27 +541,61 @@ function getMovieById(id) {
   return movieState.movies.find((movie) => movie.id === Number(id)) || null;
 }
 
+function movieFieldValue(value, fallback = "Not set") {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function movieDateTimeValue(value) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? movieFieldValue(value) : date.toLocaleString();
+}
+
+function movieDetailRow(label, value, className = "") {
+  return `<div${className ? ` class="${className}"` : ""}><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
 function renderMovieView(movie) {
   movieState.activeMovie = movie;
+  const detailRows = [
+    ["ID", movie.id],
+    ["Title", movie.title],
+    ["Year Released", movie.year_released],
+    ["Downloaded", movie.downloaded],
+    ["Franchise", movie.franchise?.name || null, "None"],
+    ["Franchise ID", movie.franchise_id],
+    ["Collection", movie.collection?.name || null, "None"],
+    ["Collection ID", movie.collection_id],
+    ["Poster URL", movie.poster_url],
+    ["Rating", movie.rated],
+    ["Director", movie.director],
+    ["Released Date", movie.date_released],
+    ["Runtime", movie.runtime],
+    ["Genre", movie.genre],
+    ["Writers", movie.writers],
+    ["Actors", movie.actors],
+    ["Plot", movie.plot, "Not set", "movie-detail-wide"],
+    ["Created", movieDateTimeValue(movie.created_at)],
+    ["Updated", movieDateTimeValue(movie.updated_at)],
+    ["Deleted", movie.deleted],
+    ["Deleted At", movieDateTimeValue(movie.deleted_at)],
+    ["Deleted By", movie.deleted_by],
+  ];
   els.viewContent.innerHTML = `
     <div class="movie-dialog-layout">
       <header class="movie-dialog-header">
         <h2 id="movie-view-title">${escapeHtml(movie.title)}</h2>
-        <p>${escapeHtml(movie.year_released)}</p>
+        <p>${escapeHtml(movieFieldValue(movie.year_released))}</p>
       </header>
       <aside class="movie-dialog-poster-panel">
         ${posterMarkup(movie, "large")}
       </aside>
       <div class="movie-dialog-scroll">
         <dl class="movie-detail-list">
-          <div><dt>Rating</dt><dd>${escapeHtml(movie.rated || "-")}</dd></div>
-          <div><dt>Director</dt><dd>${escapeHtml(movie.director || "-")}</dd></div>
-          <div><dt>Genre</dt><dd>${escapeHtml(movie.genre || "-")}</dd></div>
-          <div><dt>Runtime</dt><dd>${escapeHtml(movie.runtime || "-")}</dd></div>
-          <div><dt>Cast</dt><dd>${escapeHtml(movie.actors || "-")}</dd></div>
-          <div><dt>Writers</dt><dd>${escapeHtml(movie.writers || "-")}</dd></div>
-          <div><dt>Plot</dt><dd>${escapeHtml(movie.plot || "-")}</dd></div>
-          <div><dt>Status</dt><dd>${statusBadge(movie)}</dd></div>
+          ${detailRows.map(([label, value, fallback, className]) => movieDetailRow(label, movieFieldValue(value, fallback), className)).join("")}
         </dl>
       </div>
       <footer class="movie-dialog-footer">

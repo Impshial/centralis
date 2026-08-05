@@ -539,6 +539,19 @@
       </div>`).join("") : '<p class="empty-state">No sessions yet.</p>';
   }
 
+  function isActiveSession(sessionId) {
+    return Boolean(sessionId && state.session?.id === sessionId);
+  }
+
+  function updateSessionSummary(session) {
+    if (!session?.id) return;
+    const existingIndex = state.sessions.findIndex((item) => item.id === session.id);
+    if (existingIndex >= 0) state.sessions[existingIndex] = session;
+    else state.sessions.unshift(session);
+    state.sessions.sort((first, second) => new Date(second.updated_at || 0) - new Date(first.updated_at || 0));
+    renderSessions();
+  }
+
   function findAssets(messageId) { return state.assets.filter((asset) => asset.message_id === messageId && asset.asset_kind === "output"); }
   function getOutputAssets() {
     return state.assets
@@ -1031,7 +1044,11 @@
         ? await invokeHighQualityOpenAi(requestBody)
         : await invoke("generate-session-images", requestBody);
       if (generation.cancelled) {
-        await openSession(generation.sessionId);
+        if (isActiveSession(generation.sessionId)) await openSession(generation.sessionId);
+        return;
+      }
+      if (!isActiveSession(generation.sessionId)) {
+        updateSessionSummary(payload.session);
         return;
       }
       const savedUserMessage = payload.userMessage || { ...optimistic, status: "completed" };
@@ -1047,7 +1064,11 @@
       setStatus("Ready");
     } catch (error) {
       if (generation.cancelled) {
-        await openSession(generation.sessionId);
+        if (isActiveSession(generation.sessionId)) await openSession(generation.sessionId);
+        return;
+      }
+      if (!isActiveSession(generation.sessionId)) {
+        await clearPendingGenerationAfterError(generation.sessionId, error instanceof Error ? error.message : "Could not generate images.", error?.details || null);
         return;
       }
       optimistic.status = "failed";
@@ -1059,7 +1080,7 @@
       renderConversation(); setComposerError(optimistic.error_message); setStatus("Generation failed", true);
     } finally {
       if (state.activeGeneration === generation) state.activeGeneration = null;
-      setBusy(false);
+      if (isActiveSession(generation.sessionId)) setBusy(false);
     }
   }
 
