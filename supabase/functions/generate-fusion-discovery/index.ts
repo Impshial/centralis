@@ -19,20 +19,21 @@ type FusionParent = {
 const REALITY_LEVELS = ["Real", "Near Future", "Speculative", "Advanced", "Science Fantasy"];
 const MAX_LEVEL = 5;
 const PRODUCT_TYPES = [
-  "product",
+  "instrument",
   "material",
   "machine",
-  "tool",
-  "chemical",
-  "biological organism",
-  "food",
-  "structural component",
-  "industrial process",
-  "real-world system",
+  "process",
+  "sensor",
+  "biological system",
+  "industrial component",
+  "field apparatus",
+  "adaptive tool",
+  "lab specimen",
 ];
 
 function cleanText(value: unknown, maxLength: number) {
-  return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+  const cleaned = String(value || "").replace(/\s+/g, " ").trim();
+  return Number.isFinite(maxLength) ? cleaned.slice(0, maxLength) : cleaned;
 }
 
 function asRecord(value: unknown) {
@@ -116,7 +117,7 @@ function extractFusionFields(value: unknown, fields = { name: "", description: "
   const record = asRecord(value);
   if (!Object.keys(record).length) return fields;
   if (!fields.name) fields.name = firstCleanText(record, NAME_KEYS, 80);
-  if (!fields.description) fields.description = firstCleanText(record, DESCRIPTION_KEYS, 260);
+  if (!fields.description) fields.description = firstCleanText(record, DESCRIPTION_KEYS, Infinity);
   if (fields.traits.length < 3) fields.traits = traitsFromRecord(record);
 
   const preferredKeys = ["result", "item", "discovery", "output", "generated", "data", "payload", "attributes", "metadata", "properties", "content", "message"];
@@ -159,7 +160,7 @@ function cleanParent(value: unknown): FusionParent {
   return {
     id: cleanText(record.id, 120),
     name: cleanText(record.name, 80),
-    description: cleanText(record.description, 180),
+    description: cleanText(record.description, Infinity),
     traits: cleanTraits(record.traits),
     level: Math.max(0, Math.min(999, Number(record.level) || 0)),
   };
@@ -189,15 +190,22 @@ class PromptBuilder {
     return [
       "You generate strict JSON for Fusion, a discovery game about combining objects.",
       "Return exactly one JSON object with keys: name, description, traits.",
-      "Every result must meaningfully inherit recognizable traits, materials, mechanisms, uses, or constraints from both parents.",
-      `The result must be an identifiable ${PRODUCT_TYPES.join(", ")}, or similar concrete real-world object or system.`,
-      "Avoid abstractions, magic, jokes, lore, names made by simply concatenating parent names, and unchanged parent items.",
-      "For Reality Level Real, the result must already exist in the real world.",
-      "For Reality Level Real, do not invent a new product. Choose the closest established product, material, food, tool, machine, organism, substance, or system that meaningfully relates to both parents.",
-      "For Reality Level Real, reject generic composites, vague kits, generic workstations, and names formed mainly by joining parent words.",
-      "For later reality levels, increase creative freedom gradually while staying physically or biologically coherent.",
-      "The name must be concise and natural. The description must be one sentence with a concrete function and a specific contribution from both parents.",
-      "Traits must be an array of 3 to 6 concise primary characteristics, such as uses, mechanisms, materials, constraints, or domains. Do not use filler traits.",
+      "Make every Fusion result inventive, concrete, and a little uncanny, but usually grounded in understandable technical language.",
+      "Do not get stuck trying to be strictly realistic. If needed, invent a speculative material, mechanism, interface, process, organism, sensor, or industrial use.",
+      "The only hard rule is that the result must contain recognizable DNA from both parent items.",
+      "For level 2+ results, focus on the two immediate parent items as complete things.",
+      "Do not list or acknowledge older ancestor items unless they are still directly relevant to the new result.",
+      "It is fine for a higher-level result to transcend its original ingredients and become a cleaner new concept.",
+      "Borrow a concrete material, behavior, shape, use, environment, failure mode, measurement property, or physical constraint from each parent.",
+      `The result should feel like a speculative ${PRODUCT_TYPES.join(", ")}, or similarly tangible technical oddity.`,
+      "Prefer material science, biotech, sensors, chemistry, manufacturing, energy systems, control systems, microscopy, field equipment, or procedural jargon.",
+      "Use fantasy only as a last resort, and keep it quiet: no ghosts, curses, prophecy, mythic forces, dream logic, or cosmic grandiosity.",
+      "The invented mechanism must still have internal cause-and-effect: parent A changes parent B in a specific way, and parent B changes parent A in a specific way.",
+      "Avoid bland names like Generic Fusion, Rulebound Chimera, Ritual Object, Prototype, Processor, Engine, Device, Vessel, Module, Kit, or Workstation.",
+      "Avoid phrases like stable result, combined function, physical traits, fusion-world object, clear cause-and-effect rule, impossible dimension, guilt, hidden seams, ghosts, oracle, beast, moon, crown, comet, witchlight, or haunted.",
+      "The name must be concise and grounded-evocative, like something from a lab drawer, field manual, patent index, or maintenance log.",
+      "The description must be one sentence that explicitly names both parents and explains how both are present.",
+      "Traits must be an array of 3 to 6 concise primary characteristics. At least one trait should come from each parent.",
       "Do not include markdown, commentary, alternate options, or extra fields.",
     ].join("\n");
   }
@@ -211,21 +219,28 @@ class PromptBuilder {
       return `Parent ${index + 1}\nName: ${parent.name}\nDescription: ${parent.description || "No description stored."}${traits}`;
     });
     return [
-      `Reality Level: ${realityLevel}`,
+      `Reality Flavor: ${realityLevel}`,
       `Target Level: ${targetLevel}`,
-      realityLevel === "Real" ? "Level 0 rule: return an already-known real item or established product category, not a newly invented fusion." : "",
-      options.fallbackMode ? "Fallback mode: the real-world overlap was weak. Allow one small near-future or lightly fantastical push, but keep the result concrete, usable, and recognizably inherited from both parents. Do not use magic, generic kits, generic workstations, or parent-name mashups." : "",
+      "Make Shit Up rule: every pair must produce a result. Never refuse. Never say no valid fusion exists.",
+      "Default tone: speculative engineering, material science, biotech, field equipment, lab process, or technical anomaly.",
+      "The result must contain something recognizable from both parent items, not just their names.",
+      "If either parent is already a generated Fusion item, treat it as a complete object; do not unpack all older ancestors unless the result needs them.",
+      options.fallbackMode ? "Fallback mode: be more specific and picturable, but stay mostly grounded. Use unknown materials, adaptive machinery, biological mechanisms, measurement effects, or industrial procedures. Do not use generic categories, parent-name mashups, ghosts, curses, prophecies, dream logic, or cosmic scale." : "",
       ...parentLines,
     ].filter(Boolean).join("\n");
   }
 
   static forcedSynthesisPrompt(parents: FusionParent[]) {
     return [
-      "The previous Fusion attempts failed. Create one stronger result now.",
-      "Do not return a placeholder, draft, prototype, processor, engine, device, kit, workstation, or parent-name hyphenation.",
+      "The previous Fusion attempt was too bland or failed quality checks. Return one stronger technical result now.",
+      "Do not look for an established real-world answer.",
+      "Invent a speculative mechanism that makes the two parents transform each other through material behavior, sensing, chemistry, biology, pressure, heat, vibration, signal processing, contamination, calibration, or tooling.",
+      "Do not return a placeholder, draft, prototype, processor, engine, device, generic vessel, generic rig, generic module, generic kit, generic workstation, ritual object, rulebound chimera, or parent-name-only hyphenation.",
       "Do not use the phrase \"physical traits\" or say the item performs a \"combined function\".",
-      "Use the parents' traits as design constraints, not just their names.",
-      "The result may take one small fantastical or near-future leap, but it must feel like a concrete named object someone could picture, build, buy, patent, eat, wear, install, or use.",
+      "Do not use phrases like stable result, fusion-world object, clear cause-and-effect rule, ghosts, impossible dimension, prophecy, haunted, or cosmic.",
+      "Present the result as true inside Fusion's speculative rules.",
+      "Use the parents as causal ingredients. Each parent must visibly contribute something.",
+      "The result must feel like something someone could picture as an object, specimen, material, machine, sensor, tool, process, field apparatus, or industrial anomaly.",
       "Return exactly one JSON object with keys: name, description, traits.",
       PromptBuilder.userPrompt(parents, { realityOverride: "Speculative", fallbackMode: true }),
     ].join("\n\n");
@@ -234,12 +249,12 @@ class PromptBuilder {
   static repairPrompt(parents: FusionParent[], rawResponse: string) {
     return [
       "Convert the previous Fusion model response into exactly one JSON object with keys: name, description, traits.",
-      "Never return an empty object. Never return null. If the previous response is empty, create a concrete fallback result from the parents.",
+      "Never return an empty object. Never return null. If the previous response is empty, create a grounded speculative result from the parents.",
       "Do not add extra keys. Do not use markdown.",
       "Preserve the intended concrete result if it obeys the rules. If the previous response omitted one field, infer the missing field from the parents.",
-      "The description must be one sentence with a concrete function and a specific contribution from both parents.",
-      "Traits must be an array of 3 to 6 concise primary characteristics.",
-      PromptBuilder.userPrompt(parents),
+      "The description must be one sentence that explicitly names both parents and makes both parents visibly matter.",
+      "Traits must be an array of 3 to 6 concise primary characteristics, with at least one trait from each parent.",
+      PromptBuilder.userPrompt(parents, { realityOverride: "Speculative", fallbackMode: true }),
       `Previous response: ${rawResponse.slice(0, 1500)}`,
     ].join("\n\n");
   }
@@ -247,6 +262,10 @@ class PromptBuilder {
 
 function singularize(value: string) {
   return value.replace(/ies$/i, "y").replace(/s$/i, "");
+}
+
+function titleWord(value: string) {
+  return value.replace(/(^|[-\s])[a-z]/g, (match) => match.toUpperCase());
 }
 
 function lastMeaningfulWord(value: string) {
@@ -258,30 +277,111 @@ function lastMeaningfulWord(value: string) {
   return singularize(words[words.length - 1] || "device");
 }
 
-function titleCase(value: string) {
-  return value.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
-}
-
 function parentEssence(parent: FusionParent) {
-  return cleanTraits(parent.traits, [parent])[0] || getParentKeywords(parent)[0] || lastMeaningfulWord(parent.name);
+  return getParentKeywords(parent)[0] || lastMeaningfulWord(parent.name);
 }
 
-function inventedDiscovery(parents: FusionParent[]) {
-  const first = parentEssence(parents[0]);
-  const second = parentEssence(parents[1]);
+function hashText(value: string) {
+  return Math.abs(value.split("").reduce((sum, char) => ((sum * 31) + char.charCodeAt(0)) | 0, 7));
+}
+
+function parentSignalWords(parent: FusionParent) {
+  return [
+    ...getParentKeywords(parent),
+    lastMeaningfulWord(parent.name),
+    ...extractConcepts(parent).slice(0, 2),
+  ]
+    .map((word) => singularize(cleanText(word, 32).toLowerCase()))
+    .filter((word) => word.length > 3);
+}
+
+function hasParentSignal(text: string, parent: FusionParent) {
+  const normalized = text.toLowerCase();
+  return parentSignalWords(parent).some((word) => normalized.includes(word));
+}
+
+function extractConcepts(parent: FusionParent) {
+  const stopWords = new Set([
+    "about", "above", "across", "after", "allow", "also", "being", "between", "carried", "common",
+    "distinctive", "everyday", "feature", "features", "from", "into", "made", "major", "object",
+    "objects", "other", "physical", "properties", "serving", "special", "supporting", "through",
+    "used", "uses", "using", "with", "within", "provides", "providing", "produces", "creating",
+    "stable", "result", "clear", "cause", "effect", "rule", "beverage", "drink", "food",
+  ]);
+  const nameConcepts = [
+    lastMeaningfulWord(parent.name),
+    ...getParentKeywords(parent),
+  ]
+    .map(singularize)
+    .filter((word) => word.length > 3 && !stopWords.has(word));
+  const values = [
+    parent.description || "",
+    ...(parent.traits || []),
+  ];
+  const words = values
+    .join(" ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map(singularize)
+    .filter((word) => word.length > 3 && !stopWords.has(word));
+  const unique = [...new Map([...nameConcepts, ...words].map((word) => [word, word])).values()];
+  return unique.length ? unique.slice(0, 5) : [parentEssence(parent)];
+}
+
+function improvisedDiscovery(parents: FusionParent[]) {
   const level = Math.max(parents[0].level, parents[1].level) + 1;
-  const forms = level <= 2
-    ? ["Rig", "Vessel", "Array", "Harness", "Module", "Apparatus"]
-    : level <= 4
-      ? ["Manifold", "Condenser", "Lattice", "Cradle", "Relay", "Chamber"]
-      : ["Singularity", "Wellspring", "Crown", "Heart", "Gate", "Halo"];
-  const form = forms[Math.abs(`${first}${second}`.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)) % forms.length];
-  const coreName = `${titleCase(first)} ${titleCase(second)} ${form}`.replace(/\s+/g, " ").slice(0, 48);
-  const traits = deriveTraits(coreName, "", [first, second, `${first} transfer`, `${second} control`], parents);
+  const index = hashText(`${parents[0].name}|${parents[1].name}|${level}`);
+  const firstConcepts = extractConcepts(parents[0]);
+  const secondConcepts = extractConcepts(parents[1]);
+  const first = firstConcepts[0];
+  const second = secondConcepts[0];
+  const interactions = [
+    { verb: "calibrates against", noun: "Gauge", trait: "calibrated response", effect: "turning the second parent's behavior into a readable change in the first parent's structure" },
+    { verb: "plates onto", noun: "Coating", trait: "reactive surface layer", effect: "forming a thin functional layer that carries both parent signatures" },
+    { verb: "filters through", noun: "Membrane", trait: "selective permeability", effect: "letting only the shared operating condition pass through the new material" },
+    { verb: "stabilizes inside", noun: "Matrix", trait: "stabilized composite", effect: "locking both parent behaviors into a controlled internal pattern" },
+    { verb: "indexes", noun: "Assay", trait: "diagnostic readout", effect: "converting contact between the parents into a measurable signal" },
+    { verb: "compresses into", noun: "Pellet", trait: "pressure-formed body", effect: "packing both parent materials into a dense usable form" },
+    { verb: "routes through", noun: "Regulator", trait: "flow regulation", effect: "using one parent's constraint to control the other's movement or release" },
+    { verb: "etches onto", noun: "Substrate", trait: "etched interface", effect: "engraving the first parent's pattern into the second parent's surface" },
+    { verb: "cultures within", noun: "Bioreactor", trait: "controlled growth", effect: "making the second parent sustain a repeatable version of the first parent's behavior" },
+    { verb: "anneals with", noun: "Laminate", trait: "layered reinforcement", effect: "bonding both parent contributions into a heat-set layered material" },
+    { verb: "charges through", noun: "Cell", trait: "stored output", effect: "turning the parents' mismatch into a small stored release of energy or motion" },
+    { verb: "maps across", noun: "Array", trait: "distributed sensing", effect: "spreading both parent behaviors across repeated readable points" },
+  ];
+  const modifiers = [
+    "Adaptive",
+    "Microcellular",
+    "Phase-Locked",
+    "Cryo-Set",
+    "Sintered",
+    "Bioactive",
+    "Pressure",
+    "Fluorescent",
+    "Indexed",
+    "Porous",
+    "Resonant",
+    "Thermal",
+  ];
+  const interaction = interactions[index % interactions.length];
+  const modifier = modifiers[Math.floor(index / interactions.length) % modifiers.length];
+  const names = [
+    `${titleWord(first)}-${titleWord(second)} ${interaction.noun}`,
+    `${modifier} ${titleWord(first)} ${interaction.noun}`,
+    `${titleWord(second)} ${modifier} ${interaction.noun}`,
+    `${titleWord(first)} ${titleWord(second)} ${interaction.noun}`,
+  ];
+  const name = cleanText(names[index % names.length], 48);
   return {
-    name: coreName,
-    description: `An invented ${form.toLowerCase()} that channels ${first} through ${second} to create a specific, usable effect beyond either parent alone.`,
-    traits,
+    name,
+    description: cleanText(`${name} forms when the ${first} properties of ${parents[0].name} ${interaction.verb} the ${second} properties of ${parents[1].name}, ${interaction.effect}.`, Infinity),
+    traits: [
+      interaction.trait,
+      `${first} interface`,
+      `${second} interface`,
+      `${parents[0].name} input`,
+      `${parents[1].name} input`,
+    ],
   };
 }
 
@@ -289,7 +389,7 @@ class ValidationService {
   static validate(result: unknown, parents: FusionParent[], parentLevel: number) {
     const extracted = extractFusionFields(result);
     const name = cleanText(extracted.name, 48);
-    const description = cleanText(extracted.description, 220);
+    const description = cleanText(extracted.description, Infinity);
     const traits = cleanTraits(extracted.traits, parents);
     if (!name || !description) {
       const keys = Object.keys(asRecord(result)).slice(0, 12).join(", ") || "none";
@@ -309,10 +409,23 @@ class ValidationService {
     if (description.split(/\s+/).length < 6) {
       throw new Error("Generated discovery description was too thin.");
     }
+    if (/\binvented\b/i.test(description)) {
+      throw new Error("Generated discovery admitted it was invented.");
+    }
+    const combinedSignalText = `${name} ${description} ${traits.join(" ")}`;
+    if (/\b(rulebound chimera|ritual object|stable result|combined function|physical traits|fusion-world object|clear cause-and-effect rule|providing traits|beverage traits)\b/i.test(combinedSignalText)) {
+      throw new Error("Generated discovery used bland fallback language.");
+    }
+    if (!parents.every((parent) => hasParentSignal(combinedSignalText, parent))) {
+      throw new Error("Generated discovery did not preserve both parent identities.");
+    }
     if (parentLevel === 0) {
       const combinedText = `${name} ${description}`.toLowerCase();
-      if (/\b(useful traits|tangible item|practical workshop kit|combines useful|generic|fusion|hybrid|combination|combined)\b/i.test(combinedText)) {
+      if (/\b(useful traits|tangible item|practical workshop kit|combines useful|generic|fusion|hybrid|combination|combined|beyond either parent alone)\b/i.test(combinedText)) {
         throw new Error("Generated discovery was too vague for a level 0 recipe.");
+      }
+      if (/\b(vessel|rig|array|harness|module|apparatus|manifold|condenser|lattice|cradle|relay|chamber)\b/i.test(name)) {
+        throw new Error("Generated discovery used a generic invented form for a level 0 recipe.");
       }
       if (/\bkit\b/i.test(name) && !/\b(first aid kit|tool kit|repair kit|sewing kit|meal kit|test kit|resin kit)\b/i.test(name)) {
         throw new Error("Generated discovery invented a generic kit for a level 0 recipe.");
@@ -320,9 +433,9 @@ class ValidationService {
       if (/\bworkstation\b/i.test(name) && !/\b(computer workstation|audio workstation|welding workstation|laboratory workstation|kitchen workstation)\b/i.test(name)) {
         throw new Error("Generated discovery invented a generic workstation for a level 0 recipe.");
       }
-      const parentKeywordHits = parents.map((parent) => getParentKeywords(parent).some((word) => normalizedName.includes(word)));
-      if (parentKeywordHits.every(Boolean)) {
-        throw new Error("Generated discovery name was mainly a joined parent-name composite.");
+      const traitText = traits.join(" ").toLowerCase();
+      if (parents.some((parent) => getParentKeywords(parent).some((word) => /\b(transfer|control|channel)\b/i.test(traitText) && traitText.includes(word)))) {
+        throw new Error("Generated discovery traits were generic parent-transfer filler.");
       }
     }
     const sharedParentWords = parents.map((parent) => {
@@ -332,9 +445,6 @@ class ValidationService {
     if (parentLevel === 0 && sharedParentWords.filter(Boolean).length === 0 && /\b(fusion|hybrid|combination|combined)\b/i.test(`${name} ${description}`)) {
       throw new Error("Generated discovery was too generic.");
     }
-    if (parentLevel === 0 && /\b(magic|mythic|spell|soul|dream|fantasy|impossible|teleport|warp)\b/i.test(`${name} ${description}`)) {
-      throw new Error("Generated discovery violated the real-world reality level.");
-    }
     return { name, description, traits: deriveTraits(name, description, traits, parents) };
   }
 }
@@ -342,8 +452,9 @@ class ValidationService {
 async function generateDiscovery(openai: OpenAI, parents: FusionParent[]) {
   const generatedText = await generateJsonText(openai, {
     system: PromptBuilder.systemPrompt(),
-    prompt: PromptBuilder.userPrompt(parents),
-    maxOutputTokens: 380,
+    prompt: PromptBuilder.userPrompt(parents, { realityOverride: "Speculative", fallbackMode: true }),
+    maxOutputTokens: 280,
+    timeoutMs: 18000,
   });
   return {
     raw: generatedText || "",
@@ -354,8 +465,9 @@ async function generateDiscovery(openai: OpenAI, parents: FusionParent[]) {
 async function generateSpeculativeFallbackDiscovery(openai: OpenAI, parents: FusionParent[]) {
   const generatedText = await generateJsonText(openai, {
     system: PromptBuilder.systemPrompt(),
-    prompt: PromptBuilder.userPrompt(parents, { realityOverride: "Near Future", fallbackMode: true }),
-    maxOutputTokens: 400,
+    prompt: PromptBuilder.userPrompt(parents, { realityOverride: "Speculative", fallbackMode: true }),
+    maxOutputTokens: 300,
+    timeoutMs: 14000,
   });
   return {
     raw: generatedText || "",
@@ -367,7 +479,8 @@ async function repairDiscovery(openai: OpenAI, parents: FusionParent[], rawRespo
   const repairedText = await generateJsonText(openai, {
     system: PromptBuilder.systemPrompt(),
     prompt: PromptBuilder.repairPrompt(parents, rawResponse),
-    maxOutputTokens: 340,
+    maxOutputTokens: 260,
+    timeoutMs: 10000,
   });
   return parseJson(repairedText || "{}");
 }
@@ -376,7 +489,8 @@ async function forceSynthesisDiscovery(openai: OpenAI, parents: FusionParent[]) 
   const generatedText = await generateJsonText(openai, {
     system: PromptBuilder.systemPrompt(),
     prompt: PromptBuilder.forcedSynthesisPrompt(parents),
-    maxOutputTokens: 420,
+    maxOutputTokens: 300,
+    timeoutMs: 14000,
   });
   return {
     raw: generatedText || "",
@@ -384,41 +498,22 @@ async function forceSynthesisDiscovery(openai: OpenAI, parents: FusionParent[]) 
   };
 }
 
-async function generateValidatedDiscovery(openai: OpenAI, parents: FusionParent[], options: { speculative?: boolean } = {}) {
+async function generateValidatedDiscovery(openai: OpenAI, parents: FusionParent[], options: { speculative?: boolean; repairJson?: boolean } = {}) {
   const generated = options.speculative
     ? await generateSpeculativeFallbackDiscovery(openai, parents)
     : await generateDiscovery(openai, parents);
   if (!generated.parsed) {
-    try {
-      const repaired = await repairDiscovery(openai, parents, generated.raw);
-      return ValidationService.validate(repaired, parents, parents[0].level);
-    } catch (repairError) {
-      if (options.speculative || (repairError instanceof Error && /without both name and description|valid JSON/i.test(repairError.message))) {
-        const forced = await forceSynthesisDiscovery(openai, parents);
-        if (forced.parsed) return ValidationService.validate(forced.parsed, parents, parents[0].level);
-        return inventedDiscovery(parents);
-      }
-      throw repairError;
-    }
+    if (!options.repairJson) throw new Error("OpenAI did not return valid Fusion JSON.");
+    const repaired = await repairDiscovery(openai, parents, generated.raw);
+    return ValidationService.validate(repaired, parents, parents[0].level);
   }
-  try {
-    return ValidationService.validate(generated.parsed, parents, parents[0].level);
-  } catch (validationError) {
-    if (!(validationError instanceof Error) || !/without both name and description/i.test(validationError.message)) {
-      throw validationError;
-    }
-    try {
-      const repaired = await repairDiscovery(openai, parents, generated.raw);
-      return ValidationService.validate(repaired, parents, parents[0].level);
-    } catch (repairError) {
-      if (options.speculative || (repairError instanceof Error && /without both name and description|valid JSON/i.test(repairError.message))) {
-        const forced = await forceSynthesisDiscovery(openai, parents);
-        if (forced.parsed) return ValidationService.validate(forced.parsed, parents, parents[0].level);
-        return inventedDiscovery(parents);
-      }
-      throw repairError;
-    }
-  }
+  return ValidationService.validate(generated.parsed, parents, parents[0].level);
+}
+
+async function generateFastFallbackDiscovery(openai: OpenAI, parents: FusionParent[]) {
+  const forced = await forceSynthesisDiscovery(openai, parents);
+  if (!forced.parsed) return improvisedDiscovery(parents);
+  return ValidationService.validate(forced.parsed, parents, parents[0].level);
 }
 
 Deno.serve(async (req) => {
@@ -445,17 +540,18 @@ Deno.serve(async (req) => {
 
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
     let lastError: unknown = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        return jsonResponse(await generateValidatedDiscovery(openai, parents));
-      } catch (error) {
-        lastError = error;
-      }
+    try {
+      return jsonResponse(await generateValidatedDiscovery(openai, parents, { repairJson: true }));
+    } catch (error) {
+      lastError = error;
     }
-    if (parents[0].level === 0 || (lastError instanceof Error && /without both name and description/i.test(lastError.message))) {
-      return jsonResponse(await generateValidatedDiscovery(openai, parents, { speculative: true }));
+    try {
+      return jsonResponse(await generateFastFallbackDiscovery(openai, parents));
+    } catch (error) {
+      lastError = error;
     }
-    throw lastError instanceof Error ? lastError : new Error("Could not validate discovery.");
+    console.warn("Using improvised Fusion fallback:", lastError);
+    return jsonResponse(improvisedDiscovery(parents));
   } catch (error) {
     console.error(error);
     return jsonResponse(describeError(error, "Could not generate Fusion discovery."), 500);

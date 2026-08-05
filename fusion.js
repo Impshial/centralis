@@ -1,44 +1,40 @@
 (() => {
-  window.centralisFusionVersion = "fusion-15";
+  window.centralisFusionVersion = "fusion-16";
   const supabase = window.centralisSupabase;
-  const SAVE_KEY = "centralis-fusion-save";
-  const SAVE_VERSION = 1;
   const BOARD_SIZE = 3200;
   const ROOT_RADIUS = 34;
   const GENERATED_RADIUS = 42;
   const COLLISION_GAP = 12;
   const MAX_LEVEL = 5;
 
-  const LEVEL_ZERO_ITEMS = [
-    "Gallon of milk", "Brick", "Bag of potting soil", "Car battery", "Fire extinguisher", "Oxygen tank", "Propane cylinder", "Bag of rice", "Loaf of bread", "Jar of honey",
-    "Box of nails", "Roll of copper wire", "Motor oil", "Windshield washer fluid", "Concrete block", "Bicycle tire", "Bowling ball", "Bag of charcoal", "Sack of flour", "Aquarium",
-    "Microwave oven", "Printer", "Chainsaw", "Guitar", "Violin", "Skateboard", "Soccer ball", "Suitcase", "Sleeping bag", "Folded camping chair",
-    "Five-gallon bucket", "Coiled garden hose", "Paint can", "Tube of silicone caulk", "Epoxy resin kit", "Pool chlorine tablets", "Bottle of bleach", "Jug of ammonia", "Box of baking soda", "Dry ice",
-    "Fertilizer pellets", "Bird seed", "Dog food", "Cat litter", "Live houseplant", "Coral fragment", "Mushroom grow kit", "Quartz crystal", "Iron ingot", "Lead brick",
-    "Bicycle chain", "Glass bottle", "Aluminum ladder", "Cinder block", "Bag of cement", "Box of cereal", "Wheelbarrow tire", "Car alternator", "Brake rotor", "Spark plug",
-    "Fuel injector", "Radiator", "Ceiling fan", "Air purifier", "Humidifier", "Dehumidifier", "Electric kettle", "Blender", "Rice cooker", "Cast iron skillet",
-    "Pressure cooker", "Dutch oven", "Ice cube tray", "Bag of coffee beans", "Maple syrup", "Olive oil", "Vinegar", "Liquid dish soap", "Laundry detergent", "Isopropyl alcohol",
-    "Hydrogen peroxide", "Acetone", "Glycerin", "Paraffin wax", "Bar of copper", "Sheet of acrylic", "Steel pipe", "PVC pipe", "Roll of fiberglass insulation", "Ceramic floor tile",
-    "Rope", "Chain", "Padlock", "Door hinge", "Bicycle pedal", "Printer ink cartridge", "Box of crayons", "Aquarium filter", "Bag of sand", "Granite countertop sample",
-  ];
-
   const els = {
     app: document.querySelector("[data-fusion-app]"),
+    home: document.querySelector("[data-fusion-home]"),
+    homeStatus: document.querySelector("[data-fusion-home-status]"),
+    homeGameCount: document.querySelector("[data-fusion-home-game-count]"),
+    homeItemCount: document.querySelector("[data-fusion-home-item-count]"),
+    homeMaxLevel: document.querySelector("[data-fusion-home-max-level]"),
+    gameGrid: document.querySelector("[data-fusion-game-grid]"),
+    newGame: document.querySelector("[data-fusion-new-game]"),
+    shell: document.querySelector("[data-fusion-shell]"),
+    gameTitle: document.querySelector("[data-fusion-game-title]"),
     board: document.querySelector("[data-fusion-board]"),
     world: document.querySelector("[data-fusion-world]"),
     panel: document.querySelector("[data-fusion-panel]"),
     tooltip: document.querySelector("[data-fusion-tooltip]"),
     status: document.querySelector("[data-fusion-status]"),
     discoveryCount: document.querySelector("[data-fusion-discovery-count]"),
-    recipeCount: document.querySelector("[data-fusion-recipe-count]"),
     maxLevel: document.querySelector("[data-fusion-max-level]"),
     zoomLabel: document.querySelector("[data-fusion-zoom-label]"),
     search: document.querySelector("[data-fusion-search]"),
   };
 
   const state = {
+    mode: "home",
+    appUser: null,
+    gameId: new URLSearchParams(window.location.search).get("game") || "",
+    game: null,
     items: [],
-    recipes: [],
     viewport: { x: 0, y: 0, zoom: 1 },
     settings: {},
     selectedId: null,
@@ -50,6 +46,7 @@
     pan: null,
     suppressClick: false,
     expandedAncestry: new Set(),
+    saveTimer: null,
   };
 
   const text = (value) => String(value ?? "");
@@ -63,6 +60,10 @@
     return window.crypto?.randomUUID ? window.crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  function asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
   function normalizePair(firstId, secondId) {
     return [firstId, secondId].sort((a, b) => a.localeCompare(b)).join("+");
   }
@@ -71,96 +72,223 @@
     return item.level === 0 ? ROOT_RADIUS : GENERATED_RADIUS + Math.min(14, item.level * 3);
   }
 
-  function buildRootItems() {
-    const columns = 10;
-    const gap = 86;
-    const startX = BOARD_SIZE / 2 - ((columns - 1) * gap) / 2;
-    const startY = BOARD_SIZE / 2 - 340;
-    return LEVEL_ZERO_ITEMS.map((name, index) => ({
-      id: `root-${String(index + 1).padStart(3, "0")}`,
-      name,
-      description: "An ordinary level 0 object with an infinite supply.",
-      level: 0,
-      parentIds: [],
-      ancestorIds: [],
-      position: {
-        x: startX + (index % columns) * gap,
-        y: startY + Math.floor(index / columns) * gap,
-      },
-      discoveredAt: null,
-      anchored: true,
-    }));
+  function setHomeStatus(message, type = "") {
+    if (!els.homeStatus) return;
+    els.homeStatus.textContent = message || "";
+    els.homeStatus.classList.toggle("is-error", type === "error");
   }
 
-  class SaveService {
-    static load() {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
-        if (!parsed || parsed.version !== SAVE_VERSION) throw new Error("No compatible save.");
-        const roots = buildRootItems();
-        const rootIds = new Set(roots.map((item) => item.id));
-        const rawGenerated = Array.isArray(parsed.items) ? parsed.items.filter((item) => !rootIds.has(item.id)) : [];
-        const itemLookup = new Map([...roots, ...rawGenerated].map((item) => [item.id, item]));
-        const generated = rawGenerated.filter((item) => !isInvalidSavedDiscovery(item)).map((item) => normalizeSavedDiscovery(item, itemLookup));
-        const validIds = new Set([...roots, ...generated].map((item) => item.id));
-        const recipes = (Array.isArray(parsed.recipes) ? parsed.recipes : []).filter((recipe) => validIds.has(recipe.resultItemId));
-        if (generated.length !== rawGenerated.length || recipes.length !== (parsed.recipes || []).length || generated.some((item) => item._wasNormalized)) {
-          localStorage.setItem(SAVE_KEY, JSON.stringify({
-            ...parsed,
-            items: generated.map(({ _wasNormalized, ...item }) => item),
-            recipes,
-            savedAt: new Date().toISOString(),
-          }));
-        }
-        return {
-          items: [...roots, ...generated.map(({ _wasNormalized, ...item }) => item)],
-          recipes,
-          viewport: parsed.viewport && typeof parsed.viewport === "object" ? parsed.viewport : null,
-          settings: parsed.settings && typeof parsed.settings === "object" ? parsed.settings : {},
-        };
-      } catch (_) {
-        return { items: buildRootItems(), recipes: [], viewport: null, settings: {} };
+  function setStatus(message, type = "") {
+    if (!els.status) return;
+    els.status.textContent = message || "";
+    els.status.classList.toggle("is-error", type === "error");
+    els.status.classList.toggle("is-success", type === "success");
+  }
+
+  async function getAppUser() {
+    if (state.appUser?.id) return state.appUser;
+    if (window.centralisGetCurrentAppUser) {
+      state.appUser = await window.centralisGetCurrentAppUser();
+    } else {
+      state.appUser = window.centralisCurrentAppUser || null;
+    }
+    if (!state.appUser?.id) throw new Error("Sign in to Centralis before using Fusion.");
+    return state.appUser;
+  }
+
+  function requireSupabase() {
+    if (!supabase) throw new Error("Supabase is not available for Fusion.");
+    return supabase;
+  }
+
+  function handleDbError(error, fallback) {
+    if (!error) return;
+    throw new Error(error.message || fallback);
+  }
+
+  class FusionDataService {
+    static async listGames() {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      const { data: games, error } = await client
+        .from("fusion_games")
+        .select("id,title,status,created_at,updated_at")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("updated_at", { ascending: false });
+      handleDbError(error, "Could not load Fusion games.");
+      const gameIds = (games || []).map((game) => game.id);
+      if (!gameIds.length) return [];
+
+      const [rootsResult, discoveriesResult] = await Promise.all([
+        client.from("fusion_game_level0_items").select("game_id,id").in("game_id", gameIds),
+        client.from("fusion_game_discoveries").select("game_id,id,level").in("game_id", gameIds),
+      ]);
+      handleDbError(rootsResult.error, "Could not load Fusion game counts.");
+      handleDbError(discoveriesResult.error, "Could not load Fusion game counts.");
+
+      const summary = new Map(gameIds.map((id) => [id, { rootCount: 0, discoveryCount: 0, maxLevel: 0 }]));
+      (rootsResult.data || []).forEach((row) => {
+        const stats = summary.get(row.game_id);
+        if (stats) rootCountPlus(stats);
+      });
+      (discoveriesResult.data || []).forEach((row) => {
+        const stats = summary.get(row.game_id);
+        if (!stats) return;
+        stats.discoveryCount += 1;
+        stats.maxLevel = Math.max(stats.maxLevel, Number(row.level) || 0);
+      });
+      return (games || []).map((game) => ({ ...game, ...(summary.get(game.id) || {}) }));
+    }
+
+    static async createGame() {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      const { data, error } = await client.rpc("create_fusion_game", { p_user_id: user.id });
+      handleDbError(error, "Could not create Fusion game.");
+      return data;
+    }
+
+    static async loadGame(gameId) {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      const { data: game, error: gameError } = await client
+        .from("fusion_games")
+        .select("id,user_id,title,status,viewport,settings,created_at,updated_at")
+        .eq("id", gameId)
+        .eq("user_id", user.id)
+        .single();
+      handleDbError(gameError, "Could not load Fusion game.");
+
+      const [rootsResult, discoveriesResult] = await Promise.all([
+        client
+          .from("fusion_game_level0_items")
+          .select("id,level0_item_id,initial_order,position_x,position_y,fusion_level0_items(name,description)")
+          .eq("game_id", gameId)
+          .order("initial_order", { ascending: true }),
+        client
+          .from("fusion_game_discoveries")
+          .select("id,name,description,traits,level,parent_item_ids,ancestor_item_ids,position_x,position_y,discovered_at")
+          .eq("game_id", gameId)
+          .order("discovered_at", { ascending: true }),
+      ]);
+      handleDbError(rootsResult.error, "Could not load Fusion starting items.");
+      handleDbError(discoveriesResult.error, "Could not load Fusion discoveries.");
+
+      const roots = (rootsResult.data || []).map((row) => ({
+        id: row.id,
+        dbTable: "fusion_game_level0_items",
+        level0ItemId: row.level0_item_id,
+        initialOrder: row.initial_order,
+        name: row.fusion_level0_items?.name || "Starting Item",
+        description: row.fusion_level0_items?.description || "A starting Fusion object.",
+        traits: [],
+        level: 0,
+        parentIds: [],
+        ancestorIds: [],
+        position: { x: Number(row.position_x) || 0, y: Number(row.position_y) || 0 },
+        discoveredAt: null,
+        anchored: true,
+      }));
+      const discoveries = (discoveriesResult.data || []).map((row) => ({
+        id: row.id,
+        dbTable: "fusion_game_discoveries",
+        name: row.name,
+        description: row.description,
+        traits: asArray(row.traits),
+        level: Number(row.level) || 1,
+        parentIds: asArray(row.parent_item_ids),
+        ancestorIds: asArray(row.ancestor_item_ids),
+        position: { x: Number(row.position_x) || 0, y: Number(row.position_y) || 0 },
+        discoveredAt: row.discovered_at,
+        anchored: false,
+      }));
+      return {
+        game,
+        items: [...roots, ...discoveries],
+        viewport: game.viewport && Object.keys(game.viewport).length ? game.viewport : null,
+        settings: game.settings && typeof game.settings === "object" ? game.settings : {},
+      };
+    }
+
+    static async updateGame(patch) {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      const { error } = await client
+        .from("fusion_games")
+        .update(patch)
+        .eq("id", state.gameId)
+        .eq("user_id", user.id);
+      handleDbError(error, "Could not save Fusion game.");
+    }
+
+    static async updateItemPosition(item) {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      const table = item.level === 0 ? "fusion_game_level0_items" : "fusion_game_discoveries";
+      const { error } = await client
+        .from(table)
+        .update({ position_x: item.position.x, position_y: item.position.y })
+        .eq("id", item.id)
+        .eq("user_id", user.id);
+      handleDbError(error, "Could not save Fusion item position.");
+    }
+
+    static async createDiscovery(first, second, generated, position) {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      const level = Math.max(first.level, second.level) + 1;
+      const ancestorIds = [...new Set([first.id, second.id, ...(first.ancestorIds || []), ...(second.ancestorIds || [])])];
+      const payload = {
+        game_id: state.gameId,
+        user_id: user.id,
+        name: generated.name,
+        description: generated.description,
+        traits: cleanTraits(generated.traits, first, second),
+        level,
+        parent_item_ids: [first.id, second.id],
+        ancestor_item_ids: ancestorIds,
+        position_x: position.x,
+        position_y: position.y,
+        discovered_at: new Date().toISOString(),
+      };
+      const { data, error } = await client
+        .from("fusion_game_discoveries")
+        .insert(payload)
+        .select("id,name,description,traits,level,parent_item_ids,ancestor_item_ids,position_x,position_y,discovered_at")
+        .single();
+      handleDbError(error, "Could not save Fusion discovery.");
+      return {
+        id: data.id,
+        dbTable: "fusion_game_discoveries",
+        name: data.name,
+        description: data.description,
+        traits: asArray(data.traits),
+        level: Number(data.level) || level,
+        parentIds: asArray(data.parent_item_ids),
+        ancestorIds: asArray(data.ancestor_item_ids),
+        position: { x: Number(data.position_x) || position.x, y: Number(data.position_y) || position.y },
+        discoveredAt: data.discovered_at,
+        anchored: false,
+      };
+    }
+
+    static async deleteDiscoveries(itemIds) {
+      const client = requireSupabase();
+      const user = await getAppUser();
+      if (itemIds.length) {
+        const { error } = await client
+          .from("fusion_game_discoveries")
+          .delete()
+          .eq("user_id", user.id)
+          .in("id", itemIds);
+        handleDbError(error, "Could not delete Fusion discoveries.");
       }
     }
-
-    static save() {
-      const rootIds = new Set(LEVEL_ZERO_ITEMS.map((_, index) => `root-${String(index + 1).padStart(3, "0")}`));
-      localStorage.setItem(SAVE_KEY, JSON.stringify({
-        version: SAVE_VERSION,
-        savedAt: new Date().toISOString(),
-        items: state.items.filter((item) => !rootIds.has(item.id)),
-        recipes: state.recipes,
-        viewport: state.viewport,
-        settings: state.settings,
-      }));
-    }
   }
 
-  function isInvalidSavedDiscovery(item) {
-    if (!item || item.level < 1) return false;
-    const name = text(item.name).toLowerCase();
-    const description = text(item.description).toLowerCase();
-    if (/\b(useful traits|tangible item|practical workshop kit|combines useful)\b/.test(description)) return true;
-    if (/\b\w+\s+\w+\s+kit\b/.test(name) && /\bcombines\b/.test(description)) return true;
-    if (/\b(prototype|processor|engine|device)\b/.test(name) && /\b(physical traits|combined function|uses the .* and .*)\b/.test(description)) return true;
-    if (/\bworkstation\b/.test(name) && !/\b(computer workstation|audio workstation|welding workstation|laboratory workstation|kitchen workstation)\b/.test(name)) return true;
-    return false;
-  }
-
-  class RecipeRepository {
-    static find(firstId, secondId) {
-      const key = normalizePair(firstId, secondId);
-      return state.recipes.find((recipe) => recipe.key === key) || null;
-    }
-
-    static add(firstId, secondId, resultId) {
-      const key = normalizePair(firstId, secondId);
-      const existing = state.recipes.find((recipe) => recipe.key === key);
-      if (existing) return existing;
-      const recipe = { key, parentItemIds: [firstId, secondId], resultItemId: resultId, createdAt: new Date().toISOString() };
-      state.recipes.push(recipe);
-      return recipe;
-    }
+  function rootCountPlus(stats) {
+    stats.rootCount += 1;
   }
 
   class DiscoveryRepository {
@@ -182,21 +310,17 @@
       return deleteIds;
     }
 
-    static deleteItem(itemId) {
+    static async deleteItem(itemId) {
       const item = state.items.find((candidate) => candidate.id === itemId);
       if (!item || item.level === 0) return { deleted: 0 };
       const deleteIds = this.getDeleteCascade(itemId);
+      await FusionDataService.deleteDiscoveries([...deleteIds]);
       state.items = state.items.filter((candidate) => !deleteIds.has(candidate.id));
-      state.recipes = state.recipes.filter((recipe) => {
-        const parentIds = Array.isArray(recipe.parentItemIds) ? recipe.parentItemIds : [];
-        return !deleteIds.has(recipe.resultItemId) && !parentIds.some((id) => deleteIds.has(id));
-      });
       if (deleteIds.has(state.selectedId)) state.selectedId = null;
       if (deleteIds.has(state.highlightedId)) state.highlightedId = null;
       [...state.expandedAncestry].forEach((id) => {
         if (deleteIds.has(id)) state.expandedAncestry.delete(id);
       });
-      SaveService.save();
       return { deleted: deleteIds.size };
     }
   }
@@ -233,21 +357,14 @@
     }
 
     static async combine(first, second, dropPoint) {
-      const existingRecipe = RecipeRepository.find(first.id, second.id);
-      if (existingRecipe) {
-        const existing = state.items.find((item) => item.id === existingRecipe.resultItemId);
-        if (existing) return { item: existing, reused: true };
-      }
-
       const key = normalizePair(first.id, second.id);
       state.loadingRecipeKey = key;
       renderLoadingCircle(dropPoint);
       setStatus("Generating discovery...");
       try {
         const generated = await OpenAIService.generate(first, second);
-        const item = DiscoveryService.create(first, second, generated, dropPoint);
-        RecipeRepository.add(first.id, second.id, item.id);
-        return { item, reused: false };
+        const item = await DiscoveryService.create(first, second, generated, dropPoint);
+        return { item };
       } finally {
         state.loadingRecipeKey = null;
       }
@@ -256,9 +373,7 @@
 
   class OpenAIService {
     static async generate(first, second) {
-      if (!supabase) {
-        throw new Error("Sign in to Centralis before generating Fusion discoveries.");
-      }
+      if (!supabase) throw new Error("Sign in to Centralis before generating Fusion discoveries.");
       const { data, error } = await supabase.functions.invoke("generate-fusion-discovery", {
         body: {
           parents: [serializeParent(first), serializeParent(second)],
@@ -280,23 +395,11 @@
   }
 
   class DiscoveryService {
-    static create(first, second, generated, dropPoint) {
+    static async create(first, second, generated, dropPoint) {
       const level = Math.max(first.level, second.level) + 1;
       const radius = GENERATED_RADIUS + Math.min(14, level * 3);
       const position = CollisionService.findOpenPosition(dropPoint.x, dropPoint.y, radius);
-      const ancestorIds = [...new Set([first.id, second.id, ...(first.ancestorIds || []), ...(second.ancestorIds || [])])];
-      const item = {
-        id: createId("fusion-item"),
-        name: generated.name,
-        description: generated.description,
-        traits: cleanTraits(generated.traits, first, second),
-        level,
-        parentIds: [first.id, second.id],
-        ancestorIds,
-        position,
-        discoveredAt: new Date().toISOString(),
-        anchored: false,
-      };
+      const item = await FusionDataService.createDiscovery(first, second, generated, position);
       state.items.push(item);
       return item;
     }
@@ -304,10 +407,8 @@
 
   function serializeParent(item) {
     const payload = { id: item.id, name: item.name, level: item.level };
-    if (item.level > 0) {
-      payload.description = item.description;
-      payload.traits = cleanTraits(item.traits, ...getParents(item));
-    }
+    if (item.description) payload.description = item.description;
+    if (item.level > 0) payload.traits = cleanTraits(item.traits, ...getParents(item));
     return payload;
   }
 
@@ -316,7 +417,7 @@
   }
 
   function cleanDescription(value) {
-    return text(value).replace(/\s+/g, " ").trim().slice(0, 180) || "A newly discovered fusion of its parent objects.";
+    return text(value).replace(/\s+/g, " ").trim() || "A newly discovered fusion of its parent objects.";
   }
 
   function cleanTraits(value, ...fallbackParents) {
@@ -335,38 +436,19 @@
     return [...new Map([...unique, ...fallback].map((trait) => [trait.toLowerCase(), trait])).values()].slice(0, 6);
   }
 
-  function normalizeSavedDiscovery(item, lookup = null) {
-    const parents = (item.parentIds || [])
-      .map((id) => lookup?.get?.(id) || state.items.find((candidate) => candidate.id === id))
-      .filter(Boolean);
-    const traits = deriveTraits(item, parents);
-    const wasNormalized = !Array.isArray(item.traits) || item.traits.join("|") !== traits.join("|");
-    return { ...item, traits, _wasNormalized: wasNormalized };
-  }
-
-  function deriveTraits(item, parents = []) {
-    const direct = cleanTraits(item.traits, ...parents);
-    if (direct.length >= 3) return direct;
-    const keywordTraits = [
-      ...direct,
-      ...parents.flatMap((parent) => [parent.name, ...(parent.traits || [])]),
-      item.name,
-      item.description,
-    ]
-      .flatMap((value) => text(value).toLowerCase().split(/[^a-z0-9]+/))
-      .filter((word) => word.length > 3 && !["with", "from", "level", "object", "ordinary", "supply", "newly", "discovered", "parent", "objects"].includes(word));
-    return [...new Map(keywordTraits.map((trait) => [trait.toLowerCase(), trait])).values()].slice(0, 6);
-  }
-
   function getParents(item) {
     return (item.parentIds || []).map((id) => state.items.find((candidate) => candidate.id === id)).filter(Boolean);
   }
 
-  function setStatus(message, type = "") {
-    if (!els.status) return;
-    els.status.textContent = message || "";
-    els.status.classList.toggle("is-error", type === "error");
-    els.status.classList.toggle("is-success", type === "success");
+  function getAncestorHighlightIds() {
+    const item = state.items.find((candidate) => candidate.id === state.selectedId);
+    if (!item || item.level === 0) return new Set();
+    return new Set([...(item.parentIds || []), ...(item.ancestorIds || [])]);
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "Unknown";
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
   }
 
   function worldToScreen(point) {
@@ -394,11 +476,24 @@
   }
 
   function applyViewport() {
+    if (!els.world) return;
     els.world.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
     if (els.zoomLabel) els.zoomLabel.textContent = `${Math.round(state.viewport.zoom * 100)}%`;
   }
 
-  function resetView() {
+  function scheduleGameSave(patch = {}) {
+    state.game = { ...(state.game || {}), ...patch };
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = window.setTimeout(() => {
+      FusionDataService.updateGame({
+        viewport: state.viewport,
+        settings: state.settings,
+        ...patch,
+      }).catch((error) => setStatus(error.message, "error"));
+    }, 250);
+  }
+
+  async function resetView({ persist = true } = {}) {
     const rect = els.board.getBoundingClientRect();
     state.viewport = {
       x: rect.width / 2 - BOARD_SIZE / 2,
@@ -406,10 +501,10 @@
       zoom: Math.min(1, Math.max(0.62, rect.width / 940)),
     };
     applyViewport();
-    SaveService.save();
+    if (persist) scheduleGameSave();
   }
 
-  function sortFusions() {
+  async function sortFusions() {
     const generated = state.items.filter((item) => item.level > 0).sort((a, b) => {
       if (a.level !== b.level) return a.level - b.level;
       return new Date(a.discoveredAt || 0).getTime() - new Date(b.discoveredAt || 0).getTime()
@@ -439,11 +534,15 @@
       });
     });
 
-    SaveService.save();
-    render();
-    const first = generated[0];
-    if (first) centerItemIfNeeded(first);
-    setStatus("Fusions sorted by level.", "success");
+    try {
+      await Promise.all(generated.map((item) => FusionDataService.updateItemPosition(item)));
+      render();
+      const first = generated[0];
+      if (first) centerItemIfNeeded(first);
+      setStatus("Fusions sorted by level.", "success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not save sorted fusions.", "error");
+    }
   }
 
   function zoomBy(delta, center = null) {
@@ -457,7 +556,7 @@
     state.viewport.x = screen.x - rect.left - before.x * nextZoom;
     state.viewport.y = screen.y - rect.top - before.y * nextZoom;
     applyViewport();
-    SaveService.save();
+    scheduleGameSave();
   }
 
   function render() {
@@ -470,12 +569,15 @@
 
   function renderItem(item) {
     const radius = radiusFor(item);
+    const ancestorIds = getAncestorHighlightIds();
     const isSelected = state.selectedId === item.id;
     const isHighlighted = state.highlightedId === item.id;
+    const isAncestor = ancestorIds.has(item.id);
     const isFiltered = state.searchQuery && !itemMatchesSearch(item, state.searchQuery);
     const classes = ["fusion-item", item.level === 0 ? "is-root" : "is-generated"];
     if (isSelected) classes.push("is-selected");
     if (isHighlighted) classes.push("is-highlighted");
+    if (isAncestor) classes.push("is-ancestor");
     if (isFiltered) classes.push("is-filtered");
     return `
       <button class="${classes.join(" ")}" type="button" data-fusion-item="${html(item.id)}" style="--x:${item.position.x}px;--y:${item.position.y}px;--r:${radius}px;" aria-label="${html(item.name)}">
@@ -549,7 +651,6 @@
 
   function syncStats() {
     if (els.discoveryCount) els.discoveryCount.textContent = String(state.items.length);
-    if (els.recipeCount) els.recipeCount.textContent = String(state.recipes.length);
     if (els.maxLevel) els.maxLevel.textContent = String(Math.max(...state.items.map((item) => item.level), 0));
   }
 
@@ -584,7 +685,7 @@
         </section>
       ` : ""}
       <dl class="fusion-detail-list">
-        <div><dt>Discovered</dt><dd>${item.discoveredAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.discoveredAt)) : "Starting item"}</dd></div>
+        <div><dt>Discovered</dt><dd>${item.discoveredAt ? formatDateTime(item.discoveredAt) : "Starting item"}</dd></div>
         <div><dt>Parents</dt><dd>${parents.length ? parents.map((parent) => html(parent.name)).join(" + ") : "Original supply"}</dd></div>
         <div><dt>Ancestry</dt><dd>${item.ancestorIds?.length || 0} stored ancestor${(item.ancestorIds?.length || 0) === 1 ? "" : "s"}</dd></div>
       </dl>
@@ -614,14 +715,14 @@
   }
 
   function showTooltip(item, event) {
-    if (!els.tooltip || item.level === 0) return;
+    if (!els.tooltip) return;
     const parents = getParents(item).map((parent) => parent.name);
     const traits = cleanTraits(item.traits, ...getParents(item));
     els.tooltip.innerHTML = `
       <strong>${html(item.name)}</strong>
       <span>${html(item.description)}</span>
-      ${traits.length ? `<span class="fusion-tooltip-traits">${traits.slice(0, 4).map((trait) => html(trait)).join(" / ")}</span>` : ""}
-      <small>Level ${item.level}${parents.length ? ` from ${html(parents.join(" + "))}` : ""}</small>
+      ${item.level > 0 && traits.length ? `<span class="fusion-tooltip-traits">${traits.slice(0, 4).map((trait) => html(trait)).join(" / ")}</span>` : ""}
+      <small>${item.level > 0 ? `Level ${item.level}${parents.length ? ` from ${html(parents.join(" + "))}` : ""}` : `Starting item #${item.initialOrder || ""}`}</small>
     `;
     els.tooltip.hidden = false;
     positionTooltip(event);
@@ -657,8 +758,7 @@
       removeDragGhost();
     }
     updateDropFeedback(null);
-    if (!drag) return;
-    if (!drag.moved) return;
+    if (!drag?.moved) return;
     const source = state.items.find((item) => item.id === drag.sourceId);
     const target = itemAtScreenPoint(event.clientX, event.clientY, source?.id);
     const dropPoint = screenToWorld({ x: event.clientX, y: event.clientY });
@@ -668,9 +768,13 @@
     }
     if (!target && source.level > 0) {
       source.position = CollisionService.findOpenPosition(dropPoint.x, dropPoint.y, radiusFor(source), new Set([source.id]));
-      SaveService.save();
-      render();
-      setStatus("Discovery moved.", "success");
+      try {
+        await FusionDataService.updateItemPosition(source);
+        render();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Could not save item position.", "error");
+        render();
+      }
       return;
     }
     if (!target || !FusionService.canCombine(source, target)) {
@@ -679,13 +783,12 @@
       return;
     }
     try {
-      const { item, reused } = await FusionService.combine(source, target, dropPoint);
+      const { item } = await FusionService.combine(source, target, dropPoint);
       state.selectedId = item.id;
       state.highlightedId = item.id;
-      SaveService.save();
       render();
       centerItem(item);
-      setStatus(reused ? "Existing discovery found." : "Discovery saved.", reused ? "" : "success");
+      setStatus("Discovery saved.", "success");
       window.setTimeout(() => {
         state.highlightedId = null;
         render();
@@ -709,10 +812,12 @@
     state.viewport.x = rect.width / 2 - item.position.x * state.viewport.zoom;
     state.viewport.y = rect.height / 2 - item.position.y * state.viewport.zoom;
     applyViewport();
-    SaveService.save();
+    scheduleGameSave();
   }
 
-  function bindEvents() {
+  function bindGameEvents() {
+    if (!els.board || els.board.dataset.fusionBound) return;
+    els.board.dataset.fusionBound = "true";
     els.board.addEventListener("pointerdown", (event) => {
       const itemNode = event.target.closest("[data-fusion-item]");
       if (itemNode) {
@@ -722,12 +827,15 @@
         itemNode.setPointerCapture?.(event.pointerId);
         return;
       }
-      state.pan = { startX: event.clientX, startY: event.clientY, x: state.viewport.x, y: state.viewport.y };
+      state.pan = { startX: event.clientX, startY: event.clientY, x: state.viewport.x, y: state.viewport.y, moved: false };
       els.board.setPointerCapture?.(event.pointerId);
     });
 
     window.addEventListener("pointermove", (event) => {
       if (state.pan) {
+        if (!state.pan.moved && Math.hypot(event.clientX - state.pan.startX, event.clientY - state.pan.startY) > 6) {
+          state.pan.moved = true;
+        }
         state.viewport.x = state.pan.x + event.clientX - state.pan.startX;
         state.viewport.y = state.pan.y + event.clientY - state.pan.startY;
         applyViewport();
@@ -748,8 +856,9 @@
 
     window.addEventListener("pointerup", (event) => {
       if (state.pan) {
+        state.suppressClick = Boolean(state.pan.moved);
         state.pan = null;
-        SaveService.save();
+        scheduleGameSave();
       }
       if (state.drag) handleDrop(event);
     });
@@ -760,9 +869,13 @@
         return;
       }
       const itemNode = event.target.closest("[data-fusion-item]");
-      if (!itemNode) return;
+      if (!itemNode) {
+        state.selectedId = null;
+        render();
+        return;
+      }
       state.selectedId = itemNode.dataset.fusionItem;
-      renderPanel();
+      render();
     });
 
     els.board.addEventListener("mouseover", (event) => {
@@ -788,11 +901,11 @@
       render();
       setStatus(state.searchQuery ? "Non-matching items are dimmed." : "");
     });
-    document.addEventListener("click", (event) => {
+    document.addEventListener("click", async (event) => {
       const closePanel = event.target.closest("[data-fusion-close-panel]");
       if (closePanel) {
         state.selectedId = null;
-        renderPanel();
+        render();
       }
       const deleteButton = event.target.closest("[data-fusion-delete-item]");
       if (deleteButton) {
@@ -803,9 +916,13 @@
           ? `Delete "${item.name}" and ${cascade.size - 1} descendant discover${cascade.size - 1 === 1 ? "y" : "ies"}?`
           : `Delete "${item.name}"?`;
         if (!window.confirm(message)) return;
-        const result = DiscoveryRepository.deleteItem(item.id);
-        render();
-        setStatus(result.deleted > 1 ? `Deleted ${result.deleted} discoveries.` : "Discovery deleted.", "success");
+        try {
+          const result = await DiscoveryRepository.deleteItem(item.id);
+          render();
+          setStatus(result.deleted > 1 ? `Deleted ${result.deleted} discoveries.` : "Discovery deleted.", "success");
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : "Could not delete discovery.", "error");
+        }
         return;
       }
       const toggle = event.target.closest("[data-fusion-ancestry-toggle]");
@@ -819,25 +936,90 @@
   }
 
   function exportSave() {
-    const blob = new Blob([localStorage.getItem(SAVE_KEY) || "{}"], { type: "application/json" });
+    const payload = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      game: state.game,
+      items: state.items,
+      viewport: state.viewport,
+      settings: state.settings,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `centralis-fusion-save-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `centralis-fusion-game-${state.gameId || "export"}-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
-  function init() {
+  function renderHome(games) {
+    const totalItems = games.reduce((sum, game) => sum + (game.rootCount || 0) + (game.discoveryCount || 0), 0);
+    const maxLevel = games.reduce((max, game) => Math.max(max, game.maxLevel || 0), 0);
+    if (els.homeGameCount) els.homeGameCount.textContent = String(games.length);
+    if (els.homeItemCount) els.homeItemCount.textContent = String(totalItems);
+    if (els.homeMaxLevel) els.homeMaxLevel.textContent = String(maxLevel);
+    if (!els.gameGrid) return;
+    if (!games.length) {
+      els.gameGrid.innerHTML = `<div class="fusion-empty-state">No saved Fusion games yet.</div>`;
+      return;
+    }
+    els.gameGrid.innerHTML = games.map((game, index) => {
+      const title = game.title && game.title !== "Fusion Game" ? game.title : `Fusion Game ${games.length - index}`;
+      const itemCount = (game.rootCount || 0) + (game.discoveryCount || 0);
+      return `
+        <a class="fusion-game-card" href="fusion.html?game=${encodeURIComponent(game.id)}">
+          <div>
+            <h2>${html(title)}</h2>
+            <p>Updated ${html(formatDateTime(game.updated_at))}</p>
+          </div>
+          <div class="fusion-game-card-stats">
+            <span><strong>${itemCount}</strong> Items</span>
+            <span><strong>${game.maxLevel || 0}</strong> Max</span>
+          </div>
+          <p>Started ${html(formatDateTime(game.created_at))}</p>
+        </a>
+      `;
+    }).join("");
+  }
+
+  async function showHome() {
+    state.mode = "home";
+    document.body.classList.add("is-fusion-home");
+    els.home.hidden = false;
+    els.shell.hidden = true;
+    if (els.panel) els.panel.hidden = true;
+    setHomeStatus("Loading saved games...");
+    try {
+      const games = await FusionDataService.listGames();
+      renderHome(games);
+      setHomeStatus("");
+    } catch (error) {
+      renderHome([]);
+      setHomeStatus(error instanceof Error ? error.message : "Could not load Fusion games.", "error");
+    }
+  }
+
+  async function showGame(gameId) {
+    state.mode = "game";
+    document.body.classList.remove("is-fusion-home");
+    els.home.hidden = true;
+    els.shell.hidden = false;
     if (!els.app || !els.board || !els.world) return;
-    const save = SaveService.load();
+    setStatus("Loading Fusion game...");
+    const save = await FusionDataService.loadGame(gameId);
+    state.gameId = gameId;
+    state.game = save.game;
     state.items = save.items;
-    state.recipes = save.recipes;
     state.settings = save.settings;
+    state.selectedId = null;
+    state.highlightedId = null;
+    state.expandedAncestry = new Set();
+    if (els.gameTitle) els.gameTitle.textContent = save.game.title || "Fusion";
     els.world.style.width = `${BOARD_SIZE}px`;
     els.world.style.height = `${BOARD_SIZE}px`;
     render();
-    bindEvents();
+    bindGameEvents();
     requestAnimationFrame(() => {
       if (save.viewport) {
         state.viewport = {
@@ -851,6 +1033,38 @@
       }
     });
     setStatus("Drag one circle onto another same-level circle. Fusion currently supports levels 0-5.");
+  }
+
+  function bindHomeEvents() {
+    els.newGame?.addEventListener("click", async () => {
+      if (els.newGame.disabled) return;
+      els.newGame.disabled = true;
+      setHomeStatus("Creating a new Fusion game...");
+      try {
+        const gameId = await FusionDataService.createGame();
+        window.location.href = `fusion.html?game=${encodeURIComponent(gameId)}`;
+      } catch (error) {
+        setHomeStatus(error instanceof Error ? error.message : "Could not create Fusion game.", "error");
+        els.newGame.disabled = false;
+      }
+    });
+  }
+
+  async function init() {
+    if (!els.app) return;
+    bindHomeEvents();
+    try {
+      await getAppUser();
+      if (state.gameId) await showGame(state.gameId);
+      else await showHome();
+    } catch (error) {
+      if (state.gameId) {
+        els.shell.hidden = false;
+        setStatus(error instanceof Error ? error.message : "Could not initialize Fusion.", "error");
+      } else {
+        await showHome();
+      }
+    }
   }
 
   init();

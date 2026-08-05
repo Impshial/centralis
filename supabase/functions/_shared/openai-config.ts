@@ -46,6 +46,7 @@ export async function generateJsonText(
     prompt: string;
     temperature?: number;
     maxOutputTokens?: number;
+    timeoutMs?: number;
   },
 ) {
   const input: ResponseInputMessage[] = [
@@ -53,7 +54,7 @@ export async function generateJsonText(
     { role: "user", content: options.prompt },
   ];
 
-  const response = await client.responses.create({
+  const request = client.responses.create({
     model: TEXT_MODEL,
     input,
     text: {
@@ -62,6 +63,13 @@ export async function generateJsonText(
     ...(TEXT_MODEL_SUPPORTS_TEMPERATURE && typeof options.temperature === "number" ? { temperature: options.temperature } : {}),
     ...(typeof options.maxOutputTokens === "number" ? { max_output_tokens: options.maxOutputTokens } : {}),
   });
+
+  const response = typeof options.timeoutMs === "number"
+    ? await Promise.race([
+      request,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI request timed out.")), options.timeoutMs)),
+    ])
+    : await request;
 
   return getResponseOutputText(response);
 }

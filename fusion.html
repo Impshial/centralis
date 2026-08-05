@@ -6,7 +6,7 @@
   <title>Fusion | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=fusion-15">
+  <link rel="stylesheet" href="styles.css?v=fusion-16">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -15,11 +15,41 @@
     <header class="site-header" aria-label="Centralis main header"></header>
 
     <main class="fusion-page" data-fusion-app>
-      <section class="fusion-shell">
-        <header class="fusion-topbar">
+      <section class="fusion-home" data-fusion-home hidden>
+        <header class="fusion-home-header">
           <div>
             <p class="module-kicker">Entertainment</p>
             <h1>Fusion</h1>
+            <p>Build a saved discovery board from 100 random starting objects.</p>
+          </div>
+          <button class="primary-action" type="button" data-fusion-new-game>
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            <span>New Game</span>
+          </button>
+        </header>
+        <section class="fusion-home-summary" aria-label="Fusion summary">
+          <div>
+            <strong data-fusion-home-game-count>0</strong>
+            <span>Saved Games</span>
+          </div>
+          <div>
+            <strong data-fusion-home-item-count>0</strong>
+            <span>Total Items</span>
+          </div>
+          <div>
+            <strong data-fusion-home-max-level>0</strong>
+            <span>Highest Level</span>
+          </div>
+        </section>
+        <section class="fusion-game-grid" data-fusion-game-grid aria-label="Saved Fusion games"></section>
+        <p class="fusion-home-status" data-fusion-home-status role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="fusion-shell" data-fusion-shell hidden>
+        <header class="fusion-topbar">
+          <div>
+            <p class="module-kicker">Entertainment</p>
+            <h1 data-fusion-game-title>Fusion</h1>
           </div>
           <label class="fusion-search" aria-label="Search Fusion items">
             <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
@@ -27,10 +57,13 @@
           </label>
           <div class="fusion-stats" aria-label="Fusion statistics">
             <span><strong data-fusion-discovery-count>100</strong> Items</span>
-            <span><strong data-fusion-recipe-count>0</strong> Recipes</span>
             <span><strong data-fusion-max-level>0</strong> Max Level</span>
           </div>
           <div class="fusion-actions">
+            <a class="secondary-action" href="fusion.html" data-fusion-home-link title="Fusion home">
+              <ph-cards weight="bold" aria-hidden="true"></ph-cards>
+              <span>Games</span>
+            </a>
             <button class="secondary-action" type="button" data-fusion-sort title="Sort fusions">
               <ph-stack weight="bold" aria-hidden="true"></ph-stack>
               <span>Sort Fusions</span>
@@ -65,6 +98,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=fusion-nav-1"></script>
-  <script src="fusion.js?v=fusion-15"></script>
+  <script src="fusion.js?v=fusion-16"></script>
 </body>
 </html>
