@@ -20701,6 +20701,20 @@ body.is-deleting-image-session .app-shell {
 .image-generation-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .image-generation-attachment { display: inline-flex; align-items: center; gap: 6px; min-width: 0; border: 1px solid var(--border-color, #2d444e); border-radius: 6px; padding: 4px 7px 4px 4px; font-size: .78rem; }
 .image-generation-attachment img { display: block; width: 26px; height: 26px; flex: 0 0 auto; object-fit: cover; border-radius: 3px; background: #091115; }
+.image-generation-attachment.is-uploading {
+  color: var(--muted-text, #aebbc2);
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 52%, var(--border-color, #2d444e));
+  background: color-mix(in srgb, var(--accent, #78d5c8) 8%, transparent);
+}
+.image-generation-attachment-spinner {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in srgb, var(--accent, #78d5c8) 22%, transparent);
+  border-top-color: var(--accent, #78d5c8);
+  border-radius: 50%;
+  animation: image-generation-spin 850ms linear infinite;
+}
 .image-generation-attachment span { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .image-generation-attachment button { all: unset; cursor: pointer; color: var(--muted-text, #aebbc2); }
 .image-generation-message-references { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }

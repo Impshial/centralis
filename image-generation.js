@@ -59,7 +59,7 @@
     deletingSession: document.querySelector("[data-image-deleting-session]"),
   };
 
-  const state = { user: null, sessions: [], session: null, messages: [], assets: [], selectedAsset: null, viewerAsset: null, viewerZoom: 1, viewerFitWidth: 0, viewerFitHeight: 0, selectedReferences: new Set(), busy: false, activeGeneration: null, modelCatalog: [] };
+  const state = { user: null, sessions: [], session: null, messages: [], assets: [], selectedAsset: null, viewerAsset: null, viewerZoom: 1, viewerFitWidth: 0, viewerFitHeight: 0, selectedReferences: new Set(), pendingReferenceUploads: [], busy: false, activeGeneration: null, modelCatalog: [] };
   const ACTIVE_GENERATION_WINDOW_MS = 20 * 60 * 1000;
   const DEFAULT_MODEL_SETTINGS = { provider: "openai", model: "gpt-image-2", n: 1, size: "auto", width: "", height: "", quality: "auto", format: "png", compression: 90, background: "auto", style_preset: "", negative_prompt: "", seed: "", cfg_scale: "", steps: "", enable_web_search: false, hide_watermark: false, moderation: "low" };
   const CLIENT_IMAGE_MODEL_CATALOG = [
@@ -472,10 +472,26 @@
     els.status.classList.toggle("is-error", isError);
   }
 
+  function hasPendingReferenceUploads() {
+    return state.pendingReferenceUploads.some((upload) => upload.sessionId === state.session?.id);
+  }
+
+  function syncComposerControls() {
+    const uploadBusy = hasPendingReferenceUploads();
+    const canSend = Boolean(state.session && !state.busy && !uploadBusy && els.prompt.value.trim());
+    const model = getCurrentModel();
+    const referencesEnabled = Boolean(model?.supportsReferences);
+    const attachButton = document.querySelector(".image-generation-attach-button");
+    els.send.disabled = !canSend;
+    if (els.fileInput) els.fileInput.disabled = uploadBusy || !referencesEnabled || !state.session;
+    attachButton?.classList.toggle("is-disabled", uploadBusy || !referencesEnabled || !state.session);
+    attachButton?.setAttribute("aria-disabled", uploadBusy || !referencesEnabled || !state.session ? "true" : "false");
+  }
+
   function setBusy(busy) {
     state.busy = busy;
-    els.send.disabled = busy || !state.session;
-    els.send.querySelector("span").textContent = busy ? "Generating…" : "Send";
+    els.send.querySelector("span").textContent = busy ? "Generating..." : "Send";
+    syncComposerControls();
   }
 
   function clearComposerError() {
@@ -521,6 +537,7 @@
   function autoResize() {
     els.prompt.style.height = "auto";
     els.prompt.style.height = `${Math.min(152, Math.max(42, els.prompt.scrollHeight))}px`;
+    syncComposerControls();
   }
 
   function renderSessions() {
@@ -727,6 +744,7 @@
       els.referenceOptions.innerHTML = "";
       els.referenceCount.textContent = "Unavailable";
       els.attachments.hidden = true;
+      syncComposerControls();
       return;
     }
     const options = state.assets.filter((asset) => asset.preview_url);
@@ -736,13 +754,20 @@
       </button>`).join("") : '<span>No session images yet.</span>';
     els.referenceCount.textContent = `${state.selectedReferences.size} selected${model ? ` / ${model.maxReferences}` : ""}`;
     const selected = state.assets.filter((asset) => state.selectedReferences.has(asset.id));
-    els.attachments.hidden = !selected.length;
-    els.attachments.innerHTML = selected.map((asset) => `<span class="image-generation-attachment">
+    const pending = state.pendingReferenceUploads.filter((upload) => upload.sessionId === state.session?.id);
+    els.attachments.hidden = !selected.length && !pending.length;
+    const pendingMarkup = pending.map((upload) => `<span class="image-generation-attachment is-uploading" title="Uploading ${html(upload.name)}">
+      <span class="image-generation-attachment-spinner" aria-hidden="true"></span>
+      <span>${html(upload.name)}</span>
+    </span>`).join("");
+    const selectedMarkup = selected.map((asset) => `<span class="image-generation-attachment">
       <img src="${asset.preview_url}" alt="${html(asset.original_filename)}">
       <span>${html(asset.original_filename)}</span>
       <button type="button" data-image-remove-reference="${asset.id}" aria-label="Remove ${html(asset.original_filename)}">&times;</button>
     </span>`).join("");
+    els.attachments.innerHTML = `${pendingMarkup}${selectedMarkup}`;
     syncOutputCountForReferences();
+    syncComposerControls();
   }
 
   function renderSessionThumbnails() {
@@ -993,21 +1018,57 @@
     if (sessionId) await openSession(sessionId);
   }
 
+
   async function uploadFiles(files) {
     if (!files.length || !state.session) return;
-    const form = new FormData(); form.set("sessionId", state.session.id);
-    [...files].forEach((file) => form.append("files", file));
-    setStatus("Uploading references…");
-    const { data, error } = await supabase.functions.invoke("upload-image-generation-reference", { body: form });
-    if (error) throw new Error(error.message || "Could not upload references.");
-    for (const asset of data.assets || []) { state.assets.push(asset); state.selectedReferences.add(asset.id); }
-    setStatus("Ready"); renderReferenceOptions();
+    if (hasPendingReferenceUploads()) return;
+    const uploadSessionId = state.session.id;
+    const model = getCurrentModel();
+    if (!model?.supportsReferences) throw new Error(`${model?.label || "This model"} does not support reference images.`);
+    const remainingSlots = Math.max(0, model.maxReferences - state.selectedReferences.size);
+    const selectedFiles = [...files].filter((file) => file.type.startsWith("image/")).slice(0, remainingSlots);
+    if (!selectedFiles.length) {
+      if (remainingSlots <= 0) throw new Error(`Select no more than ${model.maxReferences} references for ${model.label}.`);
+      return;
+    }
+    const pendingUploads = selectedFiles.map((file, index) => ({
+      id: `pending-reference-${Date.now()}-${index}`,
+      sessionId: uploadSessionId,
+      name: file.name || `Reference image ${index + 1}`,
+      size: file.size || 0,
+    }));
+    state.pendingReferenceUploads.push(...pendingUploads);
+    setStatus(selectedFiles.length === 1 ? "Uploading reference..." : `Uploading ${selectedFiles.length} references...`);
+    renderReferenceOptions();
+    const form = new FormData();
+    form.set("sessionId", uploadSessionId);
+    selectedFiles.forEach((file) => form.append("files", file));
+    try {
+      const { data, error } = await supabase.functions.invoke("upload-image-generation-reference", { body: form });
+      if (error) throw new Error(error.message || "Could not upload references.");
+      if (isActiveSession(uploadSessionId)) {
+        for (const asset of data.assets || []) {
+          state.assets.push(asset);
+          state.selectedReferences.add(asset.id);
+        }
+        setStatus("Ready");
+      }
+    } finally {
+      const pendingIds = new Set(pendingUploads.map((upload) => upload.id));
+      state.pendingReferenceUploads = state.pendingReferenceUploads.filter((upload) => !pendingIds.has(upload.id));
+      if (isActiveSession(uploadSessionId)) renderReferenceOptions();
+    }
   }
 
   async function sendPrompt(event) {
     event.preventDefault();
     const generationStartedAt = new Date().toISOString();
     if (state.busy) return;
+    if (hasPendingReferenceUploads()) {
+      setComposerError("Wait for reference images to finish uploading before sending.");
+      syncComposerControls();
+      return;
+    }
     const prompt = els.prompt.value.trim();
     els.error.textContent = "";
     const model = getCurrentModel();
