@@ -757,7 +757,7 @@
     const pending = state.pendingReferenceUploads.filter((upload) => upload.sessionId === state.session?.id);
     els.attachments.hidden = !selected.length && !pending.length;
     const pendingMarkup = pending.map((upload) => `<span class="image-generation-attachment is-uploading" title="Uploading ${html(upload.name)}">
-      <span class="image-generation-attachment-spinner" aria-hidden="true"></span>
+      <ph-spinner-gap class="image-generation-attachment-spinner" aria-hidden="true"></ph-spinner-gap>
       <span>${html(upload.name)}</span>
     </span>`).join("");
     const selectedMarkup = selected.map((asset) => `<span class="image-generation-attachment">

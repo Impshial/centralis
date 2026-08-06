@@ -20707,14 +20707,13 @@ body.is-deleting-image-session .app-shell {
   background: color-mix(in srgb, var(--accent, #78d5c8) 8%, transparent);
 }
 .image-generation-attachment-spinner {
-  display: block;
-  box-sizing: border-box;
+  display: inline-block;
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
-  border: 2px solid color-mix(in srgb, var(--accent, #78d5c8) 22%, transparent);
-  border-top-color: var(--accent, #78d5c8);
-  border-radius: 50%;
+  color: var(--accent, #78d5c8);
+  font-size: 1.25rem;
+  line-height: 1;
   animation: image-generation-spin 850ms linear infinite;
 }
 .image-generation-attachment > span:not(.image-generation-attachment-spinner) { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
