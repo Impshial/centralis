@@ -4,7 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const root = __dirname;
-const modelLogPath = path.join(root, "logs", "local-chat-model.log");
+const modelLogPath = path.join(root, "logs", "roleplayer-model.log");
 
 function loadLocalEnv() {
   const envPath = path.join(root, ".env");
@@ -91,7 +91,7 @@ function appendPhysicalModelLog(entry) {
       ...entry
     })}\n`, "utf8");
   } catch (error) {
-    console.warn("Could not append Local Chat model log:", error);
+    console.warn("Could not append Roleplayer model log:", error);
   }
 }
 
@@ -173,8 +173,8 @@ function featherlessHeaders(extraHeaders = {}) {
   return {
     "Authorization": `Bearer ${featherlessApiKey}`,
     "Content-Type": "application/json",
-    "HTTP-Referer": "http://127.0.0.1:4173/local-chat.html",
-    "X-Title": "Centralis Local Chat",
+    "HTTP-Referer": "http://127.0.0.1:4173/roleplayer.html",
+    "X-Title": "Centralis Roleplayer",
     ...extraHeaders
   };
 }
@@ -278,7 +278,7 @@ function buildCharacterImagePrompt(character) {
   ].filter(Boolean).join("\n");
 
   return [
-    "Create a hyperrealistic vertical portrait image for this fictional Centralis Local Chat character.",
+    "Create a hyperrealistic vertical portrait image for this fictional Centralis Roleplayer character.",
     "Use the character details as visual guidance, prioritizing appearance, age, style, vibe, and setting clues.",
     "Show only the character. Do not include text, captions, watermarks, logos, UI, speech bubbles, or multiple panels.",
     "Keep the image non-explicit and clearly adult when age is relevant.",
@@ -353,6 +353,11 @@ async function callVeniceCharacterImage(prompt) {
 
 function cleanGeneratedCharacterDraft(value) {
   const draft = value && typeof value === "object" ? value : {};
+  const source = draft.character && typeof draft.character === "object"
+    ? draft.character
+    : draft.draft && typeof draft.draft === "object"
+      ? draft.draft
+      : draft;
   const aliases = {
     short_description: ["shortDescription", "short_description", "summary"],
     core_identity: ["coreIdentity", "core_identity", "identity"],
@@ -380,13 +385,140 @@ function cleanGeneratedCharacterDraft(value) {
   const result = {};
   for (const field of fields) {
     const keys = aliases[field] || [field];
-    const value = keys.map((key) => draft[key]).find((item) => String(item || "").trim());
+    const value = keys.map((key) => source[key]).find((item) => String(item || "").trim());
     result[field] = String(value || "").trim();
   }
-  result.tags = Array.isArray(draft.tags)
-    ? draft.tags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 12)
-    : String(draft.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
+  result.tags = Array.isArray(source.tags)
+    ? source.tags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 12)
+    : String(source.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
   return result;
+}
+
+function titleCaseWords(value) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/[^a-z0-9\s']/gi, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function firstMeaningfulText(...values) {
+  return values
+    .map((value) => String(value || "").trim())
+    .find(Boolean) || "";
+}
+
+function summarizeVibe(vibe) {
+  const pairs = Object.entries(vibe || {})
+    .map(([key, value]) => [titleCaseWords(key).toLowerCase(), String(value || "").trim()])
+    .filter(([, value]) => value)
+    .slice(0, 8);
+  if (!pairs.length) return "an original adult roleplay premise";
+  return pairs.map(([key, value]) => `${key}: ${value}`).join("; ");
+}
+
+function nameFromVibe(vibe, existingCharacter) {
+  const explicit = firstMeaningfulText(existingCharacter?.name, vibe?.name_vibe);
+  if (explicit) return titleCaseWords(explicit).slice(0, 80) || "Unnamed Roleplayer";
+  const concept = firstMeaningfulText(
+    vibe?.general_vibe,
+    vibe?.relationship_to_user,
+    vibe?.scenario_vibe,
+    vibe?.background_vibe,
+    vibe?.speech_vibe,
+    vibe?.other
+  );
+  const title = titleCaseWords(concept);
+  return title ? `${title} Character`.slice(0, 80) : "Original Roleplayer Character";
+}
+
+function tagListFromVibe(vibe, existingCharacter) {
+  const existingTags = Array.isArray(existingCharacter?.tags)
+    ? existingCharacter.tags
+    : String(existingCharacter?.tags || "").split(",");
+  const vibeTags = Object.values(vibe || {})
+    .join(",")
+    .split(/[,;\n]/);
+  const tags = [...existingTags, ...vibeTags]
+    .map((tag) => titleCaseWords(tag).toLowerCase())
+    .filter((tag) => tag && tag.length <= 40);
+  return [...new Set(tags)].slice(0, 8);
+}
+
+function completeGeneratedCharacterDraft(character, vibe, existingCharacter) {
+  const completed = { ...character };
+  const vibeSummary = summarizeVibe(vibe);
+  const name = firstMeaningfulText(completed.name, existingCharacter?.name, nameFromVibe(vibe, existingCharacter));
+  completed.name = name;
+  completed.short_description = firstMeaningfulText(
+    completed.short_description,
+    existingCharacter?.short_description,
+    `Adult roleplay character built around ${vibeSummary}.`
+  );
+  completed.description = firstMeaningfulText(
+    completed.description,
+    existingCharacter?.description,
+    `${name} is an adult, 18+, designed for a vivid roleplay premise built from ${vibeSummary}. They have enough contradiction, motive, and texture to sustain an ongoing scene without taking control of the user.`
+  );
+  completed.core_identity = firstMeaningfulText(
+    completed.core_identity,
+    existingCharacter?.core_identity,
+    `${name} is an adult, 18+, whose core identity centers on ${vibeSummary}.`
+  );
+  completed.personality = firstMeaningfulText(
+    completed.personality,
+    existingCharacter?.personality,
+    `Expressive, internally consistent, responsive to tension, and grounded by clear wants, boundaries, habits, and emotional tells.`
+  );
+  completed.appearance = firstMeaningfulText(
+    completed.appearance,
+    existingCharacter?.appearance,
+    `Adult presentation with visual details that reflect the premise: posture, styling, expression, and small environmental cues should all support ${vibeSummary}.`
+  );
+  completed.background = firstMeaningfulText(
+    completed.background,
+    existingCharacter?.background,
+    `${name}'s background explains why the current roleplay situation matters, while leaving room for discovery during the session.`
+  );
+  completed.speech_style = firstMeaningfulText(
+    completed.speech_style,
+    existingCharacter?.speech_style,
+    `Natural, character-specific dialogue with distinct rhythm, emotional subtext, and no narration of the user's thoughts, actions, or decisions.`
+  );
+  completed.scenario = firstMeaningfulText(
+    completed.scenario,
+    existingCharacter?.scenario,
+    `The scene begins around ${vibeSummary}, with ${name} present and active while the user's response remains completely open.`
+  );
+  completed.behavior_instructions = firstMeaningfulText(
+    completed.behavior_instructions,
+    existingCharacter?.behavior_instructions,
+    "Never speak, act, decide, feel, or think for the user. Portray only the character, NPCs when necessary, and the surrounding world."
+  );
+  completed.drift_guardrails = firstMeaningfulText(
+    completed.drift_guardrails,
+    existingCharacter?.drift_guardrails,
+    "Preserve this character's adult baseline, motivations, boundaries, voice, and relationship premise unless major session events justify gradual change."
+  );
+  completed.system_prompt = firstMeaningfulText(
+    completed.system_prompt,
+    existingCharacter?.system_prompt,
+    `You are ${name}, an adult fictional roleplay character. Stay in character, follow the scenario and guardrails, and never control the user's dialogue, actions, feelings, thoughts, perceptions, or choices.`
+  );
+  completed.first_message = firstMeaningfulText(
+    completed.first_message,
+    existingCharacter?.first_message,
+    `${name} is already in the scene, the atmosphere shaped by ${vibeSummary}. They make the first move in character, leaving clear space for the user to respond without being described or controlled.`
+  );
+  completed.tags = Array.isArray(completed.tags) && completed.tags.length
+    ? completed.tags
+    : tagListFromVibe(vibe, existingCharacter);
+  if (!completed.tags.length) completed.tags = ["adult", "roleplay", "original"];
+  return completed;
 }
 
 function assertAdultLegalFictionBoundary(value) {
@@ -448,7 +580,7 @@ function validateGeneratedCharacterDraft(character) {
 
 function buildCharacterVibePrompt(vibe, existingCharacter) {
   return [
-    "Create a fictional AI roleplay character draft for Centralis Local Chat.",
+    "Create a fictional AI roleplay character draft for Centralis Roleplayer.",
     "Return only strict JSON. Do not include markdown, prose outside JSON, or comments.",
     "",
     "The JSON object must have exactly these keys:",
@@ -763,7 +895,13 @@ async function handleModelRoute(request, response, pathname) {
       }
 
       const text = String(payload.choices?.[0]?.message?.content || "").trim();
-      const parsed = parseJsonFromModelText(text);
+      let parsed = {};
+      let repairNote = "";
+      try {
+        parsed = parseJsonFromModelText(text);
+      } catch (error) {
+        repairNote = error.message || "Featherless did not return valid JSON for the character draft.";
+      }
       if (parsed.error) {
         const error = String(parsed.error || "AI Vibe could not generate that character safely.").trim();
         appendPhysicalModelLog({
@@ -779,12 +917,13 @@ async function handleModelRoute(request, response, pathname) {
         return;
       }
 
-      const character = ensureAdultCharacterMarker(cleanGeneratedCharacterDraft(parsed));
+      const character = ensureAdultCharacterMarker(completeGeneratedCharacterDraft(
+        cleanGeneratedCharacterDraft(parsed),
+        vibe,
+        existingCharacter
+      ));
       assertAdultLegalFictionBoundary(character);
       validateGeneratedCharacterDraft(character);
-      if (!character.name && !character.description && !character.personality) {
-        throw new Error("Featherless returned a character draft without usable character fields.");
-      }
       const result = {
         character,
         model: usedModel || model,
@@ -797,7 +936,8 @@ async function handleModelRoute(request, response, pathname) {
           finish_reason: payload.choices?.[0]?.finish_reason || null,
           usage: payload.usage || null,
           provider: "featherless"
-        }
+        },
+        repairNote: repairNote || null
       };
       appendPhysicalModelLog({
         type: "featherless.character_vibe",
@@ -880,7 +1020,7 @@ async function handleModelRoute(request, response, pathname) {
         attempts
       };
       appendPhysicalModelLog({
-        type: "local_chat.character_image",
+        type: "roleplayer.character_image",
         status: "complete",
         request: logRequest,
         response: {
@@ -894,7 +1034,7 @@ async function handleModelRoute(request, response, pathname) {
       sendJson(response, 200, result);
     } catch (error) {
       appendPhysicalModelLog({
-        type: "local_chat.character_image",
+        type: "roleplayer.character_image",
         status: "error",
         request: logRequest,
         error: error.message || "Could not generate character image.",

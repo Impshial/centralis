@@ -21013,8 +21013,8 @@ body.is-deleting-image-session .app-shell {
 .image-generation-page .image-generation-last-image-option input { accent-color: var(--accent, #78d5c8); inline-size: 16px; block-size: 16px; }
 .image-generation-custom-size { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 7px; }
 .image-generation-custom-size > span { padding-bottom: 9px; color: var(--muted-text, #aebbc2); }
-.image-generation-sessions-section { display: flex; flex-direction: column; min-height: 0; overflow: visible; }
-.image-generation-session-list { flex: 1 1 auto; min-height: 0; overflow: visible; display: grid; align-content: start; gap: 6px; margin-top: 12px; }
+.image-generation-sessions-section { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.image-generation-session-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 6px; margin-top: 12px; padding-right: 2px; }
 .image-generation-session-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px; border: 1px solid transparent; border-radius: 6px; }
 .image-generation-session-row.is-active { background: color-mix(in srgb, var(--accent, #78d5c8) 12%, transparent); border-color: color-mix(in srgb, var(--accent, #78d5c8) 45%, transparent); }
 .image-generation-session-row .icon-button { width: 26px; height: 26px; min-width: 26px; min-height: 26px; }
@@ -22199,7 +22199,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   }
 }
 
-.local-chat-page {
+.roleplayer-page {
   display: block;
   width: min(var(--content-max-width), calc(100% - (var(--content-inline-gutter) * 2)));
   min-height: calc(100vh - 76px);
@@ -22209,15 +22209,15 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow: visible;
 }
 
-.local-chat-page.is-local-chat-detail-view {
+.roleplayer-page.is-roleplayer-detail-view {
   padding-top: calc(var(--header-height) + 6px);
 }
 
-.local-chat-tools-menu {
+.roleplayer-tools-menu {
   position: relative;
 }
 
-.local-chat-tools-menu .primary-action {
+.roleplayer-tools-menu .primary-action {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -22226,22 +22226,22 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   padding: 0 13px;
 }
 
-.local-chat-tools-menu .primary-action ph-toolbox {
+.roleplayer-tools-menu .primary-action ph-toolbox {
   width: 22px;
   height: 22px;
 }
 
-.local-chat-tools-menu .primary-action ph-caret-down {
+.roleplayer-tools-menu .primary-action ph-caret-down {
   width: 14px;
   height: 14px;
   margin-left: 2px;
 }
 
-.local-chat-tools-menu .dropdown-menu {
+.roleplayer-tools-menu .dropdown-menu {
   min-width: 230px;
 }
 
-.local-chat-header {
+.roleplayer-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -22249,7 +22249,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   margin-bottom: 20px;
 }
 
-.local-chat-header-actions {
+.roleplayer-header-actions {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -22257,17 +22257,17 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   flex-wrap: wrap;
 }
 
-.local-chat-create-character-button,
-.local-chat-personas-button {
+.roleplayer-create-character-button,
+.roleplayer-personas-button {
   gap: 8px;
 }
 
-.local-chat-create-character-button ph-plus-circle,
-.local-chat-personas-button ph-user-switch {
+.roleplayer-create-character-button ph-plus-circle,
+.roleplayer-personas-button ph-user-switch {
   flex: 0 0 auto;
 }
 
-.local-chat-header h1 {
+.roleplayer-header h1 {
   margin: 0;
   color: var(--ink);
   font-size: var(--module-heading-size);
@@ -22276,7 +22276,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   letter-spacing: 0;
 }
 
-.local-chat-controls {
+.roleplayer-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -22289,14 +22289,14 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 6px;
 }
 
-.local-chat-count {
+.roleplayer-count {
   margin: 0;
   color: var(--muted);
   font-size: 0.94rem;
   font-weight: 760;
 }
 
-.local-chat-control-actions {
+.roleplayer-control-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -22304,7 +22304,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   min-width: 0;
 }
 
-.local-chat-search {
+.roleplayer-search {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -22317,19 +22317,19 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-search:focus-within {
+.roleplayer-search:focus-within {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
 }
 
-.local-chat-search ph-magnifying-glass {
+.roleplayer-search ph-magnifying-glass {
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
 }
 
-.local-chat-search input {
+.roleplayer-search input {
   width: 100%;
   min-width: 0;
   min-height: 38px;
@@ -22341,26 +22341,26 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   outline: none;
 }
 
-.local-chat-search input::placeholder {
+.roleplayer-search input::placeholder {
   color: var(--muted);
 }
 
-.local-chat-landing-status {
+.roleplayer-landing-status {
   min-height: 1.2em;
   margin: 0 0 14px;
 }
 
-.local-chat-landing-status.is-error {
+.roleplayer-landing-status.is-error {
   color: var(--danger);
 }
 
-.local-chat-character-grid {
+.roleplayer-character-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
-.local-chat-character-card {
+.roleplayer-character-card {
   position: relative;
   display: block;
   min-height: 190px;
@@ -22375,15 +22375,15 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
-.local-chat-character-card:hover,
-.local-chat-character-card:focus-visible {
+.roleplayer-character-card:hover,
+.roleplayer-character-card:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
   outline: none;
   transform: translateY(-1px);
 }
 
-.local-chat-character-avatar {
+.roleplayer-character-avatar {
   display: grid;
   place-items: center;
   width: 100%;
@@ -22397,14 +22397,14 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 0;
 }
 
-.local-chat-character-avatar img,
-.local-chat-image-preview img {
+.roleplayer-character-avatar img,
+.roleplayer-image-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.local-chat-character-body {
+.roleplayer-character-body {
   position: absolute;
   right: 0;
   bottom: 0;
@@ -22423,7 +22423,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
 }
 
-.local-chat-character-body p {
+.roleplayer-character-body p {
   margin: 0;
   color: color-mix(in srgb, #ffffff 86%, var(--accent));
   font-size: 0.74rem;
@@ -22432,7 +22432,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1.35;
 }
 
-.local-chat-character-body h2 {
+.roleplayer-character-body h2 {
   margin: 0;
   color: #ffffff;
   font-size: 1rem;
@@ -22440,14 +22440,14 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1.1;
 }
 
-.local-chat-character-tags {
+.roleplayer-character-tags {
   display: none;
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-.local-chat-character-tags span {
+.roleplayer-character-tags span {
   padding: 4px 8px;
   color: var(--muted);
   font-size: 0.72rem;
@@ -22457,7 +22457,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 999px;
 }
 
-.local-chat-empty-characters {
+.roleplayer-empty-characters {
   display: grid;
   justify-items: center;
   gap: 8px;
@@ -22470,11 +22470,11 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-empty-characters[hidden] {
+.roleplayer-empty-characters[hidden] {
   display: none;
 }
 
-.local-chat-image-upload {
+.roleplayer-image-upload {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 16px;
@@ -22485,7 +22485,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-image-preview {
+.roleplayer-image-preview {
   display: grid;
   place-items: center;
   width: 112px;
@@ -22498,13 +22498,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-image-upload-body {
+.roleplayer-image-upload-body {
   display: grid;
   gap: 7px;
   min-width: 0;
 }
 
-.local-chat-image-upload-body > span {
+.roleplayer-image-upload-body > span {
   color: var(--accent);
   font-size: 0.72rem;
   font-weight: 850;
@@ -22512,53 +22512,53 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-image-upload-body strong {
+.roleplayer-image-upload-body strong {
   color: var(--ink);
   font-size: 1.05rem;
 }
 
-.local-chat-image-upload-body p {
+.roleplayer-image-upload-body p {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 610;
 }
 
-.local-chat-image-upload-actions {
+.roleplayer-image-upload-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 4px;
 }
 
-.local-chat-image-upload-button,
-.local-chat-generate-image-button {
+.roleplayer-image-upload-button,
+.roleplayer-generate-image-button {
   gap: 8px;
 }
 
-.local-chat-image-upload-button ph-upload-simple,
-.local-chat-generate-image-button ph-image-square,
-.local-chat-generate-image-button ph-spinner-gap {
+.roleplayer-image-upload-button ph-upload-simple,
+.roleplayer-generate-image-button ph-image-square,
+.roleplayer-generate-image-button ph-spinner-gap {
   flex: 0 0 auto;
 }
 
-.local-chat-empty-characters ph-chats-circle {
+.roleplayer-empty-characters ph-chats-circle {
   color: var(--accent);
   font-size: 2.3rem;
 }
 
-.local-chat-empty-characters strong {
+.roleplayer-empty-characters strong {
   color: var(--ink);
   font-size: 1.05rem;
 }
 
-.local-chat-empty-characters p {
+.roleplayer-empty-characters p {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 620;
 }
 
-.local-chat-workspace {
+.roleplayer-workspace {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 18px;
@@ -22566,35 +22566,35 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow: hidden;
 }
 
-.local-chat-detail {
+.roleplayer-detail {
   display: block;
   min-height: 560px;
   overflow: visible;
 }
 
-.local-chat-detail[hidden] {
+.roleplayer-detail[hidden] {
   display: none;
 }
 
-.local-chat-character-editor {
+.roleplayer-character-editor {
   display: grid;
   gap: 16px;
 }
 
-.local-chat-character-editor[hidden] {
+.roleplayer-character-editor[hidden] {
   display: none;
 }
 
-.local-chat-persona-page {
+.roleplayer-persona-page {
   display: grid;
   gap: 16px;
 }
 
-.local-chat-persona-page[hidden] {
+.roleplayer-persona-page[hidden] {
   display: none;
 }
 
-.local-chat-editor-page-header {
+.roleplayer-editor-page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -22605,7 +22605,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-editor-kicker {
+.roleplayer-editor-kicker {
   margin: 0;
   color: var(--ink);
   font-size: 1.25rem;
@@ -22614,7 +22614,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   white-space: nowrap;
 }
 
-.local-chat-editor-header-actions {
+.roleplayer-editor-header-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -22622,36 +22622,36 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   margin-left: auto;
 }
 
-.local-chat-character-save-button {
+.roleplayer-character-save-button {
   gap: 8px;
 }
 
-.local-chat-character-save-button ph-floppy-disk {
+.roleplayer-character-save-button ph-floppy-disk {
   flex: 0 0 auto;
 }
 
-.local-chat-persona-save-button,
-.local-chat-new-persona-button,
-.local-chat-import-character-button,
-.local-chat-schema-download,
-.local-chat-ai-vibe-button,
-.local-chat-ai-vibe-generate-button,
-.local-chat-generate-image-button {
+.roleplayer-persona-save-button,
+.roleplayer-new-persona-button,
+.roleplayer-import-character-button,
+.roleplayer-schema-download,
+.roleplayer-ai-vibe-button,
+.roleplayer-ai-vibe-generate-button,
+.roleplayer-generate-image-button {
   gap: 8px;
 }
 
-.local-chat-persona-save-button ph-floppy-disk,
-.local-chat-new-persona-button ph-plus-circle,
-.local-chat-import-character-button ph-file-arrow-up,
-.local-chat-schema-download ph-download-simple,
-.local-chat-ai-vibe-button ph-sparkle,
-.local-chat-ai-vibe-generate-button ph-sparkle,
-.local-chat-generate-image-button ph-image-square,
-.local-chat-generate-image-button ph-spinner-gap {
+.roleplayer-persona-save-button ph-floppy-disk,
+.roleplayer-new-persona-button ph-plus-circle,
+.roleplayer-import-character-button ph-file-arrow-up,
+.roleplayer-schema-download ph-download-simple,
+.roleplayer-ai-vibe-button ph-sparkle,
+.roleplayer-ai-vibe-generate-button ph-sparkle,
+.roleplayer-generate-image-button ph-image-square,
+.roleplayer-generate-image-button ph-spinner-gap {
   flex: 0 0 auto;
 }
 
-.local-chat-character-editor > .local-chat-editor-form {
+.roleplayer-character-editor > .roleplayer-editor-form {
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -22659,16 +22659,16 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow: visible;
 }
 
-.local-chat-character-page {
+.roleplayer-character-page {
   display: grid;
   gap: 12px;
 }
 
-.local-chat-character-page[hidden] {
+.roleplayer-character-page[hidden] {
   display: none;
 }
 
-.local-chat-back {
+.roleplayer-back {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -22682,15 +22682,15 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 6px;
 }
 
-.local-chat-back:hover,
-.local-chat-back:focus-visible {
+.roleplayer-back:hover,
+.roleplayer-back:focus-visible {
   color: var(--ink);
   background: color-mix(in srgb, var(--surface-2) 78%, transparent);
   border-color: var(--line);
   outline: none;
 }
 
-.local-chat-detail-card {
+.roleplayer-detail-card {
   position: relative;
   display: grid;
   grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
@@ -22701,26 +22701,26 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-detail-actions {
+.roleplayer-detail-actions {
   display: grid;
   align-self: start;
   justify-self: end;
   gap: 10px;
 }
 
-.local-chat-detail-edit-button,
-.local-chat-detail-delete-button {
+.roleplayer-detail-edit-button,
+.roleplayer-detail-delete-button {
   align-self: start;
   justify-self: end;
   gap: 8px;
 }
 
-.local-chat-detail-edit-button ph-pencil-simple,
-.local-chat-detail-delete-button ph-trash {
+.roleplayer-detail-edit-button ph-pencil-simple,
+.roleplayer-detail-delete-button ph-trash {
   flex: 0 0 auto;
 }
 
-.local-chat-character-page-image {
+.roleplayer-character-page-image {
   display: grid;
   place-items: center;
   aspect-ratio: 1 / 1;
@@ -22733,23 +22733,23 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-character-page-image img {
+.roleplayer-character-page-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.local-chat-character-page-copy {
+.roleplayer-character-page-copy {
   min-width: 0;
 }
 
-.local-chat-detail-card p,
-.local-chat-detail-card h2,
-.local-chat-detail-card span {
+.roleplayer-detail-card p,
+.roleplayer-detail-card h2,
+.roleplayer-detail-card span {
   margin: 0;
 }
 
-.local-chat-detail-card p {
+.roleplayer-detail-card p {
   color: var(--accent);
   font-size: 0.72rem;
   font-weight: 850;
@@ -22757,13 +22757,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-detail-card h2 {
+.roleplayer-detail-card h2 {
   color: var(--ink);
   font-size: clamp(2rem, 4vw, 3.2rem);
   line-height: 1.12;
 }
 
-.local-chat-detail-card span {
+.roleplayer-detail-card span {
   display: block;
   margin-top: 7px;
   color: var(--muted);
@@ -22772,7 +22772,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1.45;
 }
 
-.local-chat-detail-card .local-chat-detail-edit-button span {
+.roleplayer-detail-card .roleplayer-detail-edit-button span {
   display: inline;
   margin: 0;
   color: var(--primary-button-text);
@@ -22781,23 +22781,23 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1;
 }
 
-.local-chat-detail-tools-menu {
+.roleplayer-detail-tools-menu {
   align-self: start;
   justify-self: end;
 }
 
-.local-chat-character-page-details {
+.roleplayer-character-page-details {
   display: grid;
   gap: 12px;
   margin-top: 16px;
 }
 
-.local-chat-character-page-details section {
+.roleplayer-character-page-details section {
   display: grid;
   gap: 5px;
 }
 
-.local-chat-character-page-details strong {
+.roleplayer-character-page-details strong {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 820;
@@ -22805,7 +22805,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-character-page-details p {
+.roleplayer-character-page-details p {
   color: var(--ink);
   font-size: 0.92rem;
   font-weight: 560;
@@ -22813,7 +22813,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: none;
 }
 
-.local-chat-character-page-grid {
+.roleplayer-character-page-grid {
   display: grid;
   grid-template-columns: minmax(260px, 420px) minmax(180px, auto);
   gap: 12px;
@@ -22821,28 +22821,28 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   justify-content: space-between;
 }
 
-.local-chat-start-session-button {
+.roleplayer-start-session-button {
   gap: 8px;
 }
 
-.local-chat-start-session-button ph-chat-circle-text {
+.roleplayer-start-session-button ph-chat-circle-text {
   flex: 0 0 auto;
 }
 
-.local-chat-character-controls {
+.roleplayer-character-controls {
   display: grid;
   gap: 12px;
   min-width: 0;
 }
 
-.local-chat-field {
+.roleplayer-field {
   display: grid;
   gap: 7px;
   color: var(--ink);
   font-weight: 760;
 }
 
-.local-chat-field span {
+.roleplayer-field span {
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 820;
@@ -22850,7 +22850,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-field select {
+.roleplayer-field select {
   width: 100%;
   min-height: 40px;
   padding: 0 11px;
@@ -22862,26 +22862,26 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   font-weight: 650;
 }
 
-.local-chat-sessions {
+.roleplayer-sessions {
   display: grid;
   gap: 10px;
   min-height: 0;
 }
 
-.local-chat-sessions > div {
+.roleplayer-sessions > div {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
 }
 
-.local-chat-sessions h2 {
+.roleplayer-sessions h2 {
   margin: 2px 0 0;
   color: var(--ink);
   font-size: 0.95rem;
 }
 
-.local-chat-session-card,
-.local-chat-persona-button {
+.roleplayer-session-card,
+.roleplayer-persona-button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -22896,34 +22896,34 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   cursor: pointer;
 }
 
-.local-chat-session-card {
+.roleplayer-session-card {
   min-height: 112px;
 }
 
-.local-chat-session-card.is-active,
-.local-chat-session-card:hover,
-.local-chat-session-card:focus-visible,
-.local-chat-persona-button.is-active,
-.local-chat-persona-button:hover {
+.roleplayer-session-card.is-active,
+.roleplayer-session-card:hover,
+.roleplayer-session-card:focus-visible,
+.roleplayer-persona-button.is-active,
+.roleplayer-persona-button:hover {
   border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
   outline: none;
 }
 
-.local-chat-session-card div {
+.roleplayer-session-card div {
   display: grid;
   gap: 8px;
   min-width: 0;
   align-content: start;
 }
 
-.local-chat-session-card strong,
-.local-chat-persona-button strong {
+.roleplayer-session-card strong,
+.roleplayer-persona-button strong {
   color: var(--ink);
   font-size: 0.96rem;
   line-height: 1.15;
 }
 
-.local-chat-session-card em {
+.roleplayer-session-card em {
   width: fit-content;
   padding: 2px 7px;
   color: var(--ink);
@@ -22935,7 +22935,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   font-weight: 760;
 }
 
-.local-chat-session-card button {
+.roleplayer-session-card button {
   display: grid;
   place-items: center;
   width: 30px;
@@ -22947,14 +22947,14 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   cursor: pointer;
 }
 
-.local-chat-session-card button:hover,
-.local-chat-session-card button:focus-visible {
+.roleplayer-session-card button:hover,
+.roleplayer-session-card button:focus-visible {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   outline: none;
 }
 
-.local-chat-persona-button em {
+.roleplayer-persona-button em {
   display: inline-block;
   margin-left: 6px;
   padding: 2px 6px;
@@ -22966,16 +22966,16 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 999px;
 }
 
-.local-chat-session-card span,
-.local-chat-persona-button span,
-.local-chat-muted {
+.roleplayer-session-card span,
+.roleplayer-persona-button span,
+.roleplayer-muted {
   margin: 0;
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 620;
 }
 
-.local-chat-chat-header {
+.roleplayer-chat-header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -22985,36 +22985,36 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-bottom: 1px solid var(--line);
 }
 
-.local-chat-settings-button {
+.roleplayer-settings-button {
   margin-left: auto;
 }
 
-.local-chat-settings-button ph-gear-six {
+.roleplayer-settings-button ph-gear-six {
   width: 18px;
   height: 18px;
 }
 
-.local-chat-settings-button:disabled {
+.roleplayer-settings-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-.modal-dialog.local-chat-settings-dialog {
+.modal-dialog.roleplayer-settings-dialog {
   width: min(520px, calc(100vw - 32px));
 }
 
-.local-chat-settings-dialog form {
+.roleplayer-settings-dialog form {
   display: grid;
   gap: 16px;
   padding: 18px;
 }
 
-.local-chat-slider-field {
+.roleplayer-slider-field {
   display: grid;
   gap: 10px;
 }
 
-.local-chat-slider-field > span {
+.roleplayer-slider-field > span {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 820;
@@ -23022,17 +23022,17 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-slider-field > strong {
+.roleplayer-slider-field > strong {
   color: var(--ink);
   font-size: 1.05rem;
 }
 
-.local-chat-slider-field input[type="range"] {
+.roleplayer-slider-field input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
 }
 
-.local-chat-slider-ticks {
+.roleplayer-slider-ticks {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
@@ -23041,42 +23041,42 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   font-weight: 680;
 }
 
-.local-chat-slider-ticks span {
+.roleplayer-slider-ticks span {
   min-width: 0;
   text-align: center;
 }
 
-.local-chat-slider-ticks span:first-child {
+.roleplayer-slider-ticks span:first-child {
   text-align: left;
 }
 
-.local-chat-slider-ticks span:last-child {
+.roleplayer-slider-ticks span:last-child {
   text-align: right;
 }
 
-.local-chat-chat-back {
+.roleplayer-chat-back {
   flex: 0 0 auto;
 }
 
-.local-chat-chat-layout {
+.roleplayer-chat-layout {
   display: block;
 }
 
-.local-chat-chat-layout[hidden] {
+.roleplayer-chat-layout[hidden] {
   display: none;
 }
 
-.local-chat-session-heading {
+.roleplayer-session-heading {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.local-chat-chat-tools-menu {
+.roleplayer-chat-tools-menu {
   margin-left: auto;
 }
 
-.local-chat-session-heading span {
+.roleplayer-session-heading span {
   color: var(--muted);
   font-size: 0.68rem;
   font-weight: 820;
@@ -23084,7 +23084,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-session-heading strong {
+.roleplayer-session-heading strong {
   color: var(--ink);
   font-size: 1rem;
   overflow: hidden;
@@ -23092,15 +23092,15 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   white-space: nowrap;
 }
 
-.local-chat-sidebar,
-.local-chat-panel {
+.roleplayer-sidebar,
+.roleplayer-panel {
   min-width: 0;
   min-height: 0;
   background: var(--surface);
   border: 1px solid var(--line);
 }
 
-.local-chat-sidebar {
+.roleplayer-sidebar {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -23109,7 +23109,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 10px;
 }
 
-.local-chat-status-card {
+.roleplayer-status-card {
   display: grid;
   gap: 5px;
   padding: 14px;
@@ -23118,19 +23118,19 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-status-card.is-ready {
+.roleplayer-status-card.is-ready {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
 }
 
-.local-chat-status-card.is-loading {
+.roleplayer-status-card.is-loading {
   border-color: color-mix(in srgb, #f4c96b 55%, var(--line));
 }
 
-.local-chat-status-card.is-error {
+.roleplayer-status-card.is-error {
   border-color: color-mix(in srgb, var(--danger) 62%, var(--line));
 }
 
-.local-chat-status-card span {
+.roleplayer-status-card span {
   color: var(--muted);
   font-size: 0.68rem;
   font-weight: 800;
@@ -23138,13 +23138,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-status-card strong {
+.roleplayer-status-card strong {
   color: var(--ink);
   font-size: 0.98rem;
   font-weight: 820;
 }
 
-.local-chat-status-card p {
+.roleplayer-status-card p {
   margin: 0;
   color: var(--muted);
   font-size: 0.84rem;
@@ -23152,7 +23152,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1.45;
 }
 
-.local-chat-setup {
+.roleplayer-setup {
   display: grid;
   gap: 14px;
   padding: 15px;
@@ -23161,17 +23161,17 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-setup[hidden] {
+.roleplayer-setup[hidden] {
   display: none;
 }
 
-.local-chat-setup h2 {
+.roleplayer-setup h2 {
   margin: 0;
   color: var(--ink);
   font-size: 1.1rem;
 }
 
-.local-chat-setup ol {
+.roleplayer-setup ol {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -23182,7 +23182,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1.45;
 }
 
-.local-chat-setup code {
+.roleplayer-setup code {
   color: var(--ink);
   font-size: 0.82rem;
   background: color-mix(in srgb, var(--field) 86%, transparent);
@@ -23191,7 +23191,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   padding: 1px 5px;
 }
 
-.local-chat-panel {
+.roleplayer-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0;
@@ -23201,7 +23201,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 10px;
 }
 
-.local-chat-model-log {
+.roleplayer-model-log {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
@@ -23213,7 +23213,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 10px;
 }
 
-.local-chat-model-log header {
+.roleplayer-model-log header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -23224,13 +23224,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-bottom: 1px solid var(--line);
 }
 
-.local-chat-model-log header div {
+.roleplayer-model-log header div {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
-.local-chat-model-log header span {
+.roleplayer-model-log header span {
   color: var(--muted);
   font-size: 0.66rem;
   font-weight: 820;
@@ -23238,12 +23238,12 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-model-log header strong {
+.roleplayer-model-log header strong {
   color: var(--ink);
   font-size: 0.95rem;
 }
 
-.local-chat-model-log-list {
+.roleplayer-model-log-list {
   display: grid;
   align-content: start;
   gap: 10px;
@@ -23252,7 +23252,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow-y: auto;
 }
 
-.local-chat-model-log-empty {
+.roleplayer-model-log-empty {
   display: grid;
   gap: 5px;
   padding: 12px;
@@ -23262,17 +23262,17 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-model-log-empty strong {
+.roleplayer-model-log-empty strong {
   color: var(--ink);
 }
 
-.local-chat-model-log-empty span {
+.roleplayer-model-log-empty span {
   font-size: 0.78rem;
   font-weight: 620;
   line-height: 1.4;
 }
 
-.local-chat-model-log-entry {
+.roleplayer-model-log-entry {
   color: var(--ink);
   background: var(--field);
   border: 1px solid var(--line);
@@ -23280,7 +23280,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow: hidden;
 }
 
-.local-chat-model-log-entry summary {
+.roleplayer-model-log-entry summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 3px 8px;
@@ -23288,9 +23288,9 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   cursor: pointer;
 }
 
-.local-chat-model-log-entry summary span,
-.local-chat-model-log-entry summary em,
-.local-chat-model-log-entry section span {
+.roleplayer-model-log-entry summary span,
+.roleplayer-model-log-entry summary em,
+.roleplayer-model-log-entry section span {
   color: var(--muted);
   font-size: 0.68rem;
   font-style: normal;
@@ -23299,7 +23299,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-model-log-entry summary strong {
+.roleplayer-model-log-entry summary strong {
   min-width: 0;
   color: var(--ink);
   font-size: 0.84rem;
@@ -23308,13 +23308,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   white-space: nowrap;
 }
 
-.local-chat-model-log-entry section {
+.roleplayer-model-log-entry section {
   display: grid;
   gap: 6px;
   padding: 0 10px 10px;
 }
 
-.local-chat-model-log-entry pre {
+.roleplayer-model-log-entry pre {
   max-height: 360px;
   margin: 0;
   padding: 10px;
@@ -23328,23 +23328,23 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   word-break: break-word;
 }
 
-.local-chat-model-log.is-collapsed {
+.roleplayer-model-log.is-collapsed {
   width: 48px;
   min-width: 48px;
 }
 
-.local-chat-model-log.is-collapsed header {
+.roleplayer-model-log.is-collapsed header {
   justify-content: center;
   height: 100%;
   padding: 10px 6px;
 }
 
-.local-chat-model-log.is-collapsed header div,
-.local-chat-model-log.is-collapsed .local-chat-model-log-list {
+.roleplayer-model-log.is-collapsed header div,
+.roleplayer-model-log.is-collapsed .roleplayer-model-log-list {
   display: none;
 }
 
-.local-chat-messages {
+.roleplayer-messages {
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -23353,7 +23353,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow-y: auto;
 }
 
-.local-chat-empty {
+.roleplayer-empty {
   display: grid;
   justify-items: center;
   align-content: center;
@@ -23363,23 +23363,23 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-align: center;
 }
 
-.local-chat-empty ph-chats-circle {
+.roleplayer-empty ph-chats-circle {
   color: var(--accent);
   font-size: 2.2rem;
 }
 
-.local-chat-empty strong {
+.roleplayer-empty strong {
   color: var(--ink);
   font-size: 1.05rem;
 }
 
-.local-chat-empty p {
+.roleplayer-empty p {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 620;
 }
 
-.local-chat-message {
+.roleplayer-message {
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -23387,14 +23387,14 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   min-width: 0;
 }
 
-.local-chat-message-content {
+.roleplayer-message-content {
   display: grid;
   gap: 7px;
   min-width: 0;
   flex: 1 1 auto;
 }
 
-.local-chat-message-content > span {
+.roleplayer-message-content > span {
   color: var(--muted);
   font-size: 0.68rem;
   font-weight: 820;
@@ -23402,18 +23402,18 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-message.is-user {
+.roleplayer-message.is-user {
   display: grid;
   width: fit-content;
   max-width: min(86%, 720px);
   margin-left: auto;
 }
 
-.local-chat-message.is-user .local-chat-message-content > span {
+.roleplayer-message.is-user .roleplayer-message-content > span {
   text-align: right;
 }
 
-.local-chat-message-avatar {
+.roleplayer-message-avatar {
   display: grid;
   place-items: center;
   width: 64px;
@@ -23428,19 +23428,19 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-message-avatar img {
+.roleplayer-message-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.local-chat-message-body {
+.roleplayer-message-body {
   color: var(--ink);
   font-size: 0.94rem;
   line-height: 1.6;
 }
 
-.local-chat-message-actions {
+.roleplayer-message-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -23453,11 +23453,11 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-top: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
 }
 
-.local-chat-message-actions span {
+.roleplayer-message-actions span {
   margin-right: 2px;
 }
 
-.local-chat-message-actions button {
+.roleplayer-message-actions button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -23471,35 +23471,35 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   cursor: pointer;
 }
 
-.local-chat-message-actions button:hover,
-.local-chat-message-actions button:focus-visible {
+.roleplayer-message-actions button:hover,
+.roleplayer-message-actions button:focus-visible {
   color: var(--ink);
   background: color-mix(in srgb, var(--surface-2) 74%, transparent);
   outline: none;
 }
 
-.local-chat-message-actions ph-copy,
-.local-chat-message-actions ph-trash,
-.local-chat-message-actions ph-arrow-bend-down-right {
+.roleplayer-message-actions ph-copy,
+.roleplayer-message-actions ph-trash,
+.roleplayer-message-actions ph-arrow-bend-down-right {
   width: 14px;
   height: 14px;
 }
 
-.local-chat-message.is-user .local-chat-message-actions {
+.roleplayer-message.is-user .roleplayer-message-actions {
   justify-content: flex-end;
   width: 100%;
   padding-top: 2px;
   border-top: 0;
 }
 
-.local-chat-message.is-user .local-chat-message-body {
+.roleplayer-message.is-user .roleplayer-message-body {
   padding: 10px 14px;
   background: color-mix(in srgb, var(--surface-2) 88%, #ffffff 4%);
   border: 1px solid color-mix(in srgb, var(--line) 72%, var(--accent));
   border-radius: 18px;
 }
 
-.local-chat-composer {
+.roleplayer-composer {
   display: grid;
   gap: 8px;
   padding: 14px;
@@ -23507,29 +23507,29 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-top: 1px solid var(--line);
 }
 
-.local-chat-composer .form-status {
+.roleplayer-composer .form-status {
   margin: 0;
   font-size: 0.82rem;
   font-weight: 700;
 }
 
-.local-chat-composer .form-status[hidden],
-.local-chat-composer .form-status:empty {
+.roleplayer-composer .form-status[hidden],
+.roleplayer-composer .form-status:empty {
   display: none;
 }
 
-.local-chat-composer .form-status.is-error {
+.roleplayer-composer .form-status.is-error {
   color: var(--danger);
 }
 
-.local-chat-composer-row {
+.roleplayer-composer-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
 }
 
-.local-chat-composer textarea {
+.roleplayer-composer textarea {
   width: 100%;
   min-height: 44px;
   max-height: 160px;
@@ -23545,39 +23545,39 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   outline: none;
 }
 
-.local-chat-composer textarea:focus {
+.roleplayer-composer textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-.local-chat-composer .local-chat-stop-button {
+.roleplayer-composer .roleplayer-stop-button {
   color: #ffffff;
   background: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 82%, var(--line));
 }
 
-.local-chat-composer .local-chat-stop-button:hover,
-.local-chat-composer .local-chat-stop-button:focus-visible {
+.roleplayer-composer .roleplayer-stop-button:hover,
+.roleplayer-composer .roleplayer-stop-button:focus-visible {
   filter: brightness(1.08);
 }
 
-.local-chat-modal-backdrop {
+.roleplayer-modal-backdrop {
   z-index: 42;
 }
 
-.modal-dialog.local-chat-editor-dialog {
+.modal-dialog.roleplayer-editor-dialog {
   width: min(980px, calc(100vw - 36px));
   max-height: calc(100vh - var(--header-height) - 42px);
   overflow: hidden;
 }
 
-.modal-dialog.local-chat-ai-vibe-dialog {
+.modal-dialog.roleplayer-ai-vibe-dialog {
   width: min(920px, calc(100vw - 36px));
   max-height: calc(100vh - var(--header-height) - 42px);
   overflow: hidden;
 }
 
-.local-chat-editor-dialog .modal-header {
+.roleplayer-editor-dialog .modal-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -23586,33 +23586,33 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-bottom: 1px solid var(--line);
 }
 
-.local-chat-editor-dialog .modal-header h2 {
+.roleplayer-editor-dialog .modal-header h2 {
   margin: 0;
   color: var(--ink);
   font-size: 1.45rem;
 }
 
-.local-chat-editor-form {
+.roleplayer-editor-form {
   display: grid;
   gap: 14px;
   padding: 18px 22px 20px;
   overflow-y: auto;
 }
 
-.local-chat-ai-vibe-dialog form {
+.roleplayer-ai-vibe-dialog form {
   display: grid;
   gap: 14px;
   padding: 18px 22px 20px;
   overflow-y: auto;
 }
 
-.local-chat-form-grid {
+.roleplayer-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 13px;
 }
 
-.local-chat-form-grid label {
+.roleplayer-form-grid label {
   display: grid;
   gap: 7px;
   min-width: 0;
@@ -23620,7 +23620,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   font-weight: 760;
 }
 
-.local-chat-form-grid label > span {
+.roleplayer-form-grid label > span {
   color: var(--muted);
   font-size: 0.74rem;
   font-weight: 820;
@@ -23628,12 +23628,12 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   text-transform: uppercase;
 }
 
-.local-chat-form-grid .is-wide {
+.roleplayer-form-grid .is-wide {
   grid-column: 1 / -1;
 }
 
-.local-chat-form-grid input[type="text"],
-.local-chat-form-grid textarea {
+.roleplayer-form-grid input[type="text"],
+.roleplayer-form-grid textarea {
   width: 100%;
   min-width: 0;
   padding: 10px 11px;
@@ -23646,22 +23646,22 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   line-height: 1.42;
 }
 
-.local-chat-form-grid textarea {
+.roleplayer-form-grid textarea {
   resize: vertical;
 }
 
-.local-chat-check {
+.roleplayer-check {
   align-content: center;
   grid-template-columns: auto minmax(0, 1fr);
   min-height: 42px;
 }
 
-.local-chat-check input {
+.roleplayer-check input {
   width: 18px;
   height: 18px;
 }
 
-.local-chat-dialog-actions {
+.roleplayer-dialog-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -23669,11 +23669,11 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   padding-top: 2px;
 }
 
-.local-chat-dialog-spacer {
+.roleplayer-dialog-spacer {
   flex: 1 1 auto;
 }
 
-.local-chat-persona-layout {
+.roleplayer-persona-layout {
   display: grid;
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   min-height: 0;
@@ -23683,7 +23683,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   overflow: hidden;
 }
 
-.local-chat-persona-list {
+.roleplayer-persona-list {
   display: grid;
   align-content: start;
   gap: 10px;
@@ -23694,7 +23694,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-right: 1px solid var(--line);
 }
 
-.local-chat-persona-empty {
+.roleplayer-persona-empty {
   display: grid;
   gap: 6px;
   padding: 14px;
@@ -23704,102 +23704,102 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   border-radius: 8px;
 }
 
-.local-chat-persona-empty strong {
+.roleplayer-persona-empty strong {
   color: var(--ink);
 }
 
-.local-chat-persona-empty span {
+.roleplayer-persona-empty span {
   font-size: 0.84rem;
   font-weight: 620;
   line-height: 1.4;
 }
 
 @media (max-width: 1180px) {
-  .local-chat-character-grid {
+  .roleplayer-character-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 840px) {
-  .local-chat-page {
+  .roleplayer-page {
     width: min(100% - 28px, 1220px);
     padding-bottom: 24px;
     overflow: auto;
   }
 
-  .local-chat-header {
+  .roleplayer-header {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .local-chat-editor-page-header {
+  .roleplayer-editor-page-header {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .local-chat-header-actions {
+  .roleplayer-header-actions {
     justify-content: flex-start;
   }
 
-  .local-chat-controls {
+  .roleplayer-controls {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .local-chat-control-actions,
-  .local-chat-search {
+  .roleplayer-control-actions,
+  .roleplayer-search {
     width: 100%;
   }
 
-  .local-chat-character-grid {
+  .roleplayer-character-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .local-chat-workspace {
+  .roleplayer-workspace {
     grid-template-columns: 1fr;
   }
 
-  .local-chat-detail-card,
-  .local-chat-character-page-grid {
+  .roleplayer-detail-card,
+  .roleplayer-character-page-grid {
     grid-template-columns: 1fr;
   }
 
-  .local-chat-detail-tools-menu {
+  .roleplayer-detail-tools-menu {
     justify-self: start;
   }
 
-  .local-chat-panel {
+  .roleplayer-panel {
     height: auto;
     min-height: 520px;
   }
 
-  .local-chat-message-avatar {
+  .roleplayer-message-avatar {
     width: 52px;
     height: 52px;
     flex-basis: 52px;
   }
 
-  .local-chat-model-log.is-collapsed {
+  .roleplayer-model-log.is-collapsed {
     width: 100%;
     min-width: 0;
     height: 48px;
     min-height: 48px;
   }
 
-  .local-chat-composer-row {
+  .roleplayer-composer-row {
     grid-template-columns: 1fr;
   }
 
-  .local-chat-image-upload {
+  .roleplayer-image-upload {
     grid-template-columns: 1fr;
   }
 
-  .local-chat-form-grid,
-  .local-chat-persona-layout {
+  .roleplayer-form-grid,
+  .roleplayer-persona-layout {
     grid-template-columns: 1fr;
   }
 
-  .local-chat-persona-list {
+  .roleplayer-persona-list {
     max-height: 220px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -23807,7 +23807,7 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
 }
 
 @media (max-width: 560px) {
-  .local-chat-character-grid {
+  .roleplayer-character-grid {
     grid-template-columns: 1fr;
   }
 }

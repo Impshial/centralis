@@ -3,181 +3,181 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Local Chat | Centralis</title>
+  <title>Roleplayer | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=local-chat-21">
-  <link rel="stylesheet" href="tailwind.generated.css?v=local-chat-6">
+  <link rel="stylesheet" href="styles.css?v=roleplayer-21">
+  <link rel="stylesheet" href="tailwind.generated.css?v=roleplayer-6">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
-<body data-auth-required="true" data-page="local-chat">
+<body data-auth-required="true" data-page="roleplayer">
   <div class="app-shell">
     <header class="site-header" aria-label="Centralis main header"></header>
 
-    <main class="local-chat-page" aria-labelledby="local-chat-title" data-local-chat-page hidden>
-      <header class="local-chat-header" data-local-chat-header>
+    <main class="roleplayer-page" aria-labelledby="roleplayer-title" data-roleplayer-page hidden>
+      <header class="roleplayer-header" data-roleplayer-header>
         <div>
           <p class="settings-eyebrow">AI Tools</p>
-          <h1 id="local-chat-title">Local Chat</h1>
+          <h1 id="roleplayer-title">Roleplayer</h1>
         </div>
-        <div class="local-chat-header-actions">
-          <button class="primary-action local-chat-create-character-button" type="button" data-local-chat-create-character>
+        <div class="roleplayer-header-actions">
+          <button class="primary-action roleplayer-create-character-button" type="button" data-roleplayer-create-character>
             <ph-plus-circle weight="bold" aria-hidden="true"></ph-plus-circle>
             <span>Create Character</span>
           </button>
-          <button class="secondary-action local-chat-personas-button" type="button" data-local-chat-personas>
+          <button class="secondary-action roleplayer-personas-button" type="button" data-roleplayer-personas>
             <ph-user-switch weight="bold" aria-hidden="true"></ph-user-switch>
             <span>Personas</span>
           </button>
         </div>
       </header>
 
-      <section class="local-chat-controls" aria-label="Character display options" data-local-chat-controls>
-        <p class="local-chat-count" data-local-chat-character-count>0 Characters</p>
-        <div class="local-chat-control-actions">
-          <label class="local-chat-search">
+      <section class="roleplayer-controls" aria-label="Character display options" data-roleplayer-controls>
+        <p class="roleplayer-count" data-roleplayer-character-count>0 Characters</p>
+        <div class="roleplayer-control-actions">
+          <label class="roleplayer-search">
             <span class="sr-only">Search characters</span>
             <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
-            <input type="search" placeholder="Search characters..." autocomplete="off" data-local-chat-search>
+            <input type="search" placeholder="Search characters..." autocomplete="off" data-roleplayer-search>
           </label>
-          <button class="secondary-action" type="button" data-local-chat-refresh>
+          <button class="secondary-action" type="button" data-roleplayer-refresh>
             <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
             Refresh
           </button>
         </div>
       </section>
 
-      <p class="form-status local-chat-landing-status" data-local-chat-landing-status role="status"></p>
+      <p class="form-status roleplayer-landing-status" data-roleplayer-landing-status role="status"></p>
 
-      <section class="local-chat-library" data-local-chat-library>
-        <section class="local-chat-character-grid" data-local-chat-character-grid aria-label="Characters"></section>
-        <section class="local-chat-empty-characters" data-local-chat-empty hidden>
+      <section class="roleplayer-library" data-roleplayer-library>
+        <section class="roleplayer-character-grid" data-roleplayer-character-grid aria-label="Characters"></section>
+        <section class="roleplayer-empty-characters" data-roleplayer-empty hidden>
           <ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle>
           <strong>No characters found</strong>
-          <p>Create a character to start building your local chat library.</p>
+          <p>Create a character to start building your roleplayer library.</p>
         </section>
       </section>
 
-      <section class="local-chat-detail" data-local-chat-detail hidden>
-        <div class="local-chat-character-page" data-local-chat-character-page>
-          <button class="ghost-action local-chat-back" type="button" data-local-chat-back>
+      <section class="roleplayer-detail" data-roleplayer-detail hidden>
+        <div class="roleplayer-character-page" data-roleplayer-character-page>
+          <button class="ghost-action roleplayer-back" type="button" data-roleplayer-back>
             <ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left>
             Characters
           </button>
-          <div class="local-chat-detail-card" data-local-chat-detail-card></div>
-          <div class="local-chat-character-page-grid">
-            <div class="local-chat-character-controls">
-              <label class="local-chat-field">
+          <div class="roleplayer-detail-card" data-roleplayer-detail-card></div>
+          <div class="roleplayer-character-page-grid">
+            <div class="roleplayer-character-controls">
+              <label class="roleplayer-field">
                 <span>Featherless Model</span>
-                <select data-local-chat-model></select>
+                <select data-roleplayer-model></select>
               </label>
-              <label class="local-chat-field">
+              <label class="roleplayer-field">
                 <span>Persona</span>
-                <select data-local-chat-persona-select></select>
+                <select data-roleplayer-persona-select></select>
               </label>
             </div>
-            <button class="primary-action local-chat-start-session-button" type="button" data-local-chat-start-session>
+            <button class="primary-action roleplayer-start-session-button" type="button" data-roleplayer-start-session>
               <ph-chat-circle-text weight="bold" aria-hidden="true"></ph-chat-circle-text>
               Start New Chat
             </button>
           </div>
-          <section class="local-chat-sessions">
+          <section class="roleplayer-sessions">
             <h2>Chats</h2>
-            <div data-local-chat-sessions></div>
+            <div data-roleplayer-sessions></div>
           </section>
         </div>
 
-        <div class="local-chat-chat-layout" data-local-chat-chat-page hidden>
-          <div class="local-chat-panel">
-            <div class="local-chat-chat-header">
-              <button class="ghost-action local-chat-back local-chat-chat-back" type="button" data-local-chat-chat-back>
+        <div class="roleplayer-chat-layout" data-roleplayer-chat-page hidden>
+          <div class="roleplayer-panel">
+            <div class="roleplayer-chat-header">
+              <button class="ghost-action roleplayer-back roleplayer-chat-back" type="button" data-roleplayer-chat-back>
                 <ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left>
                 Character Page
               </button>
-            <div class="local-chat-session-heading">
-              <span data-local-chat-session-kicker>No Session</span>
-              <strong data-local-chat-session-title>Select or start a chat</strong>
+            <div class="roleplayer-session-heading">
+              <span data-roleplayer-session-kicker>No Session</span>
+              <strong data-roleplayer-session-title>Select or start a chat</strong>
             </div>
-            <div class="menu-wrap local-chat-tools-menu local-chat-chat-tools-menu">
-              <button class="primary-action menu-trigger" type="button" aria-label="Chat actions" title="Chat actions" aria-expanded="false" aria-haspopup="menu" data-local-chat-tools>
+            <div class="menu-wrap roleplayer-tools-menu roleplayer-chat-tools-menu">
+              <button class="primary-action menu-trigger" type="button" aria-label="Chat actions" title="Chat actions" aria-expanded="false" aria-haspopup="menu" data-roleplayer-tools>
                 <ph-toolbox weight="bold" aria-hidden="true"></ph-toolbox>
                 <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
               </button>
               <div class="dropdown-menu align-right" role="menu">
-                <button type="button" role="menuitem" data-local-chat-settings-open>
+                <button type="button" role="menuitem" data-roleplayer-settings-open>
                   <ph-gear-six weight="duotone" aria-hidden="true"></ph-gear-six>
                   <span>Chat Settings</span>
                 </button>
               </div>
             </div>
           </div>
-            <div class="local-chat-messages" data-local-chat-messages></div>
-            <form class="local-chat-composer" data-local-chat-form>
-              <div class="local-chat-composer-row">
-                <textarea rows="1" placeholder="Send a message to the character..." data-local-chat-input disabled></textarea>
-                <button class="primary-action" type="submit" data-local-chat-send disabled>
+            <div class="roleplayer-messages" data-roleplayer-messages></div>
+            <form class="roleplayer-composer" data-roleplayer-form>
+              <div class="roleplayer-composer-row">
+                <textarea rows="1" placeholder="Send a message to the character..." data-roleplayer-input disabled></textarea>
+                <button class="primary-action" type="submit" data-roleplayer-send disabled>
                   <ph-paper-plane-tilt weight="bold" aria-hidden="true"></ph-paper-plane-tilt>
                   Send
                 </button>
               </div>
-              <p class="form-status" data-local-chat-form-status role="status" hidden></p>
+              <p class="form-status" data-roleplayer-form-status role="status" hidden></p>
             </form>
           </div>
 
         </div>
       </section>
 
-      <section class="local-chat-character-editor" data-local-chat-character-editor hidden>
-        <header class="local-chat-editor-page-header">
-          <span class="local-chat-editor-kicker" data-local-chat-character-modal-title>Edit Character</span>
-          <div class="local-chat-editor-header-actions">
-            <button class="secondary-action" type="button" data-local-chat-close-character>Cancel</button>
-            <label class="secondary-action local-chat-import-character-button">
+      <section class="roleplayer-character-editor" data-roleplayer-character-editor hidden>
+        <header class="roleplayer-editor-page-header">
+          <span class="roleplayer-editor-kicker" data-roleplayer-character-modal-title>Edit Character</span>
+          <div class="roleplayer-editor-header-actions">
+            <button class="secondary-action" type="button" data-roleplayer-close-character>Cancel</button>
+            <label class="secondary-action roleplayer-import-character-button">
               <ph-file-arrow-up weight="bold" aria-hidden="true"></ph-file-arrow-up>
               <span>Import JSON</span>
-              <input class="sr-only" type="file" accept="application/json,.json" data-local-chat-character-json-input>
+              <input class="sr-only" type="file" accept="application/json,.json" data-roleplayer-character-json-input>
             </label>
-            <a class="secondary-action local-chat-schema-download" href="local-chat-character.schema.json" download>
+            <a class="secondary-action roleplayer-schema-download" href="roleplayer-character.schema.json" download>
               <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
               <span>JSON Schema</span>
             </a>
-            <button class="secondary-action local-chat-ai-vibe-button" type="button" data-local-chat-ai-vibe-open>
+            <button class="secondary-action roleplayer-ai-vibe-button" type="button" data-roleplayer-ai-vibe-open>
               <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
               <span>AI Vibe</span>
             </button>
-            <button class="primary-action local-chat-character-save-button" type="submit" form="local-chat-character-form">
+            <button class="primary-action roleplayer-character-save-button" type="submit" form="roleplayer-character-form">
               <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
-              <span data-local-chat-character-save-text>Save Character</span>
+              <span data-roleplayer-character-save-text>Save Character</span>
             </button>
           </div>
         </header>
-        <form class="local-chat-editor-form" id="local-chat-character-form" data-local-chat-character-form>
-          <section class="local-chat-image-upload" aria-label="Character image">
-            <div class="local-chat-image-preview" data-local-chat-character-image-preview aria-hidden="true">
+        <form class="roleplayer-editor-form" id="roleplayer-character-form" data-roleplayer-character-form>
+          <section class="roleplayer-image-upload" aria-label="Character image">
+            <div class="roleplayer-image-preview" data-roleplayer-character-image-preview aria-hidden="true">
               <ph-user-focus weight="duotone" aria-hidden="true"></ph-user-focus>
             </div>
-            <div class="local-chat-image-upload-body">
+            <div class="roleplayer-image-upload-body">
               <span>Character Image</span>
-              <strong data-local-chat-character-image-name>No image selected</strong>
+              <strong data-roleplayer-character-image-name>No image selected</strong>
               <p>Upload a portrait or visual reference for this character.</p>
-              <div class="local-chat-image-upload-actions">
-                <label class="secondary-action local-chat-image-upload-button">
+              <div class="roleplayer-image-upload-actions">
+                <label class="secondary-action roleplayer-image-upload-button">
                   <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
                   Upload Image
-                  <input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-local-chat-character-image-input>
+                  <input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-roleplayer-character-image-input>
                 </label>
-                <button class="secondary-action local-chat-generate-image-button" type="button" data-local-chat-generate-character-image disabled>
+                <button class="secondary-action roleplayer-generate-image-button" type="button" data-roleplayer-generate-character-image disabled>
                   <ph-image-square weight="bold" aria-hidden="true"></ph-image-square>
                   <span>Generate Image</span>
                 </button>
-                <button class="ghost-action" type="button" data-local-chat-character-image-clear hidden>
+                <button class="ghost-action" type="button" data-roleplayer-character-image-clear hidden>
                   <ph-x weight="bold" aria-hidden="true"></ph-x>
                   Clear
                 </button>
               </div>
             </div>
           </section>
-          <div class="local-chat-form-grid">
+          <div class="roleplayer-form-grid">
             <label>
               <span>Name</span>
               <input type="text" name="name" maxlength="160" required>
@@ -235,47 +235,47 @@
               <textarea name="first_message" rows="3"></textarea>
             </label>
           </div>
-          <p class="dialog-status" data-local-chat-character-status></p>
-          <div class="local-chat-dialog-actions">
-            <button class="danger-action" type="button" data-local-chat-archive-character hidden>
+          <p class="dialog-status" data-roleplayer-character-status></p>
+          <div class="roleplayer-dialog-actions">
+            <button class="danger-action" type="button" data-roleplayer-archive-character hidden>
               <ph-archive weight="bold" aria-hidden="true"></ph-archive>
               Archive Character
             </button>
-            <span class="local-chat-dialog-spacer" aria-hidden="true"></span>
-            <button class="secondary-action" type="button" data-local-chat-close-character>Cancel</button>
-            <button class="primary-action local-chat-character-save-button" type="submit">
+            <span class="roleplayer-dialog-spacer" aria-hidden="true"></span>
+            <button class="secondary-action" type="button" data-roleplayer-close-character>Cancel</button>
+            <button class="primary-action roleplayer-character-save-button" type="submit">
               <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
-              <span data-local-chat-character-save-text>Save Character</span>
+              <span data-roleplayer-character-save-text>Save Character</span>
             </button>
           </div>
         </form>
       </section>
 
-      <section class="local-chat-persona-page" data-local-chat-persona-page hidden>
-        <header class="local-chat-editor-page-header">
-          <span class="local-chat-editor-kicker">My Personas</span>
-          <div class="local-chat-editor-header-actions">
-            <button class="secondary-action local-chat-new-persona-button" type="button" data-local-chat-new-persona>
+      <section class="roleplayer-persona-page" data-roleplayer-persona-page hidden>
+        <header class="roleplayer-editor-page-header">
+          <span class="roleplayer-editor-kicker">My Personas</span>
+          <div class="roleplayer-editor-header-actions">
+            <button class="secondary-action roleplayer-new-persona-button" type="button" data-roleplayer-new-persona>
               <ph-plus-circle weight="bold" aria-hidden="true"></ph-plus-circle>
               <span>New Persona</span>
             </button>
-            <button class="secondary-action" type="button" data-local-chat-close-personas>Cancel</button>
-            <button class="primary-action local-chat-persona-save-button" type="submit" form="local-chat-persona-form">
+            <button class="secondary-action" type="button" data-roleplayer-close-personas>Cancel</button>
+            <button class="primary-action roleplayer-persona-save-button" type="submit" form="roleplayer-persona-form">
               <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
               <span>Save Persona</span>
             </button>
           </div>
         </header>
-        <div class="local-chat-persona-layout">
-          <div class="local-chat-persona-list" data-local-chat-persona-list></div>
-          <form class="local-chat-editor-form" id="local-chat-persona-form" data-local-chat-persona-form>
+        <div class="roleplayer-persona-layout">
+          <div class="roleplayer-persona-list" data-roleplayer-persona-list></div>
+          <form class="roleplayer-editor-form" id="roleplayer-persona-form" data-roleplayer-persona-form>
             <input type="hidden" name="id">
-            <div class="local-chat-form-grid">
+            <div class="roleplayer-form-grid">
               <label>
                 <span>Name</span>
                 <input type="text" name="name" maxlength="160" required>
               </label>
-              <label class="local-chat-check">
+              <label class="roleplayer-check">
                 <input type="checkbox" name="is_default">
                 <span>Default persona</span>
               </label>
@@ -308,19 +308,19 @@
                 <textarea name="instructions" rows="3"></textarea>
               </label>
             </div>
-            <p class="dialog-status" data-local-chat-persona-status></p>
-            <div class="local-chat-dialog-actions">
-              <button class="danger-action" type="button" data-local-chat-archive-persona hidden>
+            <p class="dialog-status" data-roleplayer-persona-status></p>
+            <div class="roleplayer-dialog-actions">
+              <button class="danger-action" type="button" data-roleplayer-archive-persona hidden>
                 <ph-archive weight="bold" aria-hidden="true"></ph-archive>
                 Archive Persona
               </button>
-              <span class="local-chat-dialog-spacer" aria-hidden="true"></span>
-              <button class="secondary-action local-chat-new-persona-button" type="button" data-local-chat-new-persona>
+              <span class="roleplayer-dialog-spacer" aria-hidden="true"></span>
+              <button class="secondary-action roleplayer-new-persona-button" type="button" data-roleplayer-new-persona>
                 <ph-plus-circle weight="bold" aria-hidden="true"></ph-plus-circle>
                 <span>New Persona</span>
               </button>
-              <button class="secondary-action" type="button" data-local-chat-close-personas>Cancel</button>
-              <button class="primary-action local-chat-persona-save-button" type="submit">
+              <button class="secondary-action" type="button" data-roleplayer-close-personas>Cancel</button>
+              <button class="primary-action roleplayer-persona-save-button" type="submit">
                 <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
                 <span>Save Persona</span>
               </button>
@@ -330,28 +330,28 @@
       </section>
     </main>
 
-    <div class="modal-backdrop local-chat-modal-backdrop" data-local-chat-settings-modal hidden>
-      <div class="modal-dialog local-chat-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="local-chat-settings-title">
+    <div class="modal-backdrop roleplayer-modal-backdrop" data-roleplayer-settings-modal hidden>
+      <div class="modal-dialog roleplayer-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="roleplayer-settings-title">
         <div class="modal-header">
           <div>
-            <p class="settings-eyebrow">Local Chat</p>
-            <h2 id="local-chat-settings-title">Chat Settings</h2>
+            <p class="settings-eyebrow">Roleplayer</p>
+            <h2 id="roleplayer-settings-title">Chat Settings</h2>
             <p class="modal-subtitle">Settings for this chat session only.</p>
           </div>
-          <button class="modal-close" type="button" aria-label="Close settings" data-local-chat-settings-close>
+          <button class="modal-close" type="button" aria-label="Close settings" data-roleplayer-settings-close>
             <ph-x weight="bold" aria-hidden="true"></ph-x>
           </button>
         </div>
-        <form data-local-chat-settings-form>
-          <label class="local-chat-field">
+        <form data-roleplayer-settings-form>
+          <label class="roleplayer-field">
             <span>Model</span>
-            <select data-local-chat-settings-model></select>
+            <select data-roleplayer-settings-model></select>
           </label>
-          <label class="local-chat-slider-field">
+          <label class="roleplayer-slider-field">
             <span>Length of reply</span>
-            <strong data-local-chat-reply-length-label>Standard</strong>
-            <input type="range" min="0" max="4" step="1" value="2" data-local-chat-reply-length>
-            <div class="local-chat-slider-ticks" aria-hidden="true">
+            <strong data-roleplayer-reply-length-label>Standard</strong>
+            <input type="range" min="0" max="4" step="1" value="2" data-roleplayer-reply-length>
+            <div class="roleplayer-slider-ticks" aria-hidden="true">
               <span>Brief</span>
               <span>Short</span>
               <span>Standard</span>
@@ -359,10 +359,10 @@
               <span>Extended</span>
             </div>
           </label>
-          <p class="dialog-status" data-local-chat-settings-status></p>
-          <div class="local-chat-dialog-actions">
-            <span class="local-chat-dialog-spacer" aria-hidden="true"></span>
-            <button class="secondary-action" type="button" data-local-chat-settings-close>Cancel</button>
+          <p class="dialog-status" data-roleplayer-settings-status></p>
+          <div class="roleplayer-dialog-actions">
+            <span class="roleplayer-dialog-spacer" aria-hidden="true"></span>
+            <button class="secondary-action" type="button" data-roleplayer-settings-close>Cancel</button>
             <button class="primary-action" type="submit">
               <ph-floppy-disk weight="bold" aria-hidden="true"></ph-floppy-disk>
               Save Settings
@@ -372,20 +372,20 @@
       </div>
     </div>
 
-    <div class="modal-backdrop local-chat-modal-backdrop" data-local-chat-ai-vibe-modal hidden>
-      <div class="modal-dialog local-chat-ai-vibe-dialog" role="dialog" aria-modal="true" aria-labelledby="local-chat-ai-vibe-title">
+    <div class="modal-backdrop roleplayer-modal-backdrop" data-roleplayer-ai-vibe-modal hidden>
+      <div class="modal-dialog roleplayer-ai-vibe-dialog" role="dialog" aria-modal="true" aria-labelledby="roleplayer-ai-vibe-title">
         <div class="modal-header">
           <div>
-            <p class="settings-eyebrow">Local Chat</p>
-            <h2 id="local-chat-ai-vibe-title">AI Vibe</h2>
+            <p class="settings-eyebrow">Roleplayer</p>
+            <h2 id="roleplayer-ai-vibe-title">AI Vibe</h2>
             <p class="modal-subtitle">Give the model optional notes. Empty character fields will be filled, and anything already typed will stay untouched.</p>
           </div>
-          <button class="modal-close" type="button" aria-label="Close AI Vibe" data-local-chat-ai-vibe-close>
+          <button class="modal-close" type="button" aria-label="Close AI Vibe" data-roleplayer-ai-vibe-close>
             <ph-x weight="bold" aria-hidden="true"></ph-x>
           </button>
         </div>
-        <form data-local-chat-ai-vibe-form>
-          <div class="local-chat-form-grid local-chat-ai-vibe-grid">
+        <form data-roleplayer-ai-vibe-form>
+          <div class="roleplayer-form-grid roleplayer-ai-vibe-grid">
             <label>
               <span>Gender</span>
               <input type="text" name="gender" placeholder="Woman, man, nonbinary, etc.">
@@ -439,11 +439,11 @@
               <textarea name="other" rows="3" placeholder="Any miscellaneous notes for the generator."></textarea>
             </label>
           </div>
-          <p class="dialog-status" data-local-chat-ai-vibe-status></p>
-          <div class="local-chat-dialog-actions">
-            <span class="local-chat-dialog-spacer" aria-hidden="true"></span>
-            <button class="secondary-action" type="button" data-local-chat-ai-vibe-close>Cancel</button>
-            <button class="primary-action local-chat-ai-vibe-generate-button" type="submit" data-local-chat-ai-vibe-generate>
+          <p class="dialog-status" data-roleplayer-ai-vibe-status></p>
+          <div class="roleplayer-dialog-actions">
+            <span class="roleplayer-dialog-spacer" aria-hidden="true"></span>
+            <button class="secondary-action" type="button" data-roleplayer-ai-vibe-close>Cancel</button>
+            <button class="primary-action roleplayer-ai-vibe-generate-button" type="submit" data-roleplayer-ai-vibe-generate>
               <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
               <span>Generate Vibe</span>
             </button>
@@ -455,7 +455,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=generation-activity-1"></script>
-  <script src="local-chat.js?v=local-chat-37"></script>
+  <script src="script.js?v=roleplayer-1"></script>
+  <script src="roleplayer.js?v=roleplayer-37"></script>
 </body>
 </html>

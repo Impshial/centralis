@@ -433,7 +433,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu" role="menu">
         <a href="god-engine.html" role="menuitem"><ph-dna weight="duotone" aria-hidden="true"></ph-dna><span>God Engine</span></a>
         <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
-        <a href="local-chat.html" role="menuitem" data-admin-only-nav hidden><ph-robot weight="duotone" aria-hidden="true"></ph-robot><span>Local Chat</span></a>
+        <a href="roleplayer.html" role="menuitem" data-admin-only-nav hidden><ph-robot weight="duotone" aria-hidden="true"></ph-robot><span>Roleplayer</span></a>
         <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
       </div>
     </div>

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://centralis.local/local-chat-character.schema.json",
-  "title": "Centralis Local Chat Character",
+  "$id": "https://centralis.local/roleplayer-character.schema.json",
+  "title": "Centralis Roleplayer Character",
   "type": "object",
   "additionalProperties": true,
   "properties": {

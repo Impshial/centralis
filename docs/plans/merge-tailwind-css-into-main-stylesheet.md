@@ -26,7 +26,7 @@ Consolidate Centralis styling into one source of truth by moving all CSS from `t
   - `fusion.html`
   - `stellar-architect.html`
   - `calendar.html`
-  - `local-chat.html`
+  - `roleplayer.html`
 - Verify shared header/navigation, theme menu, generation activity modal, Movie Tracker table styling, Fusion canvas/homepage, and Stellar Architect still render correctly.
 - Confirm the merge preserved cascade order by checking that styles previously overridden by `tailwind.generated.css` still win after consolidation.
 

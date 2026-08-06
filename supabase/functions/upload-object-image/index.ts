@@ -25,10 +25,10 @@ function createUploadImageMetadata(input: {
       note: "Uploaded image",
     });
   }
-  if (input.storageModule === "local-chat" || input.storageModule.startsWith("local-chat/")) {
+  if (input.storageModule === "roleplayer" || input.storageModule.startsWith("roleplayer/")) {
     return createCentralisStorageMetadata({
-      module: "Local Chat",
-      context: `Local Chat Character: ${name}`,
+      module: "Roleplayer",
+      context: `Roleplayer Character: ${name}`,
       note: "Uploaded image",
     });
   }

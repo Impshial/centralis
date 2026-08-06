@@ -1,5 +1,5 @@
 (function () {
-  const MODEL_STORAGE_KEY = "centralis:local-chat:selected-model";
+  const MODEL_STORAGE_KEY = "centralis:roleplayer:selected-model";
   const DEFAULT_FEATHERLESS_MODEL = "anthracite-org/magnum-v4-9b";
   const PREFERRED_FEATHERLESS_MODELS = [
     DEFAULT_FEATHERLESS_MODEL,
@@ -88,76 +88,76 @@
   ];
 
   const els = {
-    page: document.querySelector("[data-local-chat-page]"),
-    header: document.querySelector("[data-local-chat-header]"),
-    library: document.querySelector("[data-local-chat-library]"),
-    detail: document.querySelector("[data-local-chat-detail]"),
-    characterPage: document.querySelector("[data-local-chat-character-page]"),
-    chatPage: document.querySelector("[data-local-chat-chat-page]"),
-    modelLog: document.querySelector("[data-local-chat-model-log]"),
-    modelLogList: document.querySelector("[data-local-chat-model-log-list]"),
-    modelLogToggle: document.querySelector("[data-local-chat-model-log-toggle]"),
-    controls: document.querySelector("[data-local-chat-controls]"),
-    characterCount: document.querySelector("[data-local-chat-character-count]"),
-    characterSearch: document.querySelector("[data-local-chat-search]"),
-    characterGrid: document.querySelector("[data-local-chat-character-grid]"),
-    characterEmpty: document.querySelector("[data-local-chat-empty]"),
-    landingStatus: document.querySelector("[data-local-chat-landing-status]"),
-    createCharacter: document.querySelector("[data-local-chat-create-character]"),
-    personas: document.querySelector("[data-local-chat-personas]"),
-    refresh: document.querySelector("[data-local-chat-refresh]"),
-    back: document.querySelector("[data-local-chat-back]"),
-    chatBack: document.querySelector("[data-local-chat-chat-back]"),
-    detailCard: document.querySelector("[data-local-chat-detail-card]"),
-    statusCard: document.querySelector("[data-local-chat-status-card]"),
-    statusKicker: document.querySelector("[data-local-chat-status-kicker]"),
-    statusTitle: document.querySelector("[data-local-chat-status-title]"),
-    statusBody: document.querySelector("[data-local-chat-status-body]"),
-    model: document.querySelector("[data-local-chat-model]"),
-    personaSelect: document.querySelector("[data-local-chat-persona-select]"),
-    startSession: document.querySelector("[data-local-chat-start-session]"),
-    sessions: document.querySelector("[data-local-chat-sessions]"),
-    sessionKicker: document.querySelector("[data-local-chat-session-kicker]"),
-    sessionTitle: document.querySelector("[data-local-chat-session-title]"),
-    settingsOpen: document.querySelector("[data-local-chat-settings-open]"),
-    messages: document.querySelector("[data-local-chat-messages]"),
-    form: document.querySelector("[data-local-chat-form]"),
-    input: document.querySelector("[data-local-chat-input]"),
-    send: document.querySelector("[data-local-chat-send]"),
-    formStatus: document.querySelector("[data-local-chat-form-status]"),
-    characterEditor: document.querySelector("[data-local-chat-character-editor]"),
-    characterModalTitle: document.querySelector("[data-local-chat-character-modal-title]"),
-    characterSaveText: document.querySelectorAll("[data-local-chat-character-save-text]"),
-    characterForm: document.querySelector("[data-local-chat-character-form]"),
-    characterStatus: document.querySelector("[data-local-chat-character-status]"),
-    archiveCharacter: document.querySelector("[data-local-chat-archive-character]"),
-    characterJsonInput: document.querySelector("[data-local-chat-character-json-input]"),
-    characterImageInput: document.querySelector("[data-local-chat-character-image-input]"),
-    characterImagePreview: document.querySelector("[data-local-chat-character-image-preview]"),
-    characterImageName: document.querySelector("[data-local-chat-character-image-name]"),
-    characterImageClear: document.querySelector("[data-local-chat-character-image-clear]"),
-    generateCharacterImage: document.querySelector("[data-local-chat-generate-character-image]"),
-    closeCharacterButtons: document.querySelectorAll("[data-local-chat-close-character]"),
-    aiVibeOpen: document.querySelector("[data-local-chat-ai-vibe-open]"),
-    aiVibeModal: document.querySelector("[data-local-chat-ai-vibe-modal]"),
-    aiVibeForm: document.querySelector("[data-local-chat-ai-vibe-form]"),
-    aiVibeStatus: document.querySelector("[data-local-chat-ai-vibe-status]"),
-    aiVibeGenerate: document.querySelector("[data-local-chat-ai-vibe-generate]"),
-    aiVibeCloseButtons: document.querySelectorAll("[data-local-chat-ai-vibe-close]"),
-    personaPage: document.querySelector("[data-local-chat-persona-page]"),
-    personaForm: document.querySelector("[data-local-chat-persona-form]"),
-    personaStatus: document.querySelector("[data-local-chat-persona-status]"),
-    personaList: document.querySelector("[data-local-chat-persona-list]"),
-    newPersonaButtons: document.querySelectorAll("[data-local-chat-new-persona]"),
-    archivePersona: document.querySelector("[data-local-chat-archive-persona]"),
-    closePersonaButtons: document.querySelectorAll("[data-local-chat-close-personas]"),
-    settingsModal: document.querySelector("[data-local-chat-settings-modal]"),
-    settingsForm: document.querySelector("[data-local-chat-settings-form]"),
-    settingsStatus: document.querySelector("[data-local-chat-settings-status]"),
-    settingsModel: document.querySelector("[data-local-chat-settings-model]"),
-    replyLength: document.querySelector("[data-local-chat-reply-length]"),
-    replyLengthLabel: document.querySelector("[data-local-chat-reply-length-label]"),
-    closeSettingsButtons: document.querySelectorAll("[data-local-chat-settings-close]")
+    page: document.querySelector("[data-roleplayer-page]"),
+    header: document.querySelector("[data-roleplayer-header]"),
+    library: document.querySelector("[data-roleplayer-library]"),
+    detail: document.querySelector("[data-roleplayer-detail]"),
+    characterPage: document.querySelector("[data-roleplayer-character-page]"),
+    chatPage: document.querySelector("[data-roleplayer-chat-page]"),
+    modelLog: document.querySelector("[data-roleplayer-model-log]"),
+    modelLogList: document.querySelector("[data-roleplayer-model-log-list]"),
+    modelLogToggle: document.querySelector("[data-roleplayer-model-log-toggle]"),
+    controls: document.querySelector("[data-roleplayer-controls]"),
+    characterCount: document.querySelector("[data-roleplayer-character-count]"),
+    characterSearch: document.querySelector("[data-roleplayer-search]"),
+    characterGrid: document.querySelector("[data-roleplayer-character-grid]"),
+    characterEmpty: document.querySelector("[data-roleplayer-empty]"),
+    landingStatus: document.querySelector("[data-roleplayer-landing-status]"),
+    createCharacter: document.querySelector("[data-roleplayer-create-character]"),
+    personas: document.querySelector("[data-roleplayer-personas]"),
+    refresh: document.querySelector("[data-roleplayer-refresh]"),
+    back: document.querySelector("[data-roleplayer-back]"),
+    chatBack: document.querySelector("[data-roleplayer-chat-back]"),
+    detailCard: document.querySelector("[data-roleplayer-detail-card]"),
+    statusCard: document.querySelector("[data-roleplayer-status-card]"),
+    statusKicker: document.querySelector("[data-roleplayer-status-kicker]"),
+    statusTitle: document.querySelector("[data-roleplayer-status-title]"),
+    statusBody: document.querySelector("[data-roleplayer-status-body]"),
+    model: document.querySelector("[data-roleplayer-model]"),
+    personaSelect: document.querySelector("[data-roleplayer-persona-select]"),
+    startSession: document.querySelector("[data-roleplayer-start-session]"),
+    sessions: document.querySelector("[data-roleplayer-sessions]"),
+    sessionKicker: document.querySelector("[data-roleplayer-session-kicker]"),
+    sessionTitle: document.querySelector("[data-roleplayer-session-title]"),
+    settingsOpen: document.querySelector("[data-roleplayer-settings-open]"),
+    messages: document.querySelector("[data-roleplayer-messages]"),
+    form: document.querySelector("[data-roleplayer-form]"),
+    input: document.querySelector("[data-roleplayer-input]"),
+    send: document.querySelector("[data-roleplayer-send]"),
+    formStatus: document.querySelector("[data-roleplayer-form-status]"),
+    characterEditor: document.querySelector("[data-roleplayer-character-editor]"),
+    characterModalTitle: document.querySelector("[data-roleplayer-character-modal-title]"),
+    characterSaveText: document.querySelectorAll("[data-roleplayer-character-save-text]"),
+    characterForm: document.querySelector("[data-roleplayer-character-form]"),
+    characterStatus: document.querySelector("[data-roleplayer-character-status]"),
+    archiveCharacter: document.querySelector("[data-roleplayer-archive-character]"),
+    characterJsonInput: document.querySelector("[data-roleplayer-character-json-input]"),
+    characterImageInput: document.querySelector("[data-roleplayer-character-image-input]"),
+    characterImagePreview: document.querySelector("[data-roleplayer-character-image-preview]"),
+    characterImageName: document.querySelector("[data-roleplayer-character-image-name]"),
+    characterImageClear: document.querySelector("[data-roleplayer-character-image-clear]"),
+    generateCharacterImage: document.querySelector("[data-roleplayer-generate-character-image]"),
+    closeCharacterButtons: document.querySelectorAll("[data-roleplayer-close-character]"),
+    aiVibeOpen: document.querySelector("[data-roleplayer-ai-vibe-open]"),
+    aiVibeModal: document.querySelector("[data-roleplayer-ai-vibe-modal]"),
+    aiVibeForm: document.querySelector("[data-roleplayer-ai-vibe-form]"),
+    aiVibeStatus: document.querySelector("[data-roleplayer-ai-vibe-status]"),
+    aiVibeGenerate: document.querySelector("[data-roleplayer-ai-vibe-generate]"),
+    aiVibeCloseButtons: document.querySelectorAll("[data-roleplayer-ai-vibe-close]"),
+    personaPage: document.querySelector("[data-roleplayer-persona-page]"),
+    personaForm: document.querySelector("[data-roleplayer-persona-form]"),
+    personaStatus: document.querySelector("[data-roleplayer-persona-status]"),
+    personaList: document.querySelector("[data-roleplayer-persona-list]"),
+    newPersonaButtons: document.querySelectorAll("[data-roleplayer-new-persona]"),
+    archivePersona: document.querySelector("[data-roleplayer-archive-persona]"),
+    closePersonaButtons: document.querySelectorAll("[data-roleplayer-close-personas]"),
+    settingsModal: document.querySelector("[data-roleplayer-settings-modal]"),
+    settingsForm: document.querySelector("[data-roleplayer-settings-form]"),
+    settingsStatus: document.querySelector("[data-roleplayer-settings-status]"),
+    settingsModel: document.querySelector("[data-roleplayer-settings-model]"),
+    replyLength: document.querySelector("[data-roleplayer-reply-length]"),
+    replyLengthLabel: document.querySelector("[data-roleplayer-reply-length-label]"),
+    closeSettingsButtons: document.querySelectorAll("[data-roleplayer-settings-close]")
   };
 
   const state = {
@@ -358,15 +358,15 @@
       ? "Time unavailable"
       : `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
     return `
-      <footer class="local-chat-message-actions" aria-label="${isAssistant ? "Reply actions" : "Message actions"}">
+      <footer class="roleplayer-message-actions" aria-label="${isAssistant ? "Reply actions" : "Message actions"}">
         ${isAssistant ? `<span>${escapeHtml(timing)}</span>` : ""}
-        <button type="button" aria-label="${isAssistant ? "Copy reply" : "Copy message"}" title="${isAssistant ? "Copy reply" : "Copy message"}" data-local-chat-copy-reply="${escapeHtml(message.id || "")}">
+        <button type="button" aria-label="${isAssistant ? "Copy reply" : "Copy message"}" title="${isAssistant ? "Copy reply" : "Copy message"}" data-roleplayer-copy-reply="${escapeHtml(message.id || "")}">
           <ph-copy weight="bold" aria-hidden="true"></ph-copy>
         </button>
-        <button type="button" aria-label="${isAssistant ? "Delete reply" : "Delete message"}" title="${isAssistant ? "Delete reply" : "Delete message"}" data-local-chat-delete-reply="${escapeHtml(message.id || "")}">
+        <button type="button" aria-label="${isAssistant ? "Delete reply" : "Delete message"}" title="${isAssistant ? "Delete reply" : "Delete message"}" data-roleplayer-delete-reply="${escapeHtml(message.id || "")}">
           <ph-trash weight="bold" aria-hidden="true"></ph-trash>
         </button>
-        ${isAssistant ? `<button type="button" data-local-chat-continue-reply="${escapeHtml(message.id || "")}">
+        ${isAssistant ? `<button type="button" data-roleplayer-continue-reply="${escapeHtml(message.id || "")}">
           <ph-arrow-bend-down-right weight="bold" aria-hidden="true"></ph-arrow-bend-down-right>
           Continue
         </button>` : ""}
@@ -505,7 +505,7 @@
 
   function showLibrary() {
     state.editorMode = "";
-    els.page?.classList.remove("is-local-chat-detail-view", "is-local-chat-editor-view");
+    els.page?.classList.remove("is-roleplayer-detail-view", "is-roleplayer-editor-view");
     if (els.header) els.header.hidden = false;
     if (els.library) els.library.hidden = false;
     if (els.detail) els.detail.hidden = true;
@@ -520,8 +520,8 @@
   }
 
   function showDetail() {
-    els.page?.classList.add("is-local-chat-detail-view");
-    els.page?.classList.remove("is-local-chat-editor-view");
+    els.page?.classList.add("is-roleplayer-detail-view");
+    els.page?.classList.remove("is-roleplayer-editor-view");
     if (els.header) els.header.hidden = true;
     if (els.library) els.library.hidden = true;
     if (els.detail) els.detail.hidden = false;
@@ -549,8 +549,8 @@
 
   function showCharacterEditor() {
     state.editorMode = state.editingCharacterId ? "edit" : "create";
-    els.page?.classList.add("is-local-chat-editor-view");
-    els.page?.classList.remove("is-local-chat-detail-view");
+    els.page?.classList.add("is-roleplayer-editor-view");
+    els.page?.classList.remove("is-roleplayer-detail-view");
     if (els.header) els.header.hidden = true;
     if (els.library) els.library.hidden = true;
     if (els.detail) els.detail.hidden = true;
@@ -562,8 +562,8 @@
 
   function showPersonasPage() {
     state.editorMode = "personas";
-    els.page?.classList.add("is-local-chat-editor-view");
-    els.page?.classList.remove("is-local-chat-detail-view");
+    els.page?.classList.add("is-roleplayer-editor-view");
+    els.page?.classList.remove("is-roleplayer-detail-view");
     if (els.header) els.header.hidden = true;
     if (els.library) els.library.hidden = true;
     if (els.detail) els.detail.hidden = true;
@@ -592,7 +592,7 @@
   function closeModal(modal) {
     if (!modal) return;
     modal.hidden = true;
-    if (!document.querySelector(".local-chat-modal-backdrop:not([hidden])")) {
+    if (!document.querySelector(".roleplayer-modal-backdrop:not([hidden])")) {
       document.body.classList.remove("centralis-modal-open");
     }
   }
@@ -623,9 +623,9 @@
     els.characterGrid.innerHTML = characters.map((character) => {
       const summary = normalizeText(character.short_description || character.description) || "No description yet.";
       return `
-        <article class="local-chat-character-card" data-character-id="${escapeHtml(character.id)}" tabindex="0">
-          <div class="local-chat-character-avatar" aria-hidden="true">${characterAvatarHtml(character)}</div>
-          <div class="local-chat-character-body">
+        <article class="roleplayer-character-card" data-character-id="${escapeHtml(character.id)}" tabindex="0">
+          <div class="roleplayer-character-avatar" aria-hidden="true">${characterAvatarHtml(character)}</div>
+          <div class="roleplayer-character-body">
             <h2>${escapeHtml(character.name)}</h2>
             <p>${escapeHtml(summary)}</p>
           </div>
@@ -638,11 +638,11 @@
     const character = selectedCharacter();
     if (!els.detailCard || !character) return;
     els.detailCard.innerHTML = `
-      <div class="local-chat-character-page-image" aria-hidden="true">${characterImageHtml(character)}</div>
-      <div class="local-chat-character-page-copy">
+      <div class="roleplayer-character-page-image" aria-hidden="true">${characterImageHtml(character)}</div>
+      <div class="roleplayer-character-page-copy">
         <h2>${escapeHtml(character.name)}</h2>
         <span>${escapeHtml(character.short_description || character.description || "No description yet.")}</span>
-        <div class="local-chat-character-page-details">
+        <div class="roleplayer-character-page-details">
           ${character.description ? `<section><strong>Description</strong><p>${escapeHtml(character.description)}</p></section>` : ""}
           ${character.personality ? `<section><strong>Personality</strong><p>${escapeHtml(character.personality)}</p></section>` : ""}
           ${character.appearance ? `<section><strong>Appearance</strong><p>${escapeHtml(character.appearance)}</p></section>` : ""}
@@ -650,12 +650,12 @@
           ${character.scenario ? `<section><strong>Scenario</strong><p>${escapeHtml(character.scenario)}</p></section>` : ""}
         </div>
       </div>
-      <div class="local-chat-detail-actions">
-        <button class="primary-action local-chat-detail-edit-button" type="button" data-local-chat-edit-character>
+      <div class="roleplayer-detail-actions">
+        <button class="primary-action roleplayer-detail-edit-button" type="button" data-roleplayer-edit-character>
           <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
           <span>Edit Character</span>
         </button>
-        <button class="danger-action local-chat-detail-delete-button" type="button" data-local-chat-delete-character>
+        <button class="danger-action roleplayer-detail-delete-button" type="button" data-roleplayer-delete-character>
           <ph-trash weight="bold" aria-hidden="true"></ph-trash>
           <span>Delete Character</span>
         </button>
@@ -725,17 +725,17 @@
   function renderSessions() {
     if (!els.sessions) return;
     if (!state.sessions.length) {
-      els.sessions.innerHTML = '<p class="local-chat-muted">No chats yet.</p>';
+      els.sessions.innerHTML = '<p class="roleplayer-muted">No chats yet.</p>';
       return;
     }
     els.sessions.innerHTML = state.sessions.map((session) => `
-      <article class="local-chat-session-card${session.id === state.selectedSessionId ? " is-active" : ""}" data-session-id="${escapeHtml(session.id)}" tabindex="0">
+      <article class="roleplayer-session-card${session.id === state.selectedSessionId ? " is-active" : ""}" data-session-id="${escapeHtml(session.id)}" tabindex="0">
         <div>
           <strong>${escapeHtml(sessionDisplayTitle(session))}</strong>
           <span>${escapeHtml(formatDate(session.last_message_at || session.updated_at || session.created_at))}</span>
           <em>${Number(session._messageCount || 0)} ${Number(session._messageCount || 0) === 1 ? "message" : "messages"}</em>
         </div>
-        <button type="button" aria-label="Delete session" title="Delete session" data-local-chat-delete-session="${escapeHtml(session.id)}">
+        <button type="button" aria-label="Delete session" title="Delete session" data-roleplayer-delete-session="${escapeHtml(session.id)}">
           <ph-trash weight="bold" aria-hidden="true"></ph-trash>
         </button>
       </article>
@@ -753,7 +753,7 @@
     if (!els.messages) return;
     if (!state.selectedSessionId) {
       els.messages.innerHTML = `
-        <div class="local-chat-empty">
+        <div class="roleplayer-empty">
           <ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle>
           <strong>Start a character chat</strong>
           <p>Select a model and start a session to begin.</p>
@@ -763,7 +763,7 @@
     }
     if (!state.messages.length) {
       els.messages.innerHTML = `
-        <div class="local-chat-empty">
+        <div class="roleplayer-empty">
           <ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle>
           <strong>No messages yet</strong>
           <p>Send the first message to continue the scene.</p>
@@ -779,14 +779,14 @@
       const placeholder = message.streaming ? `Thinking... ${formatElapsedSeconds(state.generationElapsedSeconds)}` : "";
       const text = escapeHtml(message.content || placeholder).replace(/\n/g, "<br>");
       const avatar = role === "assistant"
-        ? `<div class="local-chat-message-avatar" aria-hidden="true">${characterImageHtml(character)}</div>`
+        ? `<div class="roleplayer-message-avatar" aria-hidden="true">${characterImageHtml(character)}</div>`
         : "";
       return `
-        <article class="local-chat-message is-${role}${message.streaming ? " is-streaming" : ""}">
+        <article class="roleplayer-message is-${role}${message.streaming ? " is-streaming" : ""}">
           ${avatar}
-          <div class="local-chat-message-content">
+          <div class="roleplayer-message-content">
             <span>${escapeHtml(label)}</span>
-            <div class="local-chat-message-body">${text}</div>
+            <div class="roleplayer-message-body">${text}</div>
             ${renderMessageActions(message)}
           </div>
         </article>
@@ -840,7 +840,7 @@
     if (!els.modelLogList) return;
     if (!state.modelLog.length) {
       els.modelLogList.innerHTML = `
-        <div class="local-chat-model-log-empty">
+        <div class="roleplayer-model-log-empty">
           <strong>No model calls yet</strong>
           <span>Send a message to see the exact prompts and responses Centralis exchanges with Featherless.</span>
         </div>
@@ -848,7 +848,7 @@
       return;
     }
     els.modelLogList.innerHTML = state.modelLog.slice().reverse().map((entry) => `
-      <details class="local-chat-model-log-entry" open>
+      <details class="roleplayer-model-log-entry" open>
         <summary>
           <span>${escapeHtml(formatDate(entry.createdAt))}</span>
           <strong>${escapeHtml(entry.label)}</strong>
@@ -907,7 +907,7 @@
     setDialogStatus(els.settingsStatus, "Saving settings...");
     try {
       const { data, error } = await requireSupabase()
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .update({ settings, model_name: modelName })
         .eq("id", session.id)
         .eq("user_id", state.user.id)
@@ -929,7 +929,7 @@
 
   function renderChatHeader() {
     const session = selectedSession();
-    if (els.sessionKicker) els.sessionKicker.textContent = session ? selectedCharacter()?.name || "Local Chat" : "No Session";
+    if (els.sessionKicker) els.sessionKicker.textContent = session ? selectedCharacter()?.name || "Roleplayer" : "No Session";
     if (els.sessionTitle) els.sessionTitle.textContent = session ? selectedCharacter()?.name || session.title || "Chat" : "Select or start a chat";
     if (els.settingsOpen) els.settingsOpen.disabled = !session || state.busy;
     renderReplyLengthControl();
@@ -962,10 +962,10 @@
         ? '<ph-spinner-gap weight="bold" aria-hidden="true"></ph-spinner-gap><span>Generating...</span>'
         : '<ph-image-square weight="bold" aria-hidden="true"></ph-image-square><span>Generate Image</span>';
     }
-    if (els.input) els.input.disabled = !canSend();
+    if (els.input) els.input.disabled = !state.selectedSessionId || !modelReady;
     if (els.send) {
       els.send.disabled = !state.busy && !canSend();
-      els.send.classList.toggle("local-chat-stop-button", state.busy);
+      els.send.classList.toggle("roleplayer-stop-button", state.busy);
       els.send.innerHTML = state.busy
         ? '<ph-stop-circle weight="bold" aria-hidden="true"></ph-stop-circle>Stop'
         : '<ph-paper-plane-tilt weight="bold" aria-hidden="true"></ph-paper-plane-tilt>Send';
@@ -977,7 +977,7 @@
     const activePersonas = state.personas.filter((persona) => !persona.is_archived);
     if (!activePersonas.length) {
       els.personaList.innerHTML = `
-        <div class="local-chat-persona-empty">
+        <div class="roleplayer-persona-empty">
           <strong>No personas yet</strong>
           <span>Create one to give the user a stable role inside character chats.</span>
         </div>
@@ -985,7 +985,7 @@
       return;
     }
     els.personaList.innerHTML = activePersonas.map((persona) => `
-      <button type="button" class="local-chat-persona-button${persona.id === state.editingPersonaId ? " is-active" : ""}" data-persona-id="${escapeHtml(persona.id)}">
+      <button type="button" class="roleplayer-persona-button${persona.id === state.editingPersonaId ? " is-active" : ""}" data-persona-id="${escapeHtml(persona.id)}">
         <strong>${escapeHtml(persona.name)}${persona.is_default ? ' <em>Default</em>' : ""}</strong>
         <span>${escapeHtml(persona.short_description || "No description yet.")}</span>
       </button>
@@ -1064,7 +1064,7 @@
   async function loadCharacters() {
     const supabase = requireSupabase();
     const { data, error } = await supabase
-      .from("local_chat_characters")
+      .from("roleplayer_characters")
       .select("*")
       .eq("user_id", state.user.id)
       .order("updated_at", { ascending: false });
@@ -1133,10 +1133,10 @@
 
     const body = new FormData();
     body.append("objectId", character.id);
-    body.append("storageModule", "local-chat");
-    body.append("objectName", character.name || "Local Chat Character");
+    body.append("storageModule", "roleplayer");
+    body.append("objectName", character.name || "Roleplayer Character");
     body.append("objectKind", "character");
-    body.append("elementType", "Local Chat Character");
+    body.append("elementType", "Roleplayer Character");
     body.append("file", file);
 
     const response = await requireSupabase().functions.invoke("upload-object-image", { body });
@@ -1151,7 +1151,7 @@
   async function loadPersonas() {
     const supabase = requireSupabase();
     const { data, error } = await supabase
-      .from("local_chat_personas")
+      .from("roleplayer_personas")
       .select("*")
       .eq("user_id", state.user.id)
       .order("updated_at", { ascending: false });
@@ -1166,7 +1166,7 @@
     }
     const supabase = requireSupabase();
     const { data, error } = await supabase
-      .from("local_chat_sessions")
+      .from("roleplayer_sessions")
       .select("*")
       .eq("user_id", state.user.id)
       .eq("character_id", characterId)
@@ -1181,7 +1181,7 @@
 
     const countsBySession = new Map(sessions.map((session) => [session.id, { user: 0, assistant: 0 }]));
     const { data: messages, error: messagesError } = await supabase
-      .from("local_chat_messages")
+      .from("roleplayer_messages")
       .select("session_id, role")
       .eq("user_id", state.user.id)
       .in("session_id", sessions.map((session) => session.id))
@@ -1211,7 +1211,7 @@
     }
     const supabase = requireSupabase();
     const { data, error } = await supabase
-      .from("local_chat_messages")
+      .from("roleplayer_messages")
       .select("*")
       .eq("user_id", state.user.id)
       .eq("session_id", sessionId)
@@ -1227,7 +1227,7 @@
     }
     const supabase = requireSupabase();
     const { data, error } = await supabase
-      .from("local_chat_memories")
+      .from("roleplayer_memories")
       .select("*")
       .eq("user_id", state.user.id)
       .eq("session_id", sessionId)
@@ -1278,7 +1278,7 @@
   async function nextSequenceNumber(sessionId) {
     const supabase = requireSupabase();
     const { data, error } = await supabase
-      .from("local_chat_messages")
+      .from("roleplayer_messages")
       .select("sequence_number")
       .eq("session_id", sessionId)
       .order("sequence_number", { ascending: false })
@@ -1300,14 +1300,14 @@
       generation_metadata: metadata.generation_metadata || null
     };
     const { data, error } = await supabase
-      .from("local_chat_messages")
+      .from("roleplayer_messages")
       .insert(row)
       .select()
       .single();
     if (error) throw error;
 
     await supabase
-      .from("local_chat_sessions")
+      .from("roleplayer_sessions")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", sessionId)
       .eq("user_id", state.user.id);
@@ -1354,7 +1354,7 @@
       const lastRemainingMessage = remainingMessages[remainingMessages.length - 1] || null;
       if (removedMessageIds.length) {
         const { error: deleteMemoriesError } = await supabase
-          .from("local_chat_memories")
+          .from("roleplayer_memories")
           .delete()
           .eq("user_id", state.user.id)
           .eq("session_id", state.selectedSessionId)
@@ -1363,7 +1363,7 @@
       }
 
       const { error: deleteMessagesError } = await supabase
-        .from("local_chat_messages")
+        .from("roleplayer_messages")
         .delete()
         .eq("user_id", state.user.id)
         .eq("session_id", state.selectedSessionId)
@@ -1371,7 +1371,7 @@
       if (deleteMessagesError) throw deleteMessagesError;
 
       const { error: updateSessionError } = await supabase
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .update({
           last_message_at: lastRemainingMessage?.created_at || null,
           conversation_summary: null,
@@ -1829,8 +1829,8 @@
       if (!row.name) throw new Error("Name is required.");
 
       const query = state.editingCharacterId
-        ? supabase.from("local_chat_characters").update(row).eq("id", state.editingCharacterId).eq("user_id", state.user.id).select().single()
-        : supabase.from("local_chat_characters").insert(row).select().single();
+        ? supabase.from("roleplayer_characters").update(row).eq("id", state.editingCharacterId).eq("user_id", state.user.id).select().single()
+        : supabase.from("roleplayer_characters").insert(row).select().single();
       const { data, error } = await query;
       if (error) throw error;
       state.editingCharacterId = data.id;
@@ -1864,7 +1864,7 @@
     try {
       const supabase = requireSupabase();
       const { error } = await supabase
-        .from("local_chat_characters")
+        .from("roleplayer_characters")
         .update({ is_archived: true })
         .eq("id", character.id)
         .eq("user_id", state.user.id);
@@ -1902,14 +1902,14 @@
     try {
       const supabase = requireSupabase();
       const { error: sessionError } = await supabase
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .delete()
         .eq("character_id", character.id)
         .eq("user_id", state.user.id);
       if (sessionError) throw sessionError;
 
       const { error: characterError } = await supabase
-        .from("local_chat_characters")
+        .from("roleplayer_characters")
         .delete()
         .eq("id", character.id)
         .eq("user_id", state.user.id);
@@ -1941,7 +1941,7 @@
       const isDefault = Boolean(form.elements.is_default.checked);
       if (isDefault) {
         await supabase
-          .from("local_chat_personas")
+          .from("roleplayer_personas")
           .update({ is_default: false })
           .eq("user_id", state.user.id)
           .eq("is_default", true);
@@ -1963,8 +1963,8 @@
 
       const id = normalizeText(form.elements.id.value);
       const query = id
-        ? supabase.from("local_chat_personas").update(row).eq("id", id).eq("user_id", state.user.id).select().single()
-        : supabase.from("local_chat_personas").insert(row).select().single();
+        ? supabase.from("roleplayer_personas").update(row).eq("id", id).eq("user_id", state.user.id).select().single()
+        : supabase.from("roleplayer_personas").insert(row).select().single();
       const { data, error } = await query;
       if (error) throw error;
 
@@ -1988,7 +1988,7 @@
     try {
       const supabase = requireSupabase();
       const { error } = await supabase
-        .from("local_chat_personas")
+        .from("roleplayer_personas")
         .update({ is_archived: true, is_default: false })
         .eq("id", persona.id)
         .eq("user_id", state.user.id);
@@ -2026,7 +2026,7 @@
       const persona = state.personas.find((item) => item.id === state.selectedPersonaId && !item.is_archived) || null;
       const title = `${character.name}${persona ? ` with ${persona.name}` : ""} - ${formatDate(new Date().toISOString())}`;
       const { data: session, error } = await supabase
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .insert({
           user_id: state.user.id,
           title,
@@ -2175,7 +2175,7 @@
         const memory = state.memories.find((item) => item.id === id);
         if (!memory) return Promise.resolve();
         return supabase
-          .from("local_chat_memories")
+          .from("roleplayer_memories")
           .update({
             recall_count: Number(memory.recall_count || 0) + 1,
             last_recalled_at: recalledAt
@@ -2188,7 +2188,7 @@
         ? { ...memory, recall_count: Number(memory.recall_count || 0) + 1, last_recalled_at: recalledAt }
         : memory);
     } catch (error) {
-      console.warn("Local Chat memory recall counters were not updated:", error);
+      console.warn("Roleplayer memory recall counters were not updated:", error);
     }
   }
 
@@ -2641,7 +2641,7 @@
         : [];
       const supabase = requireSupabase();
       if (memories.length) {
-        await supabase.from("local_chat_memories").insert(memories);
+        await supabase.from("roleplayer_memories").insert(memories);
       }
 
       const memoryUpdates = [
@@ -2650,7 +2650,7 @@
       ].slice(0, 20);
       for (const update of memoryUpdates) {
         await supabase
-          .from("local_chat_memories")
+          .from("roleplayer_memories")
           .update(update.row)
           .eq("id", update.id)
           .eq("user_id", state.user.id)
@@ -2671,7 +2671,7 @@
       updates.memory_updated_through_sequence = assistantMessage.sequence_number;
       if (Object.keys(updates).length) {
         const { data, error } = await supabase
-          .from("local_chat_sessions")
+          .from("roleplayer_sessions")
           .update(updates)
           .eq("id", session.id)
           .eq("user_id", state.user.id)
@@ -2683,7 +2683,7 @@
       }
       await loadMemories(session.id);
     } catch (error) {
-      console.warn("Local Chat memory extraction skipped:", error);
+      console.warn("Roleplayer memory extraction skipped:", error);
     }
   }
 
@@ -2745,7 +2745,7 @@
       if (!updatedSummary) return;
       const supabase = requireSupabase();
       const { data, error } = await supabase
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .update({
           conversation_summary: updatedSummary,
           summarized_through_sequence: cutoffSequence
@@ -2759,7 +2759,7 @@
         state.sessions = state.sessions.map((item) => item.id === data.id ? data : item);
       }
     } catch (error) {
-      console.warn("Local Chat conversation summary was not updated:", error);
+      console.warn("Roleplayer conversation summary was not updated:", error);
     }
   }
 
@@ -2917,6 +2917,7 @@
     setFormStatus("Saving message...");
     if (els.input) els.input.value = "";
     renderControls();
+    window.setTimeout(() => focusComposer(), 0);
 
     let userRow = null;
 
@@ -2937,7 +2938,7 @@
       state.busy = false;
       state.abortController = null;
       renderAll();
-      focusComposer();
+      window.setTimeout(() => focusComposer(), 0);
     }
   }
 
@@ -2983,7 +2984,7 @@
     try {
       const supabase = requireSupabase();
       const { error } = await supabase
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .delete()
         .eq("id", session.id)
         .eq("user_id", state.user.id);
@@ -3044,7 +3045,7 @@
       if (els.page) els.page.hidden = false;
     } catch (error) {
       if (els.page) els.page.hidden = false;
-      setLandingStatus(error.message || "Could not initialize Local Chat.", true);
+      setLandingStatus(error.message || "Could not initialize Roleplayer.", true);
     }
   }
 
@@ -3084,9 +3085,9 @@
       }
       updateChatUrl();
       renderAll();
-      setLandingStatus("Local Chat refreshed.");
+      setLandingStatus("Roleplayer refreshed.");
     } catch (error) {
-      setLandingStatus(error.message || "Could not refresh Local Chat.", true);
+      setLandingStatus(error.message || "Could not refresh Roleplayer.", true);
     }
   });
   els.back?.addEventListener("click", showLibrary);
@@ -3125,32 +3126,32 @@
     openCharacterDetail(card.dataset.characterId);
   });
   els.detailCard?.addEventListener("click", (event) => {
-    const toolsButton = event.target.closest("[data-local-chat-tools]");
+    const toolsButton = event.target.closest("[data-roleplayer-tools]");
     if (toolsButton) {
       const isOpen = toolsButton.getAttribute("aria-expanded") === "true";
       toolsButton.setAttribute("aria-expanded", String(!isOpen));
       return;
     }
-    if (event.target.closest("[data-local-chat-edit-character]")) {
-      event.target.closest(".local-chat-tools-menu")?.querySelector("[data-local-chat-tools]")?.setAttribute("aria-expanded", "false");
+    if (event.target.closest("[data-roleplayer-edit-character]")) {
+      event.target.closest(".roleplayer-tools-menu")?.querySelector("[data-roleplayer-tools]")?.setAttribute("aria-expanded", "false");
       fillCharacterForm(selectedCharacter());
       showCharacterEditor();
       return;
     }
-    if (event.target.closest("[data-local-chat-delete-character]")) {
+    if (event.target.closest("[data-roleplayer-delete-character]")) {
       deleteSelectedCharacter();
       return;
     }
-    if (event.target.closest("[data-local-chat-archive-character-detail]")) {
-      event.target.closest(".local-chat-tools-menu")?.querySelector("[data-local-chat-tools]")?.setAttribute("aria-expanded", "false");
+    if (event.target.closest("[data-roleplayer-archive-character-detail]")) {
+      event.target.closest(".roleplayer-tools-menu")?.querySelector("[data-roleplayer-tools]")?.setAttribute("aria-expanded", "false");
       archiveSelectedCharacter();
     }
   });
   els.startSession?.addEventListener("click", startSession);
   els.sessions?.addEventListener("click", (event) => {
-    const deleteButton = event.target.closest("[data-local-chat-delete-session]");
+    const deleteButton = event.target.closest("[data-roleplayer-delete-session]");
     if (deleteButton) {
-      deleteSession(deleteButton.dataset.localChatDeleteSession);
+      deleteSession(deleteButton.dataset.roleplayerDeleteSession);
       return;
     }
     const card = event.target.closest("[data-session-id]");
@@ -3158,26 +3159,26 @@
   });
   els.sessions?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
-    if (event.target.closest("[data-local-chat-delete-session]")) return;
+    if (event.target.closest("[data-roleplayer-delete-session]")) return;
     const card = event.target.closest("[data-session-id]");
     if (!card) return;
     event.preventDefault();
     selectSession(card.dataset.sessionId);
   });
   els.messages?.addEventListener("click", (event) => {
-    const copyButton = event.target.closest("[data-local-chat-copy-reply]");
+    const copyButton = event.target.closest("[data-roleplayer-copy-reply]");
     if (copyButton) {
-      copyReply(copyButton.dataset.localChatCopyReply);
+      copyReply(copyButton.dataset.roleplayerCopyReply);
       return;
     }
-    const deleteButton = event.target.closest("[data-local-chat-delete-reply]");
+    const deleteButton = event.target.closest("[data-roleplayer-delete-reply]");
     if (deleteButton) {
-      rewindMessagesFrom(deleteButton.dataset.localChatDeleteReply);
+      rewindMessagesFrom(deleteButton.dataset.roleplayerDeleteReply);
       return;
     }
-    const continueButton = event.target.closest("[data-local-chat-continue-reply]");
+    const continueButton = event.target.closest("[data-roleplayer-continue-reply]");
     if (continueButton) {
-      continueReply(continueButton.dataset.localChatContinueReply);
+      continueReply(continueButton.dataset.roleplayerContinueReply);
     }
   });
   els.model?.addEventListener("change", () => {
@@ -3186,7 +3187,7 @@
     const session = selectedSession();
     if (session && state.selectedModel) {
       requireSupabase()
-        .from("local_chat_sessions")
+        .from("roleplayer_sessions")
         .update({ model_name: state.selectedModel })
         .eq("id", session.id)
         .eq("user_id", state.user.id)
@@ -3205,11 +3206,6 @@
     renderPersonaSelect();
   });
   els.form?.addEventListener("submit", sendMessage);
-  els.chatPage?.addEventListener("click", (event) => {
-    const intentionalFocusTarget = event.target.closest("button, a, input, select, textarea, [role='menuitem'], [tabindex]");
-    if (intentionalFocusTarget) return;
-    window.setTimeout(() => focusComposer(), 0);
-  });
   els.input?.addEventListener("input", () => {
     if (!els.input) return;
     els.input.style.height = "auto";
