@@ -20707,6 +20707,8 @@ body.is-deleting-image-session .app-shell {
   background: color-mix(in srgb, var(--accent, #78d5c8) 8%, transparent);
 }
 .image-generation-attachment-spinner {
+  display: block;
+  box-sizing: border-box;
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
@@ -20715,7 +20717,7 @@ body.is-deleting-image-session .app-shell {
   border-radius: 50%;
   animation: image-generation-spin 850ms linear infinite;
 }
-.image-generation-attachment span { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-generation-attachment > span:not(.image-generation-attachment-spinner) { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .image-generation-attachment button { all: unset; cursor: pointer; color: var(--muted-text, #aebbc2); }
 .image-generation-message-references { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .image-generation-message-references button {
