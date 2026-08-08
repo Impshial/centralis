@@ -916,17 +916,7 @@
       setStatus(dom.createStatus, error.message, "error");
       return;
     }
-    await seedProjectStructure(data.id);
     window.location.href = `arc-workspace.html?project_id=${encodeURIComponent(data.id)}`;
-  }
-
-  async function seedProjectStructure(projectId) {
-    const base = [
-      { unit_type: "act", title: "Act I", sort_order: 100 },
-      { unit_type: "act", title: "Act II", sort_order: 200 },
-      { unit_type: "act", title: "Act III", sort_order: 300 },
-    ].map((unit) => ({ ...unit, project_id: projectId, user_id: state.user.id, status: "planned" }));
-    await window.centralisSupabase.from(TABLES.units).insert(base);
   }
 
   async function handleSaveUnitModal(event) {

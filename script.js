@@ -465,6 +465,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu" role="menu">
         <a href="calendar.html" role="menuitem"><ph-calendar-blank weight="duotone" aria-hidden="true"></ph-calendar-blank><span>Calendar</span></a>
         <a href="todo.html" role="menuitem"><ph-check-square-offset weight="duotone" aria-hidden="true"></ph-check-square-offset><span>ToDo</span></a>
+        <a href="listmaker.html" role="menuitem"><ph-list-bullets weight="duotone" aria-hidden="true"></ph-list-bullets><span>ListMaker</span></a>
         <a href="useful-things.html" role="menuitem"><ph-wrench weight="duotone" aria-hidden="true"></ph-wrench><span>Useful Things</span></a>
         <a href="designer.html" role="menuitem" data-admin-only-nav hidden><ph-pencil-ruler weight="duotone" aria-hidden="true"></ph-pencil-ruler><span>Designer</span></a>
       </div>
@@ -2685,6 +2686,12 @@ function renderHomeModules(metrics = {}) {
       href: "useful-things.html",
       icon: "ph-wrench",
       detail: "Text, math, generators",
+    },
+    {
+      title: "ListMaker",
+      href: "listmaker.html",
+      icon: "ph-list-bullets",
+      detail: "Flexible saved lists",
     },
   ];
 

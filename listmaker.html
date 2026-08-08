@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ListMaker | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script>
+    if (new URLSearchParams(window.location.search).has("list")) {
+      window.location.replace(`listmaker-list.html${window.location.search}`);
+    }
+  </script>
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=listmaker-toolbar-width-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="listmaker">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="listmaker-page" aria-labelledby="listmaker-title">
+      <section class="listmaker-home" data-listmaker-home>
+        <header class="listmaker-hero">
+          <div>
+            <p class="settings-eyebrow">Utilities</p>
+            <h1 id="listmaker-title">ListMaker</h1>
+          </div>
+          <button class="primary-action" type="button" data-listmaker-create-open>
+            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+            Create New List
+          </button>
+        </header>
+
+        <section class="listmaker-home-toolbar" aria-label="ListMaker saved lists">
+          <label class="listmaker-search-field">
+            <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+            <span class="sr-only">Search saved lists</span>
+            <input type="search" placeholder="Search lists..." data-listmaker-home-search>
+          </label>
+          <div class="listmaker-home-tabs" role="group" aria-label="Saved list filter">
+            <button type="button" class="is-active" data-listmaker-home-filter="active">Active</button>
+            <button type="button" data-listmaker-home-filter="archived">Archived</button>
+            <button type="button" data-listmaker-home-filter="trash">Trash</button>
+          </div>
+        </section>
+
+        <p class="listmaker-status" data-listmaker-home-status role="status">Loading ListMaker...</p>
+        <section class="listmaker-list-grid" data-listmaker-list-grid aria-label="Saved lists"></section>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="listmaker-create-modal" data-strict-modal hidden>
+    <section class="modal-dialog listmaker-create-dialog" role="dialog" aria-modal="true" aria-labelledby="listmaker-create-title">
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">ListMaker</p>
+          <h2 id="listmaker-create-title">Create New List</h2>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-create-close aria-label="Close">&times;</button>
+      </div>
+      <form class="listmaker-create-form" data-listmaker-create-form></form>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=listmaker-1"></script>
+  <script src="listmaker.js?v=listmaker-toolbar-width-1"></script>
+</body>
+</html>

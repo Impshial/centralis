@@ -91,6 +91,104 @@
   });
   const text = (value) => String(value ?? "");
   const html = (value) => text(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+
+  function renderInlineMarkdown(value) {
+    return html(value)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/~~([^~]+)~~/g, "<del>$1</del>")
+      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+      .replace(/_([^_\n]+)_/g, "<em>$1</em>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\n/g, "<br>");
+  }
+
+  function renderPromptMarkdown(value) {
+    const markdown = text(value).replace(/\r\n?/g, "\n");
+    if (!markdown.trim()) return "";
+    const lines = markdown.split("\n");
+    const blocks = [];
+    let paragraphLines = [];
+    let listType = "";
+    let listItems = [];
+    let codeLines = null;
+
+    function flushParagraph() {
+      const paragraph = paragraphLines.join("\n").trim();
+      if (paragraph) blocks.push(`<p>${renderInlineMarkdown(paragraph)}</p>`);
+      paragraphLines = [];
+    }
+
+    function flushList() {
+      if (listType && listItems.length) {
+        blocks.push(`<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</${listType}>`);
+      }
+      listType = "";
+      listItems = [];
+    }
+
+    function flushCode() {
+      if (codeLines) {
+        blocks.push(`<pre><code>${html(codeLines.join("\n"))}</code></pre>`);
+        codeLines = null;
+      }
+    }
+
+    for (const line of lines) {
+      if (line.trim().startsWith("```")) {
+        if (codeLines) {
+          flushCode();
+        } else {
+          flushParagraph();
+          flushList();
+          codeLines = [];
+        }
+        continue;
+      }
+      if (codeLines) {
+        codeLines.push(line);
+        continue;
+      }
+      if (!line.trim()) {
+        flushParagraph();
+        flushList();
+        continue;
+      }
+      const heading = line.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        flushList();
+        const level = heading[1].length;
+        blocks.push(`<h${level}>${renderInlineMarkdown(heading[2].trim())}</h${level}>`);
+        continue;
+      }
+      const quote = line.match(/^>\s?(.+)$/);
+      if (quote) {
+        flushParagraph();
+        flushList();
+        blocks.push(`<blockquote>${renderInlineMarkdown(quote[1].trim())}</blockquote>`);
+        continue;
+      }
+      const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+      const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+      if (unordered || ordered) {
+        flushParagraph();
+        const nextListType = unordered ? "ul" : "ol";
+        if (listType && listType !== nextListType) flushList();
+        listType = nextListType;
+        listItems.push((unordered || ordered)[1].trim());
+        continue;
+      }
+      flushList();
+      paragraphLines.push(line);
+    }
+
+    flushParagraph();
+    flushList();
+    flushCode();
+    return `<div class="image-generation-message-content">${blocks.join("")}</div>`;
+  }
   function getParams() {
     const model = getCurrentModel();
     const params = Object.fromEntries([...document.querySelectorAll("[data-image-param]")].map((input) => [input.dataset.imageParam, input.type === "checkbox" ? input.checked : input.value]));
@@ -719,7 +817,7 @@
         <button class="image-generation-chat-action" type="button" data-image-new-session-from-message="${message.id}" title="Start a new session with this prompt" aria-label="Start a new session with this prompt"><ph-sign-out aria-hidden="true"></ph-sign-out></button>
       </div>` : "";
       return `<article class="image-generation-message is-${message.role} ${message.status === "failed" ? "is-failed" : ""}">
-        <div>${html(message.content)}</div>${referencePreviews}${previews}${stateLabel ? `<p class="image-generation-message-meta">${html(stateLabel)}</p>` : ""}${errorDetails}
+        ${renderPromptMarkdown(message.content)}${referencePreviews}${previews}${stateLabel ? `<p class="image-generation-message-meta">${html(stateLabel)}</p>` : ""}${errorDetails}
       </article>${promptActions}${generatingPlaceholder}`;
     }).join("");
     els.conversation.querySelectorAll(".image-generation-message, .image-generation-message-actions").forEach((node) => node.remove());
@@ -757,7 +855,7 @@
     const pending = state.pendingReferenceUploads.filter((upload) => upload.sessionId === state.session?.id);
     els.attachments.hidden = !selected.length && !pending.length;
     const pendingMarkup = pending.map((upload) => `<span class="image-generation-attachment is-uploading" title="Uploading ${html(upload.name)}">
-      <ph-spinner-gap class="image-generation-attachment-spinner" aria-hidden="true"></ph-spinner-gap>
+      <span class="image-generation-attachment-spinner" aria-hidden="true"></span>
       <span>${html(upload.name)}</span>
     </span>`).join("");
     const selectedMarkup = selected.map((asset) => `<span class="image-generation-attachment">

@@ -1123,12 +1123,14 @@
       return;
     }
 
+    const selectedUniverseName = state.universesById.get(state.selectedUniverseId)?.name || "";
     const groups = rows.reduce((map, row) => {
-      const universe = state.universesById.get(row.universe_id);
-      const key = row.universe_id || "unknown";
+      const type = getType(row.element_type_id);
+      const typeName = type?.name || "No type";
+      const key = type?.id || "no-type";
       if (!map.has(key)) {
         map.set(key, {
-          universeName: universe?.name || "Unknown Universe",
+          typeName,
           rows: []
         });
       }
@@ -1136,16 +1138,25 @@
       return map;
     }, new Map());
 
-    dom.content.innerHTML = Array.from(groups.values())
+    dom.content.innerHTML = `
+      <div class="chronicle-type-groups">
+        ${Array.from(groups.values())
+          .sort((left, right) => left.typeName.localeCompare(right.typeName))
       .map((group) => `
-        <section class="chronicle-universe-group">
-          <h2>${escapeHtml(group.universeName)}</h2>
+        <details class="chronicle-type-group">
+          <summary>
+            <span>${escapeHtml(group.typeName)}</span>
+            <span>${group.rows.length} ${group.rows.length === 1 ? "element" : "elements"}</span>
+            <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+          </summary>
           <div class="chronicle-list" role="list">
-            ${group.rows.map((row) => renderElementRow(row, group.universeName)).join("")}
+            ${group.rows.map((row) => renderElementRow(row, selectedUniverseName)).join("")}
           </div>
-        </section>
+        </details>
       `)
-      .join("");
+      .join("")}
+      </div>
+    `;
   }
 
   function renderElementRow(row, universeName = "") {

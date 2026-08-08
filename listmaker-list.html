@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ListMaker List | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script>
+    if (!new URLSearchParams(window.location.search).has("list")) {
+      window.location.replace("listmaker.html");
+    }
+  </script>
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=listmaker-toolbar-width-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="listmaker">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="listmaker-page" aria-labelledby="listmaker-list-title">
+      <section class="listmaker-editor" data-listmaker-editor>
+        <header class="listmaker-editor-header">
+          <div class="listmaker-editor-heading-row">
+            <a class="secondary-action" href="listmaker.html">
+              <ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left>
+              Lists
+            </a>
+            <div class="listmaker-editor-title">
+              <h1 id="listmaker-list-title" data-listmaker-title-input></h1>
+              <p data-listmaker-description-display></p>
+            </div>
+            <div class="listmaker-editor-actions">
+              <details class="listmaker-actions-menu">
+                <summary class="primary-action">
+                  <ph-dots-three-outline weight="bold" aria-hidden="true"></ph-dots-three-outline>
+                  Actions
+                </summary>
+                <div>
+                  <button type="button" data-listmaker-settings-open>
+                    <ph-sliders-horizontal weight="bold" aria-hidden="true"></ph-sliders-horizontal>
+                    Settings
+                  </button>
+                  <button type="button" data-listmaker-import-open>
+                    <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                    Import
+                  </button>
+                  <button type="button" data-listmaker-export-open>
+                    <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                    Export
+                  </button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <section class="listmaker-toolbar" aria-label="List controls">
+            <div class="listmaker-toolbar-primary">
+              <label class="listmaker-search-field">
+                <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+                <span class="sr-only">Search items</span>
+                <input type="search" placeholder="Search items..." data-listmaker-item-search>
+              </label>
+              <select data-listmaker-sort aria-label="Sort items"></select>
+              <select data-listmaker-filter aria-label="Filter items"></select>
+              <div class="listmaker-view-switch" role="group" aria-label="View">
+                <button type="button" data-listmaker-view="list">List</button>
+                <button type="button" data-listmaker-view="table">Table</button>
+              </div>
+              <p class="listmaker-status" data-listmaker-editor-status role="status"></p>
+            </div>
+            <div class="listmaker-toolbar-secondary">
+              <form class="listmaker-add-form" data-listmaker-add-form>
+                <input type="text" placeholder="Add item..." autocomplete="off" data-listmaker-add-input>
+                <select data-listmaker-add-category aria-label="Category for new items" hidden></select>
+                <button class="primary-action" type="submit">
+                  <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+                  Add
+                </button>
+              </form>
+              <section class="listmaker-bulk-bar" data-listmaker-bulk-bar></section>
+            </div>
+          </section>
+        </header>
+
+        <section class="listmaker-items" data-listmaker-items aria-label="List items"></section>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="listmaker-settings-modal" data-strict-modal hidden>
+    <section class="modal-dialog listmaker-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="listmaker-settings-title">
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">List Settings</p>
+          <h2 id="listmaker-settings-title">Configure List</h2>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-settings-close aria-label="Close">&times;</button>
+      </div>
+      <form class="listmaker-settings-form" data-listmaker-settings-form></form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="listmaker-io-modal" data-strict-modal hidden>
+    <section class="modal-dialog listmaker-io-dialog" role="dialog" aria-modal="true" aria-labelledby="listmaker-io-title">
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">Import / Export</p>
+          <h2 id="listmaker-io-title" data-listmaker-io-title>Import</h2>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-io-close aria-label="Close">&times;</button>
+      </div>
+      <div data-listmaker-io-content></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="listmaker-category-modal" data-strict-modal hidden>
+    <section class="modal-dialog listmaker-category-dialog" role="dialog" aria-modal="true" aria-labelledby="listmaker-category-title">
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">ListMaker</p>
+          <h2 id="listmaker-category-title">Move to Category</h2>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-category-close aria-label="Close">&times;</button>
+      </div>
+      <form class="listmaker-category-form" data-listmaker-category-form>
+        <label class="form-field">
+          <span>Category</span>
+          <select data-listmaker-category-select></select>
+        </label>
+        <p class="form-status" data-listmaker-category-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-listmaker-category-close>Cancel</button>
+          <button class="primary-action" type="submit">Move Items</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="listmaker-context-menu" data-listmaker-context-menu hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=listmaker-1"></script>
+  <script src="listmaker.js?v=listmaker-toolbar-width-1"></script>
+</body>
+</html>
