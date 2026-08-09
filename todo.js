@@ -281,6 +281,23 @@ function renderTasks() {
   }).join("");
 }
 
+function getRequestedTaskId() {
+  return new URLSearchParams(window.location.search).get("task") || "";
+}
+
+function openRequestedTaskFromUrl() {
+  const taskId = getRequestedTaskId();
+  if (!taskId) return;
+
+  const task = todoState.tasks.find((item) => String(item.id) === String(taskId));
+  if (!task) {
+    setStatus("Could not find the requested task.", "error");
+    return;
+  }
+
+  openTaskModal(task);
+}
+
 async function loadTasks() {
   if (!todoSupabaseClient || !todoState.appUser) return;
   setStatus("Loading tasks...");
@@ -568,6 +585,7 @@ async function initializeTodo() {
       return;
     }
     await loadTasks();
+    openRequestedTaskFromUrl();
   } catch (error) {
     setStatus(`Could not load ToDo: ${getReadableError(error)}`, "error");
   }

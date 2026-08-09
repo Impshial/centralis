@@ -51,6 +51,7 @@ const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { month: "short"
 const FULL_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const DEFAULT_COLOR = "#6366f1";
+const MAX_MONTH_VISIBLE_ITEMS = 3;
 
 window.centralisCalendarLoaded = true;
 
@@ -468,11 +469,12 @@ function renderMonthGrid() {
       <span class="month-event-list"></span>
     `;
     const list = cell.querySelector(".month-event-list");
-    (eventsByDate.get(key) || []).slice(0, 4).forEach((item) => {
+    const dayItems = eventsByDate.get(key) || [];
+    dayItems.slice(0, MAX_MONTH_VISIBLE_ITEMS).forEach((item) => {
       list.append(createCalendarItemElement(item, "month"));
     });
 
-    const extra = (eventsByDate.get(key) || []).length - 4;
+    const extra = dayItems.length - MAX_MONTH_VISIBLE_ITEMS;
     if (extra > 0) {
       const chip = document.createElement("span");
       chip.className = "month-event-more";
@@ -516,9 +518,24 @@ function createCalendarItemElement(item, variant = "card") {
     `;
   }
 
-  if (!isTask) {
-    element.tabIndex = 0;
-    element.setAttribute("role", "button");
+  element.tabIndex = 0;
+  element.setAttribute("role", "button");
+
+  if (isTask) {
+    const openTask = (event) => {
+      event.stopPropagation();
+      window.location.href = `todo.html?task=${encodeURIComponent(item.id)}`;
+    };
+    element.setAttribute("aria-label", `Open task ${item.title || "Untitled Task"} in ToDo`);
+    element.addEventListener("click", openTask);
+    element.addEventListener("dblclick", openTask);
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openTask(event);
+      }
+    });
+  } else {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("dblclick", (event) => {
       event.stopPropagation();

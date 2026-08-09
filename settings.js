@@ -15,6 +15,12 @@
     { id: "todo", label: "ToDo Tasks", description: "Tasks and subtasks." },
     { id: "source_documents", label: "Source Material Documents", description: "Source document database rows only. iDrive files remain." },
     { id: "image_generation", label: "Image Generation Sessions", description: "Sessions, messages, and asset metadata. iDrive images remain." },
+    { id: "roleplayer", label: "Roleplayer", description: "Characters, personas, sessions, messages, and memories." },
+    { id: "god_engine", label: "God Engine Evolutions", description: "Evolution worlds, species, and evolution events." },
+    { id: "arc_studio", label: "Arc Studio Projects", description: "Projects, story units, threads, character arcs, links, states, and diagnostics." },
+    { id: "fusion", label: "Fusion Games", description: "Saved games, starting items, generated discoveries, and canvas positions. The level 0 master list remains." },
+    { id: "listmaker", label: "ListMaker Lists", description: "Lists, items, categories, statuses, custom fields, and field values." },
+    { id: "generation_jobs", label: "Generation Jobs", description: "Background generation job records across modules." },
     { id: "movies", label: "Movies", description: "Movies, franchises, and collections." },
     { id: "episode_roulette", label: "Episode Roulette Saved Shows", description: "Saved recent shows." },
     { id: "stellar", label: "Stellar Architect Systems", description: "Systems, stars, planets, moons, lifeforms, colonies, and colonists." },
@@ -39,10 +45,15 @@
     { id: "todo", label: "ToDo" },
     { id: "source_documents", label: "Source Material" },
     { id: "image_generation", label: "Image Generation" },
+    { id: "roleplayer", label: "Roleplayer" },
+    { id: "god_engine", label: "God Engine" },
+    { id: "arc_studio", label: "Arc Studio" },
+    { id: "fusion", label: "Fusion" },
+    { id: "listmaker", label: "ListMaker" },
+    { id: "generation_jobs", label: "Generation Jobs" },
     { id: "movies", label: "Movies" },
     { id: "episode_roulette", label: "Episode Roulette" },
-    { id: "stellar", label: "Stellar Architect" },
-    { id: "generation_jobs", label: "Generation Jobs" }
+    { id: "stellar", label: "Stellar Architect" }
   ];
 
   const els = {

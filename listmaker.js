@@ -274,7 +274,7 @@
         <div class="listmaker-empty">
           <h2>${state.homeFilter === "active" ? "No lists yet" : "Nothing here"}</h2>
           <p>${state.homeFilter === "active" ? "Create a blank list or start from a template." : "This saved-list view is empty."}</p>
-          ${state.homeFilter === "active" ? '<button class="primary-action" type="button" data-listmaker-create-open><ph-plus weight="bold" aria-hidden="true"></ph-plus>Create New List</button>' : ""}
+          ${state.homeFilter === "active" ? '<button class="primary-action" type="button" data-listmaker-create-open><ph-plus weight="bold" aria-hidden="true"></ph-plus><span>Create New List</span></button>' : ""}
         </div>
       `;
       dom.listGrid.querySelector("[data-listmaker-create-open]")?.addEventListener("click", openCreateModal);
