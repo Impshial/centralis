@@ -16360,6 +16360,7 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   border-radius: 8px;
   background: var(--surface, #111827);
   box-shadow: 0 20px 46px rgb(0 0 0 / 36%);
+  overflow: auto;
 }
 
 .listmaker-context-menu[hidden] {

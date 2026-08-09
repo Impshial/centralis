@@ -1442,14 +1442,29 @@
   function showContextMenu(event, entries) {
     dom.contextMenu.innerHTML = entries.map((entry, index) => `<button type="button" data-context-index="${index}">${escapeHtml(entry[0])}</button>`).join("");
     dom.contextMenu.hidden = false;
-    dom.contextMenu.style.left = `${event.clientX}px`;
-    dom.contextMenu.style.top = `${event.clientY}px`;
+    positionContextMenu(event);
     dom.contextMenu.onclick = async (clickEvent) => {
       const button = clickEvent.target.closest("[data-context-index]");
       if (!button) return;
       hideContextMenu();
       await entries[Number(button.dataset.contextIndex)]?.[1]?.();
     };
+  }
+
+  function positionContextMenu(event) {
+    if (!dom.contextMenu) return;
+    const margin = 10;
+    dom.contextMenu.style.maxHeight = `${Math.max(160, window.innerHeight - margin * 2)}px`;
+    dom.contextMenu.style.left = `${event.clientX}px`;
+    dom.contextMenu.style.top = `${event.clientY}px`;
+    const rect = dom.contextMenu.getBoundingClientRect();
+    const left = Math.min(Math.max(margin, event.clientX), Math.max(margin, window.innerWidth - rect.width - margin));
+    const opensBelow = event.clientY + rect.height + margin <= window.innerHeight;
+    const top = opensBelow
+      ? Math.min(event.clientY, window.innerHeight - rect.height - margin)
+      : Math.max(margin, event.clientY - rect.height);
+    dom.contextMenu.style.left = `${left}px`;
+    dom.contextMenu.style.top = `${top}px`;
   }
 
   function hideContextMenu() {
