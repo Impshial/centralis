@@ -1,5 +1,5 @@
 (() => {
-  window.centralisFusionVersion = "fusion-16";
+  window.centralisFusionVersion = "fusion-17";
   const supabase = window.centralisSupabase;
   const BOARD_SIZE = 3200;
   const ROOT_RADIUS = 34;
@@ -44,6 +44,8 @@
     drag: null,
     dragGhost: null,
     pan: null,
+    activePointers: new Map(),
+    pinch: null,
     suppressClick: false,
     expandedAncestry: new Set(),
     saveTimer: null,
@@ -547,7 +549,7 @@
 
   function zoomBy(delta, center = null) {
     const oldZoom = state.viewport.zoom;
-    const nextZoom = Math.max(0.35, Math.min(1.8, oldZoom + delta));
+    const nextZoom = clampZoom(oldZoom + delta);
     if (nextZoom === oldZoom) return;
     const rect = els.board.getBoundingClientRect();
     const screen = center || { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -557,6 +559,70 @@
     state.viewport.y = screen.y - rect.top - before.y * nextZoom;
     applyViewport();
     scheduleGameSave();
+  }
+
+  function clampZoom(value) {
+    return Math.max(0.35, Math.min(1.8, value));
+  }
+
+  function pointerCenter(first, second) {
+    return {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    };
+  }
+
+  function pointerDistance(first, second) {
+    return Math.hypot(first.x - second.x, first.y - second.y);
+  }
+
+  function activePinchPointers() {
+    return [...state.activePointers.values()].slice(0, 2);
+  }
+
+  function startPinchGesture() {
+    if (state.activePointers.size < 2) return;
+    const [first, second] = activePinchPointers();
+    const center = pointerCenter(first, second);
+    state.pinch = {
+      startDistance: Math.max(1, pointerDistance(first, second)),
+      startZoom: state.viewport.zoom,
+      worldCenter: screenToWorld(center),
+    };
+    state.pan = null;
+    state.drag = null;
+    document.body.classList.remove("is-fusion-dragging");
+    removeDragGhost();
+    updateDropFeedback(null);
+    hideTooltip();
+  }
+
+  function updatePinchGesture() {
+    if (!state.pinch || state.activePointers.size < 2) return;
+    const [first, second] = activePinchPointers();
+    const center = pointerCenter(first, second);
+    const distance = Math.max(1, pointerDistance(first, second));
+    const nextZoom = clampZoom(state.pinch.startZoom * (distance / state.pinch.startDistance));
+    const rect = els.board.getBoundingClientRect();
+    state.viewport.zoom = nextZoom;
+    state.viewport.x = center.x - rect.left - state.pinch.worldCenter.x * nextZoom;
+    state.viewport.y = center.y - rect.top - state.pinch.worldCenter.y * nextZoom;
+    applyViewport();
+  }
+
+  function finishPointer(event) {
+    state.activePointers.delete(event.pointerId);
+    if (state.pinch) {
+      state.suppressClick = true;
+      if (state.activePointers.size >= 2) {
+        startPinchGesture();
+      } else {
+        state.pinch = null;
+        scheduleGameSave();
+      }
+      return true;
+    }
+    return false;
   }
 
   function render() {
@@ -819,6 +885,16 @@
     if (!els.board || els.board.dataset.fusionBound) return;
     els.board.dataset.fusionBound = "true";
     els.board.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+        hideTooltip();
+        state.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (state.activePointers.size >= 2) {
+          startPinchGesture();
+          els.board.setPointerCapture?.(event.pointerId);
+          return;
+        }
+      }
       const itemNode = event.target.closest("[data-fusion-item]");
       if (itemNode) {
         const item = state.items.find((candidate) => candidate.id === itemNode.dataset.fusionItem);
@@ -832,6 +908,14 @@
     });
 
     window.addEventListener("pointermove", (event) => {
+      if (state.activePointers.has(event.pointerId)) {
+        event.preventDefault();
+        state.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (state.pinch) {
+          updatePinchGesture();
+          return;
+        }
+      }
       if (state.pan) {
         if (!state.pan.moved && Math.hypot(event.clientX - state.pan.startX, event.clientY - state.pan.startY) > 6) {
           state.pan.moved = true;
@@ -855,12 +939,28 @@
     });
 
     window.addEventListener("pointerup", (event) => {
+      if (finishPointer(event)) return;
       if (state.pan) {
         state.suppressClick = Boolean(state.pan.moved);
         state.pan = null;
         scheduleGameSave();
       }
       if (state.drag) handleDrop(event);
+    });
+
+    window.addEventListener("pointercancel", (event) => {
+      if (finishPointer(event)) return;
+      if (state.pan) {
+        state.pan = null;
+        scheduleGameSave();
+      }
+      if (state.drag) {
+        state.drag = null;
+        document.body.classList.remove("is-fusion-dragging");
+        removeDragGhost();
+        updateDropFeedback(null);
+        render();
+      }
     });
 
     els.board.addEventListener("click", (event) => {
@@ -878,13 +978,15 @@
       render();
     });
 
-    els.board.addEventListener("mouseover", (event) => {
+    els.board.addEventListener("pointerover", (event) => {
+      if (event.pointerType !== "mouse") return;
       const itemNode = event.target.closest("[data-fusion-item]");
       if (!itemNode) return;
       const item = state.items.find((candidate) => candidate.id === itemNode.dataset.fusionItem);
       if (item) showTooltip(item, event);
     });
-    els.board.addEventListener("mouseout", (event) => {
+    els.board.addEventListener("pointerout", (event) => {
+      if (event.pointerType !== "mouse") return;
       if (!event.relatedTarget?.closest?.("[data-fusion-item]")) hideTooltip();
     });
     els.board.addEventListener("wheel", (event) => {
