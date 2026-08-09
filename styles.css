@@ -15047,7 +15047,7 @@ body[data-page="listmaker"] .app-shell {
 
 .listmaker-editor-header {
   position: sticky;
-  top: 0;
+  top: var(--header-height, 76px);
   z-index: 8;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
