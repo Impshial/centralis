@@ -138,11 +138,24 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="listmaker-category-manager-modal" data-strict-modal hidden>
+    <section class="modal-dialog listmaker-category-dialog" role="dialog" aria-modal="true" aria-labelledby="listmaker-category-manager-title">
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">ListMaker</p>
+          <h2 id="listmaker-category-manager-title">Manage Categories</h2>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-category-manager-close aria-label="Close">&times;</button>
+      </div>
+      <form class="listmaker-category-form" data-listmaker-category-manager-form></form>
+    </section>
+  </div>
+
   <div class="listmaker-context-menu" data-listmaker-context-menu hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=listmaker-1"></script>
-  <script src="listmaker.js?v=listmaker-toolbar-width-1"></script>
+  <script src="listmaker.js?v=listmaker-category-manager-1"></script>
 </body>
 </html>

@@ -97,6 +97,8 @@
     dom.categoryForm = document.querySelector("[data-listmaker-category-form]");
     dom.categorySelect = document.querySelector("[data-listmaker-category-select]");
     dom.categoryStatus = document.querySelector("[data-listmaker-category-status]");
+    dom.categoryManagerModal = document.getElementById("listmaker-category-manager-modal");
+    dom.categoryManagerForm = document.querySelector("[data-listmaker-category-manager-form]");
     dom.contextMenu = document.querySelector("[data-listmaker-context-menu]");
     dom.titleInput = document.querySelector("[data-listmaker-title-input]");
     dom.descriptionDisplay = document.querySelector("[data-listmaker-description-display]");
@@ -157,6 +159,7 @@
     document.querySelector("[data-listmaker-export-open]")?.addEventListener("click", () => openIoModal("export"));
     document.querySelector("[data-listmaker-io-close]")?.addEventListener("click", closeIoModal);
     document.querySelectorAll("[data-listmaker-category-close]").forEach((button) => button.addEventListener("click", closeCategoryModal));
+    document.querySelector("[data-listmaker-category-manager-close]")?.addEventListener("click", closeCategoryManagerModal);
     dom.homeSearch?.addEventListener("input", () => {
       state.homeSearch = dom.homeSearch.value.trim().toLowerCase();
       renderHome();
@@ -199,6 +202,9 @@
     dom.items?.addEventListener("paste", handleItemPaste);
     dom.bulkBar?.addEventListener("click", handleBulkClick);
     dom.categoryForm?.addEventListener("submit", handleCategorySubmit);
+    dom.categoryManagerForm?.addEventListener("submit", (event) => event.preventDefault());
+    dom.categoryManagerForm?.addEventListener("click", handleCategoryManagerClick);
+    dom.categoryManagerForm?.addEventListener("change", handleCategoryManagerChange);
     dom.listGrid?.addEventListener("click", handleHomeAction);
     dom.ioContent?.addEventListener("click", handleIoClick);
   }
@@ -814,12 +820,11 @@
 
   function syncSettingsConditionalFields() {
     if (!dom.settingsForm) return;
-    const elements = dom.settingsForm.elements;
-    const checklist = Boolean(elements.behavior_checklist?.checked);
-    const categorized = Boolean(elements.behavior_categorized?.checked);
-    const status = Boolean(elements.behavior_status?.checked);
-    const customFields = Boolean(elements.behavior_custom_fields?.checked);
-    const rating = Boolean(elements.behavior_rating?.checked);
+    const checklist = settingsBehaviorEnabled("checklist");
+    const categorized = settingsBehaviorEnabled("categorized");
+    const status = settingsBehaviorEnabled("status");
+    const customFields = settingsBehaviorEnabled("custom_fields");
+    const rating = settingsBehaviorEnabled("rating");
     const sections = [
       ["[data-settings-checklist-config]", checklist],
       ["[data-settings-category-config]", categorized],
@@ -831,6 +836,11 @@
       const section = dom.settingsForm.querySelector(selector);
       if (section) section.hidden = !visible;
     });
+  }
+
+  function settingsBehaviorEnabled(key) {
+    if (!dom.settingsForm) return false;
+    return new FormData(dom.settingsForm).has(`behavior_${key}`);
   }
 
   async function addSettingRow(kind) {
@@ -1206,6 +1216,93 @@
     state.pendingCategoryMoveIds = [];
   }
 
+  function openCategoryManagerModal() {
+    if (!dom.categoryManagerModal || !dom.categoryManagerForm) return;
+    dom.categoryManagerForm.innerHTML = renderCategoryManagerForm();
+    dom.categoryManagerModal.hidden = false;
+    dom.categoryManagerForm.querySelector("[data-add-category-name]")?.focus();
+  }
+
+  function closeCategoryManagerModal() {
+    if (dom.categoryManagerModal) dom.categoryManagerModal.hidden = true;
+  }
+
+  function renderCategoryManagerForm() {
+    return `
+      <div class="listmaker-settings-scroll">
+        <section class="listmaker-config-section">
+          <h3>Categories ${infoTip("Add, rename, reorder, or remove sections for this categorized list.")}</h3>
+          <div class="listmaker-settings-list">${state.categories.map((category) => settingRow("category", category)).join("") || '<p class="listmaker-muted">No categories.</p>'}</div>
+          <div class="listmaker-inline-add"><input type="text" placeholder="New category" data-add-category-name><button type="button" data-add-category>Add Category</button></div>
+        </section>
+      </div>
+      <p class="form-status" data-category-manager-status role="status"></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-listmaker-category-manager-close>Close</button>
+      </div>
+    `;
+  }
+
+  async function handleCategoryManagerClick(event) {
+    if (event.target.closest("[data-listmaker-category-manager-close]")) closeCategoryManagerModal();
+    if (event.target.closest("[data-add-category]")) await addManagedCategory();
+    const del = event.target.closest("[data-setting-delete]");
+    if (del) await deleteManagedCategory(del.dataset.settingDelete);
+    const move = event.target.closest("[data-setting-move]");
+    if (move) await moveManagedCategory(move.dataset.settingMove);
+  }
+
+  async function handleCategoryManagerChange(event) {
+    const nameTarget = event.target.closest("[data-setting-name]");
+    if (!nameTarget) return;
+    const [kind, id] = nameTarget.dataset.settingName.split(":");
+    if (kind !== "category") return;
+    await updateSettingName(kind, id, clean(nameTarget.value));
+  }
+
+  async function addManagedCategory() {
+    const name = clean(dom.categoryManagerForm?.querySelector("[data-add-category-name]")?.value);
+    if (!name) return;
+    const { error } = await supabase.from(TABLES.categories).insert({ list_id: state.listId, user_id: state.user.id, name, sort_order: nextOrder(state.categories) });
+    if (error) {
+      setStatus(dom.categoryManagerForm.querySelector("[data-category-manager-status]"), error.message, "error");
+      return;
+    }
+    await loadList();
+    renderEditor();
+    openCategoryManagerModal();
+  }
+
+  async function deleteManagedCategory(value) {
+    const [kind, id] = value.split(":");
+    if (kind !== "category") return;
+    if (!window.confirm("Delete this category? Items in it will become uncategorized.")) return;
+    const { error } = await supabase.from(TABLES.categories).delete().eq("id", id).eq("user_id", state.user.id);
+    if (error) {
+      setStatus(dom.categoryManagerForm.querySelector("[data-category-manager-status]"), error.message, "error");
+      return;
+    }
+    await loadList();
+    renderEditor();
+    openCategoryManagerModal();
+  }
+
+  async function moveManagedCategory(value) {
+    const [kind, id, direction] = value.split(":");
+    if (kind !== "category") return;
+    const index = state.categories.findIndex((row) => row.id === id);
+    const other = state.categories[index + (direction === "up" ? -1 : 1)];
+    const row = state.categories[index];
+    if (!row || !other) return;
+    await Promise.all([
+      supabase.from(TABLES.categories).update({ sort_order: other.sort_order }).eq("id", row.id).eq("user_id", state.user.id),
+      supabase.from(TABLES.categories).update({ sort_order: row.sort_order }).eq("id", other.id).eq("user_id", state.user.id),
+    ]);
+    await loadList();
+    renderEditor();
+    openCategoryManagerModal();
+  }
+
   async function handleCategorySubmit(event) {
     event.preventDefault();
     const ids = state.pendingCategoryMoveIds.slice();
@@ -1283,7 +1380,10 @@
       ["Set Position...", () => setItemPosition(itemId)],
     ];
     if (behaviors.checklist) entries.push([item?.completed ? "Mark Incomplete" : "Mark Complete", () => updateItemField(itemId, "completed", !item?.completed)]);
-    if (behaviors.categorized) state.categories.forEach((category) => entries.push([`Move to Category: ${category.name}`, () => updateItemField(itemId, "category_id", category.id)]));
+    if (behaviors.categorized) {
+      entries.push(["Manage Categories", openCategoryManagerModal]);
+      state.categories.forEach((category) => entries.push([`Move to Category: ${category.name}`, () => updateItemField(itemId, "category_id", category.id)]));
+    }
     if (behaviors.status) state.statuses.forEach((status) => entries.push([`Set Status: ${status.name}`, () => updateItemField(itemId, "status_id", status.id)]));
     return entries;
   }
@@ -1295,6 +1395,7 @@
         const title = window.prompt("Item name");
         if (title) addItems([clean(title)], { category_id: categoryId || null });
       }],
+      ["Manage Categories", openCategoryManagerModal],
       [category?.collapsed ? "Expand" : "Collapse", async () => {
         if (category) {
           await supabase.from(TABLES.categories).update({ collapsed: !category.collapsed }).eq("id", category.id).eq("user_id", state.user.id);
@@ -1306,7 +1407,7 @@
   }
 
   function blankMenu() {
-    return [
+    const entries = [
       ["Add Item", () => dom.addInput?.focus()],
       ["Add Multiple Items", async () => {
         const value = window.prompt("Paste or type one item per line");
@@ -1321,6 +1422,8 @@
       ["Randomize", randomizeItems],
       ["Find and Replace", findAndReplace],
     ];
+    if (normalizeBehaviors(state.list?.behaviors).categorized) entries.splice(2, 0, ["Manage Categories", openCategoryManagerModal]);
+    return entries;
   }
 
   function fieldHeaderMenu(fieldId) {
