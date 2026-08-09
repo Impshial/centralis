@@ -13959,6 +13959,21 @@ html[data-color-scheme="dark"] .react-flow__controls-button svg {
   opacity: 0.58;
 }
 
+.primary-action > [aria-hidden="true"],
+.secondary-action > [aria-hidden="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.primary-action > [aria-hidden="true"] svg,
+.secondary-action > [aria-hidden="true"] svg {
+  display: block;
+}
+
 
 /* Stellar Architect */
 body[data-page="stellar-architect"] {
