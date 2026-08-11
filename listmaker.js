@@ -44,6 +44,7 @@
     { key: "pros-cons", name: "Pros & Cons", description: "Two categories for evaluation.", behaviors: { categorized: true }, categories: ["Pros", "Cons"], fields: [] },
     { key: "inventory", name: "Inventory", description: "Track quantities and notes.", behaviors: {}, fields: [{ name: "Quantity", field_type: "number" }, { name: "Notes", field_type: "long_text" }] },
     { key: "comparison", name: "Comparison", description: "Compare items across fields.", behaviors: { scored: true }, rating_type: "stars_5", fields: [{ name: "Price", field_type: "number" }, { name: "Notes", field_type: "long_text" }] },
+    { key: "notes", name: "Notes", description: "Multiline note entries instead of single-line items.", behaviors: {}, fields: [], default_view: "list" },
     { key: "shopping", name: "Shopping List", description: "Checklist with quantities.", behaviors: { checklist: true }, fields: [{ name: "Quantity", field_type: "number" }] },
     { key: "packing", name: "Packing List", description: "Categorized checklist.", behaviors: { checklist: true, categorized: true }, categories: ["Clothing", "Toiletries", "Gear", "Documents"], fields: [] },
     { key: "favorites", name: "Favorites", description: "Ranked list with ratings.", behaviors: { ranked: true }, rating_type: "stars_5", fields: [] },
@@ -103,6 +104,7 @@
     dom.titleInput = document.querySelector("[data-listmaker-title-input]");
     dom.descriptionDisplay = document.querySelector("[data-listmaker-description-display]");
     dom.addForm = document.querySelector("[data-listmaker-add-form]");
+    dom.addTitleControl = document.querySelector("[data-listmaker-add-title-control]");
     dom.addInput = document.querySelector("[data-listmaker-add-input]");
     dom.addCategory = document.querySelector("[data-listmaker-add-category]");
     dom.itemSearch = document.querySelector("[data-listmaker-item-search]");
@@ -176,7 +178,7 @@
     dom.settingsForm?.addEventListener("click", handleSettingsClick);
     dom.settingsForm?.addEventListener("change", handleSettingsChange);
     dom.addForm?.addEventListener("submit", handleAddSubmit);
-    dom.addInput?.addEventListener("paste", handlePasteIntoAdd);
+    dom.addForm?.addEventListener("paste", handlePasteIntoAdd);
     dom.itemSearch?.addEventListener("input", () => {
       state.search = dom.itemSearch.value.trim();
       renderItems();
@@ -321,8 +323,17 @@
     dom.itemSearch.value = state.search;
     renderSortOptions();
     renderFilterOptions();
+    renderAddTitleControl();
     renderAddCategoryControl();
     renderItems();
+  }
+
+  function renderAddTitleControl() {
+    if (!dom.addTitleControl) return;
+    dom.addTitleControl.innerHTML = isNotesList()
+      ? '<textarea rows="3" placeholder="Add note..." autocomplete="off" data-listmaker-add-input></textarea>'
+      : '<input type="text" placeholder="Add item..." autocomplete="off" data-listmaker-add-input>';
+    dom.addInput = dom.addTitleControl.querySelector("[data-listmaker-add-input]");
   }
 
   function renderAddCategoryControl() {
@@ -443,18 +454,26 @@
   function renderItemRow(item) {
     const behaviors = normalizeBehaviors(state.list?.behaviors);
     const checked = state.selectedIds.has(item.id) ? " checked" : "";
+    const notesClass = isNotesList() ? " is-notes-row" : "";
     return `
-      <article class="listmaker-item-row${behaviors.checklist ? " has-checklist" : ""}${item.completed ? " is-complete" : ""}${state.selectedIds.has(item.id) ? " is-selected" : ""}" data-item-id="${escapeHtml(item.id)}" role="listitem">
+      <article class="listmaker-item-row${notesClass}${behaviors.checklist ? " has-checklist" : ""}${item.completed ? " is-complete" : ""}${state.selectedIds.has(item.id) ? " is-selected" : ""}" data-item-id="${escapeHtml(item.id)}" role="listitem">
         <input type="checkbox" aria-label="Select ${escapeAttribute(item.title)}" data-select-item="${escapeHtml(item.id)}"${checked}>
         ${behaviors.checklist ? renderChecklistToggle(item) : ""}
         <div class="listmaker-row-title-wrap">
           ${behaviors.ranked ? `<span class="listmaker-rank">${rankFor(item)}</span>` : ""}
-          <input class="listmaker-item-title" type="text" value="${escapeAttribute(item.title)}" data-item-field="title" data-item-id="${escapeHtml(item.id)}">
+          ${renderItemTitleControl(item)}
         </div>
         ${renderBehaviorInputs(item)}
         ${renderRowActionMenu(item.id)}
       </article>
     `;
+  }
+
+  function renderItemTitleControl(item) {
+    const attrs = `class="listmaker-item-title" data-item-field="title" data-item-id="${escapeHtml(item.id)}"`;
+    return isNotesList()
+      ? `<textarea rows="3" ${attrs}>${escapeHtml(item.title)}</textarea>`
+      : `<input type="text" value="${escapeAttribute(item.title)}" ${attrs}>`;
   }
 
   function renderRowActionMenu(itemId) {
@@ -549,11 +568,11 @@
   function renderTableRow(item) {
     const behaviors = normalizeBehaviors(state.list?.behaviors);
     return `
-      <tr data-item-id="${escapeHtml(item.id)}" class="${item.completed ? "is-complete " : ""}${state.selectedIds.has(item.id) ? "is-selected" : ""}">
+      <tr data-item-id="${escapeHtml(item.id)}" class="${isNotesList() ? "is-notes-row " : ""}${item.completed ? "is-complete " : ""}${state.selectedIds.has(item.id) ? "is-selected" : ""}">
         <td class="listmaker-select-column"><input type="checkbox" data-select-item="${escapeHtml(item.id)}"${state.selectedIds.has(item.id) ? " checked" : ""}></td>
         ${behaviors.ranked ? `<td>${rankFor(item)}</td>` : ""}
         ${behaviors.checklist ? `<td class="listmaker-completed-column">${renderChecklistToggle(item)}</td>` : ""}
-        <td class="listmaker-line-cell listmaker-name-column"><input type="text" value="${escapeAttribute(item.title)}" data-item-field="title" data-item-id="${escapeHtml(item.id)}"></td>
+        <td class="listmaker-line-cell listmaker-name-column">${renderItemTitleControl(item)}</td>
         ${behaviors.scored ? `<td class="listmaker-line-cell"><input type="number" step="any" value="${escapeAttribute(item.score ?? "")}" data-item-field="score" data-item-id="${escapeHtml(item.id)}"></td>` : ""}
         ${state.list?.rating_type ? `<td class="listmaker-line-cell">${renderRatingInput(item)}</td>` : ""}
         ${behaviors.status ? `<td class="listmaker-line-cell"><select data-item-field="status_id" data-item-id="${escapeHtml(item.id)}"><option value="">No status</option>${state.statuses.map((status) => `<option value="${escapeHtml(status.id)}"${item.status_id === status.id ? " selected" : ""}>${escapeHtml(status.name)}</option>`).join("")}</select></td>` : ""}
@@ -597,7 +616,7 @@
       template_key: template.key,
       behaviors,
       rating_type: ratingType,
-      default_view: customFields.length ? "table" : formData.get("default_view") || "list",
+      default_view: customFields.length ? "table" : template.default_view || formData.get("default_view") || "list",
       settings: { completedItems: formData.get("completed_items") || "keep" },
     };
     setStatus(dom.createForm.querySelector("[data-listmaker-create-status]"), "Creating list...");
@@ -690,6 +709,7 @@
     dom.createForm.elements.behavior_custom_fields.checked = Boolean(template.fields?.length);
     dom.createForm.elements.behavior_rating.checked = Boolean(template.rating_type);
     if (template.rating_type) dom.createForm.elements.rating_type.value = template.rating_type;
+    if (template.default_view) dom.createForm.elements.default_view.value = template.default_view;
     dom.createForm.elements.categories.value = (template.categories || []).join("\n");
     dom.createForm.elements.statuses.value = BASE_STATUSES.map((item) => item.name).join("\n");
     dom.createForm.querySelector("[data-create-fields]").innerHTML = "";
@@ -912,6 +932,7 @@
   }
 
   async function handlePasteIntoAdd(event) {
+    if (isNotesList()) return;
     const textValue = event.clipboardData?.getData("text/plain") || "";
     const items = parsePastedItems(textValue);
     if (items.length <= 1) return;
@@ -1852,6 +1873,10 @@
 
   function templateName(key) {
     return TEMPLATES.find((template) => template.key === key)?.name || "Custom";
+  }
+
+  function isNotesList() {
+    return state.list?.template_key === "notes";
   }
 
   function ratingLabel(value) {

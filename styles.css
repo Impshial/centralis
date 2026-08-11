@@ -15111,6 +15111,7 @@ body[data-page="listmaker"] .app-shell {
 
 .listmaker-search-field input,
 .listmaker-add-form input,
+.listmaker-add-form textarea,
 .listmaker-toolbar select,
 .listmaker-item-row input,
 .listmaker-item-row select,
@@ -15385,15 +15386,29 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 
 .listmaker-add-form {
   display: flex;
+  align-items: flex-start;
   min-width: 0;
   justify-self: start;
   width: 100%;
   gap: 8px;
 }
 
-.listmaker-add-form input {
+.listmaker-add-title-control {
   flex: 1;
+  min-width: 0;
+}
+
+.listmaker-add-form input,
+.listmaker-add-form textarea {
+  width: 100%;
   padding: 0 10px;
+}
+
+.listmaker-add-form textarea {
+  min-height: 76px;
+  padding: 10px;
+  line-height: 1.35;
+  resize: vertical;
 }
 
 .listmaker-add-form .primary-action {
@@ -15728,6 +15743,24 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   min-width: 0;
   padding: 0 9px;
   font-weight: 760;
+}
+
+.listmaker-item-row.is-notes-row {
+  align-items: start;
+}
+
+.listmaker-item-row.is-notes-row .listmaker-row-title-wrap,
+.listmaker-table tr.is-notes-row .listmaker-name-column {
+  align-items: stretch;
+}
+
+.listmaker-item-row.is-notes-row .listmaker-item-title,
+.listmaker-table tr.is-notes-row .listmaker-item-title {
+  min-height: 82px;
+  padding: 9px;
+  line-height: 1.35;
+  resize: vertical;
+  white-space: pre-wrap;
 }
 
 .listmaker-small-input {

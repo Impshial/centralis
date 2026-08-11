@@ -11,7 +11,7 @@
     }
   </script>
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=listmaker-editor-grid-header-1">
+  <link rel="stylesheet" href="styles.css?v=listmaker-notes-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -72,7 +72,9 @@
             </div>
             <div class="listmaker-toolbar-secondary">
               <form class="listmaker-add-form" data-listmaker-add-form>
-                <input type="text" placeholder="Add item..." autocomplete="off" data-listmaker-add-input>
+                <div class="listmaker-add-title-control" data-listmaker-add-title-control>
+                  <input type="text" placeholder="Add item..." autocomplete="off" data-listmaker-add-input>
+                </div>
                 <select data-listmaker-add-category aria-label="Category for new items" hidden></select>
                 <button class="primary-action" type="submit">
                   <ph-plus weight="bold" aria-hidden="true"></ph-plus>
@@ -156,6 +158,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=listmaker-1"></script>
-  <script src="listmaker.js?v=listmaker-context-menu-fit-1"></script>
+  <script src="listmaker.js?v=listmaker-notes-1"></script>
 </body>
 </html>
