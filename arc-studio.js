@@ -45,6 +45,16 @@
       copy: "Timeline, Arc Map, causality, continuity, setups, payoffs, and diagnostics help you see how the story moves and where it needs attention.",
     },
   ];
+  const MANUSCRIPT_READING_STATUS = "Reading manuscript and building outline guidance...";
+  const MANUSCRIPT_READING_FRAMES = ["/", "|", "\\", "-"];
+  const ARC_FORMAT_HELP = {
+    novel: "Novel outlines focus on chapters/scenes, POV, prose pacing, interiority, and scene purpose.",
+    short_story: "Short story outlines focus on essential turns, compression, emotional arc, and ending pressure.",
+    series: "Series outlines focus on installments, recurring threads, long-range payoffs, and larger arc movement.",
+    screenplay: "Screenplay outlines focus on acts, sequences, scenes, visual action, and dramatic turns.",
+    tv_episode: "TV episode outlines focus on teaser/acts/scenes, act breaks, A/B stories, and escalation.",
+    custom: "Undecided outlines stay flexible and call out where format choices are still open.",
+  };
 
   const state = {
     user: window.centralisCurrentAppUser || null,
@@ -62,6 +72,7 @@
     elementStates: [],
     diagnosticReports: [],
     elements: [],
+    primaryImagesByObjectId: new Map(),
     selectedUnitId: "",
     inspectorTab: "overview",
     view: "outline",
@@ -70,6 +81,10 @@
     tutorialIndex: 0,
     tutorialSessionDismissed: false,
     stagedManuscript: null,
+    activeManuscriptJobId: "",
+    createStatusAnimationTimer: null,
+    createStatusAnimationFrame: 0,
+    createStatusAnimationMessage: "",
   };
 
   const dom = {};
@@ -97,6 +112,8 @@
       dom.createStatus = document.querySelector("[data-arc-create-status]");
       dom.createSubmit = document.querySelector("[data-arc-create-submit]");
       dom.universeSelect = document.querySelector("[data-arc-universe-select]");
+      dom.formatSelect = document.querySelector("[data-arc-format-select]");
+      dom.formatHelp = document.querySelector("[data-arc-format-help]");
       dom.manuscriptInput = document.querySelector("[data-arc-manuscript-file]");
       dom.stagedManuscript = document.querySelector("[data-arc-staged-manuscript]");
       return;
@@ -104,6 +121,7 @@
 
     dom.projectTitle = document.querySelector("[data-arc-project-title]");
     dom.headerProjectName = document.querySelector("[data-arc-header-project-name]");
+    dom.projectHero = document.querySelector("[data-arc-project-hero]");
     dom.workspaceStatus = document.querySelector("[data-arc-workspace-status]");
     dom.outlineCount = document.querySelector("[data-arc-outline-count]");
     dom.outlineList = document.querySelector("[data-arc-outline-list]");
@@ -142,6 +160,7 @@
       document.querySelector("[data-arc-create-close]")?.addEventListener("click", closeCreateProject);
       document.querySelector("[data-arc-create-cancel]")?.addEventListener("click", closeCreateProject);
       dom.createForm?.addEventListener("submit", handleCreateProject);
+      dom.formatSelect?.addEventListener("change", renderFormatHelp);
       dom.manuscriptInput?.addEventListener("change", handleManuscriptSelected);
       dom.stagedManuscript?.addEventListener("click", (event) => {
         if (event.target instanceof Element && event.target.closest("[data-arc-remove-manuscript]")) {
@@ -302,6 +321,7 @@
     state.elementStates = elementStates;
     state.diagnosticReports = diagnosticReports;
     state.elements = elements;
+    await loadWorkspaceImages();
     state.selectedUnitId = state.selectedUnitId || state.units.find((unit) => unit.unit_type === "scene")?.id || state.units[0]?.id || "";
     setStatus(dom.workspaceStatus, "");
   }
@@ -334,6 +354,40 @@
       return [];
     }
     return data || [];
+  }
+
+  async function loadWorkspaceImages() {
+    state.primaryImagesByObjectId = new Map();
+    const objectIds = new Set();
+    if (state.project?.universe_id) objectIds.add(state.project.universe_id);
+    state.units.forEach((unit) => {
+      if (unit.pov_element_id) objectIds.add(unit.pov_element_id);
+      if (unit.location_element_id) objectIds.add(unit.location_element_id);
+    });
+    state.unitElements.forEach((link) => {
+      if (link.element_id) objectIds.add(link.element_id);
+    });
+    state.characterArcs.forEach((arc) => {
+      if (arc.character_element_id) objectIds.add(arc.character_element_id);
+    });
+    if (!objectIds.size || !window.centralisSupabase?.functions) return;
+    try {
+      const { data, error } = await window.centralisSupabase.functions.invoke("list-object-images", {
+        body: { objectIds: [...objectIds] },
+      });
+      if (error) throw error;
+      const grouped = new Map();
+      for (const image of data?.images || []) {
+        const group = grouped.get(image.object_id) || [];
+        group.push(image);
+        grouped.set(image.object_id, group);
+      }
+      for (const [objectId, images] of grouped.entries()) {
+        state.primaryImagesByObjectId.set(objectId, normalizeImages(images)[0]);
+      }
+    } catch (error) {
+      console.warn("Could not load Arc Studio contextual images:", error);
+    }
   }
 
   async function maybeShowTutorial() {
@@ -445,6 +499,36 @@
     }).join("");
   }
 
+  function renderProjectHero() {
+    if (!dom.projectHero || !state.project) return;
+    const stats = projectStats();
+    const heroImage = projectHeroImageUrl();
+    const style = heroImage ? ` style="--arc-project-image: url('${escapeAttribute(heroImage)}')"` : "";
+    dom.projectHero.innerHTML = `
+      <div class="arc-project-hero-bg"${style}></div>
+      <div class="arc-project-hero-content">
+        <div class="arc-project-cover">
+          ${heroImage ? `<img src="${escapeAttribute(heroImage)}" alt="">` : '<ph-git-branch weight="duotone" aria-hidden="true"></ph-git-branch>'}
+        </div>
+        <div class="arc-project-title-block">
+          <p class="settings-eyebrow">Arc Studio</p>
+          <h1>${escapeHtml(state.project.title || "Untitled Project")}</h1>
+          <p>${escapeHtml(state.project.logline || state.project.premise || "Shape the story movement, scene by scene.")}</p>
+          <div class="arc-project-badges">
+            <span>${escapeHtml(normalizeLabel(state.project.genre || state.project.format || "Story"))}</span>
+            <span>${escapeHtml(normalizeLabel(state.project.status || "Planning"))}</span>
+          </div>
+        </div>
+        <dl class="arc-project-stat-grid">
+          <div><dt>Scenes</dt><dd>${stats.sceneCount}</dd></div>
+          <div><dt>Threads</dt><dd>${stats.threadCount}</dd></div>
+          <div><dt>Characters</dt><dd>${stats.characterCount}</dd></div>
+          <div class="arc-project-progress" style="--arc-progress: ${stats.progressPercent}%"><dt>Progress</dt><dd>${stats.progressPercent}%</dd></div>
+        </dl>
+      </div>
+    `;
+  }
+
   function renderWorkspace() {
     if (!state.project) return;
     if (dom.projectTitle) dom.projectTitle.textContent = state.project.title;
@@ -453,6 +537,7 @@
       dom.headerProjectName.hidden = !state.project.title;
     }
     dom.viewTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.arcView === state.view));
+    renderProjectHero();
     renderOutline();
     renderSurface();
     renderInspector();
@@ -462,7 +547,8 @@
     const visible = filteredUnits();
     if (dom.outlineCount) {
       const sceneCount = state.units.filter((unit) => unit.unit_type === "scene").length;
-      dom.outlineCount.textContent = `${state.units.length} units, ${sceneCount} scenes`;
+      const groupCount = state.units.filter((unit) => !isStoryScene(unit)).length;
+      dom.outlineCount.textContent = `${groupCount} ${groupCount === 1 ? "group" : "groups"} - ${sceneCount} ${sceneCount === 1 ? "scene" : "scenes"}`;
     }
     if (!state.units.length) {
       dom.outlineList.innerHTML = `<p class="empty-state">No story units yet. Add a chapter or scene to begin.</p>`;
@@ -483,12 +569,15 @@
       return `
         <article class="arc-outline-item ${state.selectedUnitId === unit.id ? "is-selected" : ""}" style="--arc-depth: ${depth}">
           <button type="button" data-arc-select-unit="${escapeAttribute(unit.id)}">
-            <span class="arc-unit-type">${escapeHtml(normalizeLabel(unit.unit_type))}</span>
+            <span class="arc-unit-row-top">
+              <span class="arc-unit-type">${escapeHtml(isStoryScene(unit) ? sceneNumber(unit) : normalizeLabel(unit.unit_type))}</span>
+              <span class="arc-status-dot status-${escapeAttribute(unit.status || "idea")}"></span>
+            </span>
             <strong>${escapeHtml(unit.title)}</strong>
-            <small>${escapeHtml(normalizeLabel(unit.status))}</small>
+            <small>${escapeHtml(isStoryScene(unit) ? normalizeLabel(unit.status) : `${descendantSceneCount(unit.id)} scenes`)}</small>
           </button>
           <div class="arc-outline-actions">
-            <button type="button" data-arc-toggle-unit="${escapeAttribute(unit.id)}" title="Collapse or expand"><ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down></button>
+            <button type="button" data-arc-toggle-unit="${escapeAttribute(unit.id)}" title="Collapse or expand">${unit.collapsed ? '<ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right>' : '<ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>'}</button>
             <button type="button" data-arc-edit-unit="${escapeAttribute(unit.id)}" title="Edit"><ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple></button>
             <button type="button" data-arc-duplicate-unit="${escapeAttribute(unit.id)}" title="Duplicate"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>
             <button type="button" data-arc-move-unit="${escapeAttribute(unit.id)}" data-direction="up" title="Move up"><ph-arrow-up weight="bold" aria-hidden="true"></ph-arrow-up></button>
@@ -520,20 +609,39 @@
       return;
     }
     if (state.view === "corkboard") {
-      const columns = ["idea", "planned", "outlined", "drafting", "revising", "complete", "cut"];
+      const groups = groupedSceneSections(units);
       dom.storySurface.innerHTML = `
-        <div class="arc-corkboard">
-          ${columns.map((status) => `
-            <section class="arc-corkboard-column">
-              <h3>${escapeHtml(normalizeLabel(status))}</h3>
-              ${units.filter((unit) => unit.status === status).map(renderSurfaceCard).join("") || '<p class="arc-muted">No units.</p>'}
+        <div class="arc-view-heading">
+          <div>
+            <p class="settings-eyebrow">Corkboard</p>
+            <h2>Scene Cards</h2>
+          </div>
+          <span>${units.filter(isStoryScene).length} scenes</span>
+        </div>
+        ${groups.length ? `<div class="arc-corkboard-groups">
+          ${groups.map((group) => `
+            <section class="arc-corkboard-section">
+              <header>
+                <h3>${escapeHtml(group.title)}</h3>
+                <span>${group.scenes.length} ${group.scenes.length === 1 ? "scene" : "scenes"}</span>
+              </header>
+              <div class="arc-corkboard">
+                ${group.scenes.map(renderPaperSceneCard).join("") || '<p class="arc-muted">No scenes.</p>'}
+              </div>
             </section>
           `).join("")}
-        </div>
+        </div>` : '<p class="empty-state">No scenes to show on the corkboard.</p>'}
       `;
       return;
     }
     dom.storySurface.innerHTML = `
+      <div class="arc-view-heading">
+        <div>
+          <p class="settings-eyebrow">Outline</p>
+          <h2>${escapeHtml(currentSectionTitle(units))}</h2>
+        </div>
+        <span>${units.filter(isStoryScene).length} scenes</span>
+      </div>
       <div class="arc-outline-surface">
         ${units.sort(sortUnitsByTreePosition).map(renderSurfaceCard).join("")}
       </div>
@@ -541,13 +649,39 @@
   }
 
   function renderSurfaceCard(unit) {
+    const context = sceneContext(unit);
+    const image = scenePrimaryImage(unit);
     return `
       <article class="arc-unit-card ${state.selectedUnitId === unit.id ? "is-selected" : ""}">
         <button type="button" data-arc-select-unit="${escapeAttribute(unit.id)}">
-          <span>${escapeHtml(normalizeLabel(unit.unit_type))}</span>
+          <span class="arc-card-number">${escapeHtml(isStoryScene(unit) ? sceneNumber(unit) : normalizeLabel(unit.unit_type))}</span>
+          <span class="arc-card-copy">
+            <span class="arc-status-badge status-${escapeAttribute(unit.status || "idea")}">${escapeHtml(normalizeLabel(unit.status || "idea"))}</span>
+            <h3>${escapeHtml(unit.title)}</h3>
+            <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
+            <small>${escapeHtml(context.join(" - ") || "No scene context yet.")}</small>
+          </span>
+          <span class="arc-card-media">${renderSceneImage(image, unit.title)}</span>
+        </button>
+      </article>
+    `;
+  }
+
+  function renderPaperSceneCard(unit) {
+    const context = sceneContext(unit);
+    return `
+      <article class="arc-paper-card ${state.selectedUnitId === unit.id ? "is-selected" : ""}">
+        <button type="button" data-arc-select-unit="${escapeAttribute(unit.id)}">
+          <span class="arc-paper-card-top">
+            <span>${escapeHtml(sceneNumber(unit))}</span>
+            <span class="arc-status-badge status-${escapeAttribute(unit.status || "idea")}">${escapeHtml(normalizeLabel(unit.status || "idea"))}</span>
+          </span>
           <h3>${escapeHtml(unit.title)}</h3>
           <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
-          <small>${escapeHtml(normalizeLabel(unit.status))}${unit.story_time ? ` - ${escapeHtml(unit.story_time)}` : ""}</small>
+          <span class="arc-paper-card-footer">
+            ${context.slice(0, 2).map((item) => `<small>${escapeHtml(item)}</small>`).join("") || "<small>No context</small>"}
+            <small>${escapeHtml(sceneProgressLabel(unit))}</small>
+          </span>
         </button>
       </article>
     `;
@@ -559,6 +693,13 @@
     const undated = scenes.filter((unit) => !hasChronology(unit));
     dom.storySurface.innerHTML = `
       <div class="arc-timeline-view">
+        <div class="arc-view-heading">
+          <div>
+            <p class="settings-eyebrow">Timeline</p>
+            <h2>Chronological Flow</h2>
+          </div>
+          <span>${dated.length} dated / ${undated.length} loose</span>
+        </div>
         <div class="arc-view-summary">
           <strong>${dated.length} chronological scenes</strong>
           <span>${undated.length} without chronology</span>
@@ -567,10 +708,13 @@
           ${scenes.map((unit) => `
             <article class="arc-timeline-item ${state.selectedUnitId === unit.id ? "is-selected" : ""}">
               <button type="button" data-arc-select-unit="${escapeAttribute(unit.id)}">
-                <span>${escapeHtml(unit.timeline_label || unit.chronological_label || unit.story_time || "Chronology not set")}</span>
-                <h3>${escapeHtml(unit.title)}</h3>
-                <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
-                <small>${escapeHtml(formatTimelineRange(unit))}</small>
+                <span class="arc-timeline-marker">${escapeHtml(sceneNumber(unit))}</span>
+                <span class="arc-timeline-copy">
+                  <small>${escapeHtml(unit.timeline_label || unit.chronological_label || unit.story_time || "Chronology not set")}</small>
+                  <h3>${escapeHtml(unit.title)}</h3>
+                  <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
+                </span>
+                <span class="arc-status-badge status-${escapeAttribute(unit.status || "idea")}">${escapeHtml(normalizeLabel(unit.status || "idea"))}</span>
               </button>
             </article>
           `).join("") || '<p class="empty-state">No scenes available for the timeline.</p>'}
@@ -596,8 +740,22 @@
       unitIds: new Set(state.arcStages.filter((stage) => stage.character_arc_id === arc.id && stage.unit_id).map((stage) => stage.unit_id)),
     }));
     const rows = [...threadRows, ...arcRows];
+    const stats = projectStats();
     dom.storySurface.innerHTML = `
       <div class="arc-map-view" style="--arc-scene-count: ${Math.max(1, scenes.length)}">
+        <div class="arc-view-heading">
+          <div>
+            <p class="settings-eyebrow">Arc Map</p>
+            <h2>Story Movement</h2>
+          </div>
+          <span>${rows.length} tracked arcs</span>
+        </div>
+        <div class="arc-map-dashboard">
+          <div class="arc-map-progress" style="--arc-progress: ${stats.progressPercent}%"><strong>${stats.progressPercent}%</strong><span>Complete</span></div>
+          <div><strong>${stats.threadCount}</strong><span>Threads</span></div>
+          <div><strong>${state.setups.length}</strong><span>Setups</span></div>
+          <div><strong>${state.unitLinks.length}</strong><span>Causal Links</span></div>
+        </div>
         <div class="arc-map-header">
           <span>Thread / Arc</span>
           ${scenes.map((unit) => `<span>${escapeHtml(unit.title)}</span>`).join("")}
@@ -625,6 +783,13 @@
     const aiDiagnostics = latestReport?.status === "complete" ? visibleReportDiagnostics(latestReport) : [];
     dom.storySurface.innerHTML = `
       <div class="arc-diagnostics-view">
+        <div class="arc-view-heading">
+          <div>
+            <p class="settings-eyebrow">Diagnostics</p>
+            <h2>Story Health</h2>
+          </div>
+          <span>${localDiagnostics.length + aiDiagnostics.length} notes</span>
+        </div>
         <div class="arc-diagnostics-toolbar">
           <div>
             <strong>Story Diagnostics</strong>
@@ -693,7 +858,17 @@
   }
 
   function renderProjectInspector() {
+    const stats = projectStats();
+    const heroImage = projectHeroImageUrl();
     return `
+      <section class="arc-inspector-feature">
+        <div class="arc-inspector-feature-media">${renderSceneImage(heroImage ? { image: { image_url: heroImage } } : null, state.project?.title || "Project")}</div>
+        <div>
+          <p class="settings-eyebrow">Project</p>
+          <h3>${escapeHtml(state.project?.title || "Untitled Project")}</h3>
+          <p>${escapeHtml(state.project?.logline || state.project?.premise || "Select or create a scene to begin shaping the story.")}</p>
+        </div>
+      </section>
       <section class="arc-inspector-section">
         <h3>Project Overview</h3>
         <p>${escapeHtml(state.project?.premise || state.project?.logline || "Select or create a scene to begin shaping the story.")}</p>
@@ -701,17 +876,49 @@
       <section class="arc-inspector-section">
         <h3>Dashboard</h3>
         <dl class="arc-dashboard-list">
-          <div><dt>Scenes</dt><dd>${state.units.filter((unit) => unit.unit_type === "scene").length}</dd></div>
-          <div><dt>Active Threads</dt><dd>${state.threads.filter((thread) => thread.status === "active").length}</dd></div>
-          <div><dt>Character Arcs</dt><dd>${state.characterArcs.length}</dd></div>
-          <div><dt>Unresolved Setups</dt><dd>${state.setups.filter((item) => item.status === "unresolved").length}</dd></div>
+          <div><dt>Scenes</dt><dd>${stats.sceneCount}</dd></div>
+          <div><dt>Threads</dt><dd>${stats.threadCount}</dd></div>
+          <div><dt>Characters</dt><dd>${stats.characterCount}</dd></div>
         </dl>
       </section>
     `;
   }
 
+  function renderSceneBrief(unit) {
+    const image = scenePrimaryImage(unit);
+    const linked = linksForUnit(unit.id).slice(0, 6);
+    return `
+      <section class="arc-inspector-feature">
+        <div class="arc-inspector-feature-media">${renderSceneImage(image, unit.title, { link: true })}</div>
+        <div>
+          <p class="settings-eyebrow">${escapeHtml(sceneNumber(unit))} - ${escapeHtml(normalizeLabel(unit.status || "idea"))}</p>
+          <h3>${escapeHtml(unit.title)}</h3>
+          <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
+          <div class="arc-inspector-context">
+            ${renderElementContextLink("POV", unit.pov_element_id)}
+            ${renderElementContextLink("Location", unit.location_element_id)}
+            ${unit.story_time || unit.timeline_label || unit.chronological_label ? `<span><ph-clock weight="duotone" aria-hidden="true"></ph-clock>${escapeHtml(unit.story_time || unit.timeline_label || unit.chronological_label)}</span>` : ""}
+          </div>
+          ${linked.length ? `<div class="arc-linked-avatar-row">${linked.map((link) => renderElementAvatar(link.element_id)).join("")}</div>` : ""}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderElementContextLink(label, elementId) {
+    const element = elementById(elementId);
+    if (!element) return "";
+    return `
+      <a href="${escapeAttribute(chronicleHref(elementId))}">
+        ${renderElementAvatar(elementId, element.name, { link: false })}
+        <span><small>${escapeHtml(label)}</small>${escapeHtml(element.name)}</span>
+      </a>
+    `;
+  }
+
   function renderOverviewInspector(unit) {
     return `
+      ${renderSceneBrief(unit)}
       <form class="arc-inspector-form" data-arc-save-unit="${escapeAttribute(unit.id)}">
         <label><span>Title</span><input name="title" value="${escapeAttribute(unit.title)}" required></label>
         <label><span>Synopsis</span><textarea name="summary">${escapeHtml(unit.summary || "")}</textarea></label>
@@ -896,17 +1103,16 @@
 
   function renderElementLink(link) {
     const element = state.elements.find((item) => item.id === link.element_id);
-    const chronicleHref = element?.universe_id
-      ? `chronicle-editor.html#universe/${encodeURIComponent(element.universe_id)}/element/${encodeURIComponent(link.element_id)}`
-      : `chronicle-editor.html#element/${encodeURIComponent(link.element_id)}`;
+    const href = chronicleHref(link.element_id);
     return `
       <article class="arc-element-link">
+        ${renderElementAvatar(link.element_id, element?.name)}
         <div>
           <strong>${escapeHtml(element?.name || "Unknown element")}</strong>
           <span>${escapeHtml(link.role || "appears")}</span>
           <p>${escapeHtml(link.story_state || element?.description || "No story state recorded.")}</p>
         </div>
-        <a class="secondary-action" href="${chronicleHref}">Open Chronicle</a>
+        ${href ? `<a class="secondary-action" href="${escapeAttribute(href)}">Open Chronicle</a>` : ""}
       </article>
     `;
   }
@@ -937,6 +1143,8 @@
   }
 
   function clearStagedManuscript() {
+    state.activeManuscriptJobId = "";
+    stopCreateStatusAnimation();
     state.stagedManuscript = null;
     if (dom.manuscriptInput) dom.manuscriptInput.value = "";
     renderStagedManuscript();
@@ -945,7 +1153,13 @@
   function setCreateBusy(busy, message = "") {
     if (dom.createSubmit) dom.createSubmit.disabled = busy;
     if (dom.manuscriptInput) dom.manuscriptInput.disabled = busy;
-    if (message) setStatus(dom.createStatus, message);
+    if (message === MANUSCRIPT_READING_STATUS) {
+      startCreateStatusAnimation(message);
+    } else {
+      stopCreateStatusAnimation();
+      if (message) setStatus(dom.createStatus, message);
+    }
+    if (!busy && !message) stopCreateStatusAnimation();
   }
 
   function setFormValue(name, value) {
@@ -964,6 +1178,12 @@
     setFormValue("target_length", project.target_length || project.targetLength);
     setFormValue("notes", project.notes);
     setFormValue("status", "outlined");
+  }
+
+  function renderFormatHelp() {
+    if (!dom.formatHelp) return;
+    const format = clean(dom.formatSelect?.value);
+    dom.formatHelp.textContent = ARC_FORMAT_HELP[format] || "Select a Format to guide the outline structure.";
   }
 
   function normalizeGeneratedArcUnits(units = []) {
@@ -996,35 +1216,60 @@
   async function handleManuscriptSelected() {
     const file = dom.manuscriptInput?.files?.[0] || null;
     if (!file) return;
+    const selectedFormat = clean(dom.createForm?.elements?.format?.value);
+    if (!selectedFormat) {
+      if (dom.manuscriptInput) dom.manuscriptInput.value = "";
+      setStatus(dom.createStatus, "Select a Format before uploading a manuscript.", "error");
+      dom.createForm?.elements?.format?.focus();
+      return;
+    }
     if (!window.centralisSupabase) {
       setStatus(dom.createStatus, "Supabase is not available yet. Refresh the page and try again.", "error");
       return;
     }
 
-    setCreateBusy(true, "Reading manuscript and building outline guidance...");
+    setCreateBusy(true, "Queueing manuscript breakdown...");
     try {
+      state.stagedManuscript = {
+        file,
+        source: { original_filename: file.name, mime_type: file.type, file_size: file.size },
+        project: {},
+        units: [],
+      };
+      renderStagedManuscript();
       const uploadData = new FormData();
       uploadData.set("file", file);
+      uploadData.set("format", selectedFormat);
       const { data, error } = await window.centralisSupabase.functions.invoke("extract-arc-source-document", {
         body: uploadData,
       });
-      if (error) throw error;
-      const units = normalizeGeneratedArcUnits(data?.units || []);
-      if (!data?.project?.title && !units.length) {
+      if (error) throw await readableFunctionError(error);
+      const jobId = clean(data?.job?.id);
+      if (!jobId) {
+        throw new Error("The manuscript breakdown job did not start.");
+      }
+      startCreateStatusAnimation("Starting manuscript processor...");
+      await startArcManuscriptBreakdownProcessor(jobId);
+      startCreateStatusAnimation(MANUSCRIPT_READING_STATUS);
+      const result = await pollArcManuscriptBreakdownJob(jobId);
+      const units = normalizeGeneratedArcUnits(result?.units || []);
+      if (!result?.project?.title && !units.length) {
         throw new Error("The manuscript did not return usable project details or outline units.");
       }
 
       state.stagedManuscript = {
         file,
-        source: data?.source || { original_filename: file.name, mime_type: file.type, file_size: file.size },
-        project: data?.project || {},
+        source: result?.source || { original_filename: file.name, mime_type: file.type, file_size: file.size },
+        project: result?.project || {},
         units,
       };
       applyExtractedArcProject({ project: state.stagedManuscript.project });
       renderStagedManuscript();
       setStatus(dom.createStatus, `Manuscript breakdown ready: ${units.length} outline ${units.length === 1 ? "unit" : "units"}.`, "success");
     } catch (error) {
-      clearStagedManuscript();
+      state.activeManuscriptJobId = "";
+      if (dom.manuscriptInput) dom.manuscriptInput.value = "";
+      if (dom.createModal?.hidden) return;
       setStatus(dom.createStatus, `Could not break down manuscript: ${error.message}`, "error");
     } finally {
       setCreateBusy(false);
@@ -1040,8 +1285,53 @@
     const { data, error } = await window.centralisSupabase.functions.invoke("upload-arc-source-document", {
       body: uploadData,
     });
-    if (error) throw error;
+    if (error) throw await readableFunctionError(error);
     return data?.document || null;
+  }
+
+  async function pollArcManuscriptBreakdownJob(jobId) {
+    state.activeManuscriptJobId = jobId;
+    const startedAt = Date.now();
+    let lastProgressLabel = "";
+    while (state.activeManuscriptJobId === jobId && !dom.createModal?.hidden) {
+      await sleep(1800);
+      const { data, error } = await window.centralisSupabase.functions.invoke("get-arc-manuscript-breakdown-job", {
+        body: { jobId },
+      });
+      if (error) throw await readableFunctionError(error);
+      const job = data?.job || {};
+      const progressLabel = clean(job.progress_label);
+      if (progressLabel && progressLabel !== lastProgressLabel && !["Ready", "Failed"].includes(progressLabel)) {
+        lastProgressLabel = progressLabel;
+        startCreateStatusAnimation(`${progressLabel}...`);
+      }
+      if (job.status === "completed") {
+        state.activeManuscriptJobId = "";
+        return data?.result || job.result_payload || {};
+      }
+      if (job.status === "failed" || job.status === "cancelled") {
+        state.activeManuscriptJobId = "";
+        throw new Error(job.error_message || "The manuscript breakdown did not finish.");
+      }
+      if (Date.now() - startedAt > 9 * 60 * 1000) {
+        state.activeManuscriptJobId = "";
+        throw new Error("The manuscript breakdown is taking too long. Try again with a shorter document or a more compact source.");
+      }
+    }
+    throw new Error("Manuscript breakdown was stopped.");
+  }
+
+  async function startArcManuscriptBreakdownProcessor(jobId) {
+    const { error } = await window.centralisSupabase.functions.invoke("process-arc-manuscript-breakdown-job", {
+      body: { jobId },
+    });
+    if (!error) return;
+    const readable = await readableFunctionError(error);
+    const { data: jobData, error: pollError } = await window.centralisSupabase.functions.invoke("get-arc-manuscript-breakdown-job", {
+      body: { jobId },
+    });
+    if (!pollError && ["queued", "running"].includes(String(jobData?.job?.status || ""))) return;
+    throw readable;
   }
 
   async function insertGeneratedArcUnits(projectId, units = []) {
@@ -1084,11 +1374,16 @@
       logline: clean(formData.get("logline")),
       premise: clean(formData.get("premise")),
       genre: clean(formData.get("genre")),
-      format: clean(formData.get("format")) || "novel",
+      format: clean(formData.get("format")),
       status: clean(formData.get("status")) || "planning",
       target_length: clean(formData.get("target_length")),
       notes: clean(formData.get("notes")),
     };
+    if (!payload.format) {
+      setStatus(dom.createStatus, "Select a Format before creating a story project.", "error");
+      dom.createForm?.elements?.format?.focus();
+      return;
+    }
     setCreateBusy(true, stagedUnits.length ? "Creating story project and outline..." : "Creating story project...");
     let createdProjectId = "";
     try {
@@ -1377,7 +1672,7 @@
       body: { project_id: state.project.id, scope: "project" },
     });
     if (error) {
-      setStatus(dom.workspaceStatus, `Story analysis failed: ${error.message}`, "error");
+      setStatus(dom.workspaceStatus, `Story analysis failed: ${(await readableFunctionError(error)).message}`, "error");
       await refreshWorkspace(false);
       return;
     }
@@ -1594,14 +1889,20 @@
 
   function openCreateProject() {
     dom.createModal.hidden = false;
+    document.body.classList.add("centralis-modal-open");
+    renderFormatHelp();
     renderStagedManuscript();
     dom.createForm?.querySelector("input[name='title']")?.focus();
   }
 
   function closeCreateProject() {
     dom.createModal.hidden = true;
+    document.body.classList.remove("centralis-modal-open");
+    state.activeManuscriptJobId = "";
+    stopCreateStatusAnimation();
     dom.createForm?.reset();
     clearStagedManuscript();
+    renderFormatHelp();
     setStatus(dom.createStatus, "");
   }
 
@@ -1676,6 +1977,170 @@
 
   function linksForUnit(unitId) {
     return state.unitElements.filter((link) => link.unit_id === unitId);
+  }
+
+  function normalizeImages(images = []) {
+    if (!Array.isArray(images) || !images.length) return [];
+    return [...images].sort((left, right) => {
+      if (Boolean(left.is_primary) !== Boolean(right.is_primary)) return left.is_primary ? -1 : 1;
+      return Number(left.sort_order || 0) - Number(right.sort_order || 0)
+        || String(left.created_at || "").localeCompare(String(right.created_at || ""));
+    });
+  }
+
+  function primaryImageFor(objectId) {
+    return objectId ? state.primaryImagesByObjectId.get(objectId) || null : null;
+  }
+
+  function projectHeroImageUrl() {
+    return clean(state.project?.cover_image_url) || primaryImageFor(state.project?.universe_id)?.image_url || "";
+  }
+
+  function projectStats() {
+    const scenes = state.units.filter(isStoryScene);
+    const completeScenes = scenes.filter((unit) => unit.status === "complete").length;
+    const progressPercent = scenes.length ? Math.round((completeScenes / scenes.length) * 100) : 0;
+    const characterIds = new Set([
+      ...state.characterArcs.map((arc) => arc.character_element_id).filter(Boolean),
+      ...state.units.map((unit) => unit.pov_element_id).filter(Boolean),
+      ...state.unitElements
+        .filter((link) => /character|pov|cast|appears/i.test(link.role || ""))
+        .map((link) => link.element_id)
+        .filter(Boolean),
+    ]);
+    return {
+      sceneCount: scenes.length,
+      threadCount: state.threads.length,
+      characterCount: characterIds.size,
+      progressPercent,
+    };
+  }
+
+  function sceneNumber(unit) {
+    const scenes = state.units.filter(isStoryScene).sort(sortUnitsByTreePosition);
+    const index = scenes.findIndex((scene) => scene.id === unit.id);
+    return index >= 0 ? String(index + 1).padStart(2, "0") : normalizeLabel(unit.unit_type);
+  }
+
+  function sceneProgressLabel(unit) {
+    if (unit.status === "complete") return "100%";
+    if (unit.status === "revising") return "75%";
+    if (unit.status === "drafting") return "50%";
+    if (unit.status === "outlined") return "35%";
+    if (unit.status === "planned") return "20%";
+    return "0%";
+  }
+
+  function descendantSceneCount(unitId) {
+    return state.units
+      .filter((unit) => unit.id === unitId || isDescendantOf(unit, unitId))
+      .filter(isStoryScene)
+      .length;
+  }
+
+  function isDescendantOf(unit, ancestorId) {
+    let current = unit;
+    let guard = 0;
+    while (current?.parent_unit_id && guard < 40) {
+      if (current.parent_unit_id === ancestorId) return true;
+      current = state.units.find((item) => item.id === current.parent_unit_id);
+      guard += 1;
+    }
+    return false;
+  }
+
+  function topLevelAncestor(unit) {
+    let current = unit;
+    let parent = state.units.find((item) => item.id === current?.parent_unit_id);
+    let guard = 0;
+    while (parent && guard < 40) {
+      current = parent;
+      parent = state.units.find((item) => item.id === current.parent_unit_id);
+      guard += 1;
+    }
+    return current || unit;
+  }
+
+  function groupedSceneSections(units) {
+    const visibleScenes = units.filter(isStoryScene).sort(sortUnitsByTreePosition);
+    const groups = new Map();
+    for (const scene of visibleScenes) {
+      const ancestor = topLevelAncestor(scene);
+      const key = ancestor?.id || "ungrouped";
+      if (!groups.has(key)) {
+        groups.set(key, {
+          title: ancestor && ancestor.id !== scene.id ? ancestor.title : "Ungrouped Scenes",
+          order: ancestor ? treePath(ancestor) : "zzzzzz",
+          scenes: [],
+        });
+      }
+      groups.get(key).scenes.push(scene);
+    }
+    return [...groups.values()].sort((left, right) => left.order.localeCompare(right.order));
+  }
+
+  function currentSectionTitle(units) {
+    const selected = selectedUnit();
+    if (selected && !isStoryScene(selected)) return selected.title;
+    const groups = groupedSceneSections(units);
+    return groups.length === 1 ? groups[0].title : "Story Outline";
+  }
+
+  function elementById(elementId) {
+    return state.elements.find((element) => element.id === elementId) || null;
+  }
+
+  function sceneContext(unit) {
+    return [
+      elementName(unit.pov_element_id),
+      elementName(unit.location_element_id),
+      unit.story_time || unit.timeline_label || unit.chronological_label,
+    ].filter((item) => item && item !== "Unknown element");
+  }
+
+  function scenePrimaryImage(unit) {
+    const candidateIds = [
+      unit.pov_element_id,
+      unit.location_element_id,
+      ...linksForUnit(unit.id).map((link) => link.element_id),
+    ].filter(Boolean);
+    for (const id of candidateIds) {
+      const image = primaryImageFor(id);
+      if (image?.image_url) return { image, element: elementById(id) };
+    }
+    return null;
+  }
+
+  function renderSceneImage(sceneImage, fallbackLabel = "Scene", options = {}) {
+    if (sceneImage?.image?.image_url) {
+      const href = chronicleHref(sceneImage.element?.id);
+      const image = `<img src="${escapeAttribute(sceneImage.image.image_url)}" alt="">`;
+      return href && options.link
+        ? `<a href="${escapeAttribute(href)}" aria-label="Open ${escapeAttribute(sceneImage.element?.name || "Chronicle element")} in Chronicle">${image}</a>`
+        : image;
+    }
+    return `<span class="arc-image-placeholder" aria-hidden="true"><ph-image-square weight="duotone"></ph-image-square><em>${escapeHtml(String(fallbackLabel || "Scene").slice(0, 1).toUpperCase())}</em></span>`;
+  }
+
+  function renderElementAvatar(elementId, label = "", options = {}) {
+    const element = elementById(elementId);
+    const image = primaryImageFor(elementId);
+    const name = element?.name || label || "Element";
+    const content = image?.image_url
+      ? `<img src="${escapeAttribute(image.image_url)}" alt="">`
+      : `<span>${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`;
+    const href = chronicleHref(elementId);
+    return href && options.link !== false
+      ? `<a class="arc-element-avatar" href="${escapeAttribute(href)}" title="${escapeAttribute(name)}">${content}</a>`
+      : `<span class="arc-element-avatar" title="${escapeAttribute(name)}">${content}</span>`;
+  }
+
+  function chronicleHref(elementId) {
+    const element = elementById(elementId);
+    if (!element) return "";
+    return element.universe_id
+      ? `chronicle-editor.html#universe/${encodeURIComponent(element.universe_id)}/element/${encodeURIComponent(element.id)}`
+      : `chronicle-editor.html#element/${encodeURIComponent(element.id)}`;
   }
 
   function renderUnitLinkSummary(link) {
@@ -1950,6 +2415,60 @@
 
   function escapeAttribute(value) {
     return escapeHtml(value).replaceAll("`", "&#096;");
+  }
+
+  function startCreateStatusAnimation(message) {
+    if (state.createStatusAnimationTimer && state.createStatusAnimationMessage === message) return;
+    stopCreateStatusAnimation();
+    state.createStatusAnimationMessage = message;
+    state.createStatusAnimationFrame = 0;
+    const renderFrame = () => {
+      const frame = MANUSCRIPT_READING_FRAMES[state.createStatusAnimationFrame % MANUSCRIPT_READING_FRAMES.length];
+      state.createStatusAnimationFrame += 1;
+      setStatus(dom.createStatus, `${message} ${frame}`);
+    };
+    renderFrame();
+    state.createStatusAnimationTimer = window.setInterval(renderFrame, 180);
+  }
+
+  function stopCreateStatusAnimation() {
+    if (state.createStatusAnimationTimer) {
+      window.clearInterval(state.createStatusAnimationTimer);
+      state.createStatusAnimationTimer = null;
+    }
+    state.createStatusAnimationMessage = "";
+  }
+
+  async function readableFunctionError(error) {
+    const fallback = error?.message || "Request failed.";
+    const context = error?.context;
+    if (!context) return new Error(fallback);
+
+    try {
+      if (typeof context.clone === "function") {
+        const payload = await context.clone().json();
+        const message = payload?.error || payload?.message || payload?.details?.message;
+        if (message) return new Error(String(message));
+      }
+    } catch (_error) {
+      // Fall through to text parsing below.
+    }
+
+    try {
+      const text = typeof context.text === "function" ? await context.text() : "";
+      if (text) {
+        try {
+          const payload = JSON.parse(text);
+          return new Error(String(payload.error || payload.message || text));
+        } catch (_error) {
+          return new Error(text);
+        }
+      }
+    } catch (_error) {
+      // Fall through to the SDK message.
+    }
+
+    return new Error(fallback);
   }
 
   function setStatus(target, message, type = "") {

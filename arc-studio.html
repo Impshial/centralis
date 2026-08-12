@@ -6,8 +6,8 @@
   <title>Arc Studio | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=arc-manuscript-outline-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=arc-redesign-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="arc-studio">
@@ -55,79 +55,83 @@
         </div>
 
         <form class="arc-create-form" data-arc-create-form>
-          <section class="arc-manuscript-panel">
-            <div class="arc-manuscript-header">
-              <div>
-                <strong>Start from a manuscript</strong>
-                <span>Upload a document and Arc Studio will create outline guidance, not script pages.</span>
-              </div>
-            </div>
-            <label class="source-documents-upload-zone">
-              <ph-upload-simple weight="duotone" aria-hidden="true"></ph-upload-simple>
-              <span>
-                <strong>Upload Manuscript</strong>
-                <em>PDF, Word, text, Markdown, HTML, RTF, CSV/TSV, JSON, YAML, XML</em>
-              </span>
-              <input class="source-documents-file-input" type="file" name="arc_manuscript_file" accept=".pdf,.txt,.md,.markdown,.html,.htm,.rtf,.doc,.docx,.csv,.tsv,.json,.yaml,.yml,.xml,application/pdf,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-arc-manuscript-file>
-            </label>
-            <div class="arc-staged-manuscript-list" data-arc-staged-manuscript hidden></div>
-          </section>
-          <label class="form-field">
-            <span>Title</span>
-            <input type="text" name="title" required maxlength="180" placeholder="The Ash Gate">
-          </label>
-          <label class="form-field">
-            <span>Universe <em>(optional)</em></span>
-            <select name="universe_id" data-arc-universe-select>
-              <option value="">Standalone story project</option>
-            </select>
-          </label>
-          <div class="arc-create-pair">
+          <div class="arc-create-body">
             <label class="form-field">
-              <span>Genre</span>
-              <input type="text" name="genre" placeholder="Fantasy, mystery, sci-fi...">
+              <span>Title</span>
+              <input type="text" name="title" required maxlength="180" placeholder="The Ash Gate">
             </label>
             <label class="form-field">
-              <span>Format</span>
-              <select name="format">
-                <option value="novel">Novel</option>
-                <option value="short_story">Short Story</option>
-                <option value="series">Series</option>
-                <option value="screenplay">Screenplay</option>
-                <option value="tv_episode">TV Episode</option>
-                <option value="custom">Custom</option>
+              <span>Universe <em>(optional)</em></span>
+              <select name="universe_id" data-arc-universe-select>
+                <option value="">Standalone story project</option>
               </select>
             </label>
+            <div class="arc-create-pair">
+              <label class="form-field">
+                <span>Genre</span>
+                <input type="text" name="genre" placeholder="Fantasy, mystery, sci-fi...">
+              </label>
+              <label class="form-field">
+                <span>Format</span>
+                <select name="format" required data-arc-format-select>
+                  <option value="" selected disabled>Select...</option>
+                  <option value="novel">Novel</option>
+                  <option value="short_story">Short Story</option>
+                  <option value="series">Series</option>
+                  <option value="screenplay">Screenplay</option>
+                  <option value="tv_episode">TV Episode</option>
+                  <option value="custom">Undecided (custom)</option>
+                </select>
+                <small class="arc-format-help" data-arc-format-help>Select a Format to guide the outline structure.</small>
+              </label>
+            </div>
+            <section class="arc-manuscript-panel">
+              <div class="arc-manuscript-header">
+                <div>
+                  <strong>Start from a manuscript</strong>
+                  <span>Upload a document and Arc Studio will create outline guidance for your story. Make sure you select a Format for your outline.</span>
+                </div>
+              </div>
+              <label class="source-documents-upload-zone">
+                <ph-upload-simple weight="duotone" aria-hidden="true"></ph-upload-simple>
+                <span>
+                  <strong>Upload Manuscript</strong>
+                  <em>PDF, Word, text, Markdown, HTML, RTF, CSV/TSV, JSON, YAML, XML</em>
+                </span>
+                <input class="source-documents-file-input" type="file" name="arc_manuscript_file" accept=".pdf,.txt,.md,.markdown,.html,.htm,.rtf,.doc,.docx,.csv,.tsv,.json,.yaml,.yml,.xml,application/pdf,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-arc-manuscript-file>
+              </label>
+              <div class="arc-staged-manuscript-list" data-arc-staged-manuscript hidden></div>
+              <p class="form-status arc-create-status" data-arc-create-status role="status"></p>
+            </section>
+            <label class="form-field is-wide">
+              <span>Logline</span>
+              <textarea name="logline" placeholder="A compact sentence for the story's central promise."></textarea>
+            </label>
+            <label class="form-field is-wide">
+              <span>Premise</span>
+              <textarea name="premise" placeholder="The broader story engine, conflict, and creative direction."></textarea>
+            </label>
+            <label class="form-field">
+              <span>Status</span>
+              <select name="status">
+                <option value="idea">Idea</option>
+                <option value="planning" selected>Planning</option>
+                <option value="outlined">Outlined</option>
+                <option value="drafting">Drafting</option>
+                <option value="revising">Revising</option>
+                <option value="complete">Complete</option>
+                <option value="paused">Paused</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>Target length</span>
+              <input type="text" name="target_length" placeholder="90k words, 12 episodes...">
+            </label>
+            <label class="form-field is-wide">
+              <span>Notes</span>
+              <textarea name="notes" placeholder="Private project notes, constraints, or intent."></textarea>
+            </label>
           </div>
-          <label class="form-field is-wide">
-            <span>Logline</span>
-            <textarea name="logline" placeholder="A compact sentence for the story's central promise."></textarea>
-          </label>
-          <label class="form-field is-wide">
-            <span>Premise</span>
-            <textarea name="premise" placeholder="The broader story engine, conflict, and creative direction."></textarea>
-          </label>
-          <label class="form-field">
-            <span>Status</span>
-            <select name="status">
-              <option value="idea">Idea</option>
-              <option value="planning" selected>Planning</option>
-              <option value="outlined">Outlined</option>
-              <option value="drafting">Drafting</option>
-              <option value="revising">Revising</option>
-              <option value="complete">Complete</option>
-              <option value="paused">Paused</option>
-            </select>
-          </label>
-          <label class="form-field">
-            <span>Target length</span>
-            <input type="text" name="target_length" placeholder="90k words, 12 episodes...">
-          </label>
-          <label class="form-field is-wide">
-            <span>Notes</span>
-            <textarea name="notes" placeholder="Private project notes, constraints, or intent."></textarea>
-          </label>
-          <p class="form-status" data-arc-create-status role="status"></p>
           <div class="modal-actions">
             <button class="secondary-action" type="button" data-arc-create-cancel>Cancel</button>
             <button class="primary-action" type="submit" data-arc-create-submit>Create Project</button>
@@ -140,6 +144,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="arc-studio.js?v=arc-manuscript-outline-1"></script>
+  <script src="arc-studio.js?v=arc-redesign-1"></script>
 </body>
 </html>
