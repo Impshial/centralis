@@ -60,6 +60,21 @@ export function createUniverseSourceDocumentKey(options: {
   ].join("/");
 }
 
+export function createArcSourceDocumentKey(options: {
+  authUserId: string;
+  projectId: string;
+  documentId: string;
+  filename: string;
+}) {
+  return [
+    "arc-source-documents",
+    encodeURIComponent(options.authUserId),
+    encodeURIComponent(options.projectId),
+    encodeURIComponent(options.documentId),
+    sanitizeSourceDocumentFilename(options.filename, "arc-source-document"),
+  ].join("/");
+}
+
 export async function uploadUniverseSourceDocumentObject(options: {
   bytes: Uint8Array;
   key: string;

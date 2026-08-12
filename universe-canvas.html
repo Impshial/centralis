@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=source-populate-stream-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -153,6 +153,32 @@
         </div>
         <div class="canvas-tools-right">
           <p class="canvas-transfer-status" data-canvas-transfer-status role="status"></p>
+          <div class="canvas-search-wrap">
+            <button class="tool-action icon-tool-action" type="button" data-open-canvas-search aria-expanded="false" aria-label="Search elements" title="Search elements">
+              <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+            </button>
+            <div class="canvas-search-popover" data-canvas-search-popover hidden>
+              <label class="canvas-search-input">
+                <span class="sr-only">Search elements</span>
+                <input type="search" data-canvas-search-input autocomplete="off" spellcheck="false">
+              </label>
+              <label class="canvas-search-description">
+                <input type="checkbox" data-canvas-search-description>
+                <span>Description</span>
+              </label>
+              <div class="canvas-search-footer">
+                <span data-canvas-search-status>No search</span>
+                <div class="canvas-search-nav">
+                  <button type="button" data-canvas-search-prev aria-label="Previous match" title="Previous match">
+                    <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
+                  </button>
+                  <button type="button" data-canvas-search-next aria-label="Next match" title="Next match">
+                    <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
           <button class="tool-action" type="button" data-open-ai-expert>
             <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
             AI Expert
@@ -161,16 +187,16 @@
             <span aria-hidden="true">+</span>
             Add Element
           </button>
-          <button class="tool-action" type="button" data-open-current-universe-documents>
-            <ph-files weight="bold" aria-hidden="true"></ph-files>
-            Documents
-          </button>
           <div class="menu-wrap toolbar-options-menu">
             <button class="tool-action menu-trigger" type="button" aria-expanded="false" aria-haspopup="menu">
               Options
               <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
             </button>
             <div class="dropdown-menu align-right" role="menu">
+              <button type="button" role="menuitem" data-open-current-universe-documents>
+                <ph-files weight="bold" aria-hidden="true"></ph-files>
+                Documents
+              </button>
               <button type="button" role="menuitem" data-import-elements>
                 <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
                 Import
@@ -652,6 +678,56 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="source-populate-prompt-modal" data-strict-modal hidden>
+    <section class="modal-dialog source-populate-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="source-populate-prompt-title">
+      <div class="modal-header">
+        <div>
+          <p class="modal-subtitle">Source Document</p>
+          <h2 id="source-populate-prompt-title">Populate Universe?</h2>
+          <p class="modal-subtitle" data-source-populate-prompt-text>This universe was created from an uploaded source document.</p>
+        </div>
+      </div>
+
+      <p class="form-status" data-source-populate-prompt-status role="status"></p>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-source-populate-no>No</button>
+        <button class="primary-action" type="button" data-source-populate-yes>Yes</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="source-populate-review-modal" data-strict-modal hidden>
+    <section class="modal-dialog source-populate-review-dialog" role="dialog" aria-modal="true" aria-labelledby="source-populate-review-title">
+      <div class="modal-header">
+        <div>
+          <p class="modal-subtitle">Source Document</p>
+          <h2 id="source-populate-review-title">Review Source Elements</h2>
+          <p class="modal-subtitle">Select the elements to create as nodes in this universe.</p>
+        </div>
+      </div>
+
+      <label class="source-populate-select-all">
+        <input type="checkbox" data-source-populate-select-all checked>
+        <span>Select all</span>
+        <em data-source-populate-count>0 elements</em>
+      </label>
+
+      <div class="source-populate-progress" aria-hidden="true">
+        <span></span>
+      </div>
+
+      <div class="source-populate-warning-list" data-source-populate-warnings hidden></div>
+      <div class="source-populate-review-list" data-source-populate-review-list></div>
+      <p class="form-status" data-source-populate-review-status role="status"></p>
+
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-source-populate-review-cancel>Cancel</button>
+        <button class="primary-action" type="button" data-source-populate-finalize>Create Selected</button>
+      </div>
+    </section>
+  </div>
+
   <div class="modal-backdrop" id="delete-element-modal" hidden>
     <section class="modal-dialog confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-element-title">
       <div class="modal-header">
@@ -999,6 +1075,6 @@
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
-  <script src="flow-canvas.js?v=universe-viewer-upload-1"></script>
+  <script src="flow-canvas.js?v=source-populate-stream-1"></script>
 </body>
 </html>

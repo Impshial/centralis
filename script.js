@@ -1381,6 +1381,13 @@ const sourceDocumentsClosers = document.querySelectorAll("[data-source-documents
 const sourceDocumentsUniverseName = document.querySelector("[data-source-documents-universe-name]");
 const sourceDocumentsList = document.querySelector("[data-source-documents-list]");
 const sourceDocumentsCount = document.querySelector("[data-source-documents-count]");
+const universeSourceUploadModal = document.getElementById("universe-source-upload-modal");
+const universeSourceUploadForm = document.querySelector("[data-universe-source-upload-form]");
+const universeSourceUploadStatus = document.querySelector("[data-universe-source-upload-status]");
+const universeSourceUploadSubmit = document.querySelector("[data-universe-source-upload-submit]");
+const universeSourceUploadClosers = document.querySelectorAll("[data-universe-source-upload-close]");
+const universeSourceUploadOpenButton = document.querySelector("[data-open-universe-source-upload]");
+const universeStagedSourceList = document.querySelector("[data-universe-staged-source-list]");
 const currentUniverseDocumentsButtons = document.querySelectorAll("[data-open-current-universe-documents]");
 const universeNameLabel = document.querySelector("[data-universe-name-label]");
 const universeNameInput = document.querySelector("[data-universe-name-input]");
@@ -1512,6 +1519,8 @@ let pendingUniverseDelete = null;
 let homepageIconReadyPromise = null;
 let activeSourceDocumentsUniverse = null;
 let sourceDocumentsUploading = false;
+let universeSourceUploading = false;
+let stagedUniverseSourceDocument = null;
 
 window.centralisScriptVersion = "documents-ui-1";
 console.warn("Centralis script loaded", window.centralisScriptVersion);
@@ -1611,6 +1620,44 @@ function setSourceDocumentsStatus(message, type = "") {
   sourceDocumentsStatus.textContent = message || "";
   sourceDocumentsStatus.classList.toggle("is-error", type === "error");
   sourceDocumentsStatus.classList.toggle("is-success", type === "success");
+}
+
+function setUniverseSourceUploadStatus(message, type = "") {
+  if (!universeSourceUploadStatus) return;
+  universeSourceUploadStatus.textContent = message || "";
+  universeSourceUploadStatus.classList.toggle("is-error", type === "error");
+  universeSourceUploadStatus.classList.toggle("is-success", type === "success");
+}
+
+function renderStagedUniverseSource() {
+  if (!universeStagedSourceList) return;
+
+  if (!stagedUniverseSourceDocument?.source) {
+    universeStagedSourceList.hidden = true;
+    universeStagedSourceList.innerHTML = "";
+    return;
+  }
+
+  const source = stagedUniverseSourceDocument.source;
+  universeStagedSourceList.hidden = false;
+  universeStagedSourceList.innerHTML = `
+    <div class="universe-staged-source-card">
+      <ph-file-text weight="duotone" aria-hidden="true"></ph-file-text>
+      <span>
+        <strong>${escapeHtml(source.original_filename || stagedUniverseSourceDocument.file?.name || "Source document")}</strong>
+        <em>${escapeHtml([formatDocumentType(source.mime_type, source.original_filename), formatFileSize(source.file_size)].filter(Boolean).join(" - "))}</em>
+      </span>
+      <button class="universe-staged-source-remove" type="button" aria-label="Remove staged source document" data-remove-universe-staged-source>
+        <ph-x weight="bold" aria-hidden="true"></ph-x>
+      </button>
+    </div>
+  `;
+}
+
+function clearStagedUniverseSource() {
+  stagedUniverseSourceDocument = null;
+  renderStagedUniverseSource();
+  syncUniverseAiFields();
 }
 
 function getSourceCanonReviewModal(id, markup) {
@@ -2334,6 +2381,118 @@ function closeSourceDocumentsDialog() {
   sourceDocumentsForm?.reset();
   setSourceDocumentsStatus("");
   closeModal();
+}
+
+function openUniverseSourceUploadDialog() {
+  if (!universeSourceUploadModal || universeSourceUploading) {
+    return;
+  }
+
+  universeSourceUploadForm?.reset();
+  setUniverseSourceUploadStatus("");
+  activeModal = universeSourceUploadModal;
+  universeSourceUploadModal.hidden = false;
+  document.body.classList.add("centralis-modal-open");
+  requestAnimationFrame(() => {
+    universeSourceUploadForm?.querySelector('input[type="file"]')?.focus({ preventScroll: true });
+  });
+}
+
+function closeUniverseSourceUploadDialog({ force = false } = {}) {
+  if ((universeSourceUploading && !force) || !universeSourceUploadModal) {
+    return;
+  }
+
+  universeSourceUploadForm?.reset();
+  setUniverseSourceUploadStatus("");
+  universeSourceUploadModal.hidden = true;
+  const newUniverseModal = document.getElementById("new-universe-modal");
+  if (newUniverseModal && !newUniverseModal.hidden) {
+    activeModal = newUniverseModal;
+    document.body.classList.add("centralis-modal-open");
+    requestAnimationFrame(() => universeSourceUploadOpenButton?.focus({ preventScroll: true }));
+    return;
+  }
+  activeModal = null;
+  document.body.classList.remove("centralis-modal-open");
+}
+
+async function extractUniverseSourceDocument(event) {
+  event.preventDefault();
+  if (!universeSourceUploadForm || universeSourceUploading) {
+    return;
+  }
+  if (!supabaseClient) {
+    setUniverseSourceUploadStatus("Supabase is not available yet. Refresh the page and try again.", "error");
+    return;
+  }
+
+  const fileInput = universeSourceUploadForm.querySelector('input[type="file"][name="file"]');
+  const selectedFile = fileInput?.files?.[0] || null;
+  if (!selectedFile) {
+    setUniverseSourceUploadStatus("Choose a source document to upload.", "error");
+    return;
+  }
+
+  universeSourceUploading = true;
+  if (universeSourceUploadSubmit) universeSourceUploadSubmit.disabled = true;
+  universeSourceUploadClosers.forEach((button) => { button.disabled = true; });
+  setUniverseSourceUploadStatus("Uploading source and extracting universe details...");
+  setUniverseGenerationBusy(true, "Reading Source");
+
+  try {
+    const uploadData = new FormData();
+    uploadData.set("file", selectedFile);
+    const { data, error } = await supabaseClient.functions.invoke("extract-universe-source-document", {
+      body: uploadData,
+    });
+    if (error) throw error;
+
+    const source = data?.source;
+    if (!source?.name && !source?.description) {
+      throw new Error("OpenAI did not return a usable universe name or description.");
+    }
+
+    stagedUniverseSourceDocument = {
+      file: selectedFile,
+      source,
+    };
+
+    if (source.name && universeNameInput) {
+      universeNameInput.value = source.name;
+    }
+    if (source.description && universeDescriptionInput) {
+      universeDescriptionInput.value = source.description;
+    }
+
+    renderStagedUniverseSource();
+    syncUniverseAiFields();
+    setUniverseStatus(`Source uploaded: ${source.original_filename || selectedFile.name}.`, "success");
+    closeUniverseSourceUploadDialog({ force: true });
+  } catch (error) {
+    setUniverseSourceUploadStatus(`Could not upload source: ${getReadableError(error)}`, "error");
+  } finally {
+    universeSourceUploading = false;
+    setUniverseGenerationBusy(false);
+    if (universeSourceUploadSubmit) universeSourceUploadSubmit.disabled = false;
+    universeSourceUploadClosers.forEach((button) => { button.disabled = false; });
+  }
+}
+
+async function saveStagedUniverseSourceDocument(universeId, statusSetter = setUniverseStatus) {
+  if (!stagedUniverseSourceDocument?.file || !universeId) {
+    return null;
+  }
+
+  const uploadData = new FormData();
+  uploadData.set("universeId", universeId);
+  uploadData.set("file", stagedUniverseSourceDocument.file);
+  statusSetter("Saving source document...");
+  const { data, error } = await supabaseClient.functions.invoke("upload-universe-source-document", {
+    body: uploadData,
+  });
+  if (error) throw error;
+  return data?.document || null;
 }
 
 async function uploadUniverseSourceDocument(event) {
@@ -3473,6 +3632,7 @@ async function loadUniverseCards() {
       .from(UNIVERSE_TABLE)
       .select("id,name,description,updated_at,opened_at")
       .eq("user_id", currentAppUser.id)
+      .eq("deleted", false)
       .order("updated_at", { ascending: false });
     if (!isBuilderPage) {
       query = query.limit(8);
@@ -3528,6 +3688,7 @@ async function loadRecentSourceDocuments() {
       .from(UNIVERSE_SOURCE_DOCUMENTS_TABLE)
       .select("id,universe_id,original_filename,display_name,mime_type,file_size,created_at,updated_at,universes(name)")
       .eq("user_id", currentAppUser.id)
+      .eq("deleted", false)
       .order("created_at", { ascending: false })
       .limit(8), "Loading recent documents");
 
@@ -4360,6 +4521,8 @@ function resetNewUniverseForm() {
   if (!form) return;
 
   form.reset();
+  stagedUniverseSourceDocument = null;
+  renderStagedUniverseSource();
   if (universeAiGenreSelect) {
     universeAiGenreSelect.value = "Random";
   }
@@ -4382,6 +4545,11 @@ function closeModal() {
 
   if (activeModal.id === "universe-ai-multi-review-modal") {
     closeUniverseAiMultiReviewDialog();
+    return;
+  }
+
+  if (activeModal.id === "universe-source-upload-modal") {
+    closeUniverseSourceUploadDialog();
     return;
   }
 
@@ -4457,12 +4625,19 @@ function populateUniverseAiGenreSelect() {
 }
 
 function syncUniverseAiFields() {
-  const isEnabled = Boolean(universeAiToggle?.checked);
+  const hasStagedSource = Boolean(stagedUniverseSourceDocument);
+  if (hasStagedSource && universeAiToggle) {
+    universeAiToggle.checked = false;
+  }
+  const isEnabled = Boolean(universeAiToggle?.checked) && !hasStagedSource;
+  if (universeAiToggle) {
+    universeAiToggle.disabled = hasStagedSource;
+  }
   if (universeAiGenreField) {
     universeAiGenreField.hidden = !isEnabled;
   }
   if (universeAiMultiToggle) {
-    universeAiMultiToggle.disabled = !isEnabled;
+    universeAiMultiToggle.disabled = !isEnabled || hasStagedSource;
     if (!isEnabled) {
       universeAiMultiToggle.checked = false;
     }
@@ -4809,7 +4984,23 @@ async function createUniverseFromForm(form, submitButton) {
 
     if (!universeId) return;
 
+    if (stagedUniverseSourceDocument) {
+      try {
+        const savedSourceDocument = await saveStagedUniverseSourceDocument(universeId, setUniverseStatus);
+        if (savedSourceDocument?.id) {
+          sessionStorage.setItem(`centralis-source-populate:${universeId}`, savedSourceDocument.id);
+        }
+      } catch (sourceError) {
+        setUniverseStatus(`Universe created, but the source document was not saved: ${getReadableError(sourceError)}. Opening the universe.`, "error");
+        window.setTimeout(() => {
+          window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
+        }, 1800);
+        return;
+      }
+    }
+
     setUniverseStatus("Universe created.", "success");
+    clearStagedUniverseSource();
     window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
   } catch (error) {
     setUniverseStatus(getReadableError(error), "error");
@@ -4930,6 +5121,22 @@ universeBuilderSearch?.addEventListener("input", () => {
 sourceDocumentsForm?.addEventListener("submit", uploadUniverseSourceDocument);
 sourceDocumentsClosers.forEach((button) => {
   button.addEventListener("click", closeSourceDocumentsDialog);
+});
+universeSourceUploadOpenButton?.addEventListener("click", openUniverseSourceUploadDialog);
+universeSourceUploadForm?.addEventListener("submit", extractUniverseSourceDocument);
+universeSourceUploadClosers.forEach((button) => {
+  button.addEventListener("click", closeUniverseSourceUploadDialog);
+});
+universeSourceUploadModal?.addEventListener("click", (event) => {
+  if (event.target === universeSourceUploadModal && !universeSourceUploadModal.hasAttribute("data-strict-modal")) {
+    closeUniverseSourceUploadDialog();
+  }
+});
+universeStagedSourceList?.addEventListener("click", (event) => {
+  if (event.target instanceof Element && event.target.closest("[data-remove-universe-staged-source]")) {
+    clearStagedUniverseSource();
+    setUniverseStatus("Source document removed.");
+  }
 });
 sourceDocumentsModal?.addEventListener("click", (event) => {
   if (event.target === sourceDocumentsModal && !sourceDocumentsModal.hasAttribute("data-strict-modal")) {

@@ -6,7 +6,7 @@
   <title>Arc Studio Workspace | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=arc-studio-3">
+  <link rel="stylesheet" href="styles.css?v=arc-studio-5">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -21,7 +21,10 @@
             <ph-arrow-left weight="bold" aria-hidden="true"></ph-arrow-left>
             Back to Projects
           </a>
-          <strong class="arc-workspace-module-name">Arc Studio</strong>
+          <strong class="arc-workspace-module-name">
+            <span>Arc Studio</span>
+            <span class="arc-workspace-project-name" data-arc-header-project-name hidden></span>
+          </strong>
         </div>
         <div class="arc-workspace-actions">
           <button class="secondary-action" type="button" data-arc-open-unit>
@@ -289,6 +292,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="arc-studio.js?v=arc-studio-3"></script>
+  <script src="arc-studio.js?v=arc-studio-5"></script>
 </body>
 </html>

@@ -100,9 +100,23 @@ export async function createDocumentVectorStore(document: Record<string, unknown
   const bytes = await readUniverseSourceDocumentObject(storageKey);
   const filename = String(document.original_filename || "source-document.txt");
   const contentType = String(document.mime_type || "application/octet-stream");
+  const fileId = await uploadOpenAiSourceFile({ bytes, filename, contentType });
+
+  const vectorStoreId = await createOpenAiVectorStore(`${universeName || "Universe"} Source Review`, universeId);
+  await attachFileToVectorStore(vectorStoreId, fileId);
+  await waitForVectorStoreFile(vectorStoreId, fileId);
+
+  return { fileId, vectorStoreId };
+}
+
+export async function uploadOpenAiSourceFile(options: {
+  bytes: BlobPart;
+  filename: string;
+  contentType: string;
+}) {
   const formData = new FormData();
   formData.set("purpose", "assistants");
-  formData.set("file", new File([bytes], filename, { type: contentType }));
+  formData.set("file", new File([options.bytes], options.filename, { type: options.contentType || "application/octet-stream" }));
 
   const filePayload = await openAiRequest("/files", {
     method: "POST",
@@ -110,12 +124,7 @@ export async function createDocumentVectorStore(document: Record<string, unknown
   });
   const fileId = String(filePayload.id || "");
   if (!fileId) throw new Error("OpenAI did not return a source document file ID.");
-
-  const vectorStoreId = await createOpenAiVectorStore(`${universeName || "Universe"} Source Review`, universeId);
-  await attachFileToVectorStore(vectorStoreId, fileId);
-  await waitForVectorStoreFile(vectorStoreId, fileId);
-
-  return { fileId, vectorStoreId };
+  return fileId;
 }
 
 export async function cleanupDocumentVectorStore(vectorStoreId: string, fileId: string) {
@@ -136,13 +145,19 @@ export async function runDocumentFileSearchJson(options: {
   system: string;
   prompt: string;
   maxOutputTokens?: number;
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
 }) {
+  const prompt = [
+    "Return your answer as JSON.",
+    options.prompt,
+  ].join("\n\n");
+
   const payload = await openAiRequest("/responses", {
     method: "POST",
     body: JSON.stringify({
       model: TEXT_MODEL,
       instructions: options.system,
-      input: options.prompt,
+      input: prompt,
       tools: [{
         type: "file_search",
         vector_store_ids: [options.vectorStoreId],
@@ -152,7 +167,47 @@ export async function runDocumentFileSearchJson(options: {
         format: { type: "json_object" },
         verbosity: "medium",
       },
-      reasoning: { effort: "high" },
+      reasoning: { effort: options.reasoningEffort || "high" },
+      max_output_tokens: options.maxOutputTokens || 6000,
+    }),
+  });
+
+  const output = Array.isArray(payload.output) ? payload.output : [];
+  const text = output
+    .flatMap((item) => Array.isArray(asRecord(item).content) ? asRecord(item).content as unknown[] : [])
+    .map((content) => String(asRecord(content).text || ""))
+    .filter(Boolean)
+    .join("\n")
+    || String(payload.output_text || "");
+
+  return parseJsonObject(text || "{}");
+}
+
+export async function runSourceTextJson(options: {
+  system: string;
+  prompt: string;
+  sourceText: string;
+  maxOutputTokens?: number;
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
+}) {
+  const prompt = [
+    "Return your answer as JSON.",
+    options.prompt,
+    "Source document text:",
+    options.sourceText,
+  ].join("\n\n");
+
+  const payload = await openAiRequest("/responses", {
+    method: "POST",
+    body: JSON.stringify({
+      model: TEXT_MODEL,
+      instructions: options.system,
+      input: prompt,
+      text: {
+        format: { type: "json_object" },
+        verbosity: "medium",
+      },
+      reasoning: { effort: options.reasoningEffort || "medium" },
       max_output_tokens: options.maxOutputTokens || 6000,
     }),
   });

@@ -5069,6 +5069,56 @@
       }));
     }, []);
 
+    const focusCanvasSearchNode = React.useCallback((nodeId) => {
+      const allNodes = nodesRef.current;
+      const nodesById = new Map(allNodes.map((node) => [node.id, node]));
+      const matchedNode = nodesById.get(nodeId);
+      if (!matchedNode) return false;
+
+      const collapsedAncestorId = getCollapsedAncestorId(matchedNode, nodesById, getCollapsedGroupIds(allNodes));
+      const focusNode = collapsedAncestorId ? nodesById.get(collapsedAncestorId) || matchedNode : matchedNode;
+      setNodes((currentNodes) => currentNodes.map((node) => ({
+        ...node,
+        selected: node.id === focusNode.id || (!collapsedAncestorId && node.id === matchedNode.id)
+      })));
+      setContextMenu(null);
+      setCanvasContextMenu(null);
+      setDetailsNodeId(null);
+      setDetailsMode("view");
+
+      const instance = reactFlowInstance.current;
+      const wrapper = reactFlowWrapper.current;
+      if (!instance || !wrapper) return true;
+
+      window.requestAnimationFrame(() => {
+        const currentZoom = Number(
+          (typeof instance.getZoom === "function" ? instance.getZoom() : instance.getViewport?.()?.zoom) || 1
+        );
+        const focusZoom = 1.08;
+        const position = getAbsoluteNodePosition(focusNode, nodesById);
+        const domNode = wrapper.querySelector(`.react-flow__node[data-id="${getCssSafeId(focusNode.id)}"]`);
+        const domRect = domNode?.getBoundingClientRect();
+        const fallbackSize = estimateCanvasNodeSize(focusNode);
+        const width = Math.max(1, Number(domRect?.width || 0) / currentZoom || fallbackSize.width);
+        const height = Math.max(1, Number(domRect?.height || 0) / currentZoom || fallbackSize.height);
+        const centerX = position.x + width / 2;
+        const centerY = position.y + height / 2;
+        if (typeof instance.setCenter === "function") {
+          instance.setCenter(centerX, centerY, { zoom: focusZoom, duration: 260 });
+          return;
+        }
+        const viewportWidth = Math.max(1, wrapper.clientWidth || wrapper.getBoundingClientRect().width);
+        const viewportHeight = Math.max(1, wrapper.clientHeight || wrapper.getBoundingClientRect().height);
+        instance.setViewport?.({
+          x: viewportWidth / 2 - centerX * focusZoom,
+          y: viewportHeight / 2 - centerY * focusZoom,
+          zoom: focusZoom
+        }, { duration: 260 });
+      });
+
+      return true;
+    }, []);
+
     const fetchUniverseAiChat = React.useCallback(() => callEdgeFunction("get-universe-ai-chat", {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ universeId })
@@ -7548,6 +7598,141 @@
         window.removeEventListener("centralis:open-ai-expert", handleOpenAiExpert);
       };
     }, []);
+
+    React.useEffect(() => {
+      const button = document.querySelector("[data-open-canvas-search]");
+      const popover = document.querySelector("[data-canvas-search-popover]");
+      const input = popover?.querySelector("[data-canvas-search-input]");
+      const description = popover?.querySelector("[data-canvas-search-description]");
+      const previousButton = popover?.querySelector("[data-canvas-search-prev]");
+      const nextButton = popover?.querySelector("[data-canvas-search-next]");
+      const status = popover?.querySelector("[data-canvas-search-status]");
+      if (!button || !popover || !input || !description || !previousButton || !nextButton || !status) {
+        return undefined;
+      }
+
+      const searchState = { query: "", includeDescription: false, matchIds: [], index: -1 };
+      const normalize = (value) => String(value || "").trim().toLowerCase();
+
+      function setSearchOpen(open) {
+        popover.hidden = !open;
+        button.setAttribute("aria-expanded", String(open));
+        button.classList.toggle("is-active", open);
+        if (open) {
+          window.requestAnimationFrame(() => input.focus({ preventScroll: true }));
+        }
+      }
+
+      function findMatches(query, includeDescription) {
+        if (!query) return [];
+        return nodesRef.current
+          .filter((node) => node.data?.kind === "element")
+          .filter((node) => {
+            const name = normalize(node.data?.name);
+            const nodeDescription = normalize(node.data?.description);
+            return name.includes(query) || (includeDescription && nodeDescription.includes(query));
+          })
+          .map((node) => node.id);
+      }
+
+      function updateSearch(delta = 0, options = {}) {
+        const query = normalize(input.value);
+        const includeDescription = Boolean(description.checked);
+        const matches = findMatches(query, includeDescription);
+        const queryChanged = query !== searchState.query || includeDescription !== searchState.includeDescription;
+        searchState.query = query;
+        searchState.includeDescription = includeDescription;
+        searchState.matchIds = matches;
+
+        previousButton.disabled = matches.length < 1;
+        nextButton.disabled = matches.length < 1;
+
+        if (!query) {
+          searchState.index = -1;
+          status.textContent = "No search";
+          return;
+        }
+
+        if (!matches.length) {
+          searchState.index = -1;
+          status.textContent = "No matches";
+          return;
+        }
+
+        if (queryChanged || options.reset || searchState.index < 0 || !matches.includes(matches[searchState.index])) {
+          searchState.index = delta < 0 ? matches.length - 1 : 0;
+        } else if (delta) {
+          searchState.index = (searchState.index + delta + matches.length) % matches.length;
+        } else {
+          searchState.index = Math.min(searchState.index, matches.length - 1);
+        }
+
+        status.textContent = `${searchState.index + 1} of ${matches.length}`;
+        focusCanvasSearchNode(matches[searchState.index]);
+      }
+
+      function handleButtonClick(event) {
+        event.preventDefault();
+        setSearchOpen(popover.hidden);
+        if (popover.hidden) return;
+        updateSearch(0);
+      }
+
+      function handleInput() {
+        updateSearch(0, { reset: true });
+      }
+
+      function handlePrevious() {
+        updateSearch(-1);
+      }
+
+      function handleNext() {
+        updateSearch(1);
+      }
+
+      function handleKeydown(event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          updateSearch(event.shiftKey ? -1 : 1);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          setSearchOpen(false);
+          button.focus({ preventScroll: true });
+        }
+      }
+
+      function handleDocumentClick(event) {
+        if (event.target instanceof Element && !event.target.closest(".canvas-search-wrap")) {
+          setSearchOpen(false);
+        }
+      }
+
+      function handleDocumentKeydown(event) {
+        if (event.key === "Escape" && !popover.hidden) {
+          setSearchOpen(false);
+        }
+      }
+
+      updateSearch(0);
+      button.addEventListener("click", handleButtonClick);
+      input.addEventListener("input", handleInput);
+      input.addEventListener("keydown", handleKeydown);
+      description.addEventListener("change", handleInput);
+      previousButton.addEventListener("click", handlePrevious);
+      nextButton.addEventListener("click", handleNext);
+      document.addEventListener("click", handleDocumentClick);
+      document.addEventListener("keydown", handleDocumentKeydown);
+      return () => {
+        button.removeEventListener("click", handleButtonClick);
+        input.removeEventListener("input", handleInput);
+        input.removeEventListener("keydown", handleKeydown);
+        description.removeEventListener("change", handleInput);
+        previousButton.removeEventListener("click", handlePrevious);
+        nextButton.removeEventListener("click", handleNext);
+        document.removeEventListener("click", handleDocumentClick);
+        document.removeEventListener("keydown", handleDocumentKeydown);
+      };
+    }, [focusCanvasSearchNode]);
 
     React.useEffect(() => {
       if (!aiChatOpen && !aiChatPopoutOpen) {
@@ -11634,6 +11819,19 @@
       const regenerateButton = document.querySelector("[data-generated-elements-regenerate]");
       const finalizeButton = document.querySelector("[data-generated-elements-finalize]");
       const generationOverlay = document.getElementById("generate-element-overlay");
+      const sourcePopulatePromptModal = document.getElementById("source-populate-prompt-modal");
+      const sourcePopulatePromptText = document.querySelector("[data-source-populate-prompt-text]");
+      const sourcePopulatePromptStatus = document.querySelector("[data-source-populate-prompt-status]");
+      const sourcePopulateYesButton = document.querySelector("[data-source-populate-yes]");
+      const sourcePopulateNoButton = document.querySelector("[data-source-populate-no]");
+      const sourcePopulateReviewModal = document.getElementById("source-populate-review-modal");
+      const sourcePopulateReviewList = document.querySelector("[data-source-populate-review-list]");
+      const sourcePopulateWarnings = document.querySelector("[data-source-populate-warnings]");
+      const sourcePopulateReviewStatus = document.querySelector("[data-source-populate-review-status]");
+      const sourcePopulateSelectAll = document.querySelector("[data-source-populate-select-all]");
+      const sourcePopulateCount = document.querySelector("[data-source-populate-count]");
+      const sourcePopulateFinalizeButton = document.querySelector("[data-source-populate-finalize]");
+      const sourcePopulateCancelButton = document.querySelector("[data-source-populate-review-cancel]");
       if (!modal || !reviewModal || !form) {
         return undefined;
       }
@@ -11645,10 +11843,171 @@
       let activeReviewMode = "generate";
       let activeAiProposal = null;
       let activeSourceCanonReviewId = "";
+      let sourcePopulatePromptDocument = null;
+      let sourcePopulateDraft = { elements: [], warnings: [], analyzing: false };
+      let sourcePopulatePromptChecked = false;
+      let sourcePopulateAbortController = null;
 
       function setGenerateElementsOverlay(visible) {
         if (!generationOverlay) return;
         generationOverlay.hidden = !visible;
+      }
+
+      function getSourcePopulateSessionKey() {
+        return `centralis-source-populate:${universe.id}`;
+      }
+
+      function getSourcePopulateDismissedKey(documentId) {
+        return `centralis-source-populate-dismissed:${universe.id}:${documentId}`;
+      }
+
+      function setSourcePopulatePromptStatus(message, tone = "") {
+        if (!sourcePopulatePromptStatus) return;
+        sourcePopulatePromptStatus.textContent = message || "";
+        sourcePopulatePromptStatus.classList.toggle("is-error", tone === "error");
+        sourcePopulatePromptStatus.classList.toggle("is-success", tone === "success");
+      }
+
+      function setSourcePopulateReviewStatus(message, tone = "") {
+        if (!sourcePopulateReviewStatus) return;
+        sourcePopulateReviewStatus.textContent = message || "";
+        sourcePopulateReviewStatus.classList.toggle("is-error", tone === "error");
+        sourcePopulateReviewStatus.classList.toggle("is-success", tone === "success");
+      }
+
+      function dismissSourcePopulatePrompt(documentId = sourcePopulatePromptDocument?.id) {
+        sessionStorage.removeItem(getSourcePopulateSessionKey());
+        if (documentId) {
+          localStorage.setItem(getSourcePopulateDismissedKey(documentId), "1");
+        }
+      }
+
+      function closeSourcePopulatePrompt({ dismiss = true } = {}) {
+        if (dismiss) {
+          dismissSourcePopulatePrompt();
+        }
+        if (sourcePopulatePromptModal) {
+          sourcePopulatePromptModal.hidden = true;
+        }
+        setSourcePopulatePromptStatus("");
+        sourcePopulatePromptDocument = null;
+      }
+
+      function closeSourcePopulateReview({ dismiss = true } = {}) {
+        if (sourcePopulateDraft.analyzing && sourcePopulateAbortController) {
+          sourcePopulateAbortController.abort();
+        }
+        if (dismiss) {
+          dismissSourcePopulatePrompt();
+        }
+        if (sourcePopulateReviewModal) {
+          sourcePopulateReviewModal.hidden = true;
+        }
+        sourcePopulateDraft = { elements: [], warnings: [], analyzing: false };
+        sourcePopulateAbortController = null;
+        if (sourcePopulateWarnings) {
+          sourcePopulateWarnings.hidden = true;
+          sourcePopulateWarnings.innerHTML = "";
+        }
+        setSourcePopulateReviewStatus("");
+      }
+
+      function setSourcePopulateAnalyzing(isAnalyzing) {
+        sourcePopulateDraft.analyzing = Boolean(isAnalyzing);
+        if (sourcePopulateReviewModal) {
+          sourcePopulateReviewModal.classList.toggle("is-analyzing", sourcePopulateDraft.analyzing);
+        }
+        if (sourcePopulateFinalizeButton) {
+          sourcePopulateFinalizeButton.disabled = sourcePopulateDraft.analyzing;
+          sourcePopulateFinalizeButton.textContent = "Create Selected";
+        }
+        if (sourcePopulateCancelButton) {
+          sourcePopulateCancelButton.textContent = sourcePopulateDraft.analyzing ? "Cancel Analysis" : "Cancel";
+        }
+        if (sourcePopulateSelectAll) {
+          sourcePopulateSelectAll.disabled = sourcePopulateDraft.analyzing;
+        }
+      }
+
+      function renderSourcePopulateWarnings() {
+        if (!sourcePopulateWarnings) return;
+        const warnings = sourcePopulateDraft.warnings || [];
+        sourcePopulateWarnings.hidden = !warnings.length;
+        sourcePopulateWarnings.innerHTML = warnings.map((warning) => `
+          <p>${escapeHtml(warning)}</p>
+        `).join("");
+      }
+
+      function updateSourcePopulateSelectAllState() {
+        if (!sourcePopulateReviewList || !sourcePopulateSelectAll || !sourcePopulateCount) return;
+        const checkboxes = [...sourcePopulateReviewList.querySelectorAll("[data-source-populate-element]")];
+        const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+        sourcePopulateSelectAll.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+        sourcePopulateSelectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+        sourcePopulateSelectAll.parentElement?.querySelector("span")?.replaceChildren(document.createTextNode(sourcePopulateSelectAll.checked ? "Select none" : "Select all"));
+        sourcePopulateCount.textContent = `${checkedCount} selected / ${checkboxes.length} ${checkboxes.length === 1 ? "element" : "elements"}`;
+      }
+
+      function renderSourcePopulateReview(draft) {
+        if (!sourcePopulateReviewList) return;
+        sourcePopulateReviewList.innerHTML = draft.elements.length ? draft.elements.map((element) => `
+          <label class="source-populate-element-card">
+            <input type="checkbox" data-source-populate-element value="${escapeHtml(element.tempId)}" checked${draft.analyzing ? " disabled" : ""}>
+            <span class="source-populate-element-card-body">
+              <span class="source-populate-element-card-header">
+                <strong>${escapeHtml(element.name || "Untitled Element")}</strong>
+                <span>${escapeHtml(element.elementTypeName || "Element")}</span>
+              </span>
+              <p>${escapeHtml(createBlurb(element.description))}</p>
+              <small>${escapeHtml(element.parentName || "Universe")} ${escapeHtml(element.parentLabel || "contains")} ${escapeHtml(element.name || "Untitled Element")}</small>
+            </span>
+          </label>
+        `).join("") : '<p class="empty-state">Generating source elements...</p>';
+        renderSourcePopulateWarnings();
+        updateSourcePopulateSelectAllState();
+      }
+
+      function normalizeSourcePopulateStreamElement(payload) {
+        const raw = payload?.element || payload;
+        const typeByName = new Map(elementTypes.map((type) => [normalizeLookupKey(type.name), type]));
+        const typeName = String(raw?.element_type_name || raw?.elementTypeName || raw?.type || "").replace(/\s+/g, " ").trim();
+        const type = typeByName.get(normalizeLookupKey(typeName)) || null;
+        const tempId = String(raw?.temp_id || raw?.tempId || raw?.id || `source-element-${sourcePopulateDraft.elements.length + 1}`).trim();
+        const parentRaw = String(raw?.parent || raw?.parent_temp_id || raw?.parentTempId || "universe").trim();
+        const parentTempId = normalizeLookupKey(parentRaw) === "universe" ? "universe" : parentRaw;
+        const parentElement = parentTempId === "universe" ? null : sourcePopulateDraft.elements.find((element) => (
+          element.tempId === parentTempId || normalizeLookupKey(element.tempId) === normalizeLookupKey(parentTempId)
+        ));
+        return {
+          tempId: tempId || `source-element-${sourcePopulateDraft.elements.length + 1}`,
+          name: String(raw?.name || "").replace(/\s+/g, " ").trim(),
+          description: String(raw?.description || raw?.summary || "").replace(/\s+/g, " ").trim(),
+          elementTypeName: typeName,
+          elementTypeId: type?.id || "",
+          unknownTypeName: type ? "" : typeName,
+          parentTempId,
+          parentLabel: String(raw?.parent_label || raw?.parentLabel || raw?.relationship || raw?.label || "contains").replace(/\s+/g, " ").trim() || "contains",
+          parentName: parentElement?.name || "Universe"
+        };
+      }
+
+      async function loadSourcePopulateDocument(documentId) {
+        const payload = await callEdgeFunction("list-universe-source-documents", {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ universeId: universe.id })
+        });
+        return (payload.documents || []).find((document) => String(document.id) === String(documentId)) || null;
+      }
+
+      function openSourcePopulatePrompt(document) {
+        sourcePopulatePromptDocument = document;
+        if (sourcePopulatePromptText) {
+          sourcePopulatePromptText.textContent = `This universe was created from "${document.display_name || document.original_filename || "an uploaded source document"}". Populate the canvas with elements extracted from it?`;
+        }
+        setSourcePopulatePromptStatus("");
+        if (sourcePopulatePromptModal) {
+          sourcePopulatePromptModal.hidden = false;
+        }
       }
 
       function updateTypeCount() {
@@ -12245,6 +12604,292 @@
         }
       }
 
+      async function analyzeSourcePopulateDocument() {
+        if (!sourcePopulatePromptDocument?.id) {
+          setSourcePopulatePromptStatus("No source document is available to analyze.", "error");
+          return;
+        }
+        if (!elementTypes.length) {
+          setSourcePopulatePromptStatus("Add element types before populating from a source document.", "error");
+          return;
+        }
+
+        if (sourcePopulateYesButton) sourcePopulateYesButton.disabled = true;
+        if (sourcePopulateNoButton) sourcePopulateNoButton.disabled = true;
+        setSourcePopulatePromptStatus("");
+        sourcePopulateAbortController = new AbortController();
+        sourcePopulateDraft = { elements: [], warnings: [], analyzing: true };
+        renderSourcePopulateReview(sourcePopulateDraft);
+        setSourcePopulateAnalyzing(true);
+        if (sourcePopulatePromptModal) sourcePopulatePromptModal.hidden = true;
+        if (sourcePopulateReviewModal) sourcePopulateReviewModal.hidden = false;
+        setSourcePopulateReviewStatus("Generating source elements...");
+
+        try {
+          await callStreamingEdgeFunction("stream-universe-source-elements", {
+            signal: sourcePopulateAbortController.signal,
+            body: {
+              universeId: universe.id,
+              documentId: sourcePopulatePromptDocument.id,
+              allowedElementTypes: elementTypes.map((type) => ({ id: type.id, name: type.name || "Untitled Type" }))
+            },
+            onEvent: (type, payload) => {
+              if (type === "status") {
+                setSourcePopulateReviewStatus(`${payload.message || "Generating source elements"}...`);
+                return;
+              }
+              if (type === "warning") {
+                const message = String(payload.message || "A streamed source element was skipped.");
+                sourcePopulateDraft.warnings = [...(sourcePopulateDraft.warnings || []), message];
+                renderSourcePopulateWarnings();
+                return;
+              }
+              if (type === "element") {
+                const element = normalizeSourcePopulateStreamElement(payload);
+                if (!element.name || !element.elementTypeId) {
+                  sourcePopulateDraft.warnings = [
+                    ...(sourcePopulateDraft.warnings || []),
+                    `Skipped ${element.name || "a streamed element"} because it did not match an available element type.`
+                  ];
+                  renderSourcePopulateWarnings();
+                  return;
+                }
+                sourcePopulateDraft.elements = [...sourcePopulateDraft.elements, element];
+                renderSourcePopulateReview(sourcePopulateDraft);
+                setSourcePopulateReviewStatus(`Generating... ${sourcePopulateDraft.elements.length} ${sourcePopulateDraft.elements.length === 1 ? "element" : "elements"} streamed.`);
+                return;
+              }
+              if (type === "done") {
+                const count = Number(payload.elementCount || sourcePopulateDraft.elements.length);
+                const warningCount = Number(payload.warningCount || sourcePopulateDraft.warnings?.length || 0);
+                setSourcePopulateReviewStatus(`Analysis complete. ${count} ${count === 1 ? "element" : "elements"} ready.${warningCount ? ` ${warningCount} warning${warningCount === 1 ? "" : "s"}.` : ""}`, "success");
+              }
+            }
+          });
+          if (!sourcePopulateDraft.elements.length) {
+            throw new Error("The source analysis did not stream any usable elements for your element types.");
+          }
+          dismissSourcePopulatePrompt(sourcePopulatePromptDocument.id);
+          setSourcePopulateAnalyzing(false);
+          renderSourcePopulateReview(sourcePopulateDraft);
+          sourcePopulateAbortController = null;
+        } catch (error) {
+          const wasCanceled = sourcePopulateAbortController?.signal.aborted || error?.name === "AbortError";
+          sourcePopulateAbortController = null;
+          sourcePopulateDraft = { elements: [], warnings: [], analyzing: false };
+          setSourcePopulateAnalyzing(false);
+          renderSourcePopulateReview(sourcePopulateDraft);
+          if (sourcePopulateReviewModal) sourcePopulateReviewModal.hidden = true;
+          if (sourcePopulatePromptModal) sourcePopulatePromptModal.hidden = false;
+          setSourcePopulatePromptStatus(wasCanceled ? "Source analysis canceled." : `Could not analyze source: ${getReadableError(error)}`, wasCanceled ? "" : "error");
+        } finally {
+          if (sourcePopulateYesButton) sourcePopulateYesButton.disabled = false;
+          if (sourcePopulateNoButton) sourcePopulateNoButton.disabled = false;
+        }
+      }
+
+      async function finalizeSourcePopulateElements() {
+        if (!sourcePopulateReviewList || !sourcePopulateDraft.elements.length) {
+          setSourcePopulateReviewStatus("No source elements are ready to create.", "error");
+          return;
+        }
+
+        const selectedIds = new Set([...sourcePopulateReviewList.querySelectorAll("[data-source-populate-element]:checked")].map((input) => input.value));
+        const selectedElements = sourcePopulateDraft.elements.filter((element) => selectedIds.has(element.tempId));
+        if (!selectedElements.length) {
+          setSourcePopulateReviewStatus("Select at least one element to create.", "error");
+          return;
+        }
+        const selectedByKey = new Map(selectedElements.map((element) => [normalizeLookupKey(element.tempId), element]));
+        const allSourceByKey = new Map(sourcePopulateDraft.elements.map((element) => [normalizeLookupKey(element.tempId), element]));
+        const resolveSourcePopulateParent = (element) => {
+          let parentKey = normalizeLookupKey(element.parentTempId || "universe");
+          const originalParentKey = parentKey;
+          const seen = new Set([normalizeLookupKey(element.tempId)]);
+          while (parentKey && parentKey !== "universe" && !seen.has(parentKey)) {
+            const selectedParent = selectedByKey.get(parentKey);
+            if (selectedParent && selectedParent.tempId !== element.tempId) {
+              return {
+                kind: "generated",
+                tempId: selectedParent.tempId,
+                label: parentKey === originalParentKey ? (element.parentLabel || "contains") : "contains"
+              };
+            }
+            const parentElement = allSourceByKey.get(parentKey);
+            if (!parentElement) break;
+            seen.add(parentKey);
+            parentKey = normalizeLookupKey(parentElement.parentTempId || "universe");
+          }
+          return { kind: "universe", tempId: "universe", label: "contains" };
+        };
+
+        const ownerId = getElementOwnerId();
+        if (!ownerId) {
+          setSourcePopulateReviewStatus("Could not determine the signed-in user for these elements.", "error");
+          return;
+        }
+
+        if (sourcePopulateFinalizeButton) sourcePopulateFinalizeButton.disabled = true;
+        if (sourcePopulateCancelButton) sourcePopulateCancelButton.disabled = true;
+        setSourcePopulateReviewStatus("Creating source elements...");
+        pushCanvasHistory();
+
+        const priorGenerateOptions = lastGenerateOptions;
+        lastGenerateOptions = { sourceElement: null };
+        const positions = getGeneratedElementPositions(selectedElements.length);
+        lastGenerateOptions = priorGenerateOptions;
+
+        const elementRows = selectedElements.map((element, index) => ({
+          id: createId(),
+          user_id: ownerId,
+          universe_id: universe.id,
+          element_type_id: element.elementTypeId,
+          rich_template_id: null,
+          name: element.name,
+          description: element.description || null,
+          position_x: positions[index].x,
+          position_y: positions[index].y
+        }));
+
+        try {
+          const { data: insertedElements, error: elementError } = await window.centralisSupabase
+            .from("elements")
+            .insert(elementRows)
+            .select("id,name,description,position_x,position_y,element_type_id,rich_template_id,group_id,group_position_x,group_position_y");
+          if (elementError) throw elementError;
+
+          const selectedTempToRecordId = new Map(selectedElements.map((element, index) => [normalizeLookupKey(element.tempId), elementRows[index].id]));
+          const linkRows = selectedElements.map((element, index) => {
+            const row = elementRows[index];
+            const parent = resolveSourcePopulateParent(element);
+            const sourceRecordId = parent.kind === "generated"
+              ? selectedTempToRecordId.get(normalizeLookupKey(parent.tempId))
+              : universe.id;
+            const sourceNodeId = parent.kind === "generated" && sourceRecordId
+              ? `element:${sourceRecordId}`
+              : `universe:${universe.id}`;
+            return {
+              id: createId(),
+              universe_id: universe.id,
+              source_element_id: sourceRecordId || universe.id,
+              target_element_id: row.id,
+              label: parent.label || "contains",
+              stroke_color: universeFormatRef.current.strokeColor,
+              stroke_width: universeFormatRef.current.strokeWidth,
+              stroke_style: universeFormatRef.current.strokeStyle,
+              path_type: universeFormatRef.current.pathType,
+              sourceNodeId,
+              targetNodeId: `element:${row.id}`
+            };
+          });
+
+          const { error: linkError } = await window.centralisSupabase
+            .from("element_links")
+            .insert(linkRows.map(({ sourceNodeId: _sourceNodeId, targetNodeId: _targetNodeId, ...row }) => row));
+          if (linkError) {
+            await window.centralisSupabase
+              .from("elements")
+              .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: ownerId })
+              .in("id", elementRows.map((row) => row.id));
+            throw linkError;
+          }
+
+          const insertedNodes = (insertedElements || []).map((row) => {
+            const node = toElementNode(row);
+            node.data.format = universeFormatRef.current;
+            node.selected = true;
+            return applyLayerOverlayToNode(node, activeLayerIdRef.current, layerEntriesRef.current, layerAssignmentsRef.current);
+          });
+          const insertedNodeIds = new Set(insertedNodes.map((node) => node.id));
+          const linkEdges = linkRows.map((row) => ({
+            id: row.id,
+            source: row.sourceNodeId,
+            target: row.targetNodeId,
+            sourceHandle: "right",
+            targetHandle: "left",
+            label: row.label,
+            type: "deletable",
+            zIndex: LINK_EDGE_Z_INDEX,
+            data: { recordId: row.id, format: universeFormatRef.current },
+            style: {
+              stroke: universeFormatRef.current.strokeColor,
+              strokeWidth: universeFormatRef.current.strokeWidth,
+              strokeDasharray: getStrokeDasharray(universeFormatRef.current.strokeStyle)
+            }
+          }));
+
+          const nextNodes = [
+            ...nodesRef.current.map((node) => ({ ...node, selected: false })),
+            ...insertedNodes
+          ].map((node) => ({
+            ...node,
+            selected: insertedNodeIds.has(node.id)
+          }));
+          const nextEdges = [...edgesRef.current, ...linkEdges];
+          let finalNodes = nextNodes;
+          let layoutWarning = "";
+          try {
+            setSourcePopulateReviewStatus("Creating source elements and laying out canvas...");
+            finalNodes = await createAutoLayout(nextNodes, nextEdges, universeFormatRef.current);
+            finalNodes = finalNodes.map((node) => ({
+              ...node,
+              selected: insertedNodeIds.has(node.id)
+            }));
+            await saveNodePositions(finalNodes);
+          } catch (layoutError) {
+            console.error("Could not auto-layout source elements:", layoutError);
+            layoutWarning = " Auto-layout could not be saved.";
+          }
+
+          setNodes(finalNodes);
+          setEdges(nextEdges);
+          nodesRef.current = finalNodes;
+          edgesRef.current = nextEdges;
+          closeSourcePopulateReview({ dismiss: true });
+          void syncUniverseAiSource().catch((syncError) => {
+            console.error("Could not sync AI knowledge after populating source elements:", syncError);
+            showCanvasToast("Source elements were saved, but AI knowledge could not be synced.", "error");
+          });
+          window.setTimeout(() => {
+            fitCanvasToRenderedNodes({ padding: 0.06, duration: 360 });
+          }, 50);
+          const resultMessage = `Added ${insertedNodes.length} source ${insertedNodes.length === 1 ? "element" : "elements"}.`;
+          setTransferStatus(layoutWarning ? `${resultMessage}${layoutWarning}` : `${resultMessage} Auto-layout applied.`, layoutWarning ? "error" : "success");
+        } catch (error) {
+          setSourcePopulateReviewStatus(`Could not create source elements: ${getReadableError(error)}`, "error");
+        } finally {
+          if (sourcePopulateFinalizeButton) sourcePopulateFinalizeButton.disabled = false;
+          if (sourcePopulateCancelButton) sourcePopulateCancelButton.disabled = false;
+        }
+      }
+
+      async function maybeOpenSourcePopulatePrompt() {
+        if (sourcePopulatePromptChecked || !sourcePopulatePromptModal) return;
+        sourcePopulatePromptChecked = true;
+        const documentId = sessionStorage.getItem(getSourcePopulateSessionKey());
+        if (!documentId) return;
+        if (localStorage.getItem(getSourcePopulateDismissedKey(documentId)) === "1") {
+          sessionStorage.removeItem(getSourcePopulateSessionKey());
+          return;
+        }
+        if (nodesRef.current.some((node) => node.data?.kind === "element")) {
+          dismissSourcePopulatePrompt(documentId);
+          return;
+        }
+
+        try {
+          const document = await loadSourcePopulateDocument(documentId);
+          if (!document) {
+            dismissSourcePopulatePrompt(documentId);
+            return;
+          }
+          openSourcePopulatePrompt(document);
+        } catch (error) {
+          console.error("Could not load pending source document:", error);
+          setTransferStatus(`Could not load pending source document: ${getReadableError(error)}`, "error");
+        }
+      }
+
       function handleGenerateElementsEvent(event) {
         openGenerateElementsModal(event.detail?.nodeId);
       }
@@ -12297,10 +12942,36 @@
         closeReviewModal(true);
       }
 
+      function handleSourcePopulateNo() {
+        closeSourcePopulatePrompt({ dismiss: true });
+      }
+
+      function handleSourcePopulateReviewCancel() {
+        if (sourcePopulateDraft.analyzing) {
+          sourcePopulateAbortController?.abort();
+          return;
+        }
+        closeSourcePopulateReview({ dismiss: true });
+      }
+
+      function handleSourcePopulateSelectAll() {
+        if (!sourcePopulateReviewList || !sourcePopulateSelectAll) return;
+        const shouldCheck = sourcePopulateSelectAll.checked;
+        sourcePopulateReviewList.querySelectorAll("[data-source-populate-element]").forEach((checkbox) => {
+          checkbox.checked = shouldCheck;
+        });
+        updateSourcePopulateSelectAllState();
+      }
+
       function handleEscape(event) {
         if (event.key !== "Escape") return;
         if (infoModal && !infoModal.hidden) {
           closeInfoModal();
+        } else if (sourcePopulateReviewModal && !sourcePopulateReviewModal.hidden) {
+          if (sourcePopulateDraft.analyzing) return;
+          closeSourcePopulateReview({ dismiss: true });
+        } else if (sourcePopulatePromptModal && !sourcePopulatePromptModal.hidden) {
+          closeSourcePopulatePrompt({ dismiss: true });
         } else if (!reviewModal.hidden) {
           closeReviewModal(true);
         } else if (!modal.hidden) {
@@ -12328,7 +12999,16 @@
       reviewCancelButtons.forEach((button) => button.addEventListener("click", handleReviewCancel));
       regenerateButton?.addEventListener("click", handleRegenerate);
       finalizeButton?.addEventListener("click", finalizeGeneratedElements);
+      sourcePopulateYesButton?.addEventListener("click", analyzeSourcePopulateDocument);
+      sourcePopulateNoButton?.addEventListener("click", handleSourcePopulateNo);
+      sourcePopulateCancelButton?.addEventListener("click", handleSourcePopulateReviewCancel);
+      sourcePopulateFinalizeButton?.addEventListener("click", finalizeSourcePopulateElements);
+      sourcePopulateSelectAll?.addEventListener("change", handleSourcePopulateSelectAll);
+      sourcePopulateReviewList?.addEventListener("change", updateSourcePopulateSelectAllState);
       document.addEventListener("keydown", handleEscape);
+      window.setTimeout(() => {
+        void maybeOpenSourcePopulatePrompt();
+      }, 250);
 
       return () => {
         window.removeEventListener("centralis:generate-elements", handleGenerateElementsEvent);
@@ -12344,6 +13024,12 @@
         reviewCancelButtons.forEach((button) => button.removeEventListener("click", handleReviewCancel));
         regenerateButton?.removeEventListener("click", handleRegenerate);
         finalizeButton?.removeEventListener("click", finalizeGeneratedElements);
+        sourcePopulateYesButton?.removeEventListener("click", analyzeSourcePopulateDocument);
+        sourcePopulateNoButton?.removeEventListener("click", handleSourcePopulateNo);
+        sourcePopulateCancelButton?.removeEventListener("click", handleSourcePopulateReviewCancel);
+        sourcePopulateFinalizeButton?.removeEventListener("click", finalizeSourcePopulateElements);
+        sourcePopulateSelectAll?.removeEventListener("change", handleSourcePopulateSelectAll);
+        sourcePopulateReviewList?.removeEventListener("change", updateSourcePopulateSelectAllState);
         document.removeEventListener("keydown", handleEscape);
       };
     }, [elementTypeVersion, syncUniverseAiSource]);

@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
       .select("id,user_id")
       .eq("id", universeId)
       .eq("user_id", appUser.id)
+      .eq("deleted", false)
       .single();
 
     if (universeError || !universe) {
@@ -46,6 +47,7 @@ Deno.serve(async (req) => {
       .select("id,universe_id,user_id,original_filename,display_name,mime_type,file_size,created_at,updated_at")
       .eq("universe_id", universeId)
       .eq("user_id", appUser.id)
+      .eq("deleted", false)
       .order("created_at", { ascending: false });
 
     if (error) {

@@ -69,6 +69,7 @@
     statusFilter: "",
     tutorialIndex: 0,
     tutorialSessionDismissed: false,
+    stagedManuscript: null,
   };
 
   const dom = {};
@@ -94,11 +95,15 @@
       dom.createModal = document.getElementById("arc-create-modal");
       dom.createForm = document.querySelector("[data-arc-create-form]");
       dom.createStatus = document.querySelector("[data-arc-create-status]");
+      dom.createSubmit = document.querySelector("[data-arc-create-submit]");
       dom.universeSelect = document.querySelector("[data-arc-universe-select]");
+      dom.manuscriptInput = document.querySelector("[data-arc-manuscript-file]");
+      dom.stagedManuscript = document.querySelector("[data-arc-staged-manuscript]");
       return;
     }
 
     dom.projectTitle = document.querySelector("[data-arc-project-title]");
+    dom.headerProjectName = document.querySelector("[data-arc-header-project-name]");
     dom.workspaceStatus = document.querySelector("[data-arc-workspace-status]");
     dom.outlineCount = document.querySelector("[data-arc-outline-count]");
     dom.outlineList = document.querySelector("[data-arc-outline-list]");
@@ -137,6 +142,13 @@
       document.querySelector("[data-arc-create-close]")?.addEventListener("click", closeCreateProject);
       document.querySelector("[data-arc-create-cancel]")?.addEventListener("click", closeCreateProject);
       dom.createForm?.addEventListener("submit", handleCreateProject);
+      dom.manuscriptInput?.addEventListener("change", handleManuscriptSelected);
+      dom.stagedManuscript?.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("[data-arc-remove-manuscript]")) {
+          clearStagedManuscript();
+          setStatus(dom.createStatus, "Manuscript removed.");
+        }
+      });
       dom.search?.addEventListener("input", () => {
         state.search = dom.search.value.trim().toLowerCase();
         renderLanding();
@@ -436,6 +448,10 @@
   function renderWorkspace() {
     if (!state.project) return;
     if (dom.projectTitle) dom.projectTitle.textContent = state.project.title;
+    if (dom.headerProjectName) {
+      dom.headerProjectName.textContent = state.project.title ? `/ ${state.project.title}` : "";
+      dom.headerProjectName.hidden = !state.project.title;
+    }
     dom.viewTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.arcView === state.view));
     renderOutline();
     renderSurface();
@@ -895,9 +911,172 @@
     `;
   }
 
+  function renderStagedManuscript() {
+    if (!dom.stagedManuscript) return;
+    const staged = state.stagedManuscript;
+    if (!staged?.file) {
+      dom.stagedManuscript.hidden = true;
+      dom.stagedManuscript.innerHTML = "";
+      return;
+    }
+
+    dom.stagedManuscript.hidden = false;
+    dom.stagedManuscript.innerHTML = `
+      <div class="arc-staged-manuscript-card">
+        <ph-file-text weight="duotone" aria-hidden="true"></ph-file-text>
+        <span>
+          <strong>${escapeHtml(staged.source?.original_filename || staged.file.name || "Manuscript")}</strong>
+          <em>${escapeHtml([formatDocumentType(staged.source?.mime_type || staged.file.type, staged.file.name), formatFileSize(staged.source?.file_size || staged.file.size)].filter(Boolean).join(" - "))}</em>
+        </span>
+        <button class="arc-staged-manuscript-remove" type="button" aria-label="Remove manuscript" data-arc-remove-manuscript>
+          <ph-x weight="bold" aria-hidden="true"></ph-x>
+        </button>
+      </div>
+      ${staged.units?.length ? `<p>${escapeHtml(staged.units.length)} outline ${staged.units.length === 1 ? "unit" : "units"} ready to create.</p>` : ""}
+    `;
+  }
+
+  function clearStagedManuscript() {
+    state.stagedManuscript = null;
+    if (dom.manuscriptInput) dom.manuscriptInput.value = "";
+    renderStagedManuscript();
+  }
+
+  function setCreateBusy(busy, message = "") {
+    if (dom.createSubmit) dom.createSubmit.disabled = busy;
+    if (dom.manuscriptInput) dom.manuscriptInput.disabled = busy;
+    if (message) setStatus(dom.createStatus, message);
+  }
+
+  function setFormValue(name, value) {
+    const field = dom.createForm?.elements?.[name];
+    if (!field || value === undefined || value === null || value === "") return;
+    field.value = String(value);
+  }
+
+  function applyExtractedArcProject(payload = {}) {
+    const project = payload.project || {};
+    setFormValue("title", project.title);
+    setFormValue("genre", project.genre);
+    setFormValue("format", project.format || "screenplay");
+    setFormValue("logline", project.logline);
+    setFormValue("premise", project.premise);
+    setFormValue("target_length", project.target_length || project.targetLength);
+    setFormValue("notes", project.notes);
+    setFormValue("status", "outlined");
+  }
+
+  function normalizeGeneratedArcUnits(units = []) {
+    const allowedTypes = new Set(["act", "sequence", "scene"]);
+    const seen = new Set();
+    return (Array.isArray(units) ? units : []).slice(0, 160).map((unit, index) => {
+      const title = clean(unit?.title || unit?.name) || `Story Unit ${index + 1}`;
+      let tempId = clean(unit?.temp_id || unit?.tempId || unit?.id) || `unit-${index + 1}`;
+      tempId = tempId.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || `unit-${index + 1}`;
+      while (seen.has(tempId)) tempId = `${tempId}-${index + 1}`;
+      seen.add(tempId);
+      const type = clean(unit?.unit_type || unit?.unitType || unit?.type).toLowerCase();
+      return {
+        tempId,
+        parentTempId: clean(unit?.parent_temp_id || unit?.parentTempId),
+        unitType: allowedTypes.has(type) ? type : "scene",
+        title,
+        summary: clean(unit?.summary || unit?.synopsis || unit?.advice),
+        purpose: clean(unit?.purpose),
+        conflict: clean(unit?.conflict),
+        outcome: clean(unit?.outcome),
+        storyTime: clean(unit?.story_time || unit?.storyTime),
+        emotionalTone: clean(unit?.emotional_tone || unit?.emotionalTone || unit?.tone),
+        beats: (Array.isArray(unit?.beats) ? unit.beats : []).map((beat) => clean(beat)).filter(Boolean).slice(0, 24),
+        sortOrder: Number.isFinite(Number(unit?.sort_order ?? unit?.sortOrder)) ? Math.round(Number(unit.sort_order ?? unit.sortOrder)) : (index + 1) * 100,
+      };
+    }).filter((unit) => unit.title || unit.summary);
+  }
+
+  async function handleManuscriptSelected() {
+    const file = dom.manuscriptInput?.files?.[0] || null;
+    if (!file) return;
+    if (!window.centralisSupabase) {
+      setStatus(dom.createStatus, "Supabase is not available yet. Refresh the page and try again.", "error");
+      return;
+    }
+
+    setCreateBusy(true, "Reading manuscript and building outline guidance...");
+    try {
+      const uploadData = new FormData();
+      uploadData.set("file", file);
+      const { data, error } = await window.centralisSupabase.functions.invoke("extract-arc-source-document", {
+        body: uploadData,
+      });
+      if (error) throw error;
+      const units = normalizeGeneratedArcUnits(data?.units || []);
+      if (!data?.project?.title && !units.length) {
+        throw new Error("The manuscript did not return usable project details or outline units.");
+      }
+
+      state.stagedManuscript = {
+        file,
+        source: data?.source || { original_filename: file.name, mime_type: file.type, file_size: file.size },
+        project: data?.project || {},
+        units,
+      };
+      applyExtractedArcProject({ project: state.stagedManuscript.project });
+      renderStagedManuscript();
+      setStatus(dom.createStatus, `Manuscript breakdown ready: ${units.length} outline ${units.length === 1 ? "unit" : "units"}.`, "success");
+    } catch (error) {
+      clearStagedManuscript();
+      setStatus(dom.createStatus, `Could not break down manuscript: ${error.message}`, "error");
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
+  async function uploadStagedArcSourceDocument(projectId) {
+    if (!state.stagedManuscript?.file || !projectId) return null;
+    const uploadData = new FormData();
+    uploadData.set("projectId", projectId);
+    uploadData.set("file", state.stagedManuscript.file);
+    uploadData.set("displayName", state.stagedManuscript.source?.original_filename || state.stagedManuscript.file.name);
+    const { data, error } = await window.centralisSupabase.functions.invoke("upload-arc-source-document", {
+      body: uploadData,
+    });
+    if (error) throw error;
+    return data?.document || null;
+  }
+
+  async function insertGeneratedArcUnits(projectId, units = []) {
+    const usableUnits = normalizeGeneratedArcUnits(units);
+    if (!usableUnits.length) return [];
+    const idByTempId = new Map(usableUnits.map((unit) => [unit.tempId, crypto.randomUUID()]));
+    const rows = usableUnits.map((unit, index) => ({
+      id: idByTempId.get(unit.tempId),
+      project_id: projectId,
+      user_id: state.user.id,
+      parent_unit_id: unit.parentTempId ? idByTempId.get(unit.parentTempId) || null : null,
+      unit_type: unit.unitType,
+      title: unit.title,
+      summary: unit.summary,
+      purpose: unit.purpose || null,
+      conflict: unit.conflict || null,
+      outcome: unit.outcome || null,
+      story_time: unit.storyTime || null,
+      emotional_tone: unit.emotionalTone || null,
+      status: "outlined",
+      sort_order: Number.isFinite(unit.sortOrder) ? unit.sortOrder : (index + 1) * 100,
+      beats: unit.beats,
+    }));
+    const { data, error } = await window.centralisSupabase
+      .from(TABLES.units)
+      .insert(rows)
+      .select("id");
+    if (error) throw error;
+    return data || [];
+  }
+
   async function handleCreateProject(event) {
     event.preventDefault();
     const formData = new FormData(dom.createForm);
+    const stagedUnits = state.stagedManuscript?.units || [];
     const payload = {
       user_id: state.user.id,
       title: clean(formData.get("title")),
@@ -910,13 +1089,29 @@
       target_length: clean(formData.get("target_length")),
       notes: clean(formData.get("notes")),
     };
-    setStatus(dom.createStatus, "Creating story project...");
-    const { data, error } = await window.centralisSupabase.from(TABLES.projects).insert(payload).select("*").single();
-    if (error) {
-      setStatus(dom.createStatus, error.message, "error");
-      return;
+    setCreateBusy(true, stagedUnits.length ? "Creating story project and outline..." : "Creating story project...");
+    let createdProjectId = "";
+    try {
+      const { data, error } = await window.centralisSupabase.from(TABLES.projects).insert(payload).select("*").single();
+      if (error) throw error;
+      createdProjectId = data.id;
+
+      if (state.stagedManuscript?.file) {
+        setStatus(dom.createStatus, "Saving source manuscript...");
+        await uploadStagedArcSourceDocument(createdProjectId);
+      }
+
+      if (stagedUnits.length) {
+        setStatus(dom.createStatus, "Creating Arc outline...");
+        await insertGeneratedArcUnits(createdProjectId, stagedUnits);
+      }
+
+      window.location.href = `arc-workspace.html?project_id=${encodeURIComponent(createdProjectId)}`;
+    } catch (error) {
+      const projectNote = createdProjectId ? " The project was created, but setup did not finish." : "";
+      setStatus(dom.createStatus, `${error.message}${projectNote}`, "error");
+      setCreateBusy(false);
     }
-    window.location.href = `arc-workspace.html?project_id=${encodeURIComponent(data.id)}`;
   }
 
   async function handleSaveUnitModal(event) {
@@ -1399,12 +1594,14 @@
 
   function openCreateProject() {
     dom.createModal.hidden = false;
+    renderStagedManuscript();
     dom.createForm?.querySelector("input[name='title']")?.focus();
   }
 
   function closeCreateProject() {
     dom.createModal.hidden = true;
     dom.createForm?.reset();
+    clearStagedManuscript();
     setStatus(dom.createStatus, "");
   }
 
@@ -1718,6 +1915,20 @@
       ids.push(...descendantIds(unit.id));
     }
     return ids;
+  }
+
+  function formatFileSize(bytes) {
+    const size = Number(bytes || 0);
+    if (!Number.isFinite(size) || size <= 0) return "";
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+
+  function formatDocumentType(mimeType, filename) {
+    const extension = String(filename || "").split(".").pop()?.toUpperCase() || "";
+    if (extension && extension.length <= 5) return extension;
+    return String(mimeType || "Document").replace(/^application\//, "").replace(/^text\//, "").toUpperCase();
   }
 
   function normalizeLabel(value) {
