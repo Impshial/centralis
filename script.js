@@ -432,7 +432,7 @@ const CENTRALIS_HEADER_MARKUP = `
       </button>
       <div class="dropdown-menu" role="menu">
         <a href="god-engine.html" role="menuitem"><ph-dna weight="duotone" aria-hidden="true"></ph-dna><span>God Engine</span></a>
-        <a href="chat-repository.html" role="menuitem"><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
+        <a href="chat-repository.html" role="menuitem" data-admin-only hidden><ph-chats-circle weight="duotone" aria-hidden="true"></ph-chats-circle><span>Chat Repository</span></a>
         <a href="roleplayer.html" role="menuitem" data-admin-only-nav hidden><ph-robot weight="duotone" aria-hidden="true"></ph-robot><span>Roleplayer</span></a>
         <a href="image-generation.html" role="menuitem"><ph-image-square weight="duotone" aria-hidden="true"></ph-image-square><span>Image Generation</span></a>
       </div>
@@ -791,7 +791,7 @@ function syncUserMenuEmail(user = window.centralisCurrentAppUser) {
 
 function syncAdminNavigation(user = window.centralisCurrentAppUser) {
   const isAdmin = user?.admin === true;
-  document.querySelectorAll("[data-admin-only-nav]").forEach((element) => {
+  document.querySelectorAll("[data-admin-only-nav], [data-admin-only]").forEach((element) => {
     element.hidden = !isAdmin;
   });
 }
@@ -2809,6 +2809,7 @@ function renderHomeModules(metrics = {}) {
       href: "chat-repository.html",
       icon: "ph-chats-circle",
       detail: `${getMetricTotal(metrics.chatLogs)} ${pluralize(getMetricTotal(metrics.chatLogs), "log")}`,
+      adminOnly: true,
     },
     {
       title: "Calendar",
@@ -2854,7 +2855,8 @@ function renderHomeModules(metrics = {}) {
     },
   ];
 
-  homeModuleGrid.innerHTML = modules.map((module) => `
+  const visibleModules = modules.filter((module) => !module.adminOnly || currentAppUser?.admin === true);
+  homeModuleGrid.innerHTML = visibleModules.map((module) => `
     <a class="home-module-card" href="${module.href}">
       <span class="home-module-icon" aria-hidden="true"><${module.icon} weight="duotone"></${module.icon}></span>
       <span>
@@ -2871,6 +2873,7 @@ async function loadHomeDashboardOverview() {
     return;
   }
 
+  const isAdmin = currentAppUser.admin === true;
   setHomeStatus("Checking workspace totals and upcoming work...");
   setHomeRefreshed();
   setHomeStatsLoading();
@@ -2887,12 +2890,14 @@ async function loadHomeDashboardOverview() {
   const metricLoaders = {
     universes: fetchHomeUniversesMetric,
     chronicle: fetchHomeChronicleMetric,
-    chatLogs: fetchHomeChatLogMetric,
     calendar: fetchHomeCalendarMetric,
     movies: fetchHomeMovieMetric,
     images: fetchHomeImageMetric,
     todos: fetchHomeTodoMetric,
   };
+  if (isAdmin) {
+    metricLoaders.chatLogs = fetchHomeChatLogMetric;
+  }
   const metricEntries = await Promise.all(Object.entries(metricLoaders).map(async ([key, loader]) => {
     try {
       return [key, await loader()];
@@ -3533,7 +3538,7 @@ async function prepareSignedInUser(authUser) {
       loadRecentSourceDocuments(),
       loadUniverseCards(),
       loadRecentChronicleElements(),
-      loadRecentChatLogs()
+      currentAppUser.admin === true ? loadRecentChatLogs() : Promise.resolve()
     ]);
     if (document.body.dataset.page === "home") {
       homepageDataPromise.catch((error) => {
@@ -3784,7 +3789,7 @@ async function loadRecentChronicleElements() {
 }
 
 async function loadRecentChatLogs() {
-  if (!homeChatLogList || !supabaseClient || !currentAppUser) {
+  if (!homeChatLogList || !supabaseClient || !currentAppUser || currentAppUser.admin !== true) {
     return;
   }
 
