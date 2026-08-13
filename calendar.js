@@ -12,7 +12,8 @@ const state = {
   categories: [],
   events: [],
   tasks: [],
-  selectedReminderMinutes: new Set()
+  selectedReminderMinutes: new Set(),
+  hasLoadedCalendars: false
 };
 
 const calendarPage = document.querySelector("[data-calendar-page]");
@@ -423,6 +424,10 @@ function renderCalendarList() {
   }
 
   if (!state.calendars.length) {
+    if (!state.hasLoadedCalendars) {
+      calendarList.innerHTML = '<p class="calendar-sidebar-empty">Loading calendars...</p>';
+      return;
+    }
     calendarList.innerHTML = '<p class="calendar-sidebar-empty">No calendars yet.</p>';
     return;
   }
@@ -657,6 +662,31 @@ function renderAgendaView() {
 }
 
 function renderEmptyState() {
+  if (!state.hasLoadedCalendars) {
+    if (calendarEmpty) {
+      calendarEmpty.hidden = true;
+    }
+    if (monthGrid) {
+      monthGrid.hidden = state.view !== "month";
+    }
+    if (monthWeekdays) {
+      monthWeekdays.hidden = state.view !== "month";
+    }
+    if (weekView) {
+      weekView.hidden = state.view !== "week";
+    }
+    if (dayView) {
+      dayView.hidden = state.view !== "day";
+    }
+    if (agendaView) {
+      agendaView.hidden = state.view !== "agenda";
+    }
+    if (newEventButton) {
+      newEventButton.disabled = true;
+    }
+    return;
+  }
+
   const hasCalendars = state.calendars.length > 0;
   const hasCalendarContent = hasCalendars || state.tasks.length > 0;
   if (calendarEmpty) {
@@ -1053,6 +1083,7 @@ async function refreshCalendarData() {
   try {
     await loadSettings();
     await loadCalendars();
+    state.hasLoadedCalendars = true;
     await loadCategories();
     await loadEvents();
     await loadTasks();
