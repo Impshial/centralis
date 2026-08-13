@@ -658,7 +658,7 @@
           <span class="arc-card-copy">
             <span class="arc-status-badge status-${escapeAttribute(unit.status || "idea")}">${escapeHtml(normalizeLabel(unit.status || "idea"))}</span>
             <h3>${escapeHtml(unit.title)}</h3>
-            <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
+            <p class="arc-scene-synopsis">${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
             <small>${escapeHtml(context.join(" - ") || "No scene context yet.")}</small>
           </span>
           <span class="arc-card-media">${renderSceneImage(image, unit.title)}</span>
@@ -677,7 +677,7 @@
             <span class="arc-status-badge status-${escapeAttribute(unit.status || "idea")}">${escapeHtml(normalizeLabel(unit.status || "idea"))}</span>
           </span>
           <h3>${escapeHtml(unit.title)}</h3>
-          <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
+          <p class="arc-scene-synopsis">${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
           <span class="arc-paper-card-footer">
             ${context.slice(0, 2).map((item) => `<small>${escapeHtml(item)}</small>`).join("") || "<small>No context</small>"}
             <small>${escapeHtml(sceneProgressLabel(unit))}</small>
@@ -893,7 +893,7 @@
         <div>
           <p class="settings-eyebrow">${escapeHtml(sceneNumber(unit))} - ${escapeHtml(normalizeLabel(unit.status || "idea"))}</p>
           <h3>${escapeHtml(unit.title)}</h3>
-          <p>${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
+          <p class="arc-scene-brief-summary">${escapeHtml(unit.summary || unit.purpose || "No synopsis yet.")}</p>
           <div class="arc-inspector-context">
             ${renderElementContextLink("POV", unit.pov_element_id)}
             ${renderElementContextLink("Location", unit.location_element_id)}
