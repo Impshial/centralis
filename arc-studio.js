@@ -281,7 +281,7 @@
       return;
     }
     sessionStorage.setItem("centralis-current-arc-project-id", projectId);
-    setStatus(dom.workspaceStatus, "Loading Arc Studio workspace...");
+    setStatus(dom.workspaceStatus, "Processing Change...");
 
     const projectResponse = await window.centralisSupabase
       .from(TABLES.projects)
@@ -513,7 +513,6 @@
         <div class="arc-project-title-block">
           <p class="settings-eyebrow">Arc Studio</p>
           <h1>${escapeHtml(state.project.title || "Untitled Project")}</h1>
-          <p>${escapeHtml(state.project.logline || state.project.premise || "Shape the story movement, scene by scene.")}</p>
           <div class="arc-project-badges">
             <span>${escapeHtml(normalizeLabel(state.project.genre || state.project.format || "Story"))}</span>
             <span>${escapeHtml(normalizeLabel(state.project.status || "Planning"))}</span>

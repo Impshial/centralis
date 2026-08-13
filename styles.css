@@ -29111,10 +29111,18 @@ body[data-page="arc-workspace"] .arc-inspector-tabs button:focus-visible {
   outline: none;
 }
 
-body[data-page="arc-workspace"] .arc-view-tabs {
-  margin: 0;
+body[data-page="arc-workspace"] .arc-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
   padding: 16px 24px 12px;
   border-bottom: 1px solid var(--arc-line);
+}
+
+body[data-page="arc-workspace"] .arc-view-tabs {
+  flex: 1 1 auto;
+  margin: 0;
 }
 
 body[data-page="arc-workspace"] .arc-view-tabs .is-active,
@@ -29126,9 +29134,18 @@ body[data-page="arc-workspace"] .arc-inspector-tabs .is-active {
 }
 
 body[data-page="arc-workspace"] .arc-status {
+  flex: 0 1 360px;
   min-height: 0;
+  max-width: 42%;
   margin: 0;
-  padding: 0 24px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-page="arc-workspace"] .arc-status:empty {
+  display: none;
 }
 
 body[data-page="arc-workspace"] .arc-story-surface {

@@ -76,14 +76,16 @@
         </aside>
 
         <section class="arc-main-surface" aria-label="Story planning surface">
-          <div class="arc-view-tabs" role="tablist" aria-label="Arc Studio views">
-            <button class="is-active" type="button" data-arc-view="outline">Outline</button>
-            <button type="button" data-arc-view="corkboard">Corkboard</button>
-            <button type="button" data-arc-view="timeline">Timeline</button>
-            <button type="button" data-arc-view="arc-map">Arc Map</button>
-            <button type="button" data-arc-view="diagnostics">Diagnostics</button>
+          <div class="arc-view-bar">
+            <div class="arc-view-tabs" role="tablist" aria-label="Arc Studio views">
+              <button class="is-active" type="button" data-arc-view="outline">Outline</button>
+              <button type="button" data-arc-view="corkboard">Corkboard</button>
+              <button type="button" data-arc-view="timeline">Timeline</button>
+              <button type="button" data-arc-view="arc-map">Arc Map</button>
+              <button type="button" data-arc-view="diagnostics">Diagnostics</button>
+            </div>
+            <p class="form-status arc-status" data-arc-workspace-status role="status"></p>
           </div>
-          <p class="form-status arc-status" data-arc-workspace-status role="status"></p>
           <div class="arc-story-surface" data-arc-story-surface></div>
         </section>
 
