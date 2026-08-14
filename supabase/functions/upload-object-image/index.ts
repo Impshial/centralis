@@ -39,6 +39,13 @@ function createUploadImageMetadata(input: {
       note: "Uploaded image",
     });
   }
+  if (input.storageModule === "listmaker" || input.storageModule.startsWith("listmaker/")) {
+    return createCentralisStorageMetadata({
+      module: "ListMaker",
+      context: `ListMaker Item: ${name}`,
+      note: "Uploaded image",
+    });
+  }
 
   const typeText = `${input.objectKind || ""} ${input.elementType || ""}`;
   const label = /universe/i.test(typeText) ? "Universe" : "Element";

@@ -65,6 +65,8 @@
     statuses: [],
     fields: [],
     values: [],
+    itemImagesByItemId: new Map(),
+    pendingImageItemId: "",
     selectedIds: new Set(),
     pendingCategoryMoveIds: [],
     collapsedVirtualCategories: new Set(),
@@ -107,12 +109,20 @@
     dom.addTitleControl = document.querySelector("[data-listmaker-add-title-control]");
     dom.addInput = document.querySelector("[data-listmaker-add-input]");
     dom.addCategory = document.querySelector("[data-listmaker-add-category]");
+    dom.addImageInput = document.querySelector("[data-listmaker-add-image]");
+    dom.addImageLabel = document.querySelector("[data-listmaker-add-image-label]");
     dom.itemSearch = document.querySelector("[data-listmaker-item-search]");
     dom.sort = document.querySelector("[data-listmaker-sort]");
     dom.filter = document.querySelector("[data-listmaker-filter]");
     dom.items = document.querySelector("[data-listmaker-items]");
     dom.editorStatus = document.querySelector("[data-listmaker-editor-status]");
     dom.bulkBar = document.querySelector("[data-listmaker-bulk-bar]");
+    dom.imageUploadInput = document.createElement("input");
+    dom.imageUploadInput.type = "file";
+    dom.imageUploadInput.accept = "image/*";
+    dom.imageUploadInput.hidden = true;
+    dom.imageUploadInput.addEventListener("change", handleListItemImageSelected);
+    document.body.append(dom.imageUploadInput);
   }
 
   function redirectLegacyEditorUrl() {
@@ -179,6 +189,7 @@
     dom.settingsForm?.addEventListener("change", handleSettingsChange);
     dom.addForm?.addEventListener("submit", handleAddSubmit);
     dom.addForm?.addEventListener("paste", handlePasteIntoAdd);
+    dom.addImageInput?.addEventListener("change", syncAddImageLabel);
     dom.itemSearch?.addEventListener("input", () => {
       state.search = dom.itemSearch.value.trim();
       renderItems();
@@ -262,8 +273,27 @@
     state.fields = fieldResponse.data || [];
     state.items = itemResponse.data || [];
     state.values = valueResponse.data || [];
+    await loadItemImages();
     state.view = ["list", "table"].includes(state.list.default_view) ? state.list.default_view : state.view;
     setStatus(dom.editorStatus, "");
+  }
+
+  async function loadItemImages() {
+    state.itemImagesByItemId = new Map();
+    const itemIds = state.items.map((item) => item.id).filter(Boolean);
+    if (!itemIds.length) return;
+    const { data, error } = await supabase.functions.invoke("list-object-images", {
+      body: { objectIds: itemIds },
+    });
+    if (error) {
+      console.warn("Could not load ListMaker item images:", error);
+      return;
+    }
+    for (const image of data?.images || []) {
+      const images = state.itemImagesByItemId.get(image.object_id) || [];
+      images.push(image);
+      state.itemImagesByItemId.set(image.object_id, normalizeImages(images));
+    }
   }
 
   function renderShellMode() {
@@ -459,6 +489,7 @@
       <article class="listmaker-item-row${notesClass}${behaviors.checklist ? " has-checklist" : ""}${item.completed ? " is-complete" : ""}${state.selectedIds.has(item.id) ? " is-selected" : ""}" data-item-id="${escapeHtml(item.id)}" role="listitem">
         <input type="checkbox" aria-label="Select ${escapeAttribute(item.title)}" data-select-item="${escapeHtml(item.id)}"${checked}>
         ${behaviors.checklist ? renderChecklistToggle(item) : ""}
+        ${renderItemImageSlot(item)}
         <div class="listmaker-row-title-wrap">
           ${behaviors.ranked ? `<span class="listmaker-rank">${rankFor(item)}</span>` : ""}
           ${renderItemTitleControl(item)}
@@ -478,16 +509,35 @@
 
   function renderRowActionMenu(itemId) {
     const id = escapeHtml(itemId);
+    const hasImages = Boolean(primaryItemImage(itemId));
     return `
       <details class="listmaker-row-menu">
         <summary title="Item actions" aria-label="Item actions"><ph-dots-three-outline weight="bold" aria-hidden="true"></ph-dots-three-outline></summary>
         <div>
+          ${hasImages ? `<button type="button" data-item-action="view-image" data-item-id="${id}"><ph-image-square weight="bold" aria-hidden="true"></ph-image-square><span>View Images</span></button>` : ""}
+          <button type="button" data-item-action="upload-image" data-item-id="${id}"><ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple><span>${hasImages ? "Add Image" : "Upload Image"}</span></button>
           <button type="button" data-item-action="move-up" data-item-id="${id}"><ph-arrow-up weight="bold" aria-hidden="true"></ph-arrow-up><span>Move Up</span></button>
           <button type="button" data-item-action="move-down" data-item-id="${id}"><ph-arrow-down weight="bold" aria-hidden="true"></ph-arrow-down><span>Move Down</span></button>
           <button type="button" data-item-action="duplicate" data-item-id="${id}"><ph-copy weight="bold" aria-hidden="true"></ph-copy><span>Duplicate</span></button>
           <button type="button" data-item-action="delete" data-item-id="${id}"><ph-trash weight="bold" aria-hidden="true"></ph-trash><span>Delete</span></button>
         </div>
       </details>
+    `;
+  }
+
+  function renderItemImageSlot(item) {
+    const image = primaryItemImage(item.id);
+    if (image?.image_url) {
+      return `
+        <button class="listmaker-item-image-thumb" type="button" data-item-image-view="${escapeHtml(item.id)}" aria-label="View images for ${escapeAttribute(item.title)}">
+          <img src="${escapeAttribute(image.image_url)}" alt="">
+        </button>
+      `;
+    }
+    return `
+      <button class="listmaker-item-image-empty" type="button" data-item-image-upload="${escapeHtml(item.id)}" aria-label="Upload image for ${escapeAttribute(item.title)}" title="Upload image">
+        <ph-image-square weight="duotone" aria-hidden="true"></ph-image-square>
+      </button>
     `;
   }
 
@@ -550,6 +600,7 @@
               <th class="listmaker-select-column"><input type="checkbox" data-select-all${rows.every((item) => state.selectedIds.has(item.id)) ? " checked" : ""}></th>
               ${behaviors.ranked ? "<th>Rank</th>" : ""}
               ${behaviors.checklist ? '<th class="listmaker-completed-column">Completed</th>' : ""}
+              <th class="listmaker-image-column">Image</th>
               <th class="listmaker-name-column">Name</th>
               ${behaviors.scored ? "<th>Score</th>" : ""}
               ${state.list?.rating_type ? "<th>Rating</th>" : ""}
@@ -572,6 +623,7 @@
         <td class="listmaker-select-column"><input type="checkbox" data-select-item="${escapeHtml(item.id)}"${state.selectedIds.has(item.id) ? " checked" : ""}></td>
         ${behaviors.ranked ? `<td>${rankFor(item)}</td>` : ""}
         ${behaviors.checklist ? `<td class="listmaker-completed-column">${renderChecklistToggle(item)}</td>` : ""}
+        <td class="listmaker-image-column">${renderItemImageSlot(item)}</td>
         <td class="listmaker-line-cell listmaker-name-column">${renderItemTitleControl(item)}</td>
         ${behaviors.scored ? `<td class="listmaker-line-cell"><input type="number" step="any" value="${escapeAttribute(item.score ?? "")}" data-item-field="score" data-item-id="${escapeHtml(item.id)}"></td>` : ""}
         ${state.list?.rating_type ? `<td class="listmaker-line-cell">${renderRatingInput(item)}</td>` : ""}
@@ -927,8 +979,27 @@
     event.preventDefault();
     const title = clean(dom.addInput.value);
     if (!title) return;
-    await addItems([title], addItemOverrides());
+    const imageFile = dom.addImageInput?.files?.[0] || null;
+    const rows = await addItems([title], addItemOverrides());
+    const item = rows?.[0] || null;
+    if (item && imageFile) {
+      try {
+        await uploadListItemImage(item.id, imageFile);
+        await loadItemImages();
+      } catch (error) {
+        setStatus(dom.editorStatus, `Item created, but image upload failed: ${readableError(error)}`, "error");
+      }
+    }
     dom.addInput.value = "";
+    if (dom.addImageInput) dom.addImageInput.value = "";
+    syncAddImageLabel();
+    renderEditor();
+  }
+
+  function syncAddImageLabel() {
+    if (!dom.addImageLabel || !dom.addImageInput) return;
+    const file = dom.addImageInput.files?.[0] || null;
+    dom.addImageLabel.textContent = file ? file.name : "Image";
   }
 
   async function handlePasteIntoAdd(event) {
@@ -964,13 +1035,14 @@
       category_id: overrides.category_id || null,
       status_id: overrides.status_id || null,
     }));
-    const { error } = await supabase.from(TABLES.items).insert(rows);
+    const { data, error } = await supabase.from(TABLES.items).insert(rows).select("*");
     if (error) {
       setStatus(dom.editorStatus, error.message, "error");
-      return;
+      return [];
     }
     await loadList();
     renderEditor();
+    return data || [];
   }
 
   async function handleItemChange(event) {
@@ -1031,6 +1103,16 @@
       await runItemAction(action.dataset.itemId, action.dataset.itemAction);
       return;
     }
+    const imageView = event.target.closest("[data-item-image-view]");
+    if (imageView) {
+      openItemImageViewer(imageView.dataset.itemImageView);
+      return;
+    }
+    const imageUpload = event.target.closest("[data-item-image-upload]");
+    if (imageUpload) {
+      promptItemImageUpload(imageUpload.dataset.itemImageUpload);
+      return;
+    }
     const toggle = event.target.closest("[data-category-toggle]");
     if (toggle) {
       const id = toggle.dataset.categoryToggle;
@@ -1058,7 +1140,168 @@
     if (action === "move-top") return moveItemToEdge(itemId, "top");
     if (action === "move-bottom") return moveItemToEdge(itemId, "bottom");
     if (action === "set-position") return setItemPosition(itemId);
+    if (action === "view-image") return openItemImageViewer(itemId);
+    if (action === "upload-image") return promptItemImageUpload(itemId);
     return null;
+  }
+
+  function promptItemImageUpload(itemId) {
+    if (!itemId || !dom.imageUploadInput) return;
+    state.pendingImageItemId = itemId;
+    dom.imageUploadInput.value = "";
+    dom.imageUploadInput.click();
+  }
+
+  async function handleListItemImageSelected() {
+    const file = dom.imageUploadInput?.files?.[0] || null;
+    const itemId = state.pendingImageItemId;
+    state.pendingImageItemId = "";
+    if (!file || !itemId) return;
+    try {
+      const image = await uploadListItemImage(itemId, file);
+      await loadItemImages();
+      renderItems();
+      openItemImageViewer(itemId, image?.id);
+    } catch (error) {
+      setStatus(dom.editorStatus, `Could not upload image: ${readableError(error)}`, "error");
+    } finally {
+      if (dom.imageUploadInput) dom.imageUploadInput.value = "";
+    }
+  }
+
+  async function uploadListItemImage(itemId, file) {
+    const item = state.items.find((row) => row.id === itemId);
+    if (!item) throw new Error("That list item could not be found.");
+    const formData = new FormData();
+    formData.append("objectId", item.id);
+    formData.append("objectName", item.title || "List item");
+    formData.append("objectKind", "ListMaker Item");
+    formData.append("storageModule", "listmaker");
+    formData.append("file", file);
+    const { data, error } = await supabase.functions.invoke("upload-object-image", {
+      body: formData,
+    });
+    if (error) throw error;
+    return data?.image || null;
+  }
+
+  function openItemImageViewer(itemId, activeImageId = "") {
+    const images = listItemGalleryImages();
+    const activeId = activeImageId || primaryItemImage(itemId)?.id || images.find((image) => image.objectId === itemId)?.id || "";
+    if (!images.length || !window.openCentralisImageViewer) return;
+    window.openCentralisImageViewer({
+      kicker: "ListMaker",
+      title: state.list?.title || "List Item Images",
+      images,
+      activeImageId: activeId,
+      capabilities: {
+        canNavigate: true,
+        canShowThumbnails: true,
+        canUpload: true,
+        canDelete: true,
+        canSetPrimary: true,
+        uploadLabel: "Add Image",
+      },
+      details: listItemImageDetails,
+      actions: {
+        upload: uploadImageFromViewer,
+        delete: deleteImageFromViewer,
+        setPrimary: setPrimaryImageFromViewer,
+      },
+    });
+  }
+
+  async function uploadImageFromViewer(file, context) {
+    const itemId = context?.image?.objectId || "";
+    if (!itemId) return false;
+    const image = await uploadListItemImage(itemId, file);
+    await loadItemImages();
+    renderItems();
+    return {
+      images: listItemGalleryImages(),
+      activeImageId: image?.id,
+    };
+  }
+
+  async function deleteImageFromViewer(image) {
+    if (!image?.id) return false;
+    if (!window.confirm("Delete this image?")) return false;
+    const { error } = await supabase.functions.invoke("delete-object-image", {
+      body: { imageId: image.id },
+    });
+    if (error) throw error;
+    await loadItemImages();
+    renderItems();
+    const images = listItemGalleryImages();
+    return images.length ? { images, activeImageId: images[0]?.id } : { close: true };
+  }
+
+  async function setPrimaryImageFromViewer(image) {
+    if (!image?.id) return false;
+    const { error } = await supabase.functions.invoke("set-primary-image", {
+      body: { imageId: image.id },
+    });
+    if (error) throw error;
+    await loadItemImages();
+    renderItems();
+    return {
+      images: listItemGalleryImages(),
+      activeImageId: image.id,
+    };
+  }
+
+  function listItemGalleryImages() {
+    const rows = state.items.slice().sort(compareManual);
+    return rows.flatMap((item) => (state.itemImagesByItemId.get(item.id) || []).map((image) => ({
+      id: image.id,
+      src: image.image_url,
+      name: item.title || "List item image",
+      alt: item.title || "List item image",
+      downloadName: `${safeFilename(item.title || "list-item")}-${image.id}.png`,
+      isPrimary: Boolean(image.is_primary),
+      objectId: item.id,
+      objectName: item.title,
+      objectKind: "ListMaker Item",
+      createdAt: image.created_at,
+      raw: image,
+    })));
+  }
+
+  function listItemImageDetails(image) {
+    const item = state.items.find((row) => row.id === image?.objectId);
+    if (!item) return {};
+    const rows = itemDetailRows(item);
+    return {
+      imageInfo: {
+        title: "List Item",
+        rows,
+      },
+      objectDetails: {
+        title: "Image",
+        rows: [
+          ["Primary", image.isPrimary ? "Yes" : "No"],
+          ["Uploaded", formatDate(image.createdAt)],
+        ],
+      },
+    };
+  }
+
+  function itemDetailRows(item) {
+    const behaviors = normalizeBehaviors(state.list?.behaviors);
+    const rows = [
+      ["List", state.list?.title || ""],
+      ["Item", item.title || ""],
+    ];
+    if (behaviors.checklist) rows.push(["Completed", item.completed ? "Yes" : "No"]);
+    if (behaviors.ranked) rows.push(["Rank", String(rankFor(item))]);
+    if (behaviors.scored) rows.push(["Score", item.score ?? ""]);
+    if (state.list?.rating_type) rows.push(["Rating", formatRatingValue(item.rating)]);
+    if (behaviors.status) rows.push(["Status", statusName(item.status_id) || "No status"]);
+    if (behaviors.categorized) rows.push(["Category", categoryName(item.category_id)]);
+    state.fields.forEach((field) => rows.push([field.name, formatFieldValue(item.id, field)]));
+    rows.push(["Created", formatDate(item.created_at)]);
+    rows.push(["Updated", formatDate(item.updated_at)]);
+    return rows.filter(([, value]) => value !== null && value !== undefined && String(value) !== "");
   }
 
   async function updateItemField(itemId, field, value) {
@@ -1392,6 +1635,8 @@
     const item = state.items.find((row) => row.id === itemId);
     const behaviors = normalizeBehaviors(state.list.behaviors);
     const entries = [
+      ...(primaryItemImage(itemId) ? [["View Images", () => openItemImageViewer(itemId)]] : []),
+      [primaryItemImage(itemId) ? "Add Image" : "Upload Image", () => promptItemImageUpload(itemId)],
       ["Duplicate", () => duplicateItems([itemId])],
       ["Delete", () => deleteItems([itemId])],
       ["Move Up", () => moveItem(itemId, -1)],
@@ -1801,6 +2046,19 @@
     return state.values.find((value) => value.item_id === itemId && value.field_id === fieldId) || null;
   }
 
+  function normalizeImages(images = []) {
+    if (!Array.isArray(images) || !images.length) return [];
+    return [...images].sort((left, right) => {
+      if (Boolean(left.is_primary) !== Boolean(right.is_primary)) return left.is_primary ? -1 : 1;
+      return Number(left.sort_order || 0) - Number(right.sort_order || 0)
+        || String(left.created_at || "").localeCompare(String(right.created_at || ""));
+    });
+  }
+
+  function primaryItemImage(itemId) {
+    return state.itemImagesByItemId.get(itemId)?.[0] || null;
+  }
+
   function fieldValueForExport(itemId, field) {
     const value = getFieldValue(itemId, field?.id);
     if (!value || !field) return "";
@@ -1808,6 +2066,19 @@
     if (field.field_type === "checkbox") return value.boolean_value ? "true" : "false";
     if (field.field_type === "date") return value.date_value || "";
     return value.text_value || "";
+  }
+
+  function formatFieldValue(itemId, field) {
+    const value = fieldValueForExport(itemId, field);
+    if (field?.field_type === "checkbox") return value === "true" ? "Yes" : "No";
+    return value;
+  }
+
+  function formatRatingValue(value) {
+    if (value === null || value === undefined || value === "") return "";
+    if (state.list?.rating_type === "thumbs") return Number(value) === 1 ? "Thumbs Up" : "Thumbs Down";
+    if (state.list?.rating_type === "percentage") return `${value}%`;
+    return String(value);
   }
 
   function searchText(item) {
@@ -1906,6 +2177,10 @@
 
   function formatDate(value) {
     return value ? new Date(value).toLocaleString() : "Never";
+  }
+
+  function safeFilename(value) {
+    return String(value || "list-item").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").slice(0, 80) || "list-item";
   }
 
   function setStatus(element, message, type = "") {

@@ -15796,6 +15796,43 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   padding: 0 32px 0 10px;
 }
 
+.listmaker-add-image-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  max-width: 170px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--line, rgb(255 255 255 / 14%));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface, #111827) 84%, transparent);
+  color: var(--ink, #f8fafc);
+  cursor: pointer;
+  font-weight: 760;
+}
+
+.listmaker-add-image-button ph-image-square {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.listmaker-add-image-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listmaker-add-image-button:hover,
+.listmaker-add-image-button:focus-within {
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 54%, var(--line, rgb(255 255 255 / 14%)));
+  background-color: color-mix(in srgb, var(--accent, #78d5c8) 9%, var(--surface, #111827));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #78d5c8) 20%, transparent);
+}
+
 .listmaker-bulk-bar {
   display: flex;
   align-items: center;
@@ -15901,7 +15938,7 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   text-align: left;
 }
 
-.listmaker-row-menu button :is(ph-arrow-up, ph-arrow-down, ph-copy, ph-trash) {
+.listmaker-row-menu button :is(ph-arrow-up, ph-arrow-down, ph-copy, ph-trash, ph-upload-simple, ph-image-square) {
   flex: 0 0 16px;
   width: 16px;
   height: 16px;
@@ -16023,7 +16060,7 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(112px, 170px);
-  grid-template-columns: 22px minmax(220px, 1fr);
+  grid-template-columns: 22px 44px minmax(220px, 1fr);
   align-items: center;
   gap: 8px;
   width: max-content;
@@ -16042,7 +16079,7 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 }
 
 .listmaker-item-row.has-checklist {
-  grid-template-columns: 22px 30px minmax(220px, 1fr);
+  grid-template-columns: 22px 30px 44px minmax(220px, 1fr);
 }
 
 .listmaker-item-row.is-selected,
@@ -16063,12 +16100,46 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   position: absolute;
   top: 50%;
   right: 50px;
-  left: 76px;
+  left: 128px;
   z-index: 4;
   height: 2px;
   background: color-mix(in srgb, var(--accent, #78d5c8) 54%, transparent);
   content: "";
   pointer-events: none;
+}
+
+.listmaker-item-image-thumb,
+.listmaker-item-image-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line, rgb(255 255 255 / 14%));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface, #111827) 84%, #000);
+  color: var(--muted, #9ca3af);
+  cursor: pointer;
+}
+
+.listmaker-item-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.listmaker-item-image-empty ph-image-square {
+  width: 20px;
+  height: 20px;
+}
+
+.listmaker-item-image-thumb:hover,
+.listmaker-item-image-empty:hover {
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 58%, var(--line, rgb(255 255 255 / 14%)));
+  background: color-mix(in srgb, var(--accent, #78d5c8) 12%, var(--surface, #111827));
 }
 
 .listmaker-table tr.is-complete td.listmaker-line-cell {
@@ -16351,6 +16422,18 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 .listmaker-table .listmaker-completed-column {
   width: 84px;
   text-align: center;
+}
+
+.listmaker-table .listmaker-image-column {
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+  text-align: center;
+}
+
+.listmaker-table td.listmaker-image-column .listmaker-item-image-thumb,
+.listmaker-table td.listmaker-image-column .listmaker-item-image-empty {
+  margin: 0 auto;
 }
 
 .listmaker-table .listmaker-select-column {

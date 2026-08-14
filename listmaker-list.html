@@ -11,7 +11,7 @@
     }
   </script>
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=listmaker-notes-1">
+  <link rel="stylesheet" href="styles.css?v=listmaker-item-images-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -76,6 +76,11 @@
                   <input type="text" placeholder="Add item..." autocomplete="off" data-listmaker-add-input>
                 </div>
                 <select data-listmaker-add-category aria-label="Category for new items" hidden></select>
+                <label class="listmaker-add-image-button" title="Attach image to new item">
+                  <input type="file" accept="image/*" data-listmaker-add-image hidden>
+                  <ph-image-square weight="duotone" aria-hidden="true"></ph-image-square>
+                  <span data-listmaker-add-image-label>Image</span>
+                </label>
                 <button class="primary-action" type="submit">
                   <ph-plus weight="bold" aria-hidden="true"></ph-plus>
                   Add
@@ -158,6 +163,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=listmaker-1"></script>
-  <script src="listmaker.js?v=listmaker-notes-1"></script>
+  <script src="centralis-image-viewer.js?v=listmaker-item-images-1"></script>
+  <script src="listmaker.js?v=listmaker-item-images-1"></script>
 </body>
 </html>
