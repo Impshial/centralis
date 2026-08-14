@@ -145,6 +145,7 @@ export async function runDocumentFileSearchJson(options: {
   system: string;
   prompt: string;
   maxOutputTokens?: number;
+  maxNumResults?: number;
   reasoningEffort?: "minimal" | "low" | "medium" | "high";
 }) {
   const prompt = [
@@ -161,7 +162,7 @@ export async function runDocumentFileSearchJson(options: {
       tools: [{
         type: "file_search",
         vector_store_ids: [options.vectorStoreId],
-        max_num_results: 20,
+        max_num_results: options.maxNumResults || 20,
       }],
       text: {
         format: { type: "json_object" },

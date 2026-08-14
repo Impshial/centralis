@@ -6,7 +6,7 @@
   <title>Settings | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=database-modules-1">
+  <link rel="stylesheet" href="styles.css?v=elements-import-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=database-modules-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -46,6 +46,20 @@
           >
             <ph-sparkle weight="fill" aria-hidden="true"></ph-sparkle>
             <span>AI Settings</span>
+          </button>
+          <button
+            class="settings-tab"
+            type="button"
+            role="tab"
+            id="settings-tab-elements"
+            aria-selected="false"
+            aria-controls="settings-panel-elements"
+            data-settings-tab="elements"
+            data-admin-only
+            hidden
+          >
+            <ph-shapes weight="fill" aria-hidden="true"></ph-shapes>
+            <span>Elements</span>
           </button>
           <button
             class="settings-tab"
@@ -131,6 +145,74 @@
               <button class="secondary-action" type="button" data-settings-ai-reset>Reset to defaults</button>
             </div>
           </form>
+        </section>
+
+        <section
+          class="settings-tab-panel"
+          role="tabpanel"
+          id="settings-panel-elements"
+          aria-labelledby="settings-tab-elements"
+          data-settings-panel="elements"
+          data-admin-only
+          hidden
+        >
+          <header class="settings-panel-header">
+            <div>
+              <p class="settings-panel-eyebrow">Admin</p>
+              <h2>Elements</h2>
+              <p>Export and import default element type definitions.</p>
+            </div>
+          </header>
+
+          <div class="settings-elements-grid" aria-label="Element tools">
+            <article class="settings-database-card">
+              <div class="settings-database-card-icon" aria-hidden="true">
+                <ph-download-simple weight="duotone"></ph-download-simple>
+              </div>
+              <div>
+                <h3>Export Default Element Type</h3>
+                <p>Download Artifact as a complete real default element type JSON example, or download the matching schema.</p>
+                <div class="settings-elements-actions">
+                  <button class="secondary-action" type="button" data-settings-export-default-element>
+                    <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                    Export Artifact JSON
+                  </button>
+                  <button class="secondary-action" type="button" data-settings-download-default-element-schema>
+                    <ph-file-code weight="bold" aria-hidden="true"></ph-file-code>
+                    Download Schema
+                  </button>
+                </div>
+              </div>
+            </article>
+
+            <article class="settings-database-card">
+              <div class="settings-database-card-icon" aria-hidden="true">
+                <ph-upload-simple weight="duotone"></ph-upload-simple>
+              </div>
+              <div>
+                <h3>Import Default Element Type</h3>
+                <p>Import a completed default element type JSON file into the canonical default catalog.</p>
+                <input type="file" accept="application/json,.json" data-settings-import-default-element-file hidden>
+                <div class="settings-elements-actions">
+                  <button class="primary-action" type="button" data-settings-import-default-element>
+                    <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                    Import JSON
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="settings-elements-sync">
+            <div>
+              <h3>Sync Defaults to User Libraries</h3>
+              <p>Add missing default element types, templates, sections, and fields to existing user libraries. Custom user changes are left alone.</p>
+            </div>
+            <button class="secondary-action" type="button" data-settings-sync-default-elements>
+              <ph-arrows-clockwise weight="bold" aria-hidden="true"></ph-arrows-clockwise>
+              Sync Defaults
+            </button>
+          </div>
+          <p class="form-status settings-elements-status" data-settings-elements-status role="status" aria-live="polite"></p>
         </section>
 
         <section
@@ -288,6 +370,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="settings.js?v=database-modules-1"></script>
+  <script src="settings.js?v=elements-import-1"></script>
 </body>
 </html>

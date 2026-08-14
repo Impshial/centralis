@@ -75,6 +75,19 @@ export function createArcSourceDocumentKey(options: {
   ].join("/");
 }
 
+export function createArcManuscriptJobDocumentKey(options: {
+  authUserId: string;
+  jobId: string;
+  filename: string;
+}) {
+  return [
+    "arc-manuscript-breakdowns",
+    encodeURIComponent(options.authUserId),
+    encodeURIComponent(options.jobId),
+    sanitizeSourceDocumentFilename(options.filename, "arc-manuscript"),
+  ].join("/");
+}
+
 export async function uploadUniverseSourceDocumentObject(options: {
   bytes: Uint8Array;
   key: string;

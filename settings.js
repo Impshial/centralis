@@ -55,6 +55,21 @@
     { id: "episode_roulette", label: "Episode Roulette" },
     { id: "stellar", label: "Stellar Architect" }
   ];
+  const DEFAULT_ELEMENT_TYPE_FORMAT = "centralis.default-element-type.v1";
+  const DEFAULT_ELEMENT_TYPE_VERSION = 1;
+  const DEFAULT_ELEMENT_TYPE_FIELD_TYPES = [
+    "text",
+    "textarea",
+    "number",
+    "date",
+    "select",
+    "multi_select",
+    "checkbox",
+    "url",
+    "image",
+    "rich_text",
+    "relationship"
+  ];
 
   const els = {
     tabs: Array.from(document.querySelectorAll("[data-settings-tab]")),
@@ -82,7 +97,13 @@
     activityRefresh: document.querySelector("[data-settings-activity-refresh]"),
     activityUsers: document.querySelector("[data-settings-activity-users]"),
     activityDetails: document.querySelector("[data-settings-activity-details]"),
-    activityStatus: document.querySelector("[data-settings-activity-status]")
+    activityStatus: document.querySelector("[data-settings-activity-status]"),
+    exportDefaultElement: document.querySelector("[data-settings-export-default-element]"),
+    defaultElementSchema: document.querySelector("[data-settings-download-default-element-schema]"),
+    importDefaultElement: document.querySelector("[data-settings-import-default-element]"),
+    importDefaultElementFile: document.querySelector("[data-settings-import-default-element-file]"),
+    syncDefaultElements: document.querySelector("[data-settings-sync-default-elements]"),
+    elementsStatus: document.querySelector("[data-settings-elements-status]")
   };
 
   if (!els.form || !els.model || !els.effort || !els.verbosity) {
@@ -168,6 +189,187 @@
     els.activityStatus.textContent = message;
     els.activityStatus.classList.toggle("is-error", kind === "error");
     els.activityStatus.classList.toggle("is-success", kind === "success");
+  }
+
+  function setElementsStatus(message = "", kind = "") {
+    if (!els.elementsStatus) return;
+    els.elementsStatus.textContent = message;
+    els.elementsStatus.classList.toggle("is-error", kind === "error");
+    els.elementsStatus.classList.toggle("is-success", kind === "success");
+  }
+
+  function safeFileSlug(value) {
+    return String(value || "centralis")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 72) || "centralis";
+  }
+
+  function downloadJsonFile(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function getDefaultElementTypeSchema() {
+    const fieldSchema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["field_key", "label", "field_type"],
+      properties: {
+        id: { type: "string", description: "Optional stable default field id. Derived from field_key when omitted." },
+        field_key: { type: "string", pattern: "^[a-z0-9]+(?:_[a-z0-9]+)*$" },
+        label: { type: "string", minLength: 1 },
+        field_type: { type: "string", enum: DEFAULT_ELEMENT_TYPE_FIELD_TYPES },
+        section: { type: "string", description: "Optional section id, key, or name." },
+        description: { type: "string" },
+        placeholder: { type: "string" },
+        default_value: { type: "string" },
+        options: {
+          oneOf: [
+            { type: "array", items: { type: "string" } },
+            {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                choices: { type: "array", items: { type: "string" } }
+              }
+            }
+          ]
+        },
+        is_required: { type: "boolean", default: false },
+        sort_order: { type: "integer", minimum: 0 }
+      }
+    };
+    const sectionSchema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["name"],
+      properties: {
+        id: { type: "string", description: "Optional stable default section id. Derived from key/name when omitted." },
+        key: { type: "string", description: "Stable section key referenced by fields.section." },
+        name: { type: "string", minLength: 1 },
+        description: { type: "string" },
+        sort_order: { type: "integer", minimum: 0 }
+      }
+    };
+    const templateSchema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "fields"],
+      properties: {
+        id: { type: "string", description: "Optional stable default template id. Derived from name when omitted." },
+        name: { type: "string", minLength: 1 },
+        description: { type: "string" },
+        sections: { type: "array", items: sectionSchema },
+        fields: { type: "array", minItems: 1, items: fieldSchema }
+      }
+    };
+    return {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://centralis.app/schemas/default-element-type.v1.json",
+      title: "Centralis Default Element Type Import",
+      type: "object",
+      additionalProperties: false,
+      required: ["format", "version", "element_type", "templates"],
+      properties: {
+        format: { const: DEFAULT_ELEMENT_TYPE_FORMAT },
+        version: { const: DEFAULT_ELEMENT_TYPE_VERSION },
+        element_type: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name"],
+          properties: {
+            id: { type: "string", description: "Optional stable default element type id. Derived from name when omitted." },
+            name: { type: "string", minLength: 1 },
+            description: { type: "string" },
+            icon: { type: "string" },
+            color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }
+          }
+        },
+        templates: { type: "array", minItems: 1, items: templateSchema },
+        template: {
+          type: "object",
+          description: "Legacy single-template shorthand accepted by the importer."
+        },
+        sections: {
+          type: "array",
+          description: "Legacy single-template shorthand accepted by the importer."
+        },
+        fields: {
+          type: "array",
+          description: "Legacy single-template shorthand accepted by the importer."
+        }
+      }
+    };
+  }
+
+  function normalizeDefaultElementImportPayload(payload) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("The selected file is not a JSON object.");
+    }
+    if (payload.format !== DEFAULT_ELEMENT_TYPE_FORMAT) {
+      throw new Error("This is not a supported default element type JSON file.");
+    }
+    if (Number(payload.version) !== DEFAULT_ELEMENT_TYPE_VERSION) {
+      throw new Error(`Unsupported default element type version: ${payload.version || "missing"}.`);
+    }
+    const elementType = payload.element_type || {};
+    if (!String(elementType.name || "").trim()) {
+      throw new Error("element_type.name is required.");
+    }
+    const templates = Array.isArray(payload.templates)
+      ? payload.templates
+      : (payload.template ? [{ template: payload.template, sections: payload.sections || [], fields: payload.fields || [] }] : []);
+    if (!templates.length) {
+      throw new Error("At least one template is required.");
+    }
+
+    templates.forEach((templateEntry, templateIndex) => {
+      const template = templateEntry.template || templateEntry;
+      const templateName = String(template?.name || "").trim();
+      if (!templateName) {
+        throw new Error(`Template ${templateIndex + 1} needs a name.`);
+      }
+      const sections = Array.isArray(templateEntry.sections) ? templateEntry.sections : [];
+      const sectionKeys = new Set();
+      sections.forEach((section, sectionIndex) => {
+        const name = String(section?.name || "").trim();
+        if (!name) throw new Error(`Section ${sectionIndex + 1} in "${templateName}" needs a name.`);
+        [section.id, section.key, section.name].filter(Boolean).forEach((key) => sectionKeys.add(String(key).trim().toLowerCase()));
+      });
+
+      const fields = Array.isArray(templateEntry.fields) ? templateEntry.fields : [];
+      if (!fields.length) {
+        throw new Error(`Template "${templateName}" needs at least one field.`);
+      }
+      const fieldKeys = new Set();
+      fields.forEach((field, fieldIndex) => {
+        const label = String(field?.label || "").trim();
+        const fieldKey = String(field?.field_key || "").trim();
+        const fieldType = String(field?.field_type || "textarea").trim().toLowerCase();
+        if (!label || !fieldKey) throw new Error(`Field ${fieldIndex + 1} in "${templateName}" needs field_key and label.`);
+        if (!/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(fieldKey)) throw new Error(`Field "${label}" must use a snake_case field_key.`);
+        if (fieldKeys.has(fieldKey)) throw new Error(`Duplicate field_key "${fieldKey}" in "${templateName}".`);
+        fieldKeys.add(fieldKey);
+        if (!DEFAULT_ELEMENT_TYPE_FIELD_TYPES.includes(fieldType)) throw new Error(`Field "${label}" uses unsupported type "${fieldType}".`);
+        const section = String(field?.section || "").trim();
+        if (section && !sectionKeys.has(section.toLowerCase())) throw new Error(`Field "${label}" references unknown section "${section}".`);
+        const options = Array.isArray(field?.options) ? field.options : field?.options?.choices;
+        if (["select", "multi_select"].includes(fieldType) && (!Array.isArray(options) || !options.length)) {
+          throw new Error(`Field "${label}" needs at least one option.`);
+        }
+      });
+    });
+    return payload;
   }
 
   function setSaving(isSaving) {
@@ -581,6 +783,77 @@
     window.closeModal ? window.closeModal() : (els.activityModal.hidden = true);
   }
 
+  async function exportDefaultElementType() {
+    if (!settingsSupabase) return;
+    if (els.exportDefaultElement) els.exportDefaultElement.disabled = true;
+    setElementsStatus("Exporting Artifact default element type...");
+    try {
+      const { data, error } = await settingsSupabase.rpc("export_default_element_type", {
+        p_default_element_type_id: null
+      });
+      if (error) throw error;
+      const typeName = data?.element_type?.name || "default-element-type";
+      downloadJsonFile(`centralis-default-element-${safeFileSlug(typeName)}.json`, data);
+      setElementsStatus(`Exported ${typeName}.`, "success");
+    } catch (error) {
+      setElementsStatus(getReadableError(error), "error");
+    } finally {
+      if (els.exportDefaultElement) els.exportDefaultElement.disabled = false;
+    }
+  }
+
+  function downloadDefaultElementSchema() {
+    downloadJsonFile("centralis-default-element-type-schema.v1.json", getDefaultElementTypeSchema());
+    setElementsStatus("Downloaded default element type schema.", "success");
+  }
+
+  async function importDefaultElementTypeFile(file) {
+    if (!file || !settingsSupabase) return;
+    if (!/\.json$/i.test(file.name || "") && file.type && file.type !== "application/json") {
+      setElementsStatus("Choose a JSON file to import.", "error");
+      return;
+    }
+    if (els.importDefaultElement) els.importDefaultElement.disabled = true;
+    setElementsStatus("Importing default element type...");
+    try {
+      const payload = normalizeDefaultElementImportPayload(JSON.parse(await file.text()));
+      const { data, error } = await settingsSupabase.rpc("import_default_element_type", {
+        p_payload: payload
+      });
+      if (error) throw error;
+      setElementsStatus(`Imported ${data?.element_type_name || "default element type"}: ${Number(data?.templates) || 0} templates, ${Number(data?.sections) || 0} sections, ${Number(data?.fields) || 0} fields.`, "success");
+      if (window.confirm("Default element type imported. Sync missing defaults into existing user libraries now?")) {
+        await syncDefaultElementTypes();
+      }
+    } catch (error) {
+      setElementsStatus(getReadableError(error), "error");
+    } finally {
+      if (els.importDefaultElement) els.importDefaultElement.disabled = false;
+      if (els.importDefaultElementFile) els.importDefaultElementFile.value = "";
+    }
+  }
+
+  async function syncDefaultElementTypes() {
+    if (!settingsSupabase) return;
+    if (els.syncDefaultElements) els.syncDefaultElements.disabled = true;
+    if (els.importDefaultElement) els.importDefaultElement.disabled = true;
+    setElementsStatus("Syncing default element types to user libraries...");
+    try {
+      const { data, error } = await settingsSupabase.rpc("sync_default_element_types_to_users");
+      if (error) throw error;
+      const insertedTotal = Number(data?.inserted_types || 0)
+        + Number(data?.inserted_templates || 0)
+        + Number(data?.inserted_sections || 0)
+        + Number(data?.inserted_fields || 0);
+      setElementsStatus(`Synced ${Number(data?.users) || 0} users. Added ${insertedTotal} rows: ${Number(data?.inserted_types) || 0} types, ${Number(data?.inserted_templates) || 0} templates, ${Number(data?.inserted_sections) || 0} sections, ${Number(data?.inserted_fields) || 0} fields.`, "success");
+    } catch (error) {
+      setElementsStatus(getReadableError(error), "error");
+    } finally {
+      if (els.syncDefaultElements) els.syncDefaultElements.disabled = false;
+      if (els.importDefaultElement) els.importDefaultElement.disabled = false;
+    }
+  }
+
   async function saveSettings() {
     if (saving) return;
 
@@ -650,6 +923,13 @@
     renderActivityUsers();
     renderActivityDetails();
   });
+  els.exportDefaultElement?.addEventListener("click", exportDefaultElementType);
+  els.defaultElementSchema?.addEventListener("click", downloadDefaultElementSchema);
+  els.importDefaultElement?.addEventListener("click", () => els.importDefaultElementFile?.click());
+  els.importDefaultElementFile?.addEventListener("change", (event) => {
+    importDefaultElementTypeFile(event.target.files?.[0] || null);
+  });
+  els.syncDefaultElements?.addEventListener("click", syncDefaultElementTypes);
 
   window.addEventListener("centralis:user-settings-changed", (event) => {
     if (!event.detail?.settings) return;

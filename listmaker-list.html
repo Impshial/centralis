@@ -11,7 +11,7 @@
     }
   </script>
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=listmaker-item-images-1">
+  <link rel="stylesheet" href="styles.css?v=listmaker-field-choices-3">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -158,12 +158,36 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="listmaker-field-choices-modal" data-strict-modal hidden>
+    <section class="modal-dialog listmaker-field-choices-dialog" role="dialog" aria-modal="true" aria-labelledby="listmaker-field-choices-title">
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">ListMaker</p>
+          <h2 id="listmaker-field-choices-title" data-listmaker-field-choices-title>Dropdown Choices</h2>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-field-choices-close aria-label="Close">&times;</button>
+      </div>
+      <form class="listmaker-field-choices-form" data-listmaker-field-choices-form>
+        <label class="form-field">
+          <span>Choices</span>
+          <textarea rows="12" data-listmaker-field-choices-input placeholder="One choice per line"></textarea>
+        </label>
+        <p class="listmaker-muted">Existing item values are not rewritten when choices change.</p>
+        <p class="form-status" data-listmaker-field-choices-status role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-listmaker-field-choices-close>Cancel</button>
+          <button class="primary-action" type="submit">Save Choices</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <div class="listmaker-context-menu" data-listmaker-context-menu hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=listmaker-1"></script>
   <script src="centralis-image-viewer.js?v=listmaker-item-images-1"></script>
-  <script src="listmaker.js?v=listmaker-item-images-1"></script>
+  <script src="listmaker.js?v=listmaker-field-choices-3"></script>
 </body>
 </html>

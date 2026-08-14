@@ -67,6 +67,7 @@
     values: [],
     itemImagesByItemId: new Map(),
     pendingImageItemId: "",
+    pendingFieldChoicesId: "",
     selectedIds: new Set(),
     pendingCategoryMoveIds: [],
     collapsedVirtualCategories: new Set(),
@@ -102,6 +103,11 @@
     dom.categoryStatus = document.querySelector("[data-listmaker-category-status]");
     dom.categoryManagerModal = document.getElementById("listmaker-category-manager-modal");
     dom.categoryManagerForm = document.querySelector("[data-listmaker-category-manager-form]");
+    dom.fieldChoicesModal = document.getElementById("listmaker-field-choices-modal");
+    dom.fieldChoicesForm = document.querySelector("[data-listmaker-field-choices-form]");
+    dom.fieldChoicesTitle = document.querySelector("[data-listmaker-field-choices-title]");
+    dom.fieldChoicesInput = document.querySelector("[data-listmaker-field-choices-input]");
+    dom.fieldChoicesStatus = document.querySelector("[data-listmaker-field-choices-status]");
     dom.contextMenu = document.querySelector("[data-listmaker-context-menu]");
     dom.titleInput = document.querySelector("[data-listmaker-title-input]");
     dom.descriptionDisplay = document.querySelector("[data-listmaker-description-display]");
@@ -172,6 +178,7 @@
     document.querySelector("[data-listmaker-io-close]")?.addEventListener("click", closeIoModal);
     document.querySelectorAll("[data-listmaker-category-close]").forEach((button) => button.addEventListener("click", closeCategoryModal));
     document.querySelector("[data-listmaker-category-manager-close]")?.addEventListener("click", closeCategoryManagerModal);
+    document.querySelectorAll("[data-listmaker-field-choices-close]").forEach((button) => button.addEventListener("click", closeFieldChoicesModal));
     dom.homeSearch?.addEventListener("input", () => {
       state.homeSearch = dom.homeSearch.value.trim().toLowerCase();
       renderHome();
@@ -218,6 +225,7 @@
     dom.categoryManagerForm?.addEventListener("submit", (event) => event.preventDefault());
     dom.categoryManagerForm?.addEventListener("click", handleCategoryManagerClick);
     dom.categoryManagerForm?.addEventListener("change", handleCategoryManagerChange);
+    dom.fieldChoicesForm?.addEventListener("submit", handleFieldChoicesSubmit);
     dom.listGrid?.addEventListener("click", handleHomeAction);
     dom.ioContent?.addEventListener("click", handleIoClick);
   }
@@ -584,7 +592,7 @@
     if (field.field_type === "date") return `<input class="listmaker-date-input" type="date" value="${escapeAttribute(value?.date_value || "")}" ${attrs}>`;
     if (field.field_type === "dropdown") {
       const options = Array.isArray(field.dropdown_options) ? field.dropdown_options : [];
-      return `<select ${attrs}><option value="">${escapeHtml(field.name)}</option>${options.map((option) => `<option value="${escapeAttribute(option)}"${value?.text_value === option ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`;
+      return `<select ${attrs} aria-label="${escapeAttribute(field.name)}"><option value="">No selection</option>${options.map((option) => `<option value="${escapeAttribute(option)}"${value?.text_value === option ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`;
     }
     if (field.field_type === "long_text") return `<textarea rows="1" placeholder="${escapeAttribute(field.name)}" ${attrs}>${escapeHtml(value?.text_value || "")}</textarea>`;
     return `<input type="text" placeholder="${escapeAttribute(field.name)}" value="${escapeAttribute(value?.text_value || "")}" ${attrs}>`;
@@ -795,7 +803,7 @@
     return [...dom.createForm.querySelectorAll("[data-create-field-row]")].map((row) => {
       const name = clean(row.querySelector("[data-create-field-name]").value);
       const field_type = row.querySelector("[data-create-field-type]").value;
-      const dropdown_options = clean(row.querySelector("[data-create-field-options]").value).split(",").map(clean).filter(Boolean);
+      const dropdown_options = parseDropdownChoices(row.querySelector("[data-create-field-options]").value);
       return name ? { name, field_type, dropdown_options } : null;
     }).filter(Boolean);
   }
@@ -845,7 +853,10 @@
   function settingRow(kind, row) {
     const extra = kind === "status" ? `<input type="color" value="${escapeAttribute(row.color || "#6366f1")}" data-setting-color="${escapeHtml(row.id)}">` : "";
     const type = kind === "field" ? `<span>${escapeHtml(label(row.field_type))}</span>` : "";
-    return `<div class="listmaker-setting-row"><input type="text" value="${escapeAttribute(row.name)}" data-setting-name="${kind}:${escapeHtml(row.id)}">${extra}${type}<button type="button" data-setting-move="${kind}:${escapeHtml(row.id)}:up">Up</button><button type="button" data-setting-move="${kind}:${escapeHtml(row.id)}:down">Down</button><button type="button" data-setting-delete="${kind}:${escapeHtml(row.id)}">Delete</button></div>`;
+    const choices = kind === "field" && row.field_type === "dropdown"
+      ? `<button type="button" data-setting-field-choices="${escapeHtml(row.id)}">Choices</button>`
+      : "";
+    return `<div class="listmaker-setting-row"><input type="text" value="${escapeAttribute(row.name)}" data-setting-name="${kind}:${escapeHtml(row.id)}">${extra}${type}${choices}<button type="button" data-setting-move="${kind}:${escapeHtml(row.id)}:up">Up</button><button type="button" data-setting-move="${kind}:${escapeHtml(row.id)}:down">Down</button><button type="button" data-setting-delete="${kind}:${escapeHtml(row.id)}">Delete</button></div>`;
   }
 
   async function handleSettingsSubmit(event) {
@@ -868,6 +879,8 @@
     if (event.target.closest("[data-add-category]")) await addSettingRow("category");
     if (event.target.closest("[data-add-status]")) await addSettingRow("status");
     if (event.target.closest("[data-add-field]")) await addSettingRow("field");
+    const choices = event.target.closest("[data-setting-field-choices]");
+    if (choices) openFieldChoicesModal(choices.dataset.settingFieldChoices);
     const del = event.target.closest("[data-setting-delete]");
     if (del) await deleteSettingRow(del.dataset.settingDelete);
     const move = event.target.closest("[data-setting-move]");
@@ -928,7 +941,7 @@
       const name = clean(dom.settingsForm.querySelector("[data-add-field-name]").value);
       if (!name) return;
       const field_type = dom.settingsForm.querySelector("[data-add-field-type]").value;
-      const dropdown_options = clean(dom.settingsForm.querySelector("[data-add-field-options]").value).split(",").map(clean).filter(Boolean);
+      const dropdown_options = parseDropdownChoices(dom.settingsForm.querySelector("[data-add-field-options]").value);
       await supabase.from(TABLES.fields).insert({ list_id: state.listId, user_id: state.user.id, name, field_type, dropdown_options, sort_order: nextOrder(state.fields) });
     }
     await loadList();
@@ -973,6 +986,45 @@
     await supabase.from(table).update({ name }).eq("id", id).eq("user_id", state.user.id);
     await loadList();
     renderEditor();
+  }
+
+  function openFieldChoicesModal(fieldId) {
+    const field = state.fields.find((item) => item.id === fieldId && item.field_type === "dropdown");
+    if (!field || !dom.fieldChoicesModal) return;
+    state.pendingFieldChoicesId = field.id;
+    if (dom.fieldChoicesTitle) dom.fieldChoicesTitle.textContent = `${field.name} Choices`;
+    if (dom.fieldChoicesInput) dom.fieldChoicesInput.value = (Array.isArray(field.dropdown_options) ? field.dropdown_options : []).join("\n");
+    setStatus(dom.fieldChoicesStatus, "");
+    dom.fieldChoicesModal.hidden = false;
+    requestAnimationFrame(() => dom.fieldChoicesInput?.focus());
+  }
+
+  function closeFieldChoicesModal() {
+    if (dom.fieldChoicesModal) dom.fieldChoicesModal.hidden = true;
+    state.pendingFieldChoicesId = "";
+    setStatus(dom.fieldChoicesStatus, "");
+  }
+
+  async function handleFieldChoicesSubmit(event) {
+    event.preventDefault();
+    const field = state.fields.find((item) => item.id === state.pendingFieldChoicesId && item.field_type === "dropdown");
+    if (!field) {
+      closeFieldChoicesModal();
+      return;
+    }
+    const { error } = await supabase
+      .from(TABLES.fields)
+      .update({ dropdown_options: parseDropdownChoices(dom.fieldChoicesInput?.value || "") })
+      .eq("id", field.id)
+      .eq("user_id", state.user.id);
+    if (error) {
+      setStatus(dom.fieldChoicesStatus, error.message, "error");
+      return;
+    }
+    await loadList();
+    renderEditor();
+    openSettingsModal();
+    closeFieldChoicesModal();
   }
 
   async function handleAddSubmit(event) {
@@ -1331,10 +1383,21 @@
     else if (field.field_type === "checkbox") payload.boolean_value = Boolean(value);
     else if (field.field_type === "date") payload.date_value = value || null;
     else payload.text_value = String(value ?? "");
-    const { error } = await supabase.from(TABLES.values).upsert(payload, { onConflict: "item_id,field_id" });
-    if (error) setStatus(dom.editorStatus, error.message, "error");
-    await loadList();
-    renderEditor();
+    const { data, error } = await supabase.from(TABLES.values).upsert(payload, { onConflict: "item_id,field_id" }).select("*").maybeSingle();
+    if (error) {
+      setStatus(dom.editorStatus, error.message, "error");
+      return;
+    }
+    updateLocalFieldValue(data || payload);
+  }
+
+  function updateLocalFieldValue(row) {
+    const index = state.values.findIndex((value) => value.item_id === row.item_id && value.field_id === row.field_id);
+    if (index >= 0) {
+      state.values[index] = { ...state.values[index], ...row };
+    } else {
+      state.values.push(row);
+    }
   }
 
   async function duplicateItems(ids) {
@@ -1980,7 +2043,10 @@
   }
 
   function handleGlobalKeydown(event) {
-    if (event.key === "Escape") hideContextMenu();
+    if (event.key === "Escape") {
+      hideContextMenu();
+      if (dom.fieldChoicesModal && !dom.fieldChoicesModal.hidden) closeFieldChoicesModal();
+    }
     if (state.mode !== "editor") return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
       event.preventDefault();
@@ -2114,6 +2180,20 @@
 
   function collectLines(value) {
     return String(value || "").split(/\r?\n/).map(clean).filter(Boolean);
+  }
+
+  function parseDropdownChoices(value) {
+    const seen = new Set();
+    return String(value || "")
+      .split(/\r?\n/)
+      .flatMap((line) => line.includes(",") ? line.split(",") : [line])
+      .map(clean)
+      .filter((choice) => {
+        const key = choice.toLowerCase();
+        if (!choice || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
   }
 
   function parseCsv(value) {

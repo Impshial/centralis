@@ -3787,6 +3787,7 @@
       .from("element_types")
       .select("id,name,icon,color")
       .eq("user_id", universe.user_id)
+      .eq("deleted", false)
       .order("name", { ascending: true });
 
     if (error) {
@@ -6851,20 +6852,41 @@
         if (!type || !window.confirm(`Delete "${type.name}"? Elements using this type will be set to No Type.`)) {
           return;
         }
-        setTypeStatus("Deleting type...");
+        setTypeStatus("Deleting type and template data...");
         try {
-          const { error: updateError } = await window.centralisSupabase
-            .from("elements")
-            .update({ element_type_id: null, rich_template_id: null, updated_at: new Date().toISOString() })
+          const { data: typeTemplates, error: templateFetchError } = await window.centralisSupabase
+            .from("element_type_templates")
+            .select("id")
             .eq("element_type_id", typeId);
-          if (updateError) throw updateError;
+          if (templateFetchError) throw templateFetchError;
+
+          const updatePayload = { element_type_id: null, rich_template_id: null, updated_at: new Date().toISOString() };
+          const detachRequests = [
+            window.centralisSupabase
+              .from("elements")
+              .update(updatePayload)
+              .eq("element_type_id", typeId)
+          ];
+          const templateIds = (typeTemplates || []).map((template) => template.id).filter(Boolean);
+          if (templateIds.length) {
+            detachRequests.push(
+              window.centralisSupabase
+                .from("elements")
+                .update(updatePayload)
+                .in("rich_template_id", templateIds)
+            );
+          }
+          throwFirstSupabaseError(await Promise.all(detachRequests));
           const { error: deleteError } = await window.centralisSupabase
             .from("element_types")
-            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
+            .delete()
             .eq("id", typeId)
             .eq("user_id", universe.user_id);
           if (deleteError) throw deleteError;
-          syncElementTypes(await fetchElementTypes());
+          syncElementTypes(elementTypes.filter((item) => item.id !== typeId));
+          renderTypeList();
+          await fetchElementTypes();
+          syncElementTypes(elementTypes);
           await refreshTypeTemplateData();
           renderTypeList();
           closeEditor();

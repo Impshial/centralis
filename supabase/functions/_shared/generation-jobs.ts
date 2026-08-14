@@ -1,11 +1,12 @@
 import { createAdminClient } from "./image-storage.ts";
 
 export type GenerationJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type GenerationJobType = "image" | "colony" | "colonists";
+export type GenerationJobType = "image" | "colony" | "colonists" | "manuscript_outline";
+export type GenerationJobModule = "image_generation" | "universe_builder" | "stellar_architect" | "god_engine" | "fusion" | "arc_studio";
 
 export async function createGenerationJob(input: {
   userId: number;
-  module: "image_generation" | "universe_builder" | "stellar_architect" | "god_engine";
+  module: GenerationJobModule;
   jobType?: GenerationJobType;
   sourceType?: string;
   sourceId?: string | null;
@@ -44,6 +45,7 @@ export async function updateGenerationJob(jobId: string | null | undefined, patc
   progressLabel?: string | null;
   resultImageId?: string | null;
   resultAssetId?: string | null;
+  resultPayload?: Record<string, unknown> | null;
   errorMessage?: string | null;
   errorDetails?: Record<string, unknown> | null;
 }) {
@@ -57,6 +59,7 @@ export async function updateGenerationJob(jobId: string | null | undefined, patc
   if ("progressLabel" in patch) row.progress_label = patch.progressLabel;
   if ("resultImageId" in patch) row.result_image_id = patch.resultImageId;
   if ("resultAssetId" in patch) row.result_asset_id = patch.resultAssetId;
+  if ("resultPayload" in patch) row.result_payload = patch.resultPayload;
   if ("errorMessage" in patch) row.error_message = patch.errorMessage;
   if ("errorDetails" in patch) row.error_details = patch.errorDetails;
 
