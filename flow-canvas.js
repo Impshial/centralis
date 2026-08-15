@@ -11846,6 +11846,7 @@
       const sourcePopulatePromptStatus = document.querySelector("[data-source-populate-prompt-status]");
       const sourcePopulateYesButton = document.querySelector("[data-source-populate-yes]");
       const sourcePopulateNoButton = document.querySelector("[data-source-populate-no]");
+      const sourcePopulateFromDocumentButton = document.querySelector("[data-source-populate-from-document]");
       const sourcePopulateReviewModal = document.getElementById("source-populate-review-modal");
       const sourcePopulateReviewList = document.querySelector("[data-source-populate-review-list]");
       const sourcePopulateWarnings = document.querySelector("[data-source-populate-warnings]");
@@ -11866,6 +11867,7 @@
       let activeAiProposal = null;
       let activeSourceCanonReviewId = "";
       let sourcePopulatePromptDocument = null;
+      let sourcePopulatePromptMode = "document";
       let sourcePopulateDraft = { elements: [], warnings: [], analyzing: false };
       let sourcePopulatePromptChecked = false;
       let sourcePopulateAbortController = null;
@@ -11881,6 +11883,10 @@
 
       function getSourcePopulateDismissedKey(documentId) {
         return `centralis-source-populate-dismissed:${universe.id}:${documentId}`;
+      }
+
+      function getFirstOpenSourcePromptKey() {
+        return `centralis-new-universe-source-prompt:${universe.id}`;
       }
 
       function setSourcePopulatePromptStatus(message, tone = "") {
@@ -11899,6 +11905,7 @@
 
       function dismissSourcePopulatePrompt(documentId = sourcePopulatePromptDocument?.id) {
         sessionStorage.removeItem(getSourcePopulateSessionKey());
+        sessionStorage.removeItem(getFirstOpenSourcePromptKey());
         if (documentId) {
           localStorage.setItem(getSourcePopulateDismissedKey(documentId), "1");
         }
@@ -11913,6 +11920,7 @@
         }
         setSourcePopulatePromptStatus("");
         sourcePopulatePromptDocument = null;
+        sourcePopulatePromptMode = "document";
       }
 
       function closeSourcePopulateReview({ dismiss = true } = {}) {
@@ -12022,10 +12030,27 @@
       }
 
       function openSourcePopulatePrompt(document) {
+        sourcePopulatePromptMode = "document";
         sourcePopulatePromptDocument = document;
         if (sourcePopulatePromptText) {
           sourcePopulatePromptText.textContent = `This universe was created from "${document.display_name || document.original_filename || "an uploaded source document"}". Populate the canvas with elements extracted from it?`;
         }
+        if (sourcePopulateYesButton) sourcePopulateYesButton.textContent = "Yes";
+        if (sourcePopulateNoButton) sourcePopulateNoButton.textContent = "No";
+        setSourcePopulatePromptStatus("");
+        if (sourcePopulatePromptModal) {
+          sourcePopulatePromptModal.hidden = false;
+        }
+      }
+
+      function openFirstSourceUploadPrompt() {
+        sourcePopulatePromptMode = "upload";
+        sourcePopulatePromptDocument = null;
+        if (sourcePopulatePromptText) {
+          sourcePopulatePromptText.textContent = "Would you like to generate this new universe from a source file?";
+        }
+        if (sourcePopulateYesButton) sourcePopulateYesButton.textContent = "Choose File";
+        if (sourcePopulateNoButton) sourcePopulateNoButton.textContent = "Not Now";
         setSourcePopulatePromptStatus("");
         if (sourcePopulatePromptModal) {
           sourcePopulatePromptModal.hidden = false;
@@ -12889,13 +12914,19 @@
         if (sourcePopulatePromptChecked || !sourcePopulatePromptModal) return;
         sourcePopulatePromptChecked = true;
         const documentId = sessionStorage.getItem(getSourcePopulateSessionKey());
-        if (!documentId) return;
+        const shouldPromptForUpload = sessionStorage.getItem(getFirstOpenSourcePromptKey()) === "1";
+        if (!documentId && !shouldPromptForUpload) return;
         if (localStorage.getItem(getSourcePopulateDismissedKey(documentId)) === "1") {
           sessionStorage.removeItem(getSourcePopulateSessionKey());
           return;
         }
         if (nodesRef.current.some((node) => node.data?.kind === "element")) {
           dismissSourcePopulatePrompt(documentId);
+          return;
+        }
+
+        if (!documentId) {
+          openFirstSourceUploadPrompt();
           return;
         }
 
@@ -12968,6 +12999,36 @@
         closeSourcePopulatePrompt({ dismiss: true });
       }
 
+      function handleSourcePopulateYes() {
+        if (sourcePopulatePromptMode === "upload") {
+          closeSourcePopulatePrompt({ dismiss: false });
+          window.dispatchEvent(new CustomEvent("centralis:open-source-populate-upload", {
+            detail: {
+              universe: {
+                id: universe.id,
+                name: universe.name || "Untitled Universe"
+              }
+            }
+          }));
+          return;
+        }
+        void analyzeSourcePopulateDocument();
+      }
+
+      function handleSourcePopulateDocumentsUploaded(event) {
+        const uploadedUniverseId = event.detail?.universe?.id;
+        if (uploadedUniverseId && String(uploadedUniverseId) !== String(universe.id)) {
+          return;
+        }
+        const document = (event.detail?.documents || []).find((item) => item?.id);
+        if (!document) {
+          setTransferStatus("Source file uploaded, but no document was returned for analysis.", "error");
+          return;
+        }
+        sessionStorage.setItem(getSourcePopulateSessionKey(), document.id);
+        openSourcePopulatePrompt(document);
+      }
+
       function handleSourcePopulateReviewCancel() {
         if (sourcePopulateDraft.analyzing) {
           sourcePopulateAbortController?.abort();
@@ -12983,6 +13044,10 @@
           checkbox.checked = shouldCheck;
         });
         updateSourcePopulateSelectAllState();
+      }
+
+      function handleSourcePopulateFromDocument() {
+        openFirstSourceUploadPrompt();
       }
 
       function handleEscape(event) {
@@ -13021,12 +13086,14 @@
       reviewCancelButtons.forEach((button) => button.addEventListener("click", handleReviewCancel));
       regenerateButton?.addEventListener("click", handleRegenerate);
       finalizeButton?.addEventListener("click", finalizeGeneratedElements);
-      sourcePopulateYesButton?.addEventListener("click", analyzeSourcePopulateDocument);
+      sourcePopulateYesButton?.addEventListener("click", handleSourcePopulateYes);
       sourcePopulateNoButton?.addEventListener("click", handleSourcePopulateNo);
       sourcePopulateCancelButton?.addEventListener("click", handleSourcePopulateReviewCancel);
       sourcePopulateFinalizeButton?.addEventListener("click", finalizeSourcePopulateElements);
       sourcePopulateSelectAll?.addEventListener("change", handleSourcePopulateSelectAll);
       sourcePopulateReviewList?.addEventListener("change", updateSourcePopulateSelectAllState);
+      sourcePopulateFromDocumentButton?.addEventListener("click", handleSourcePopulateFromDocument);
+      window.addEventListener("centralis:source-populate-documents-uploaded", handleSourcePopulateDocumentsUploaded);
       document.addEventListener("keydown", handleEscape);
       window.setTimeout(() => {
         void maybeOpenSourcePopulatePrompt();
@@ -13046,12 +13113,14 @@
         reviewCancelButtons.forEach((button) => button.removeEventListener("click", handleReviewCancel));
         regenerateButton?.removeEventListener("click", handleRegenerate);
         finalizeButton?.removeEventListener("click", finalizeGeneratedElements);
-        sourcePopulateYesButton?.removeEventListener("click", analyzeSourcePopulateDocument);
+        sourcePopulateYesButton?.removeEventListener("click", handleSourcePopulateYes);
         sourcePopulateNoButton?.removeEventListener("click", handleSourcePopulateNo);
         sourcePopulateCancelButton?.removeEventListener("click", handleSourcePopulateReviewCancel);
         sourcePopulateFinalizeButton?.removeEventListener("click", finalizeSourcePopulateElements);
         sourcePopulateSelectAll?.removeEventListener("change", handleSourcePopulateSelectAll);
         sourcePopulateReviewList?.removeEventListener("change", updateSourcePopulateSelectAllState);
+        sourcePopulateFromDocumentButton?.removeEventListener("click", handleSourcePopulateFromDocument);
+        window.removeEventListener("centralis:source-populate-documents-uploaded", handleSourcePopulateDocumentsUploaded);
         document.removeEventListener("keydown", handleEscape);
       };
     }, [elementTypeVersion, syncUniverseAiSource]);

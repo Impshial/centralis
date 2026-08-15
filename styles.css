@@ -5866,15 +5866,17 @@ body[data-page="universe-builder"] {
   gap: 12px;
 }
 
+body[data-page="universe-canvas"] #universe-source-documents-modal .modal-dialog.universe-source-documents-dialog,
 .universe-source-documents-dialog {
   display: grid;
-  grid-template-columns: minmax(360px, 0.8fr) minmax(460px, 1.2fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   grid-template-rows: auto minmax(0, 1fr);
   column-gap: 22px;
   width: min(1280px, calc(100vw - 48px));
   max-width: none;
   max-height: min(780px, calc(100vh - 56px));
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .universe-source-documents-dialog .modal-header {
@@ -5885,6 +5887,7 @@ body[data-page="universe-builder"] {
   display: grid;
   gap: 14px;
   align-content: start;
+  min-width: 0;
   min-height: 0;
   padding-right: 22px;
   border-right: 1px solid var(--line);
@@ -5973,6 +5976,7 @@ body[data-page="universe-builder"] {
 
 .source-documents-list-panel {
   display: grid;
+  min-width: 0;
   min-height: 0;
   align-content: start;
 }
@@ -6011,15 +6015,18 @@ body[data-page="universe-builder"] {
 
 .source-document-row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-height: 74px;
   padding: 10px;
   color: var(--ink);
   background: color-mix(in srgb, var(--muted) 7%, transparent);
   border: 1px solid var(--line);
   border-radius: 8px;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
 }
 
@@ -6028,6 +6035,22 @@ body[data-page="universe-builder"] {
   border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
   background: color-mix(in srgb, var(--accent) 11%, transparent);
   outline: none;
+}
+
+.source-document-row.is-actionable {
+  cursor: pointer;
+}
+
+.source-document-action {
+  align-self: center;
+  justify-self: end;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #07111f;
+  background: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 820;
+  white-space: nowrap;
 }
 
 @media (max-width: 980px) {

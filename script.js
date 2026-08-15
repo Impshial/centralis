@@ -1526,6 +1526,8 @@ let pendingUniverseDelete = null;
 let homepageIconReadyPromise = null;
 let activeSourceDocumentsUniverse = null;
 let sourceDocumentsUploading = false;
+let sourceDocumentsUploadContext = "";
+let sourceDocumentsCurrentDocuments = [];
 let universeSourceUploading = false;
 let stagedUniverseSourceDocument = null;
 
@@ -2300,7 +2302,7 @@ function getUniverseGenreIconName(universe) {
   return matches.find((match) => match.words.some((word) => text.includes(word)))?.icon || "ph-globe-hemisphere-west";
 }
 
-function renderSourceDocumentRows(documents = [], { isHomepage = false } = {}) {
+function renderSourceDocumentRows(documents = [], { isHomepage = false, actionMode = "" } = {}) {
   if (!documents.length) {
     return '<p class="empty-state">No documents uploaded yet.</p>';
   }
@@ -2308,10 +2310,15 @@ function renderSourceDocumentRows(documents = [], { isHomepage = false } = {}) {
   return documents.map((document) => {
     const universeName = document.universe_name || document.universes?.name || "";
     const href = `universe-canvas.html?universe_id=${encodeURIComponent(document.universe_id || "")}&documents=1`;
-    const tagName = isHomepage ? "a" : "div";
+    const canSourcePopulate = actionMode === "source-populate" && isSourceDocumentCompareEligible(document);
+    const tagName = isHomepage ? "a" : canSourcePopulate ? "button" : "div";
     const hrefAttribute = isHomepage ? ` href="${href}"` : "";
+    const typeAttribute = canSourcePopulate ? ' type="button"' : "";
+    const sourcePopulateAttribute = canSourcePopulate
+      ? ` data-source-populate-document="${escapeHtml(document.id)}"`
+      : "";
     return `
-      <${tagName} class="${isHomepage ? "home-source-document-card" : "source-document-row"}"${hrefAttribute}>
+      <${tagName} class="${isHomepage ? "home-source-document-card" : `source-document-row${canSourcePopulate ? " is-actionable" : ""}`}"${hrefAttribute}${typeAttribute}${sourcePopulateAttribute}>
         <span class="${isHomepage ? "home-chronicle-icon" : "source-document-icon"}" aria-hidden="true"><ph-file-arrow-up weight="duotone"></ph-file-arrow-up></span>
         <span class="${isHomepage ? "home-chronicle-main" : "source-document-main"}">
           <strong>${escapeHtml(getSourceDocumentTitle(document))}</strong>
@@ -2323,6 +2330,7 @@ function renderSourceDocumentRows(documents = [], { isHomepage = false } = {}) {
           ].filter(Boolean).join(" - "))}</span>
           ${!isHomepage && document.display_name ? `<em>${escapeHtml(document.original_filename || "")}</em>` : ""}
         </span>
+        ${canSourcePopulate ? '<span class="source-document-action">Generate</span>' : ""}
       </${tagName}>
     `;
   }).join("");
@@ -2343,8 +2351,9 @@ async function loadUniverseSourceDocuments(universeId) {
     if (error) throw error;
 
     const documents = data?.documents || [];
+    sourceDocumentsCurrentDocuments = documents;
     setHomeCount(sourceDocumentsCount, documents.length, "document");
-    sourceDocumentsList.innerHTML = renderSourceDocumentRows(documents);
+    sourceDocumentsList.innerHTML = renderSourceDocumentRows(documents, { actionMode: sourceDocumentsUploadContext });
   } catch (error) {
     sourceDocumentsCount.textContent = "Error";
     sourceDocumentsList.innerHTML = `<p class="empty-state is-error">Could not load documents: ${getReadableError(error)}</p>`;
@@ -2357,6 +2366,7 @@ function openSourceDocumentsDialog(universe) {
   }
 
   activeSourceDocumentsUniverse = universe;
+  sourceDocumentsUploadContext = universe.sourceDocumentsContext || "";
   if (sourceDocumentsUniverseName) {
     sourceDocumentsUniverseName.textContent = universe.name || "Untitled Universe";
   }
@@ -2385,6 +2395,8 @@ function closeSourceDocumentsDialog() {
   }
 
   activeSourceDocumentsUniverse = null;
+  sourceDocumentsUploadContext = "";
+  sourceDocumentsCurrentDocuments = [];
   sourceDocumentsForm?.reset();
   setSourceDocumentsStatus("");
   closeModal();
@@ -2727,7 +2739,17 @@ async function uploadUniverseSourceDocument(event) {
     if (document.body.dataset.page === "home") {
       await loadRecentSourceDocuments();
     }
-    openSourceCanonCompareWindow(activeSourceDocumentsUniverse, uploadedDocuments);
+    if (sourceDocumentsUploadContext === "source-populate") {
+      window.dispatchEvent(new CustomEvent("centralis:source-populate-documents-uploaded", {
+        detail: {
+          universe: activeSourceDocumentsUniverse,
+          documents: uploadedDocuments,
+        },
+      }));
+      closeSourceDocumentsDialog();
+    } else {
+      openSourceCanonCompareWindow(activeSourceDocumentsUniverse, uploadedDocuments);
+    }
   } catch (error) {
     setSourceDocumentsStatus(`Could not upload document: ${getReadableError(error)}`, "error");
   } finally {
@@ -5157,6 +5179,11 @@ function getUniverseFormValues(form) {
   };
 }
 
+function markUniverseForFirstOpenSourcePrompt(universeId) {
+  if (!universeId) return;
+  sessionStorage.setItem(`centralis-new-universe-source-prompt:${universeId}`, "1");
+}
+
 function normalizeGeneratedUniverseIdea(idea) {
   return {
     name: String(idea?.name || "").replace(/\s+/g, " ").trim(),
@@ -5465,6 +5492,7 @@ async function createUniverseFromForm(form, submitButton) {
         }
       } catch (sourceError) {
         setUniverseStatus(`Universe created, but the source document was not saved: ${getReadableError(sourceError)}. Opening the universe.`, "error");
+        markUniverseForFirstOpenSourcePrompt(universeId);
         window.setTimeout(() => {
           window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
         }, 1800);
@@ -5474,6 +5502,7 @@ async function createUniverseFromForm(form, submitButton) {
 
     setUniverseStatus("Universe created.", "success");
     clearStagedUniverseSource();
+    markUniverseForFirstOpenSourcePrompt(universeId);
     window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
   } catch (error) {
     setUniverseStatus(getReadableError(error), "error");
@@ -5511,6 +5540,7 @@ async function finalizeGeneratedUniverse() {
     if (!universeId) return;
 
     setUniverseAiReviewStatus("Universe created.", "success");
+    markUniverseForFirstOpenSourcePrompt(universeId);
     window.location.href = `universe-canvas.html?universe_id=${encodeURIComponent(universeId)}`;
   } finally {
     if (button) {
@@ -5592,6 +5622,27 @@ universeBuilderSearch?.addEventListener("input", () => {
 });
 
 sourceDocumentsForm?.addEventListener("submit", uploadUniverseSourceDocument);
+sourceDocumentsList?.addEventListener("click", (event) => {
+  const button = event.target instanceof Element
+    ? event.target.closest("[data-source-populate-document]")
+    : null;
+  if (!button || sourceDocumentsUploadContext !== "source-populate") {
+    return;
+  }
+  const documentId = button.dataset.sourcePopulateDocument;
+  const document = sourceDocumentsCurrentDocuments.find((item) => String(item.id) === String(documentId));
+  if (!document) {
+    setSourceDocumentsStatus("Could not find that uploaded document.", "error");
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("centralis:source-populate-documents-uploaded", {
+    detail: {
+      universe: activeSourceDocumentsUniverse,
+      documents: [document],
+    },
+  }));
+  closeSourceDocumentsDialog();
+});
 sourceDocumentsClosers.forEach((button) => {
   button.addEventListener("click", closeSourceDocumentsDialog);
 });
@@ -5624,6 +5675,18 @@ currentUniverseDocumentsButtons.forEach((button) => {
       return;
     }
     openSourceDocumentsDialog(universe);
+  });
+});
+
+window.addEventListener("centralis:open-source-populate-upload", (event) => {
+  const universe = event.detail?.universe || getCurrentUniverseForDocuments();
+  if (!universe) {
+    setSourceDocumentsStatus("Open a universe before uploading a source file.", "error");
+    return;
+  }
+  openSourceDocumentsDialog({
+    ...universe,
+    sourceDocumentsContext: "source-populate",
   });
 });
 
