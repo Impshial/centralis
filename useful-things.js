@@ -70,6 +70,20 @@
     storageMigrationDetails: document.querySelector("[data-storage-migration-details]"),
     storageMigrationSummary: document.querySelector("[data-storage-migration-summary]"),
     storageMigrationResults: document.querySelector("[data-storage-migration-results]"),
+    combineFileInput: document.querySelector("[data-combine-file-input]"),
+    combineSelectFiles: document.querySelector("[data-combine-select-files]"),
+    combineClearFiles: document.querySelector("[data-combine-clear-files]"),
+    combineFileList: document.querySelector("[data-combine-file-list]"),
+    combineMasterName: document.querySelector("[data-combine-master-name]"),
+    combineSeparator: document.querySelector("[data-combine-separator]"),
+    combineOpenOrder: document.querySelector("[data-combine-open-order]"),
+    combineRun: document.querySelector("[data-combine-run]"),
+    combineStatus: document.querySelector("[data-combine-status]"),
+    combineOrderModal: document.querySelector("[data-combine-order-modal]"),
+    combineOrderList: document.querySelector("[data-combine-order-list]"),
+    combineOrderStatus: document.querySelector("[data-combine-order-status]"),
+    combineOrderConfirm: document.querySelector("[data-combine-order-confirm]"),
+    combineOrderCancelButtons: Array.from(document.querySelectorAll("[data-combine-order-cancel]")),
   };
 
   if (!els.modeSelect || !els.richEditor || !els.rawInput || !els.output) {
@@ -111,6 +125,10 @@
     busy: false,
     dryRunComplete: false,
     results: [],
+  };
+  const combineState = {
+    files: [],
+    draftFiles: [],
   };
 
   const converterTargetLabels = {
@@ -383,6 +401,20 @@
     els.status.textContent = message || "";
     els.status.classList.toggle("is-error", type === "error");
     els.status.classList.toggle("is-success", type === "success");
+  }
+
+  function setCombineStatus(message, type = "") {
+    if (!els.combineStatus) return;
+    els.combineStatus.textContent = message || "";
+    els.combineStatus.classList.toggle("is-error", type === "error");
+    els.combineStatus.classList.toggle("is-success", type === "success");
+  }
+
+  function setCombineOrderStatus(message, type = "") {
+    if (!els.combineOrderStatus) return;
+    els.combineOrderStatus.textContent = message || "";
+    els.combineOrderStatus.classList.toggle("is-error", type === "error");
+    els.combineOrderStatus.classList.toggle("is-success", type === "success");
   }
 
   function getConverterTargetLabel(targetFormat) {
@@ -3136,6 +3168,181 @@
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
   }
 
+  function formatFileSize(bytes = 0) {
+    const size = Number(bytes) || 0;
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10240 ? 1 : 0)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function isTextFile(file) {
+    return /\.txt$/i.test(file?.name || "");
+  }
+
+  function renderCombineFileList() {
+    if (!els.combineFileList) return;
+    if (!combineState.files.length) {
+      els.combineFileList.innerHTML = '<p class="combine-empty">No files selected.</p>';
+      return;
+    }
+    els.combineFileList.innerHTML = combineState.files.map((file, index) => `
+      <div class="combine-file-row">
+        <span class="combine-file-index">${index + 1}</span>
+        <span class="combine-file-name">${escapeHtml(file.name)}</span>
+        <span class="combine-file-size">${escapeHtml(formatFileSize(file.size))}</span>
+      </div>
+    `).join("");
+  }
+
+  function getCombineSeparator() {
+    switch (els.combineSeparator?.value) {
+      case "single-line-break":
+        return "\n";
+      case "dashed-line":
+        return `\n${"-".repeat(20)}\n`;
+      case "asterisk-line":
+        return `\n${"*".repeat(20)}\n`;
+      case "double-line-break":
+      default:
+        return "\n\n\n";
+    }
+  }
+
+  function getCombineDownloadName() {
+    const rawName = String(els.combineMasterName?.value || "").trim();
+    if (!rawName) {
+      throw new Error("Enter a master file name.");
+    }
+    return /\.txt$/i.test(rawName) ? rawName : `${rawName}.txt`;
+  }
+
+  function handleCombineFileSelection(event) {
+    const selectedFiles = Array.from(event.target?.files || []);
+    if (!selectedFiles.length) return;
+
+    const acceptedFiles = selectedFiles.filter(isTextFile);
+    const rejectedCount = selectedFiles.length - acceptedFiles.length;
+    combineState.files.push(...acceptedFiles);
+    renderCombineFileList();
+    setCombineStatus(rejectedCount
+      ? `Added ${acceptedFiles.length} text files. Skipped ${rejectedCount} non-text files.`
+      : `Added ${acceptedFiles.length} text files.`,
+      rejectedCount ? "error" : "success");
+    if (els.combineFileInput) els.combineFileInput.value = "";
+  }
+
+  function clearCombineFiles() {
+    combineState.files = [];
+    combineState.draftFiles = [];
+    renderCombineFileList();
+    setCombineStatus("");
+    if (els.combineFileInput) els.combineFileInput.value = "";
+  }
+
+  async function combineSelectedFiles() {
+    if (!combineState.files.length) {
+      setCombineStatus("Select at least one text file to combine.", "error");
+      return;
+    }
+
+    let filename = "";
+    try {
+      filename = getCombineDownloadName();
+    } catch (error) {
+      setCombineStatus(error instanceof Error ? error.message : "Enter a master file name.", "error");
+      els.combineMasterName?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (els.combineRun) els.combineRun.disabled = true;
+    setCombineStatus("Combining files...");
+    try {
+      const contents = await Promise.all(combineState.files.map((file) => file.text()));
+      downloadTextFile(contents.join(getCombineSeparator()), filename);
+      setCombineStatus(`Downloaded ${filename}.`, "success");
+    } catch (error) {
+      console.error(error);
+      setCombineStatus(error instanceof Error ? error.message : "Could not combine files.", "error");
+    } finally {
+      if (els.combineRun) els.combineRun.disabled = false;
+    }
+  }
+
+  function renderCombineOrderList() {
+    if (!els.combineOrderList) return;
+    if (!combineState.draftFiles.length) {
+      els.combineOrderList.innerHTML = '<p class="combine-empty">No files selected.</p>';
+      return;
+    }
+    els.combineOrderList.innerHTML = combineState.draftFiles.map((file, index) => `
+      <div class="combine-order-row">
+        <span class="combine-file-index">${index + 1}</span>
+        <span class="combine-file-name">${escapeHtml(file.name)}</span>
+        <div class="combine-order-actions">
+          <button type="button" data-combine-order-move="${index}:up" ${index === 0 ? "disabled" : ""} aria-label="Move ${escapeHtml(file.name)} up">
+            <ph-arrow-up weight="bold" aria-hidden="true"></ph-arrow-up>
+          </button>
+          <button type="button" data-combine-order-move="${index}:down" ${index === combineState.draftFiles.length - 1 ? "disabled" : ""} aria-label="Move ${escapeHtml(file.name)} down">
+            <ph-arrow-down weight="bold" aria-hidden="true"></ph-arrow-down>
+          </button>
+          <button type="button" data-combine-order-remove="${index}" aria-label="Remove ${escapeHtml(file.name)}">
+            <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+          </button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function openCombineOrderModal() {
+    if (!els.combineOrderModal) return;
+    if (!combineState.files.length) {
+      setCombineStatus("Select files before changing order.", "error");
+      return;
+    }
+    combineState.draftFiles = [...combineState.files];
+    setCombineOrderStatus("");
+    renderCombineOrderList();
+    els.combineOrderModal.hidden = false;
+  }
+
+  function closeCombineOrderModal() {
+    if (els.combineOrderModal) els.combineOrderModal.hidden = true;
+    combineState.draftFiles = [];
+    setCombineOrderStatus("");
+  }
+
+  function confirmCombineOrderModal() {
+    combineState.files = [...combineState.draftFiles];
+    renderCombineFileList();
+    closeCombineOrderModal();
+    setCombineStatus("File order updated.", "success");
+  }
+
+  function handleCombineOrderClick(event) {
+    const removeButton = event.target.closest("[data-combine-order-remove]");
+    const moveButton = event.target.closest("[data-combine-order-move]");
+
+    if (removeButton) {
+      const index = Number(removeButton.dataset.combineOrderRemove);
+      if (Number.isInteger(index)) {
+        combineState.draftFiles.splice(index, 1);
+        renderCombineOrderList();
+      }
+      return;
+    }
+
+    if (moveButton) {
+      const [rawIndex, direction] = String(moveButton.dataset.combineOrderMove || "").split(":");
+      const index = Number(rawIndex);
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (Number.isInteger(index) && nextIndex >= 0 && nextIndex < combineState.draftFiles.length) {
+        const [file] = combineState.draftFiles.splice(index, 1);
+        combineState.draftFiles.splice(nextIndex, 0, file);
+        renderCombineOrderList();
+      }
+    }
+  }
+
   function saveConverterInput() {
     const isRaw = getCurrentMode() === "raw";
     const contents = isRaw ? els.rawInput.value : richHtmlToMarkdown(els.richEditor.innerHTML);
@@ -4198,6 +4405,9 @@
     if (event.key === "Escape" && els.promptModal && !els.promptModal.hidden) {
       closeConverterPromptDialog();
     }
+    if (event.key === "Escape" && els.combineOrderModal && !els.combineOrderModal.hidden) {
+      closeCombineOrderModal();
+    }
     if (event.key === "Escape" && isOutputCopyMenuOpen()) {
       setOutputCopyMenuOpen(false);
       els.outputCopyMenuTrigger?.focus({ preventScroll: true });
@@ -4230,6 +4440,17 @@
   els.clearInputButton?.addEventListener("click", clearConverterInput);
   els.saveInputButton?.addEventListener("click", saveConverterInput);
   els.saveOutputButton?.addEventListener("click", saveConverterOutput);
+  els.combineSelectFiles?.addEventListener("click", () => els.combineFileInput?.click());
+  els.combineFileInput?.addEventListener("change", handleCombineFileSelection);
+  els.combineClearFiles?.addEventListener("click", clearCombineFiles);
+  els.combineRun?.addEventListener("click", combineSelectedFiles);
+  els.combineOpenOrder?.addEventListener("click", openCombineOrderModal);
+  els.combineOrderList?.addEventListener("click", handleCombineOrderClick);
+  els.combineOrderConfirm?.addEventListener("click", confirmCombineOrderModal);
+  els.combineOrderCancelButtons.forEach((button) => {
+    button.addEventListener("click", closeCombineOrderModal);
+  });
+  renderCombineFileList();
 
   window.addEventListener("resize", scheduleCalculatorResultsFit);
 

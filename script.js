@@ -1370,6 +1370,13 @@ const homeModuleGrid = document.querySelector("[data-home-module-grid]");
 const homeTodoSummary = document.querySelector("[data-home-todo-summary]");
 const homeSourceDocumentList = document.querySelector("[data-home-source-document-list]");
 const homeSourceDocumentCount = document.querySelector("[data-home-source-document-count]");
+const homeFeature = document.querySelector("[data-home-feature]");
+const homeFeatureStatus = document.querySelector("[data-home-feature-status]");
+const homeTodayCard = document.querySelector("[data-home-today-card]");
+const homeMiniCalendar = document.querySelector("[data-home-mini-calendar]");
+const homeMiniCalendarTitle = document.querySelector("[data-home-mini-calendar-title]");
+const homeQuickAccess = document.querySelector("[data-home-quick-access]");
+const homeRecentWork = document.querySelector("[data-home-recent-work]");
 const googleAuthButton = document.querySelector("[data-auth-google]");
 const signOutButtons = document.querySelectorAll("[data-sign-out]");
 const createUniverseButtons = document.querySelectorAll("[data-create-universe]");
@@ -2398,6 +2405,181 @@ function openUniverseSourceUploadDialog() {
   });
 }
 
+function formatDateKeyLocal(date) {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getHomeRecordTime(record) {
+  const timestamp = record?.timestamp || record?.updated_at || record?.opened_at || record?.created_at;
+  const date = timestamp ? new Date(timestamp) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
+
+function escapeCssUrl(value) {
+  return String(value || "").replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+}
+
+function getHomeModuleAccent(module) {
+  const accents = {
+    arc: "#a78bfa",
+    universe: "#35d0ba",
+    chronicle: "#f59e0b",
+    source: "#38bdf8",
+    chat: "#22d3ee",
+    calendar: "#38bdf8",
+    images: "#60a5fa",
+    movies: "#fb7185",
+    useful: "#f97316",
+    listmaker: "#84cc16",
+  };
+  return accents[module] || "#7dd3fc";
+}
+
+function setHomeFeatureLoading() {
+  if (!homeFeature) return;
+  homeFeature.classList.remove("has-image", "is-empty");
+  homeFeature.removeAttribute("style");
+  homeFeature.innerHTML = `
+    <div class="home-feature-content">
+      <span class="home-feature-kicker">Continue Where You Left Off</span>
+      <h2>Loading latest work...</h2>
+      <p data-home-feature-status>Finding your freshest project, document, or story thread.</p>
+    </div>
+  `;
+}
+
+function renderHomeFeature(records = []) {
+  if (!homeFeature) return;
+  const record = records.find(Boolean);
+  if (!record) {
+    homeFeature.classList.add("is-empty");
+    homeFeature.classList.remove("has-image");
+    homeFeature.style.setProperty("--home-item-accent", "#38bdf8");
+    homeFeature.style.removeProperty("--home-card-image");
+    homeFeature.innerHTML = `
+      <div class="home-feature-content">
+        <span class="home-feature-kicker">Continue Where You Left Off</span>
+        <h2>Build something strange and useful.</h2>
+        <p data-home-feature-status>No recent work yet. Start with a universe, story arc, image, or utility.</p>
+        <div class="home-feature-actions">
+          <a class="home-feature-action" href="universe-builder.html">Open Universe Builder</a>
+          <a class="home-feature-action" href="arc-studio.html">Open Arc Studio</a>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  homeFeature.classList.toggle("has-image", Boolean(record.imageUrl));
+  homeFeature.classList.remove("is-empty");
+  homeFeature.style.setProperty("--home-item-accent", record.accent || getHomeModuleAccent(record.moduleKey));
+  if (record.imageUrl) {
+    homeFeature.style.setProperty("--home-card-image", `url('${escapeCssUrl(record.imageUrl)}')`);
+  } else {
+    homeFeature.style.removeProperty("--home-card-image");
+  }
+  homeFeature.innerHTML = `
+    <div class="home-feature-content">
+      <span class="home-feature-kicker">${escapeHtml(record.label || "Latest Work")}</span>
+      <h2>${escapeHtml(record.title || "Untitled")}</h2>
+      <p data-home-feature-status>${escapeHtml(record.description || record.meta || "Ready when you are.")}</p>
+      <div class="home-feature-meta">
+        <span><${record.icon || "ph-sparkle"} weight="duotone" aria-hidden="true"></${record.icon || "ph-sparkle"}>${escapeHtml(record.meta || "Recent update")}</span>
+        <span>${escapeHtml(formatShortDate(record.timestamp))}</span>
+      </div>
+      <a class="home-feature-action" href="${record.href || "#"}">${escapeHtml(record.cta || "Open")}</a>
+    </div>
+  `;
+}
+
+function renderHomeToday(calendarMetric = {}, todoMetric = {}) {
+  if (!homeTodayCard) return;
+  const items = calendarMetric.items || [];
+  const todayKey = formatDateKeyLocal(new Date());
+  const todayItems = items.filter((item) => String(item.dateKey || "").startsWith(todayKey));
+  const openTasks = Number(todoMetric.open || 0);
+  const scheduledTasks = Number(todoMetric.scheduled || 0);
+  const previewItems = (todayItems.length ? todayItems : items).slice(0, 3);
+  const heading = todayItems.length
+    ? `${todayItems.length} ${pluralize(todayItems.length, "thing")} today`
+    : "Quiet today";
+  homeTodayCard.innerHTML = `
+    <div class="home-card-heading">
+      <div>
+        <p class="home-eyebrow">Today</p>
+        <h2>${escapeHtml(heading)}</h2>
+      </div>
+      <a href="todo.html">Open ToDo</a>
+    </div>
+    <div class="home-today-summary">
+      <span><strong>${escapeHtml(String(openTasks))}</strong> open</span>
+      <span><strong>${escapeHtml(String(scheduledTasks))}</strong> scheduled</span>
+    </div>
+    ${previewItems.length ? `
+      <div class="home-today-list">
+        ${previewItems.map((item) => {
+          if (item.type === "task") {
+            return `
+              <a class="home-today-item is-task" href="todo.html">
+                <span>${escapeHtml(formatShortDate(item.sortDate))}</span>
+                <strong>${escapeHtml(item.task?.title || "Untitled Task")}</strong>
+              </a>
+            `;
+          }
+          return `
+            <a class="home-today-item" href="calendar.html">
+              <span>${escapeHtml(formatEventTime(item.event))}</span>
+              <strong>${escapeHtml(item.event?.title || "Untitled Event")}</strong>
+            </a>
+          `;
+        }).join("")}
+      </div>
+    ` : '<p class="empty-state">No events or dated tasks on deck.</p>'}
+  `;
+}
+
+function renderHomeMiniCalendar(calendarMetric = {}) {
+  if (!homeMiniCalendar) return;
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = formatDateKeyLocal(today);
+  const markedDates = new Set(calendarMetric.markedDates || []);
+  if (homeMiniCalendarTitle) {
+    homeMiniCalendarTitle.textContent = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(today);
+  }
+
+  const cells = [];
+  const leadingBlanks = firstDay.getDay();
+  for (let index = 0; index < leadingBlanks; index += 1) {
+    cells.push('<span class="home-calendar-day is-empty" aria-hidden="true"></span>');
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month, day);
+    const dateKey = formatDateKeyLocal(date);
+    const classes = [
+      "home-calendar-day",
+      dateKey === todayKey ? "is-today" : "",
+      markedDates.has(dateKey) ? "has-work" : "",
+    ].filter(Boolean).join(" ");
+    cells.push(`<span class="${classes}" aria-label="${escapeHtml(formatShortDate(date))}">${day}</span>`);
+  }
+
+  homeMiniCalendar.innerHTML = `
+    <div class="home-calendar-weekdays" aria-hidden="true">
+      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+    </div>
+    <div class="home-calendar-grid">${cells.join("")}</div>
+  `;
+}
+
 function closeUniverseSourceUploadDialog({ force = false } = {}) {
   if ((universeSourceUploading && !force) || !universeSourceUploadModal) {
     return;
@@ -2648,7 +2830,15 @@ async function fetchHomeCalendarMetric() {
   const calendarIds = calendars.map((calendar) => calendar.id).filter(Boolean);
   const now = new Date().toISOString();
   const today = now.slice(0, 10);
+  const currentMonth = new Date();
+  const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+  const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+  const monthStartIso = monthStart.toISOString();
+  const monthEndIso = monthEnd.toISOString();
+  const monthStartKey = formatDateKeyLocal(monthStart);
+  const monthEndKey = formatDateKeyLocal(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0));
   let eventsResponse = { data: [], count: 0 };
+  let monthEventsResponse = { data: [] };
   if (calendarIds.length) {
     eventsResponse = await withTimeout(supabaseClient
       .from("events")
@@ -2658,9 +2848,20 @@ async function fetchHomeCalendarMetric() {
       .gte("start_time", now)
       .order("start_time", { ascending: true })
       .limit(5), "Loading upcoming calendar events");
+
+    monthEventsResponse = await withTimeout(supabaseClient
+      .from("events")
+      .select("id,start_time")
+      .in("calendar_id", calendarIds)
+      .eq("deleted", false)
+      .gte("start_time", monthStartIso)
+      .lt("start_time", monthEndIso)
+      .order("start_time", { ascending: true })
+      .limit(200), "Loading homepage calendar markers");
   }
 
   if (eventsResponse.error) throw eventsResponse.error;
+  if (monthEventsResponse.error) throw monthEventsResponse.error;
 
   const tasksResponse = await withTimeout(supabaseClient
     .from("todo_tasks")
@@ -2674,25 +2875,44 @@ async function fetchHomeCalendarMetric() {
 
   if (tasksResponse.error) throw tasksResponse.error;
 
+  const monthTasksResponse = await withTimeout(supabaseClient
+    .from("todo_tasks")
+    .select("id,due_date")
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false)
+    .not("due_date", "is", null)
+    .gte("due_date", monthStartKey)
+    .lte("due_date", monthEndKey)
+    .order("due_date", { ascending: true })
+    .limit(200), "Loading homepage task markers");
+
+  if (monthTasksResponse.error) throw monthTasksResponse.error;
+
   const events = eventsResponse.data || [];
   const tasks = tasksResponse.data || [];
-  const total = events.length + tasks.length;
+  const total = (eventsResponse.count ?? events.length) + (tasksResponse.count ?? tasks.length);
   const calendarsById = new Map(calendars.map((calendar) => [calendar.id, calendar]));
+  const markedDates = [
+    ...(monthEventsResponse.data || []).map((event) => formatDateKeyLocal(event.start_time)),
+    ...(monthTasksResponse.data || []).map((task) => task.due_date),
+  ].filter(Boolean);
   const items = [
     ...events.map((event) => ({
       type: "event",
       sortDate: event.start_time,
+      dateKey: formatDateKeyLocal(event.start_time),
       event,
     })),
     ...tasks.map((task) => ({
       type: "task",
       sortDate: `${task.due_date}T00:00:00`,
+      dateKey: task.due_date,
       task,
     })),
   ].sort((first, second) => new Date(first.sortDate) - new Date(second.sortDate)).slice(0, 5);
   const nextItem = items[0];
   setHomeStat("calendar", formatCompactNumber(total), nextItem ? `Next: ${formatShortDate(nextItem.sortDate)}` : "Nothing upcoming");
-  return { total, recent: items.length, events, tasks, items, calendarsById };
+  return { total, recent: items.length, events, tasks, items, calendarsById, markedDates };
 }
 
 async function fetchHomeTodoMetric() {
@@ -2713,6 +2933,7 @@ async function fetchHomeTodoMetric() {
       ? `${open} open - ${scheduled} scheduled`
       : "No tasks yet. Start a list in ToDo.";
   }
+  setHomeStat("todos", formatCompactNumber(open), scheduled ? `${scheduled} scheduled` : "No dated tasks");
   return { total, open, scheduled };
 }
 
@@ -2789,7 +3010,8 @@ function renderHomeUpcomingEvents(calendarMetric) {
 }
 
 function renderHomeModules(metrics = {}) {
-  if (!homeModuleGrid) return;
+  const target = homeQuickAccess || homeModuleGrid;
+  if (!target) return;
 
   const modules = [
     {
@@ -2797,67 +3019,70 @@ function renderHomeModules(metrics = {}) {
       href: "universe-builder.html",
       icon: "ph-planet",
       detail: `${getMetricTotal(metrics.universes)} ${pluralize(getMetricTotal(metrics.universes), "universe")}`,
+      accent: getHomeModuleAccent("universe"),
+    },
+    {
+      title: "Arc Studio",
+      href: "arc-studio.html",
+      icon: "ph-git-branch",
+      detail: "Story movement",
+      accent: getHomeModuleAccent("arc"),
     },
     {
       title: "Chronicle",
       href: "chronicle.html",
       icon: "ph-file-text",
       detail: `${getMetricTotal(metrics.chronicle)} ${pluralize(getMetricTotal(metrics.chronicle), "element")}`,
-    },
-    {
-      title: "Chat Repository",
-      href: "chat-repository.html",
-      icon: "ph-chats-circle",
-      detail: `${getMetricTotal(metrics.chatLogs)} ${pluralize(getMetricTotal(metrics.chatLogs), "log")}`,
-      adminOnly: true,
-    },
-    {
-      title: "Calendar",
-      href: "calendar.html",
-      icon: "ph-calendar-blank",
-      detail: `${getMetricTotal(metrics.calendar)} upcoming`,
-    },
-    {
-      title: "ToDo",
-      href: "todo.html",
-      icon: "ph-check-square-offset",
-      detail: `${metrics.todos?.open || 0} open`,
-    },
-    {
-      title: "Movie Tracker",
-      href: "movie-tracker.html",
-      icon: "ph-film-slate",
-      detail: `${metrics.movies?.downloaded || 0} downloaded`,
-    },
-    {
-      title: "Stellar Architect",
-      href: "stellar-architect.html#systems",
-      icon: "ph-sparkle",
-      detail: "Systems lab",
+      accent: getHomeModuleAccent("chronicle"),
     },
     {
       title: "Image Generation",
       href: "image-generation.html",
       icon: "ph-image-square",
       detail: `${getMetricRecent(metrics.images)} recent`,
+      accent: getHomeModuleAccent("images"),
+    },
+    {
+      title: "Calendar",
+      href: "calendar.html",
+      icon: "ph-calendar-blank",
+      detail: `${getMetricTotal(metrics.calendar)} upcoming`,
+      accent: getHomeModuleAccent("calendar"),
+    },
+    {
+      title: "Movie Tracker",
+      href: "movie-tracker.html",
+      icon: "ph-film-slate",
+      detail: `${metrics.movies?.downloaded || 0} downloaded`,
+      accent: getHomeModuleAccent("movies"),
     },
     {
       title: "Useful Things",
       href: "useful-things.html",
       icon: "ph-wrench",
       detail: "Text, math, generators",
+      accent: getHomeModuleAccent("useful"),
     },
     {
       title: "ListMaker",
       href: "listmaker.html",
       icon: "ph-list-bullets",
       detail: "Flexible saved lists",
+      accent: getHomeModuleAccent("listmaker"),
+    },
+    {
+      title: "Chat Repository",
+      href: "chat-repository.html",
+      icon: "ph-chats-circle",
+      detail: `${getMetricTotal(metrics.chatLogs)} ${pluralize(getMetricTotal(metrics.chatLogs), "log")}`,
+      accent: getHomeModuleAccent("chat"),
+      adminOnly: true,
     },
   ];
 
   const visibleModules = modules.filter((module) => !module.adminOnly || currentAppUser?.admin === true);
-  homeModuleGrid.innerHTML = visibleModules.map((module) => `
-    <a class="home-module-card" href="${module.href}">
+  target.innerHTML = visibleModules.map((module) => `
+    <a class="home-module-card" href="${module.href}" style="--home-item-accent: ${module.accent};">
       <span class="home-module-icon" aria-hidden="true"><${module.icon} weight="duotone"></${module.icon}></span>
       <span>
         <strong>${escapeHtml(module.title)}</strong>
@@ -2866,6 +3091,229 @@ function renderHomeModules(metrics = {}) {
       <ph-arrow-right weight="bold" aria-hidden="true"></ph-arrow-right>
     </a>
   `).join("");
+}
+
+function makeHomeWorkRecord({
+  id,
+  moduleKey,
+  label,
+  title,
+  description,
+  meta,
+  timestamp,
+  href,
+  icon,
+  cta,
+  imageUrl,
+}) {
+  return {
+    id,
+    moduleKey,
+    label,
+    title,
+    description,
+    meta,
+    timestamp,
+    href,
+    icon,
+    cta,
+    imageUrl,
+    accent: getHomeModuleAccent(moduleKey),
+  };
+}
+
+function sortHomeWorkRecords(records = []) {
+  return records
+    .filter((record) => record?.title)
+    .sort((first, second) => getHomeRecordTime(second) - getHomeRecordTime(first));
+}
+
+function renderHomeRecentWork(records = []) {
+  if (!homeRecentWork) return;
+  const visibleRecords = records.slice(0, 12);
+  if (!visibleRecords.length) {
+    homeRecentWork.innerHTML = '<p class="empty-state">No recent work yet. New projects will gather here as you build.</p>';
+    return;
+  }
+
+  homeRecentWork.innerHTML = visibleRecords.map((record) => {
+    const hasImage = Boolean(record.imageUrl);
+    const styleParts = [`--home-item-accent: ${record.accent || getHomeModuleAccent(record.moduleKey)};`];
+    if (hasImage) {
+      styleParts.push(`--home-card-image: url('${escapeCssUrl(record.imageUrl)}');`);
+    }
+    return `
+      <a class="home-work-card${hasImage ? " has-image" : ""}" href="${record.href || "#"}" style="${styleParts.join(" ")}">
+        <span class="home-work-icon" aria-hidden="true"><${record.icon || "ph-sparkle"} weight="duotone"></${record.icon || "ph-sparkle"}></span>
+        <span class="home-work-label">${escapeHtml(record.label || "Recent")}</span>
+        <strong>${escapeHtml(record.title || "Untitled")}</strong>
+        <em>${escapeHtml(record.meta || formatShortDate(record.timestamp))}</em>
+        <span>${escapeHtml(createBlurb(record.description || "", 104))}</span>
+      </a>
+    `;
+  }).join("");
+}
+
+async function loadHomeRecentWork() {
+  if (document.body.dataset.page !== "home" || !supabaseClient || !currentAppUser || !homeRecentWork) {
+    return;
+  }
+
+  setHomeFeatureLoading();
+  homeRecentWork.innerHTML = '<p class="empty-state">Loading recent work...</p>';
+
+  try {
+    const [
+      arcResponse,
+      universesResponse,
+      elementsResponse,
+      documentsResponse,
+      chatLogsResponse,
+    ] = await Promise.all([
+      withTimeout(supabaseClient
+        .from("arc_projects")
+        .select("id,title,logline,premise,genre,format,status,cover_image_url,updated_at,created_at")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .order("updated_at", { ascending: false })
+        .limit(6), "Loading Arc Studio projects"),
+      withTimeout(supabaseClient
+        .from(UNIVERSE_TABLE)
+        .select("id,name,description,updated_at,opened_at")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .order("opened_at", { ascending: false, nullsFirst: false })
+        .order("updated_at", { ascending: false })
+        .limit(8), "Loading homepage universes"),
+      withTimeout(supabaseClient
+        .from(ELEMENTS_TABLE)
+        .select("id,name,description,universe_id,updated_at,element_type_id")
+        .eq("user_id", currentAppUser.id)
+        .order("updated_at", { ascending: false })
+        .limit(8), "Loading homepage Chronicle elements"),
+      withTimeout(supabaseClient
+        .from(UNIVERSE_SOURCE_DOCUMENTS_TABLE)
+        .select("id,universe_id,original_filename,display_name,mime_type,file_size,created_at,updated_at,universes(name)")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(8), "Loading homepage source documents"),
+      currentAppUser.admin === true
+        ? withTimeout(supabaseClient
+          .from("chat_logs")
+          .select("id,title,summary,file_size,created_at,updated_at")
+          .eq("user_id", currentAppUser.id)
+          .eq("deleted", false)
+          .order("updated_at", { ascending: false })
+          .limit(6), "Loading homepage chat logs")
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const responses = [arcResponse, universesResponse, elementsResponse, documentsResponse, chatLogsResponse];
+    const firstError = responses.find((response) => response?.error)?.error;
+    if (firstError) throw firstError;
+
+    const universes = universesResponse.data || [];
+    const elements = elementsResponse.data || [];
+    const universeImagesById = await fetchPrimaryImagesByObjectId(universes.map((universe) => universe.id));
+    const elementImagesById = await fetchPrimaryImagesByObjectId(elements.map((element) => element.id));
+    const universeIds = [...new Set(elements.map((element) => element.universe_id).filter(Boolean))];
+    let universesById = new Map();
+    if (universeIds.length) {
+      const universeResponse = await withTimeout(supabaseClient
+        .from(UNIVERSE_TABLE)
+        .select("id,name")
+        .in("id", universeIds), "Loading recent work universe names");
+      if (!universeResponse.error) {
+        universesById = new Map((universeResponse.data || []).map((universe) => [universe.id, universe]));
+      }
+    }
+
+    const records = sortHomeWorkRecords([
+      ...(arcResponse.data || []).map((project) => makeHomeWorkRecord({
+        id: project.id,
+        moduleKey: "arc",
+        label: "Arc Studio",
+        title: project.title || "Untitled Project",
+        description: project.logline || project.premise || "No story movement note yet.",
+        meta: [project.genre, project.format, project.status].filter(Boolean).join(" - ") || "Story project",
+        timestamp: project.updated_at || project.created_at,
+        href: `arc-workspace.html?project_id=${encodeURIComponent(project.id)}`,
+        icon: "ph-git-branch",
+        cta: "Open Arc",
+        imageUrl: project.cover_image_url,
+      })),
+      ...universes.map((universe) => {
+        const image = universeImagesById.get(universe.id);
+        return makeHomeWorkRecord({
+          id: universe.id,
+          moduleKey: "universe",
+          label: "Universe Builder",
+          title: universe.name || "Untitled Universe",
+          description: universe.description || "No universe description yet.",
+          meta: universe.opened_at ? `Opened ${formatShortDate(universe.opened_at)}` : `Updated ${formatShortDate(universe.updated_at)}`,
+          timestamp: universe.opened_at || universe.updated_at,
+          href: `universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}`,
+          icon: "ph-planet",
+          cta: "Open Universe",
+          imageUrl: image?.image_url,
+        });
+      }),
+      ...elements.map((element) => {
+        const image = elementImagesById.get(element.id);
+        const universe = universesById.get(element.universe_id);
+        return makeHomeWorkRecord({
+          id: element.id,
+          moduleKey: "chronicle",
+          label: "Chronicle",
+          title: element.name || "Untitled Element",
+          description: element.description || "No element description yet.",
+          meta: universe?.name || "Standalone Element",
+          timestamp: element.updated_at,
+          href: element.universe_id
+            ? `chronicle-editor.html#universe/${encodeURIComponent(element.universe_id)}/element/${encodeURIComponent(element.id)}`
+            : `chronicle-editor.html#element/${encodeURIComponent(element.id)}`,
+          icon: "ph-file-text",
+          cta: "Open Element",
+          imageUrl: image?.image_url,
+        });
+      }),
+      ...(documentsResponse.data || []).map((document) => makeHomeWorkRecord({
+        id: document.id,
+        moduleKey: "source",
+        label: "Source Material",
+        title: getSourceDocumentTitle(document),
+        description: document.universes?.name || "Uploaded source document",
+        meta: [formatDocumentType(document.mime_type, document.original_filename), formatFileSize(document.file_size)].filter(Boolean).join(" - "),
+        timestamp: document.updated_at || document.created_at,
+        href: `universe-canvas.html?universe_id=${encodeURIComponent(document.universe_id || "")}&documents=1`,
+        icon: "ph-file-arrow-up",
+        cta: "Open Documents",
+      })),
+      ...(chatLogsResponse.data || []).map((chatLog) => makeHomeWorkRecord({
+        id: chatLog.id,
+        moduleKey: "chat",
+        label: "Chat Repository",
+        title: chatLog.title || "Untitled Chat Log",
+        description: chatLog.summary || "Saved conversation log.",
+        meta: formatFileSize(chatLog.file_size),
+        timestamp: chatLog.updated_at || chatLog.created_at,
+        href: `chat-repository.html?chatLogId=${encodeURIComponent(chatLog.id)}`,
+        icon: "ph-chats-circle",
+        cta: "Open Log",
+      })),
+    ]);
+
+    renderHomeFeature(records);
+    renderHomeRecentWork(records.slice(1));
+  } catch (error) {
+    console.warn("Could not load homepage recent work:", error);
+    renderHomeFeature([]);
+    if (homeRecentWork) {
+      homeRecentWork.innerHTML = `<p class="empty-state is-error">Could not load recent work: ${getReadableError(error)}</p>`;
+    }
+  }
 }
 
 async function loadHomeDashboardOverview() {
@@ -2885,6 +3333,15 @@ async function loadHomeDashboardOverview() {
   }
   if (homeModuleGrid) {
     homeModuleGrid.innerHTML = '<p class="empty-state">Loading modules...</p>';
+  }
+  if (homeQuickAccess) {
+    homeQuickAccess.innerHTML = '<p class="empty-state">Loading shortcuts...</p>';
+  }
+  if (homeTodayCard) {
+    homeTodayCard.innerHTML = '<p class="empty-state">Checking calendar and tasks...</p>';
+  }
+  if (homeMiniCalendar) {
+    homeMiniCalendar.innerHTML = '<p class="empty-state">Loading month...</p>';
   }
 
   const metricLoaders = {
@@ -2916,6 +3373,9 @@ async function loadHomeDashboardOverview() {
         if (homeUpcomingList) {
           homeUpcomingList.innerHTML = `<p class="empty-state is-error">Could not load upcoming events: ${getReadableError(error)}</p>`;
         }
+        if (homeMiniCalendar) {
+          homeMiniCalendar.innerHTML = `<p class="empty-state is-error">Could not load month: ${getReadableError(error)}</p>`;
+        }
       }
       return [key, { total: 0, recent: 0, error }];
     }
@@ -2924,9 +3384,11 @@ async function loadHomeDashboardOverview() {
   const metrics = Object.fromEntries(metricEntries);
   if (!metrics.calendar?.error) {
     renderHomeUpcomingEvents(metrics.calendar);
+    renderHomeMiniCalendar(metrics.calendar);
   }
+  renderHomeToday(metrics.calendar, metrics.todos);
   renderHomeModules(metrics);
-  setHomeStatus("Overview ready. Recent work is listed below.");
+  setHomeStatus("Overview ready.");
   setHomeRefreshed();
 }
 
@@ -3533,13 +3995,19 @@ async function prepareSignedInUser(authUser) {
     applyUserSettings(currentUserSettings);
     await loadThemeLibrary({ refresh: true });
     applyUserSettings(currentUserSettings);
-    const homepageDataPromise = Promise.all([
-      loadHomeDashboardOverview(),
-      loadRecentSourceDocuments(),
-      loadUniverseCards(),
-      loadRecentChronicleElements(),
-      currentAppUser.admin === true ? loadRecentChatLogs() : Promise.resolve()
-    ]);
+    const homepageLoaders = document.body.dataset.page === "home"
+      ? [
+        loadHomeDashboardOverview(),
+        loadHomeRecentWork(),
+      ]
+      : [
+        loadHomeDashboardOverview(),
+        loadRecentSourceDocuments(),
+        loadUniverseCards(),
+        loadRecentChronicleElements(),
+        currentAppUser.admin === true ? loadRecentChatLogs() : Promise.resolve()
+      ];
+    const homepageDataPromise = Promise.all(homepageLoaders);
     if (document.body.dataset.page === "home") {
       homepageDataPromise.catch((error) => {
         console.warn("Could not refresh homepage data:", error);

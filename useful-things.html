@@ -6,7 +6,7 @@
   <title>Useful Things | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=combine-split-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -164,6 +164,17 @@
               data-useful-tab="generators"
             >
               <span>Generators</span>
+            </button>
+            <button
+              class="useful-things-tab"
+              type="button"
+              role="tab"
+              id="useful-tab-combine-split"
+              aria-selected="false"
+              aria-controls="useful-panel-combine-split"
+              data-useful-tab="combine-split"
+            >
+              <span>Combine and Split</span>
             </button>
             <button
               class="useful-things-tab"
@@ -471,6 +482,79 @@
           </section>
 
           <section
+            class="useful-things-tab-panel combine-split-panel"
+            role="tabpanel"
+            id="useful-panel-combine-split"
+            aria-labelledby="useful-tab-combine-split"
+            data-useful-panel="combine-split"
+            hidden
+          >
+            <section class="combine-split-section" aria-labelledby="combine-section-title">
+              <div class="combine-split-header">
+                <div>
+                  <h2 id="combine-section-title">Combine</h2>
+                  <p>Combine multiple text files into one downloadable master file.</p>
+                </div>
+              </div>
+
+              <div class="combine-tool" aria-labelledby="combine-files-title">
+                <div class="combine-files-pane">
+                  <div class="combine-tool-heading">
+                    <h3 id="combine-files-title">Combine Multiple Files</h3>
+                    <div class="combine-file-actions">
+                      <input type="file" accept=".txt" multiple data-combine-file-input hidden>
+                      <button class="secondary-action" type="button" data-combine-select-files>
+                        <ph-files weight="bold" aria-hidden="true"></ph-files>
+                        Select Files
+                      </button>
+                      <button class="secondary-action" type="button" data-combine-clear-files>
+                        <ph-eraser weight="bold" aria-hidden="true"></ph-eraser>
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <div class="combine-file-list" data-combine-file-list aria-live="polite">
+                    <p class="combine-empty">No files selected.</p>
+                  </div>
+                  <button class="primary-action combine-run-button" type="button" data-combine-run>
+                    <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                    Combine
+                  </button>
+                </div>
+
+                <aside class="combine-options-pane" aria-label="Combine options">
+                  <label class="form-field">
+                    <span>Master File Name</span>
+                    <input type="text" data-combine-master-name placeholder="combined-master">
+                  </label>
+                  <label class="form-field">
+                    <span>Separator</span>
+                    <select data-combine-separator>
+                      <option value="double-line-break" selected>Double Line Break</option>
+                      <option value="single-line-break">Single Line Break</option>
+                      <option value="dashed-line">Dashed Line</option>
+                      <option value="asterisk-line">Asterisk Line</option>
+                    </select>
+                  </label>
+                  <button class="secondary-action" type="button" data-combine-open-order>
+                    <ph-arrows-down-up weight="bold" aria-hidden="true"></ph-arrows-down-up>
+                    Change Order / Remove
+                  </button>
+                </aside>
+              </div>
+              <p class="form-status combine-status" data-combine-status role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="combine-split-section split-section" aria-labelledby="split-section-title">
+              <div class="combine-split-header">
+                <div>
+                  <h2 id="split-section-title">Split</h2>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section
             class="useful-things-tab-panel"
             role="tabpanel"
             id="useful-panel-storage"
@@ -585,6 +669,34 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" data-combine-order-modal hidden>
+    <section
+      class="modal-dialog combine-order-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="combine-order-title"
+    >
+      <div class="modal-header">
+        <div>
+          <h2 id="combine-order-title">Change Order / Remove</h2>
+          <p class="modal-subtitle">Set the order for the combined master file.</p>
+        </div>
+        <button class="modal-close" type="button" data-combine-order-cancel aria-label="Close order dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="combine-order-list" data-combine-order-list></div>
+      <p class="form-status combine-order-status" data-combine-order-status role="status"></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-combine-order-cancel>Cancel</button>
+        <button class="primary-action" type="button" data-combine-order-confirm>OK</button>
+      </div>
+    </section>
+  </div>
+
   <div class="modal-backdrop" data-text-converter-prompt-modal hidden>
     <div
       class="modal-dialog text-converter-prompt-dialog"
@@ -622,6 +734,6 @@
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
-  <script src="useful-things.js?v=storage-viewer-1"></script>
+  <script src="useful-things.js?v=combine-split-1"></script>
 </body>
 </html>

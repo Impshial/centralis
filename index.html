@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&display=swap" rel="stylesheet">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=home-dark-gallery-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -192,168 +192,110 @@
       <span class="home-refresh-state" data-home-refreshed>Refreshing...</span>
     </header>
 
-    <section class="home-stat-grid" aria-label="Workspace overview">
-      <a class="home-stat-card" href="universe-builder.html" data-home-stat="universes" aria-label="Open Universe Builder">
-        <span class="home-stat-icon" aria-hidden="true"><ph-planet weight="duotone"></ph-planet></span>
-        <span class="home-stat-label">Universes</span>
-        <strong data-home-stat-value>...</strong>
-        <span data-home-stat-detail>Loading...</span>
-      </a>
-      <a class="home-stat-card" href="chronicle.html" data-home-stat="chronicle" aria-label="Open Chronicle">
-        <span class="home-stat-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
-        <span class="home-stat-label">Chronicle</span>
-        <strong data-home-stat-value>...</strong>
-        <span data-home-stat-detail>Loading...</span>
-      </a>
-      <a class="home-stat-card" href="chat-repository.html" data-home-stat="chat-logs" data-admin-only hidden aria-label="Open Chat Repository">
-        <span class="home-stat-icon" aria-hidden="true"><ph-chats-circle weight="duotone"></ph-chats-circle></span>
-        <span class="home-stat-label">Chat Logs</span>
-        <strong data-home-stat-value>...</strong>
-        <span data-home-stat-detail>Loading...</span>
-      </a>
-      <a class="home-stat-card" href="calendar.html" data-home-stat="calendar" aria-label="Open Calendar">
-        <span class="home-stat-icon" aria-hidden="true"><ph-calendar-blank weight="duotone"></ph-calendar-blank></span>
-        <span class="home-stat-label">Calendar</span>
-        <strong data-home-stat-value>...</strong>
-        <span data-home-stat-detail>Loading...</span>
-      </a>
-      <a class="home-stat-card" href="movie-tracker.html" data-home-stat="movies" aria-label="Open Movie Tracker">
-        <span class="home-stat-icon" aria-hidden="true"><ph-film-slate weight="duotone"></ph-film-slate></span>
-        <span class="home-stat-label">Movies</span>
-        <strong data-home-stat-value>...</strong>
-        <span data-home-stat-detail>Loading...</span>
-      </a>
-      <a class="home-stat-card" href="image-generation.html" data-home-stat="images" aria-label="Open Image Generation">
-        <span class="home-stat-icon" aria-hidden="true"><ph-image-square weight="duotone"></ph-image-square></span>
-        <span class="home-stat-label">Image Generation</span>
-        <strong data-home-stat-value>...</strong>
-        <span data-home-stat-detail>Loading...</span>
-      </a>
-    </section>
-
-    <section class="home-overview-grid" aria-label="Dashboard overview">
-      <article class="home-panel home-upcoming-panel">
-        <div class="home-panel-header">
-          <div>
-            <p class="home-eyebrow">Today / Upcoming</p>
-            <h2>Calendar</h2>
-          </div>
-          <div class="home-panel-actions">
-            <span data-home-upcoming-count>Loading...</span>
-            <a href="calendar.html">Open Calendar</a>
-          </div>
-        </div>
-        <div class="home-upcoming-list" data-home-upcoming-events>
-          <p class="empty-state">Loading upcoming events...</p>
+    <section class="home-command-grid" aria-label="Creative command center">
+      <article class="home-feature-card" data-home-feature>
+        <div class="home-feature-content">
+          <span class="home-feature-kicker">Continue Where You Left Off</span>
+          <h2>Loading latest work...</h2>
+          <p data-home-feature-status>Finding your freshest project, document, or story thread.</p>
         </div>
       </article>
 
-      <article class="home-panel home-todo-placeholder">
-        <div class="home-panel-header">
-          <div>
-            <p class="home-eyebrow">Tasks</p>
-            <h2>ToDo</h2>
-          </div>
-          <div class="home-panel-actions">
+      <aside class="home-right-rail" aria-label="Today at a glance">
+        <article class="home-today-card" data-home-today-card>
+          <div class="home-card-heading">
+            <div>
+              <p class="home-eyebrow">Today</p>
+              <h2>Loading schedule...</h2>
+            </div>
             <a href="todo.html">Open ToDo</a>
           </div>
-        </div>
-        <a class="home-todo-card" href="todo.html">
-          <span class="home-module-icon" aria-hidden="true"><ph-check-square-offset weight="duotone"></ph-check-square-offset></span>
-          <div>
-            <strong>Task planning for Centralis</strong>
-            <p data-home-todo-summary>Loading task summary...</p>
+          <p class="empty-state">Checking calendar and tasks...</p>
+        </article>
+
+        <article class="home-mini-calendar-card">
+          <div class="home-card-heading">
+            <div>
+              <p class="home-eyebrow">Mini Month</p>
+              <h2 data-home-mini-calendar-title>Calendar</h2>
+            </div>
+            <a href="calendar.html">Open Calendar</a>
           </div>
-        </a>
-      </article>
+          <div class="home-mini-calendar" data-home-mini-calendar>
+            <p class="empty-state">Loading month...</p>
+          </div>
+        </article>
+      </aside>
     </section>
 
-    <section class="home-activity-section" aria-label="Recent activity">
+    <section class="home-glance-section" aria-label="Centralis at a glance" data-home-glance>
       <div class="home-section-title">
-        <p class="home-eyebrow">Recent Activity</p>
+        <p class="home-eyebrow">Centralis at a Glance</p>
+        <h2>Workspace signals</h2>
+      </div>
+      <div class="home-glance-grid">
+        <a class="home-glance-item" href="universe-builder.html" data-home-stat="universes" style="--home-item-accent: #35d0ba;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-planet weight="duotone"></ph-planet></span>
+          <span class="home-stat-label">Universes</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+        <a class="home-glance-item" href="chronicle.html" data-home-stat="chronicle" style="--home-item-accent: #f59e0b;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
+          <span class="home-stat-label">Chronicle</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+        <a class="home-glance-item" href="calendar.html" data-home-stat="calendar" style="--home-item-accent: #38bdf8;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-calendar-blank weight="duotone"></ph-calendar-blank></span>
+          <span class="home-stat-label">Calendar</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+        <a class="home-glance-item" href="todo.html" data-home-stat="todos" style="--home-item-accent: #a78bfa;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-check-square-offset weight="duotone"></ph-check-square-offset></span>
+          <span class="home-stat-label">ToDo</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+        <a class="home-glance-item" href="movie-tracker.html" data-home-stat="movies" style="--home-item-accent: #fb7185;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-film-slate weight="duotone"></ph-film-slate></span>
+          <span class="home-stat-label">Movies</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+        <a class="home-glance-item" href="image-generation.html" data-home-stat="images" style="--home-item-accent: #60a5fa;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-image-square weight="duotone"></ph-image-square></span>
+          <span class="home-stat-label">Images</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+        <a class="home-glance-item" href="chat-repository.html" data-home-stat="chat-logs" data-admin-only hidden style="--home-item-accent: #22d3ee;">
+          <span class="home-glance-icon" aria-hidden="true"><ph-chats-circle weight="duotone"></ph-chats-circle></span>
+          <span class="home-stat-label">Chat Logs</span>
+          <strong data-home-stat-value>...</strong>
+          <span data-home-stat-detail>Loading...</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="home-quick-access-section" aria-label="Quick access">
+      <div class="home-section-title">
+        <p class="home-eyebrow">Quick Access</p>
+        <h2>Jump back in</h2>
+      </div>
+      <div class="home-quick-access" data-home-quick-access>
+        <p class="empty-state">Loading shortcuts...</p>
+      </div>
+    </section>
+
+    <section class="home-gallery-section" aria-label="Recent work">
+      <div class="home-section-title">
+        <p class="home-eyebrow">Recent Work</p>
         <h2>Latest work across Centralis</h2>
       </div>
-
-      <div class="home-work-grid">
-      <article class="home-panel" data-admin-only hidden>
-        <div class="home-panel-header">
-          <div>
-            <p class="home-eyebrow">Source Material</p>
-            <h2>Recent Documents</h2>
-          </div>
-          <div class="home-panel-actions">
-            <span data-home-source-document-count>Loading...</span>
-            <a href="universe-builder.html">Open Universe Builder</a>
-            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
-              <span class="sr-only">Collapse Recent Documents</span>
-              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
-            </button>
-          </div>
-        </div>
-        <div class="home-section-body home-source-document-list" data-home-section-body data-home-source-document-list>
-          <p class="empty-state">Loading documents...</p>
-        </div>
-      </article>
-
-      <article class="home-panel">
-        <div class="home-panel-header">
-          <div>
-            <p class="home-eyebrow">Worldbuilding</p>
-            <h2>Recent Universes</h2>
-          </div>
-          <div class="home-panel-actions">
-            <span data-home-universe-count>Loading...</span>
-            <a href="universe-builder.html">View all</a>
-            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
-              <span class="sr-only">Collapse Recent Universes</span>
-              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
-            </button>
-          </div>
-        </div>
-        <div class="home-section-body home-universe-list" data-home-section-body data-universe-list>
-          <p class="empty-state">Loading universes...</p>
-        </div>
-      </article>
-
-      <article class="home-panel">
-        <div class="home-panel-header">
-          <div>
-            <p class="home-eyebrow">Chronicle</p>
-            <h2>Recent Elements</h2>
-          </div>
-          <div class="home-panel-actions">
-            <span data-home-chronicle-count>Loading...</span>
-            <a href="chronicle.html">Open Chronicle</a>
-            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
-              <span class="sr-only">Collapse Recent Elements</span>
-              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
-            </button>
-          </div>
-        </div>
-        <div class="home-section-body home-chronicle-list" data-home-section-body data-home-chronicle-list>
-          <p class="empty-state">Loading Chronicle elements...</p>
-        </div>
-      </article>
-
-      <article class="home-panel">
-        <div class="home-panel-header">
-          <div>
-            <p class="home-eyebrow">Chat Repository</p>
-            <h2>Recent Chat Logs</h2>
-          </div>
-          <div class="home-panel-actions">
-            <span data-home-chat-log-count>Loading...</span>
-            <a href="chat-repository.html">Open Repository</a>
-            <button class="home-section-toggle" type="button" aria-expanded="true" data-home-section-toggle>
-              <span class="sr-only">Collapse Recent Chat Logs</span>
-              <ph-caret-up weight="bold" aria-hidden="true"></ph-caret-up>
-            </button>
-          </div>
-        </div>
-        <div class="home-section-body home-chat-log-list" data-home-section-body data-home-chat-log-list>
-          <p class="empty-state">Loading chat logs...</p>
-        </div>
-      </article>
+      <div class="home-recent-work" data-home-recent-work>
+        <p class="empty-state">Loading recent work...</p>
       </div>
     </section>
   </main>
@@ -404,6 +346,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=home-admin-menu-1"></script>
+  <script src="script.js?v=home-dark-gallery-1"></script>
 </body>
 </html>
