@@ -3240,8 +3240,8 @@
   }
 
   async function combineSelectedFiles() {
-    if (!combineState.files.length) {
-      setCombineStatus("Select at least one text file to combine.", "error");
+    if (combineState.files.length < 2) {
+      setCombineStatus("Select at least two text files to combine.", "error");
       return;
     }
 
