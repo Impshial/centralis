@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&display=swap" rel="stylesheet">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=home-dark-gallery-1">
+  <link rel="stylesheet" href="styles.css?v=home-dark-gallery-3">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -184,119 +184,98 @@
   </header>
 
   <main class="page home-dashboard">
-    <header class="home-dashboard-header">
-      <div>
-        <p class="home-eyebrow">Overview</p>
-        <h1>Dashboard</h1>
-      </div>
-      <span class="home-refresh-state" data-home-refreshed>Refreshing...</span>
-    </header>
-
-    <section class="home-command-grid" aria-label="Creative command center">
-      <article class="home-feature-card" data-home-feature>
-        <div class="home-feature-content">
-          <span class="home-feature-kicker">Continue Where You Left Off</span>
-          <h2>Loading latest work...</h2>
-          <p data-home-feature-status>Finding your freshest project, document, or story thread.</p>
+    <section class="home-board" aria-label="Centralis dashboard">
+      <div class="home-board-column home-board-column--spotlight">
+        <div class="home-section-heading">
+          <h2>Spotlight Item</h2>
         </div>
-      </article>
-
-      <aside class="home-right-rail" aria-label="Today at a glance">
-        <article class="home-today-card" data-home-today-card>
-          <div class="home-card-heading">
-            <div>
-              <p class="home-eyebrow">Today</p>
-              <h2>Loading schedule...</h2>
-            </div>
-            <a href="todo.html">Open ToDo</a>
+        <article class="home-feature-card" data-home-feature>
+          <div class="home-feature-content">
+            <span class="home-spotlight-label">Spotlight Item</span>
+            <span class="home-feature-kicker">Finding a spotlight...</span>
+            <h2>Loading spotlight...</h2>
+            <p data-home-feature-status>Choosing something from your workspace.</p>
           </div>
-          <p class="empty-state">Checking calendar and tasks...</p>
         </article>
 
-        <article class="home-mini-calendar-card">
-          <div class="home-card-heading">
-            <div>
-              <p class="home-eyebrow">Mini Month</p>
-              <h2 data-home-mini-calendar-title>Calendar</h2>
-            </div>
-            <a href="calendar.html">Open Calendar</a>
+        <div class="home-section-heading">
+          <h2>Schedule and Tasks</h2>
+        </div>
+        <article class="home-today-card" data-home-today-card>
+          <p class="empty-state">Checking calendar and tasks...</p>
+        </article>
+      </div>
+
+      <div class="home-board-column home-board-column--main">
+        <section aria-label="Centralis at a glance" data-home-glance>
+          <div class="home-section-heading">
+            <h2>Centralis at a Glance</h2>
           </div>
+          <div class="home-glance-section">
+            <div class="home-glance-grid">
+              <a class="home-glance-item" href="universe-builder.html" data-home-stat="universes">
+                <span class="home-glance-icon" aria-hidden="true"><ph-planet weight="duotone"></ph-planet></span>
+                <span class="home-stat-label">Universes</span>
+                <strong data-home-stat-value>...</strong>
+                <span data-home-stat-detail>Loading...</span>
+              </a>
+              <a class="home-glance-item" href="chronicle.html" data-home-stat="chronicle">
+                <span class="home-glance-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
+                <span class="home-stat-label">Chronicle</span>
+                <strong data-home-stat-value>...</strong>
+                <span data-home-stat-detail>Loading...</span>
+              </a>
+              <a class="home-glance-item" href="calendar.html" data-home-stat="calendar">
+                <span class="home-glance-icon" aria-hidden="true"><ph-calendar-blank weight="duotone"></ph-calendar-blank></span>
+                <span class="home-stat-label">Calendar</span>
+                <strong data-home-stat-value>...</strong>
+                <span data-home-stat-detail>Loading...</span>
+              </a>
+              <a class="home-glance-item" href="todo.html" data-home-stat="todos">
+                <span class="home-glance-icon" aria-hidden="true"><ph-check-square-offset weight="duotone"></ph-check-square-offset></span>
+                <span class="home-stat-label">ToDo</span>
+                <strong data-home-stat-value>...</strong>
+                <span data-home-stat-detail>Loading...</span>
+              </a>
+              <a class="home-glance-item" href="image-generation.html" data-home-stat="images">
+                <span class="home-glance-icon" aria-hidden="true"><ph-image-square weight="duotone"></ph-image-square></span>
+                <span class="home-stat-label">Images</span>
+                <strong data-home-stat-value>...</strong>
+                <span data-home-stat-detail>Loading...</span>
+              </a>
+              <a class="home-glance-item" href="god-engine.html" data-home-stat="god">
+                <span class="home-glance-icon" aria-hidden="true"><ph-dna weight="duotone"></ph-dna></span>
+                <span class="home-stat-label">God Engine</span>
+                <strong data-home-stat-value>...</strong>
+                <span data-home-stat-detail>Loading...</span>
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="Recent work">
+          <div class="home-section-heading">
+            <h2>Latest work across Centralis</h2>
+          </div>
+          <div class="home-gallery-section">
+            <div class="home-recent-work" data-home-recent-work>
+              <p class="empty-state">Loading recent work...</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="home-board-column home-board-column--calendar">
+        <div class="home-section-heading">
+          <h2 data-home-mini-calendar-title>Calendar</h2>
+        </div>
+        <article class="home-mini-calendar-card">
           <div class="home-mini-calendar" data-home-mini-calendar>
             <p class="empty-state">Loading month...</p>
           </div>
+          <a class="home-card-link" href="calendar.html">Open Calendar</a>
         </article>
       </aside>
-    </section>
-
-    <section class="home-glance-section" aria-label="Centralis at a glance" data-home-glance>
-      <div class="home-section-title">
-        <p class="home-eyebrow">Centralis at a Glance</p>
-        <h2>Workspace signals</h2>
-      </div>
-      <div class="home-glance-grid">
-        <a class="home-glance-item" href="universe-builder.html" data-home-stat="universes" style="--home-item-accent: #35d0ba;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-planet weight="duotone"></ph-planet></span>
-          <span class="home-stat-label">Universes</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-        <a class="home-glance-item" href="chronicle.html" data-home-stat="chronicle" style="--home-item-accent: #f59e0b;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-file-text weight="duotone"></ph-file-text></span>
-          <span class="home-stat-label">Chronicle</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-        <a class="home-glance-item" href="calendar.html" data-home-stat="calendar" style="--home-item-accent: #38bdf8;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-calendar-blank weight="duotone"></ph-calendar-blank></span>
-          <span class="home-stat-label">Calendar</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-        <a class="home-glance-item" href="todo.html" data-home-stat="todos" style="--home-item-accent: #a78bfa;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-check-square-offset weight="duotone"></ph-check-square-offset></span>
-          <span class="home-stat-label">ToDo</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-        <a class="home-glance-item" href="movie-tracker.html" data-home-stat="movies" style="--home-item-accent: #fb7185;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-film-slate weight="duotone"></ph-film-slate></span>
-          <span class="home-stat-label">Movies</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-        <a class="home-glance-item" href="image-generation.html" data-home-stat="images" style="--home-item-accent: #60a5fa;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-image-square weight="duotone"></ph-image-square></span>
-          <span class="home-stat-label">Images</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-        <a class="home-glance-item" href="chat-repository.html" data-home-stat="chat-logs" data-admin-only hidden style="--home-item-accent: #22d3ee;">
-          <span class="home-glance-icon" aria-hidden="true"><ph-chats-circle weight="duotone"></ph-chats-circle></span>
-          <span class="home-stat-label">Chat Logs</span>
-          <strong data-home-stat-value>...</strong>
-          <span data-home-stat-detail>Loading...</span>
-        </a>
-      </div>
-    </section>
-
-    <section class="home-quick-access-section" aria-label="Quick access">
-      <div class="home-section-title">
-        <p class="home-eyebrow">Quick Access</p>
-        <h2>Jump back in</h2>
-      </div>
-      <div class="home-quick-access" data-home-quick-access>
-        <p class="empty-state">Loading shortcuts...</p>
-      </div>
-    </section>
-
-    <section class="home-gallery-section" aria-label="Recent work">
-      <div class="home-section-title">
-        <p class="home-eyebrow">Recent Work</p>
-        <h2>Latest work across Centralis</h2>
-      </div>
-      <div class="home-recent-work" data-home-recent-work>
-        <p class="empty-state">Loading recent work...</p>
-      </div>
     </section>
   </main>
   </div>
@@ -346,6 +325,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="script.js?v=home-dark-gallery-1"></script>
+  <script src="script.js?v=home-dark-gallery-3"></script>
 </body>
 </html>

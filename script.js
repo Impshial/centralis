@@ -1375,7 +1375,6 @@ const homeFeatureStatus = document.querySelector("[data-home-feature-status]");
 const homeTodayCard = document.querySelector("[data-home-today-card]");
 const homeMiniCalendar = document.querySelector("[data-home-mini-calendar]");
 const homeMiniCalendarTitle = document.querySelector("[data-home-mini-calendar-title]");
-const homeQuickAccess = document.querySelector("[data-home-quick-access]");
 const homeRecentWork = document.querySelector("[data-home-recent-work]");
 const googleAuthButton = document.querySelector("[data-auth-google]");
 const signOutButtons = document.querySelectorAll("[data-sign-out]");
@@ -2438,18 +2437,20 @@ function escapeCssUrl(value) {
 
 function getHomeModuleAccent(module) {
   const accents = {
-    arc: "#a78bfa",
-    universe: "#35d0ba",
-    chronicle: "#f59e0b",
-    source: "#38bdf8",
-    chat: "#22d3ee",
-    calendar: "#38bdf8",
-    images: "#60a5fa",
-    movies: "#fb7185",
-    useful: "#f97316",
-    listmaker: "#84cc16",
+    arc: "var(--home-accent-arc)",
+    universe: "var(--home-accent-universe)",
+    chronicle: "var(--home-accent-chronicle)",
+    source: "var(--home-accent-source)",
+    chat: "var(--home-accent-chat)",
+    calendar: "var(--home-accent-calendar)",
+    images: "var(--home-accent-images)",
+    movies: "var(--home-accent-movies)",
+    useful: "var(--home-accent-useful)",
+    listmaker: "var(--home-accent-listmaker)",
+    stellar: "var(--home-accent-stellar)",
+    god: "var(--home-accent-god)",
   };
-  return accents[module] || "#7dd3fc";
+  return accents[module] || "var(--theme-primary)";
 }
 
 function setHomeFeatureLoading() {
@@ -2458,29 +2459,32 @@ function setHomeFeatureLoading() {
   homeFeature.removeAttribute("style");
   homeFeature.innerHTML = `
     <div class="home-feature-content">
-      <span class="home-feature-kicker">Continue Where You Left Off</span>
-      <h2>Loading latest work...</h2>
-      <p data-home-feature-status>Finding your freshest project, document, or story thread.</p>
+      <span class="home-spotlight-label">Spotlight Item</span>
+      <span class="home-feature-kicker">Finding a spotlight...</span>
+      <h2>Loading spotlight...</h2>
+      <p data-home-feature-status>Choosing something from your workspace.</p>
     </div>
   `;
 }
 
 function renderHomeFeature(records = []) {
   if (!homeFeature) return;
-  const record = records.find(Boolean);
+  const spotlightRecords = records.filter((record) => record && hasMeaningfulHomeDescription(record.description));
+  const record = spotlightRecords.length ? spotlightRecords[Math.floor(Math.random() * spotlightRecords.length)] : null;
   if (!record) {
     homeFeature.classList.add("is-empty");
     homeFeature.classList.remove("has-image");
-    homeFeature.style.setProperty("--home-item-accent", "#38bdf8");
+    homeFeature.style.setProperty("--home-item-accent", "var(--theme-primary)");
     homeFeature.style.removeProperty("--home-card-image");
     homeFeature.innerHTML = `
       <div class="home-feature-content">
-        <span class="home-feature-kicker">Continue Where You Left Off</span>
+        <span class="home-spotlight-label">Spotlight Item</span>
+        <span class="home-feature-kicker">Nothing to spotlight yet</span>
         <h2>Build something strange and useful.</h2>
-        <p data-home-feature-status>No recent work yet. Start with a universe, story arc, image, or utility.</p>
-        <div class="home-feature-actions">
-          <a class="home-feature-action" href="universe-builder.html">Open Universe Builder</a>
-          <a class="home-feature-action" href="arc-studio.html">Open Arc Studio</a>
+        <p data-home-feature-status>Start with a universe, Chronicle element, stellar system, or God Engine world.</p>
+        <div class="home-feature-footer">
+          <span></span>
+          <a class="home-card-link" href="universe-builder.html">Open Universe Builder</a>
         </div>
       </div>
     `;
@@ -2497,61 +2501,48 @@ function renderHomeFeature(records = []) {
   }
   homeFeature.innerHTML = `
     <div class="home-feature-content">
-      <span class="home-feature-kicker">${escapeHtml(record.label || "Latest Work")}</span>
+      <span class="home-spotlight-label">A Spotlight On ${escapeHtml(record.title || "Untitled")}</span>
+      <span class="home-feature-kicker">${escapeHtml(record.label || "Spotlight Item")}</span>
       <h2>${escapeHtml(record.title || "Untitled")}</h2>
       <p data-home-feature-status>${escapeHtml(record.description || record.meta || "Ready when you are.")}</p>
-      <div class="home-feature-meta">
-        <span><${record.icon || "ph-sparkle"} weight="duotone" aria-hidden="true"></${record.icon || "ph-sparkle"}>${escapeHtml(record.meta || "Recent update")}</span>
-        <span>${escapeHtml(formatShortDate(record.timestamp))}</span>
+      <div class="home-feature-footer">
+        <div class="home-feature-meta">
+          <span><${record.icon || "ph-sparkle"} weight="duotone" aria-hidden="true"></${record.icon || "ph-sparkle"}>${escapeHtml(record.meta || "Recent update")}</span>
+          <span>${escapeHtml(formatShortDate(record.timestamp))}</span>
+        </div>
+        <a class="home-card-link" href="${record.href || "#"}">${escapeHtml(record.cta || "Open")}</a>
       </div>
-      <a class="home-feature-action" href="${record.href || "#"}">${escapeHtml(record.cta || "Open")}</a>
     </div>
   `;
 }
 
-function renderHomeToday(calendarMetric = {}, todoMetric = {}) {
+function renderHomeToday(_calendarMetric = {}, todoMetric = {}) {
   if (!homeTodayCard) return;
-  const items = calendarMetric.items || [];
-  const todayKey = formatDateKeyLocal(new Date());
-  const todayItems = items.filter((item) => String(item.dateKey || "").startsWith(todayKey));
   const openTasks = Number(todoMetric.open || 0);
   const scheduledTasks = Number(todoMetric.scheduled || 0);
-  const previewItems = (todayItems.length ? todayItems : items).slice(0, 3);
-  const heading = todayItems.length
-    ? `${todayItems.length} ${pluralize(todayItems.length, "thing")} today`
+  const previewTasks = (todoMetric.upcomingTasks || []).slice(0, 3);
+  const todayKey = formatDateKeyLocal(new Date());
+  const todayTasks = previewTasks.filter((task) => task.due_date === todayKey);
+  const heading = todayTasks.length
+    ? `${todayTasks.length} ${pluralize(todayTasks.length, "task")} today`
     : "Quiet today";
   homeTodayCard.innerHTML = `
-    <div class="home-card-heading">
-      <div>
-        <p class="home-eyebrow">Today</p>
-        <h2>${escapeHtml(heading)}</h2>
-      </div>
-      <a href="todo.html">Open ToDo</a>
-    </div>
+    <h3>${escapeHtml(heading)}</h3>
     <div class="home-today-summary">
       <span><strong>${escapeHtml(String(openTasks))}</strong> open</span>
       <span><strong>${escapeHtml(String(scheduledTasks))}</strong> scheduled</span>
     </div>
-    ${previewItems.length ? `
+    ${previewTasks.length ? `
       <div class="home-today-list">
-        ${previewItems.map((item) => {
-          if (item.type === "task") {
-            return `
-              <a class="home-today-item is-task" href="todo.html">
-                <span>${escapeHtml(formatShortDate(item.sortDate))}</span>
-                <strong>${escapeHtml(item.task?.title || "Untitled Task")}</strong>
-              </a>
-            `;
-          }
-          return `
-            <a class="home-today-item" href="calendar.html">
-              <span>${escapeHtml(formatEventTime(item.event))}</span>
-              <strong>${escapeHtml(item.event?.title || "Untitled Event")}</strong>
-            </a>
-          `;
-        }).join("")}
+        ${previewTasks.map((task) => `
+          <a class="home-today-item is-task" href="todo.html">
+            <span>${escapeHtml(formatShortDate(`${task.due_date}T00:00:00`))}</span>
+            <strong>${escapeHtml(task.title || "Untitled Task")}</strong>
+          </a>
+        `).join("")}
       </div>
-    ` : '<p class="empty-state">No events or dated tasks on deck.</p>'}
+    ` : '<p class="empty-state">No dated tasks on deck.</p>'}
+    <a class="home-card-link" href="todo.html">Open ToDo</a>
   `;
 }
 
@@ -2584,11 +2575,20 @@ function renderHomeMiniCalendar(calendarMetric = {}) {
     cells.push(`<span class="${classes}" aria-label="${escapeHtml(formatShortDate(date))}">${day}</span>`);
   }
 
+  const eventItems = (calendarMetric.items || []).filter((item) => item.type === "event").slice(0, 4);
   homeMiniCalendar.innerHTML = `
     <div class="home-calendar-weekdays" aria-hidden="true">
       <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
     </div>
     <div class="home-calendar-grid">${cells.join("")}</div>
+    <div class="home-calendar-event-list">
+      ${eventItems.length ? eventItems.map((item) => `
+        <a class="home-calendar-event" href="calendar.html">
+          <span>${escapeHtml(formatEventTime(item.event))}</span>
+          <strong>${escapeHtml(item.event?.title || "Untitled Event")}</strong>
+        </a>
+      `).join("") : '<p class="empty-state">No upcoming calendar events.</p>'}
+    </div>
   `;
 }
 
@@ -2851,14 +2851,11 @@ async function fetchHomeCalendarMetric() {
   const calendars = calendarsResponse.data || [];
   const calendarIds = calendars.map((calendar) => calendar.id).filter(Boolean);
   const now = new Date().toISOString();
-  const today = now.slice(0, 10);
   const currentMonth = new Date();
   const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
   const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
   const monthStartIso = monthStart.toISOString();
   const monthEndIso = monthEnd.toISOString();
-  const monthStartKey = formatDateKeyLocal(monthStart);
-  const monthEndKey = formatDateKeyLocal(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0));
   let eventsResponse = { data: [], count: 0 };
   let monthEventsResponse = { data: [] };
   if (calendarIds.length) {
@@ -2885,38 +2882,11 @@ async function fetchHomeCalendarMetric() {
   if (eventsResponse.error) throw eventsResponse.error;
   if (monthEventsResponse.error) throw monthEventsResponse.error;
 
-  const tasksResponse = await withTimeout(supabaseClient
-    .from("todo_tasks")
-    .select("id,title,due_date,status,priority,category", { count: "exact" })
-    .eq("user_id", currentAppUser.id)
-    .eq("deleted", false)
-    .not("due_date", "is", null)
-    .gte("due_date", today)
-    .order("due_date", { ascending: true })
-    .limit(5), "Loading upcoming tasks");
-
-  if (tasksResponse.error) throw tasksResponse.error;
-
-  const monthTasksResponse = await withTimeout(supabaseClient
-    .from("todo_tasks")
-    .select("id,due_date")
-    .eq("user_id", currentAppUser.id)
-    .eq("deleted", false)
-    .not("due_date", "is", null)
-    .gte("due_date", monthStartKey)
-    .lte("due_date", monthEndKey)
-    .order("due_date", { ascending: true })
-    .limit(200), "Loading homepage task markers");
-
-  if (monthTasksResponse.error) throw monthTasksResponse.error;
-
   const events = eventsResponse.data || [];
-  const tasks = tasksResponse.data || [];
-  const total = (eventsResponse.count ?? events.length) + (tasksResponse.count ?? tasks.length);
+  const total = eventsResponse.count ?? events.length;
   const calendarsById = new Map(calendars.map((calendar) => [calendar.id, calendar]));
   const markedDates = [
     ...(monthEventsResponse.data || []).map((event) => formatDateKeyLocal(event.start_time)),
-    ...(monthTasksResponse.data || []).map((task) => task.due_date),
   ].filter(Boolean);
   const items = [
     ...events.map((event) => ({
@@ -2925,22 +2895,16 @@ async function fetchHomeCalendarMetric() {
       dateKey: formatDateKeyLocal(event.start_time),
       event,
     })),
-    ...tasks.map((task) => ({
-      type: "task",
-      sortDate: `${task.due_date}T00:00:00`,
-      dateKey: task.due_date,
-      task,
-    })),
   ].sort((first, second) => new Date(first.sortDate) - new Date(second.sortDate)).slice(0, 5);
   const nextItem = items[0];
   setHomeStat("calendar", formatCompactNumber(total), nextItem ? `Next: ${formatShortDate(nextItem.sortDate)}` : "Nothing upcoming");
-  return { total, recent: items.length, events, tasks, items, calendarsById, markedDates };
+  return { total, recent: items.length, events, items, calendarsById, markedDates };
 }
 
 async function fetchHomeTodoMetric() {
   const { data, error, count } = await withTimeout(supabaseClient
     .from("todo_tasks")
-    .select("id,status,due_date,updated_at,created_at", { count: "exact" })
+    .select("id,title,status,due_date,updated_at,created_at", { count: "exact" })
     .eq("user_id", currentAppUser.id)
     .eq("deleted", false), "Loading ToDo overview");
 
@@ -2950,13 +2914,18 @@ async function fetchHomeTodoMetric() {
   const total = count ?? rows.length;
   const open = rows.filter((task) => task.status !== "completed").length;
   const scheduled = rows.filter((task) => task.due_date).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingTasks = rows
+    .filter((task) => task.due_date && task.due_date >= today && task.status !== "completed")
+    .sort((first, second) => String(first.due_date).localeCompare(String(second.due_date)))
+    .slice(0, 5);
   if (homeTodoSummary) {
     homeTodoSummary.textContent = total
       ? `${open} open - ${scheduled} scheduled`
       : "No tasks yet. Start a list in ToDo.";
   }
   setHomeStat("todos", formatCompactNumber(open), scheduled ? `${scheduled} scheduled` : "No dated tasks");
-  return { total, open, scheduled };
+  return { total, open, scheduled, upcomingTasks };
 }
 
 async function fetchHomeMovieMetric() {
@@ -2989,6 +2958,22 @@ async function fetchHomeImageMetric() {
   const total = count ?? rows.length;
   const recent = rows.filter((session) => isRecentDate(session.updated_at || session.created_at)).length;
   setHomeStat("images", formatCompactNumber(total), `${recent} ${pluralize(recent, "recent session")}`);
+  return { total, recent };
+}
+
+async function fetchHomeGodMetric() {
+  const { data, error, count } = await withTimeout(supabaseClient
+    .from("god_evolutions")
+    .select("id,updated_at,created_at", { count: "exact" })
+    .eq("user_id", currentAppUser.id)
+    .eq("deleted", false), "Loading God Engine overview");
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = count ?? rows.length;
+  const recent = rows.filter((evolution) => isRecentDate(evolution.updated_at || evolution.created_at)).length;
+  setHomeStat("god", formatCompactNumber(total), `${recent} ${pluralize(recent, "recent evolution")}`);
   return { total, recent };
 }
 
@@ -3032,7 +3017,7 @@ function renderHomeUpcomingEvents(calendarMetric) {
 }
 
 function renderHomeModules(metrics = {}) {
-  const target = homeQuickAccess || homeModuleGrid;
+  const target = homeModuleGrid;
   if (!target) return;
 
   const modules = [
@@ -3144,6 +3129,11 @@ function makeHomeWorkRecord({
   };
 }
 
+function hasMeaningfulHomeDescription(description) {
+  const value = String(description || "").trim();
+  return Boolean(value) && !/^no .+ yet\.?$/i.test(value);
+}
+
 function sortHomeWorkRecords(records = []) {
   return records
     .filter((record) => record?.title)
@@ -3152,7 +3142,7 @@ function sortHomeWorkRecords(records = []) {
 
 function renderHomeRecentWork(records = []) {
   if (!homeRecentWork) return;
-  const visibleRecords = records.slice(0, 12);
+  const visibleRecords = records.slice(0, 8);
   if (!visibleRecords.length) {
     homeRecentWork.innerHTML = '<p class="empty-state">No recent work yet. New projects will gather here as you build.</p>';
     return;
@@ -3169,7 +3159,6 @@ function renderHomeRecentWork(records = []) {
         <span class="home-work-icon" aria-hidden="true"><${record.icon || "ph-sparkle"} weight="duotone"></${record.icon || "ph-sparkle"}></span>
         <span class="home-work-label">${escapeHtml(record.label || "Recent")}</span>
         <strong>${escapeHtml(record.title || "Untitled")}</strong>
-        <em>${escapeHtml(record.meta || formatShortDate(record.timestamp))}</em>
         <span>${escapeHtml(createBlurb(record.description || "", 104))}</span>
       </a>
     `;
@@ -3189,6 +3178,9 @@ async function loadHomeRecentWork() {
       arcResponse,
       universesResponse,
       elementsResponse,
+      stellarSystemsResponse,
+      imageSessionsResponse,
+      godEvolutionsResponse,
       documentsResponse,
       chatLogsResponse,
     ] = await Promise.all([
@@ -3211,8 +3203,30 @@ async function loadHomeRecentWork() {
         .from(ELEMENTS_TABLE)
         .select("id,name,description,universe_id,updated_at,element_type_id")
         .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
         .order("updated_at", { ascending: false })
         .limit(8), "Loading homepage Chronicle elements"),
+      withTimeout(supabaseClient
+        .from("stellar_systems")
+        .select("id,name,catalog_code,description,star_count,planet_count,updated_at,created_at")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .order("updated_at", { ascending: false })
+        .limit(8), "Loading homepage Stellar Architect systems"),
+      withTimeout(supabaseClient
+        .from("image_generation_sessions")
+        .select("id,title,updated_at,created_at")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .order("updated_at", { ascending: false })
+        .limit(8), "Loading homepage image generation sessions"),
+      withTimeout(supabaseClient
+        .from("god_evolutions")
+        .select("id,name,description,world_summary,starter_kind,starting_mode,updated_at,created_at")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .order("updated_at", { ascending: false })
+        .limit(8), "Loading homepage God Engine worlds"),
       withTimeout(supabaseClient
         .from(UNIVERSE_SOURCE_DOCUMENTS_TABLE)
         .select("id,universe_id,original_filename,display_name,mime_type,file_size,created_at,updated_at,universes(name)")
@@ -3232,7 +3246,7 @@ async function loadHomeRecentWork() {
         : Promise.resolve({ data: [], error: null }),
     ]);
 
-    const responses = [arcResponse, universesResponse, elementsResponse, documentsResponse, chatLogsResponse];
+    const responses = [arcResponse, universesResponse, elementsResponse, stellarSystemsResponse, imageSessionsResponse, godEvolutionsResponse, documentsResponse, chatLogsResponse];
     const firstError = responses.find((response) => response?.error)?.error;
     if (firstError) throw firstError;
 
@@ -3241,6 +3255,7 @@ async function loadHomeRecentWork() {
     const universeImagesById = await fetchPrimaryImagesByObjectId(universes.map((universe) => universe.id));
     const elementImagesById = await fetchPrimaryImagesByObjectId(elements.map((element) => element.id));
     const universeIds = [...new Set(elements.map((element) => element.universe_id).filter(Boolean))];
+    const elementIds = elements.map((element) => element.id).filter(Boolean);
     let universesById = new Map();
     if (universeIds.length) {
       const universeResponse = await withTimeout(supabaseClient
@@ -3251,6 +3266,101 @@ async function loadHomeRecentWork() {
         universesById = new Map((universeResponse.data || []).map((universe) => [universe.id, universe]));
       }
     }
+    let chronicleElementIds = new Set();
+    if (elementIds.length) {
+      const chronicleModulesResponse = await withTimeout(supabaseClient
+        .from("chronicle_modules")
+        .select("element_id")
+        .eq("user_id", currentAppUser.id)
+        .eq("deleted", false)
+        .in("element_id", elementIds)
+        .limit(200), "Checking recent work Chronicle data");
+      if (!chronicleModulesResponse.error) {
+        chronicleElementIds = new Set((chronicleModulesResponse.data || []).map((module) => module.element_id).filter(Boolean));
+      }
+    }
+
+    const universeRecords = universes.map((universe) => {
+      const image = universeImagesById.get(universe.id);
+      return makeHomeWorkRecord({
+        id: universe.id,
+        moduleKey: "universe",
+        label: "Universe Builder",
+        title: universe.name || "Untitled Universe",
+        description: universe.description || "No universe description yet.",
+        meta: universe.opened_at ? `Opened ${formatShortDate(universe.opened_at)}` : `Updated ${formatShortDate(universe.updated_at)}`,
+        timestamp: universe.opened_at || universe.updated_at,
+        href: `universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}`,
+        icon: "ph-planet",
+        cta: "Open Universe",
+        imageUrl: image?.image_url,
+      });
+    });
+    const elementRecords = elements.map((element) => {
+      const image = elementImagesById.get(element.id);
+      const universe = universesById.get(element.universe_id);
+      const hasChronicleData = chronicleElementIds.has(element.id);
+      return makeHomeWorkRecord({
+        id: element.id,
+        moduleKey: hasChronicleData ? "chronicle" : "universe",
+        label: hasChronicleData ? "Chronicle" : "Universe Builder",
+        title: element.name || "Untitled Element",
+        description: element.description || "",
+        meta: universe?.name || "Standalone Element",
+        timestamp: element.updated_at,
+        href: hasChronicleData
+          ? (element.universe_id
+          ? `chronicle-editor.html#universe/${encodeURIComponent(element.universe_id)}/element/${encodeURIComponent(element.id)}`
+          : `chronicle-editor.html#element/${encodeURIComponent(element.id)}`)
+          : `universe-canvas.html?universe_id=${encodeURIComponent(element.universe_id || "")}&focus_element_id=${encodeURIComponent(element.id)}`,
+        icon: hasChronicleData ? "ph-file-text" : "ph-planet",
+        cta: "Open Element",
+        imageUrl: image?.image_url,
+      });
+    });
+    const stellarRecords = (stellarSystemsResponse.data || []).map((system) => makeHomeWorkRecord({
+      id: system.id,
+      moduleKey: "stellar",
+      label: "Stellar Architect",
+      title: system.name || "Untitled System",
+      description: system.description || system.catalog_code || "No stellar system description yet.",
+      meta: `${Number(system.star_count || 0)} ${pluralize(Number(system.star_count || 0), "star")} - ${Number(system.planet_count || 0)} ${pluralize(Number(system.planet_count || 0), "planet")}`,
+      timestamp: system.updated_at || system.created_at,
+      href: `stellar-architect.html#system/${encodeURIComponent(system.id)}`,
+      icon: "ph-sparkle",
+      cta: "Open System",
+    }));
+    const imageSessionRecords = (imageSessionsResponse.data || []).map((session) => makeHomeWorkRecord({
+      id: session.id,
+      moduleKey: "images",
+      label: "Image Generation",
+      title: session.title || "Untitled Image Session",
+      description: "A saved image-generation workspace session.",
+      meta: `Updated ${formatShortDate(session.updated_at || session.created_at)}`,
+      timestamp: session.updated_at || session.created_at,
+      href: `image-generation.html?session_id=${encodeURIComponent(session.id)}`,
+      icon: "ph-image-square",
+      cta: "Open Session",
+    }));
+    const godRecords = (godEvolutionsResponse.data || []).map((evolution) => makeHomeWorkRecord({
+      id: evolution.id,
+      moduleKey: "god",
+      label: "God Engine",
+      title: evolution.name || "Untitled Evolution",
+      description: evolution.description || evolution.world_summary || "No evolution summary yet.",
+      meta: [evolution.starter_kind, evolution.starting_mode].filter(Boolean).join(" - ") || "Evolution world",
+      timestamp: evolution.updated_at || evolution.created_at,
+      href: `god-canvas.html?evolution_id=${encodeURIComponent(evolution.id)}`,
+      icon: "ph-dna",
+      cta: "Open Evolution",
+    }));
+
+    const spotlightRecords = sortHomeWorkRecords([
+      ...universeRecords,
+      ...elementRecords,
+      ...stellarRecords,
+      ...godRecords,
+    ]);
 
     const records = sortHomeWorkRecords([
       ...(arcResponse.data || []).map((project) => makeHomeWorkRecord({
@@ -3266,41 +3376,11 @@ async function loadHomeRecentWork() {
         cta: "Open Arc",
         imageUrl: project.cover_image_url,
       })),
-      ...universes.map((universe) => {
-        const image = universeImagesById.get(universe.id);
-        return makeHomeWorkRecord({
-          id: universe.id,
-          moduleKey: "universe",
-          label: "Universe Builder",
-          title: universe.name || "Untitled Universe",
-          description: universe.description || "No universe description yet.",
-          meta: universe.opened_at ? `Opened ${formatShortDate(universe.opened_at)}` : `Updated ${formatShortDate(universe.updated_at)}`,
-          timestamp: universe.opened_at || universe.updated_at,
-          href: `universe-canvas.html?universe_id=${encodeURIComponent(universe.id)}`,
-          icon: "ph-planet",
-          cta: "Open Universe",
-          imageUrl: image?.image_url,
-        });
-      }),
-      ...elements.map((element) => {
-        const image = elementImagesById.get(element.id);
-        const universe = universesById.get(element.universe_id);
-        return makeHomeWorkRecord({
-          id: element.id,
-          moduleKey: "chronicle",
-          label: "Chronicle",
-          title: element.name || "Untitled Element",
-          description: element.description || "No element description yet.",
-          meta: universe?.name || "Standalone Element",
-          timestamp: element.updated_at,
-          href: element.universe_id
-            ? `chronicle-editor.html#universe/${encodeURIComponent(element.universe_id)}/element/${encodeURIComponent(element.id)}`
-            : `chronicle-editor.html#element/${encodeURIComponent(element.id)}`,
-          icon: "ph-file-text",
-          cta: "Open Element",
-          imageUrl: image?.image_url,
-        });
-      }),
+      ...universeRecords,
+      ...elementRecords,
+      ...stellarRecords,
+      ...imageSessionRecords,
+      ...godRecords,
       ...(documentsResponse.data || []).map((document) => makeHomeWorkRecord({
         id: document.id,
         moduleKey: "source",
@@ -3327,8 +3407,8 @@ async function loadHomeRecentWork() {
       })),
     ]);
 
-    renderHomeFeature(records);
-    renderHomeRecentWork(records.slice(1));
+    renderHomeFeature(spotlightRecords);
+    renderHomeRecentWork(records);
   } catch (error) {
     console.warn("Could not load homepage recent work:", error);
     renderHomeFeature([]);
@@ -3356,9 +3436,6 @@ async function loadHomeDashboardOverview() {
   if (homeModuleGrid) {
     homeModuleGrid.innerHTML = '<p class="empty-state">Loading modules...</p>';
   }
-  if (homeQuickAccess) {
-    homeQuickAccess.innerHTML = '<p class="empty-state">Loading shortcuts...</p>';
-  }
   if (homeTodayCard) {
     homeTodayCard.innerHTML = '<p class="empty-state">Checking calendar and tasks...</p>';
   }
@@ -3370,9 +3447,9 @@ async function loadHomeDashboardOverview() {
     universes: fetchHomeUniversesMetric,
     chronicle: fetchHomeChronicleMetric,
     calendar: fetchHomeCalendarMetric,
-    movies: fetchHomeMovieMetric,
     images: fetchHomeImageMetric,
     todos: fetchHomeTodoMetric,
+    god: fetchHomeGodMetric,
   };
   if (isAdmin) {
     metricLoaders.chatLogs = fetchHomeChatLogMetric;
@@ -3801,6 +3878,7 @@ function waitForHomepageIcons() {
       "ph-film-slate",
       "ph-image-square",
       "ph-sparkle",
+      "ph-dna",
       "ph-wrench",
       "ph-dice-five",
       "ph-user-circle",
