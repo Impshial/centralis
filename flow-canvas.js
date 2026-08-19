@@ -25,6 +25,7 @@
   const LINK_EDGE_Z_INDEX = 0;
   const params = new URLSearchParams(window.location.search);
   let universeId = params.get("universe_id");
+  const focusElementId = params.get("focus_element_id") || params.get("element_id") || "";
   const titleElement = document.querySelector("[data-universe-title]");
 
   if (universeId) {
@@ -4435,6 +4436,7 @@
     const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
+    const pendingFocusElementIdRef = React.useRef(focusElementId);
     const connectionCompletedRef = React.useRef(false);
 
     React.useEffect(() => {
@@ -5119,6 +5121,31 @@
 
       return true;
     }, []);
+
+    const focusPendingUrlElement = React.useCallback(() => {
+      const targetElementId = pendingFocusElementIdRef.current;
+      if (!targetElementId || !reactFlowInstance.current) return false;
+
+      const targetNode = nodesRef.current.find((node) => (
+        node.data?.kind === "element"
+        && String(node.data?.recordId || toRecordId(node.id)) === String(targetElementId)
+      ));
+      if (!targetNode) return false;
+
+      pendingFocusElementIdRef.current = "";
+      window.setTimeout(() => {
+        focusCanvasSearchNode(targetNode.id);
+      }, 120);
+      return true;
+    }, [focusCanvasSearchNode]);
+
+    React.useEffect(() => {
+      if (!pendingFocusElementIdRef.current || !nodes.length) return undefined;
+      const timerId = window.setTimeout(() => {
+        focusPendingUrlElement();
+      }, 180);
+      return () => window.clearTimeout(timerId);
+    }, [nodes, focusPendingUrlElement]);
 
     const fetchUniverseAiChat = React.useCallback(() => callEdgeFunction("get-universe-ai-chat", {
       headers: { "Content-Type": "application/json" },
@@ -13944,6 +13971,7 @@
         maxZoom: 2.5,
         onInit: (instance) => {
           reactFlowInstance.current = instance;
+          if (focusPendingUrlElement()) return;
           window.requestAnimationFrame(() => {
             window.setTimeout(() => fitCanvasToRenderedNodes({ padding: 0.06, duration: 0 }), 80);
           });
