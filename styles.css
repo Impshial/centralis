@@ -8846,6 +8846,26 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
   display: inline-flex;
 }
 
+.movie-add-split {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  width: 100%;
+}
+
+.movie-add-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.movie-add-menu-toggle {
+  min-width: 42px;
+  padding-inline: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(0, 0, 0, 0.18);
+}
+
 .movie-side-panel hr,
 .movie-actions-menu hr {
   width: 100%;
@@ -8876,6 +8896,12 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
   border-radius: 6px;
   background: #1e2229;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+}
+
+.movie-add-menu {
+  right: 0;
+  left: auto;
+  width: 245px;
 }
 
 .movie-actions-menu button {
@@ -8936,6 +8962,8 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
 .movie-form-grid input,
 .movie-form-grid select,
 .movie-form-grid textarea,
+.movie-bulk-add-entry input,
+.movie-bulk-add-entry select,
 .movie-manager-add input {
   width: 100%;
   min-height: 38px;
@@ -9007,6 +9035,104 @@ body.is-resizing-movie-sidebar .movie-sidebar-resizer {
   width: min(760px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 32px));
   overflow: auto;
+}
+
+.modal-dialog.movie-bulk-add-dialog {
+  width: min(1120px, calc(100vw - 32px));
+  height: min(780px, calc(100vh - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.movie-bulk-add-form {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.movie-bulk-add-scroll {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 22px;
+  overflow: auto;
+}
+
+.movie-bulk-add-entry {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.5fr) 130px minmax(170px, 0.8fr) minmax(170px, 0.8fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.movie-bulk-add-entry .form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.movie-bulk-add-entry .form-field span {
+  font-weight: 800;
+}
+
+.movie-bulk-add-row-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.movie-bulk-add-list {
+  display: grid;
+  gap: 10px;
+}
+
+.movie-bulk-add-empty,
+.movie-bulk-add-row {
+  border: 1px solid #34404c;
+  border-radius: 8px;
+  background: #111720;
+}
+
+.movie-bulk-add-empty {
+  padding: 18px;
+  color: #c4d2df;
+  font-weight: 700;
+}
+
+.movie-bulk-add-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(170px, 0.8fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+}
+
+.movie-bulk-add-row strong,
+.movie-bulk-add-row span {
+  display: block;
+}
+
+.movie-bulk-add-row span {
+  margin-top: 3px;
+  color: #9fafbf;
+  font-size: 12px;
+}
+
+.movie-bulk-add-row-status {
+  color: #c4d2df;
+  font-weight: 800;
+}
+
+.movie-bulk-add-row-status.is-success {
+  color: #52d273;
+}
+
+.movie-bulk-add-row-status.is-warning {
+  color: #f2c94c;
+}
+
+.movie-bulk-add-row-status.is-error {
+  color: #ff6b6b;
 }
 
 .movie-floating-close {
@@ -9247,6 +9373,8 @@ body[data-page="movie-tracker"] .movie-page .dialog-status {
 body[data-page="movie-tracker"] .movie-table-shell,
 body[data-page="movie-tracker"] .movie-side-panel,
 body[data-page="movie-tracker"] .movie-actions-menu,
+body[data-page="movie-tracker"] .movie-bulk-add-empty,
+body[data-page="movie-tracker"] .movie-bulk-add-row,
 body[data-page="movie-tracker"] .movie-process-movie-details,
 body[data-page="movie-tracker"] .movie-process-failure-details,
 body[data-page="movie-tracker"] .movie-manager-list,
@@ -9269,6 +9397,8 @@ body[data-page="movie-tracker"] .movie-table td,
 body[data-page="movie-tracker"] .movie-table th,
 body[data-page="movie-tracker"] .movie-dialog-header,
 body[data-page="movie-tracker"] .movie-dialog-footer,
+body[data-page="movie-tracker"] .movie-bulk-add-empty,
+body[data-page="movie-tracker"] .movie-bulk-add-row,
 body[data-page="movie-tracker"] .movie-manager-row {
   border-color: var(--line);
 }
@@ -9293,6 +9423,7 @@ body[data-page="movie-tracker"] .movie-dialog-header h2,
 body[data-page="movie-tracker"] .movie-actions-menu button,
 body[data-page="movie-tracker"] .movie-manager-row button,
 body[data-page="movie-tracker"] .movie-icon-button,
+body[data-page="movie-tracker"] .movie-bulk-add-row strong,
 body[data-page="movie-tracker"] .movie-tool-heading button,
 body[data-page="movie-tracker"] .movie-sort-header {
   color: var(--ink);
@@ -9312,6 +9443,8 @@ body[data-page="movie-tracker"] .movie-filter-field select,
 body[data-page="movie-tracker"] .movie-form-grid input,
 body[data-page="movie-tracker"] .movie-form-grid select,
 body[data-page="movie-tracker"] .movie-form-grid textarea,
+body[data-page="movie-tracker"] .movie-bulk-add-entry input,
+body[data-page="movie-tracker"] .movie-bulk-add-entry select,
 body[data-page="movie-tracker"] .movie-manager-add input,
 body[data-page="movie-tracker"] .movie-process-failure-details li code {
   border-color: var(--line);
@@ -9356,7 +9489,9 @@ html[data-color-scheme="light"] .movie-side-panel,
 html[data-color-scheme="light"] .movie-table-shell,
 html[data-color-scheme="light"] .movie-table th,
 html[data-color-scheme="light"] .movie-table td,
-html[data-color-scheme="light"] .movie-actions-menu {
+html[data-color-scheme="light"] .movie-actions-menu,
+html[data-color-scheme="light"] .movie-bulk-add-empty,
+html[data-color-scheme="light"] .movie-bulk-add-row {
   background: #ffffff;
   color: #16212a;
 }
@@ -9394,9 +9529,33 @@ body[data-page="movie-tracker"] .movie-sort-header.is-active {
   .movie-list-card {
     width: calc(100% - 10px);
   }
+
+  .movie-bulk-add-entry,
+  .movie-bulk-add-row {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 0.5fr);
+  }
+
+  .movie-bulk-add-row > button,
+  .movie-bulk-add-row-status {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 720px) {
+  .modal-dialog.movie-bulk-add-dialog {
+    width: calc(100vw - 20px);
+    height: calc(100vh - 20px);
+  }
+
+  .movie-bulk-add-entry,
+  .movie-bulk-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .movie-bulk-add-scroll {
+    padding: 16px;
+  }
+
   .movie-dialog-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto minmax(0, 1fr) auto;

@@ -6,7 +6,7 @@
   <title>Movie Tracker | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=movie-table-square-1">
+  <link rel="stylesheet" href="styles.css?v=movie-bulk-add-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -165,10 +165,19 @@
           </button>
         </div>
         <div class="movie-sidebar-actions">
-          <button class="primary-action movie-wide-action" type="button" data-open-add-movie>
-            <ph-plus weight="bold" aria-hidden="true"></ph-plus>
-            Add Movie
-          </button>
+          <div class="movie-add-split">
+            <button class="primary-action movie-wide-action movie-add-main" type="button" data-open-add-movie>
+              <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+              Add Movie
+            </button>
+            <button class="primary-action movie-add-menu-toggle" type="button" data-add-movie-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="Open add movie options">
+              <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+            </button>
+            <div class="movie-actions-menu movie-add-menu" data-add-movie-menu role="menu" hidden>
+              <button type="button" role="menuitem" data-open-add-movie><ph-plus weight="bold"></ph-plus>Add Movie</button>
+              <button type="button" role="menuitem" data-open-bulk-add-movies><ph-list-plus weight="bold"></ph-list-plus>Add Multiple Movies</button>
+            </div>
+          </div>
         </div>
         <div class="movie-actions-wrap">
           <button class="secondary-action movie-wide-action" type="button" data-actions-toggle aria-expanded="false">
@@ -226,7 +235,7 @@
         <label class="form-field"><span>Title *</span><input name="title" placeholder="Movie title" required></label>
         <label class="form-field"><span>Year Released *</span><input name="year_released" type="number" min="1888" max="3000" required></label>
         <label class="form-field"><span>Franchise (Optional)</span><select name="franchise_id" data-add-franchise></select></label>
-        <label class="checkbox-field"><input type="checkbox" name="downloaded">Already Downloaded</label>
+        <label class="form-field"><span>Collection (Optional)</span><select name="collection_id" data-add-collection></select></label>
         <p class="dialog-status" data-add-movie-status role="status"></p>
         <div class="dialog-actions">
           <button class="secondary-action" type="button" data-close-modal-target="add-movie-modal">Cancel</button>
@@ -311,10 +320,42 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="movie-bulk-add-modal" data-strict-modal hidden>
+    <section class="modal-dialog movie-bulk-add-dialog" role="dialog" aria-modal="true" aria-labelledby="movie-bulk-add-title">
+      <form data-bulk-add-form class="movie-bulk-add-form">
+        <header class="movie-dialog-header">
+          <div>
+            <h2 id="movie-bulk-add-title">Add Multiple Movies</h2>
+            <p>Add a batch, then let Movie Tracker fill in missing details for each one.</p>
+          </div>
+          <button class="modal-close" type="button" data-close-modal-target="movie-bulk-add-modal" aria-label="Close dialog"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+        </header>
+        <div class="movie-dialog-scroll movie-bulk-add-scroll">
+          <div class="movie-bulk-add-entry">
+            <label class="form-field movie-bulk-title-field"><span>Movie Title</span><input name="bulk_title" placeholder="Movie title" autocomplete="off"></label>
+            <label class="form-field movie-bulk-year-field"><span>Year Released</span><input name="bulk_year" type="number" min="1888" max="3000" value="2026"></label>
+            <label class="form-field"><span>Franchise</span><select name="bulk_franchise_id" data-bulk-add-franchise></select></label>
+            <label class="form-field"><span>Collection</span><select name="bulk_collection_id" data-bulk-add-collection></select></label>
+            <button class="primary-action movie-bulk-add-row-button" type="button" data-bulk-add-row>
+              <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+              Add
+            </button>
+          </div>
+          <p class="dialog-status" data-bulk-add-status role="status"></p>
+          <div class="movie-bulk-add-list" data-bulk-add-rows></div>
+        </div>
+        <footer class="movie-dialog-footer">
+          <button class="secondary-action" type="button" data-close-modal-target="movie-bulk-add-modal">Cancel</button>
+          <button class="primary-action" type="submit" data-bulk-add-submit>Add Movies</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="movie-tracker.js?v=movie-tracker-v29"></script>
+  <script src="movie-tracker.js?v=movie-bulk-add-1"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {

@@ -26,6 +26,9 @@ const movieState = {
   activeMovie: null,
   activeManager: null,
   posterDisplayUrls: new Map(),
+  bulkAddRows: [],
+  bulkAddNextId: 1,
+  bulkAddProcessing: false,
 };
 
 window.centralisMovieTrackerLoaded = true;
@@ -52,6 +55,9 @@ const els = {
   franchiseFilter: document.querySelector("[data-filter-franchise]"),
   collectionFilter: document.querySelector("[data-filter-collection]"),
   addFranchise: document.querySelector("[data-add-franchise]"),
+  addCollection: document.querySelector("[data-add-collection]"),
+  addMovieMenuToggle: document.querySelector("[data-add-movie-menu-toggle]"),
+  addMovieMenu: document.querySelector("[data-add-movie-menu]"),
   actionsToggle: document.querySelector("[data-actions-toggle]"),
   actionsMenu: document.querySelector("[data-actions-menu]"),
   sidebarToggle: document.querySelector("[data-sidebar-toggle]"),
@@ -70,6 +76,12 @@ const els = {
   importFailures: document.querySelector("[data-import-failures]"),
   processContent: document.querySelector("[data-process-content]"),
   bulkForm: document.querySelector("[data-bulk-form]"),
+  bulkAddForm: document.querySelector("[data-bulk-add-form]"),
+  bulkAddStatus: document.querySelector("[data-bulk-add-status]"),
+  bulkAddRows: document.querySelector("[data-bulk-add-rows]"),
+  bulkAddFranchise: document.querySelector("[data-bulk-add-franchise]"),
+  bulkAddCollection: document.querySelector("[data-bulk-add-collection]"),
+  bulkAddSubmit: document.querySelector("[data-bulk-add-submit]"),
 };
 
 function ensureSidebarAddMovieButton() {
@@ -80,10 +92,19 @@ function ensureSidebarAddMovieButton() {
   const addWrap = document.createElement("div");
   addWrap.className = "movie-sidebar-actions";
   addWrap.innerHTML = `
-    <button class="primary-action movie-wide-action" type="button" data-open-add-movie>
-      <ph-plus weight="bold" aria-hidden="true"></ph-plus>
-      Add Movie
-    </button>
+    <div class="movie-add-split">
+      <button class="primary-action movie-wide-action movie-add-main" type="button" data-open-add-movie>
+        <ph-plus weight="bold" aria-hidden="true"></ph-plus>
+        Add Movie
+      </button>
+      <button class="primary-action movie-add-menu-toggle" type="button" data-add-movie-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="Open add movie options">
+        <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+      </button>
+      <div class="movie-actions-menu movie-add-menu" data-add-movie-menu role="menu" hidden>
+        <button type="button" role="menuitem" data-open-add-movie><ph-plus weight="bold"></ph-plus>Add Movie</button>
+        <button type="button" role="menuitem" data-open-bulk-add-movies><ph-list-plus weight="bold"></ph-list-plus>Add Multiple Movies</button>
+      </div>
+    </div>
   `;
   panel.insertBefore(addWrap, actionsWrap);
 }
@@ -378,6 +399,9 @@ function renderLookups() {
   if (els.franchiseFilter) els.franchiseFilter.innerHTML = optionMarkup(movieState.franchises, "All Franchises", movieState.filters.franchise, "No Franchise");
   if (els.collectionFilter) els.collectionFilter.innerHTML = optionMarkup(movieState.collections, "All Collections", movieState.filters.collection, "No Collection");
   if (els.addFranchise) els.addFranchise.innerHTML = noneOptionMarkup(movieState.franchises, "No Franchise");
+  if (els.addCollection) els.addCollection.innerHTML = noneOptionMarkup(movieState.collections, "No Collection");
+  if (els.bulkAddFranchise) els.bulkAddFranchise.innerHTML = noneOptionMarkup(movieState.franchises, "No Franchise", els.bulkAddFranchise.value);
+  if (els.bulkAddCollection) els.bulkAddCollection.innerHTML = noneOptionMarkup(movieState.collections, "No Collection", els.bulkAddCollection.value);
 }
 
 function renderMovies() {
@@ -660,10 +684,194 @@ async function createMovie(formData) {
     title,
     year_released: year,
     franchise_id: normalizeId(formData.get("franchise_id")),
-    downloaded: formData.get("downloaded") === "on",
+    collection_id: normalizeId(formData.get("collection_id")),
   }).select("*").single();
   if (error) throw error;
   return data;
+}
+
+function lookupName(items, id, fallback) {
+  const normalizedId = normalizeId(id);
+  if (!normalizedId) return fallback;
+  return items.find((item) => item.id === normalizedId)?.name || fallback;
+}
+
+function closeAddMovieMenu() {
+  const menu = document.querySelector("[data-add-movie-menu]");
+  const toggle = document.querySelector("[data-add-movie-menu-toggle]");
+  if (!menu) return;
+  menu.hidden = true;
+  toggle?.setAttribute("aria-expanded", "false");
+}
+
+function openAddMovieModal() {
+  closeAddMovieMenu();
+  setDialogStatus(els.addStatus, "");
+  els.addForm?.reset();
+  renderLookups();
+  openModal("add-movie-modal");
+}
+
+function setBulkAddProcessing(processing) {
+  movieState.bulkAddProcessing = processing;
+  if (!els.bulkAddForm) return;
+  els.bulkAddForm.querySelectorAll("input, select, button").forEach((control) => {
+    control.disabled = processing;
+  });
+}
+
+function renderBulkAddRows() {
+  if (!els.bulkAddRows) return;
+  if (!movieState.bulkAddRows.length) {
+    els.bulkAddRows.innerHTML = `
+      <div class="movie-bulk-add-empty">
+        No movies queued yet.
+      </div>
+    `;
+  } else {
+    els.bulkAddRows.innerHTML = movieState.bulkAddRows.map((row) => `
+      <article class="movie-bulk-add-row" data-bulk-add-pending-row="${row.clientId}">
+        <div>
+          <strong>${escapeHtml(row.title)}</strong>
+          <span>${escapeHtml(row.year)}</span>
+        </div>
+        <div>${escapeHtml(lookupName(movieState.franchises, row.franchise_id, "No Franchise"))}</div>
+        <div>${escapeHtml(lookupName(movieState.collections, row.collection_id, "No Collection"))}</div>
+        <div class="movie-bulk-add-row-status ${row.statusType ? `is-${row.statusType}` : ""}">${escapeHtml(row.status || "Queued")}</div>
+        <button class="secondary-action" type="button" data-remove-bulk-add-row="${row.clientId}" ${movieState.bulkAddProcessing ? "disabled" : ""}>Remove</button>
+      </article>
+    `).join("");
+  }
+  if (els.bulkAddSubmit) {
+    els.bulkAddSubmit.disabled = movieState.bulkAddProcessing || !movieState.bulkAddRows.length;
+  }
+}
+
+function resetBulkAddModal() {
+  movieState.bulkAddRows = [];
+  movieState.bulkAddNextId = 1;
+  movieState.bulkAddProcessing = false;
+  setDialogStatus(els.bulkAddStatus, "");
+  els.bulkAddForm?.reset();
+  const yearInput = els.bulkAddForm?.elements.bulk_year;
+  if (yearInput) yearInput.value = "2026";
+  renderLookups();
+  setBulkAddProcessing(false);
+  renderBulkAddRows();
+}
+
+function openBulkAddMoviesModal() {
+  closeAddMovieMenu();
+  resetBulkAddModal();
+  openModal("movie-bulk-add-modal");
+  els.bulkAddForm?.elements.bulk_title?.focus();
+}
+
+function closeBulkAddModal() {
+  if (movieState.bulkAddProcessing) return;
+  closeModal("movie-bulk-add-modal");
+  resetBulkAddModal();
+}
+
+function queueBulkAddMovie() {
+  if (!els.bulkAddForm || movieState.bulkAddProcessing) return;
+  const formData = new FormData(els.bulkAddForm);
+  const title = normalizeMovieTitleForSort(formData.get("bulk_title"));
+  const year = Number(formData.get("bulk_year"));
+  if (!title) {
+    setDialogStatus(els.bulkAddStatus, "Movie title is required.", "error");
+    return;
+  }
+  if (!Number.isInteger(year) || year < 1888 || year > 3000) {
+    setDialogStatus(els.bulkAddStatus, "Year released must be between 1888 and 3000.", "error");
+    return;
+  }
+
+  movieState.bulkAddRows.push({
+    clientId: movieState.bulkAddNextId,
+    title,
+    year,
+    franchise_id: normalizeId(formData.get("bulk_franchise_id")),
+    collection_id: normalizeId(formData.get("bulk_collection_id")),
+    status: "Queued",
+    statusType: "",
+  });
+  movieState.bulkAddNextId += 1;
+  setDialogStatus(els.bulkAddStatus, "");
+  els.bulkAddForm.elements.bulk_title.value = "";
+  els.bulkAddForm.elements.bulk_year.value = "2026";
+  renderBulkAddRows();
+  els.bulkAddForm.elements.bulk_title.focus();
+}
+
+function setBulkAddRowStatus(clientId, status, statusType = "") {
+  const row = movieState.bulkAddRows.find((item) => item.clientId === clientId);
+  if (!row) return;
+  row.status = status;
+  row.statusType = statusType;
+  renderBulkAddRows();
+}
+
+async function insertBulkAddMovie(row) {
+  const { data, error } = await movieSupabase.from("movies").insert({
+    user_id: movieState.appUser.id,
+    title: row.title,
+    year_released: row.year,
+    franchise_id: row.franchise_id,
+    collection_id: row.collection_id,
+  }).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+async function processBulkAddMovies() {
+  if (!movieState.bulkAddRows.length || movieState.bulkAddProcessing) return;
+  setBulkAddProcessing(true);
+  setDialogStatus(els.bulkAddStatus, "Adding movies...");
+  let inserted = 0;
+  let failed = 0;
+  let warnings = 0;
+
+  for (const row of movieState.bulkAddRows) {
+    try {
+      setBulkAddRowStatus(row.clientId, "Adding...");
+      const movie = await insertBulkAddMovie(row);
+      inserted += 1;
+      setBulkAddRowStatus(row.clientId, "Getting details...");
+      try {
+        const details = await fetchMovieMissingDetails(movie);
+        if (details.failures.length) {
+          warnings += 1;
+          setBulkAddRowStatus(row.clientId, "Added; detail lookup warning", "warning");
+        } else if (details.payload) {
+          await saveMovieMissingDetails(movie, details.payload);
+          setBulkAddRowStatus(row.clientId, "Details updated", "success");
+        } else {
+          setBulkAddRowStatus(row.clientId, "Added; no detail updates needed", "success");
+        }
+      } catch (detailError) {
+        warnings += 1;
+        console.warn("Bulk movie detail lookup failed:", detailError);
+        setBulkAddRowStatus(row.clientId, "Added; detail lookup warning", "warning");
+      }
+    } catch (error) {
+      failed += 1;
+      console.error("Bulk movie add failed:", error);
+      setBulkAddRowStatus(row.clientId, "Failed", "error");
+    }
+    await sleep(MOVIE_IMPORT_LOOKUP_DELAY_MS);
+  }
+
+  const summary = [
+    `Added ${inserted} movie${inserted === 1 ? "" : "s"}`,
+    warnings ? `${warnings} detail warning${warnings === 1 ? "" : "s"}` : "",
+    failed ? `${failed} failed` : "",
+  ].filter(Boolean).join(". ");
+  setDialogStatus(els.bulkAddStatus, summary || "No movies added.", failed ? "error" : "success");
+  await refreshMovieTracker(summary || "Bulk add complete.", failed ? "error" : "success");
+  await sleep(1400);
+  movieState.bulkAddProcessing = false;
+  closeBulkAddModal();
 }
 
 async function saveMovie(formData) {
@@ -1475,15 +1683,14 @@ async function initializeMovieTracker() {
   await refreshMovieTracker();
 }
 
-document.querySelector("[data-open-add-movie]")?.addEventListener("click", () => {
-  setDialogStatus(els.addStatus, "");
-  els.addForm?.reset();
-  renderLookups();
-  openModal("add-movie-modal");
-});
-
 document.querySelectorAll("[data-close-modal-target]").forEach((button) => {
-  button.addEventListener("click", () => closeModal(button.dataset.closeModalTarget));
+  button.addEventListener("click", () => {
+    if (button.dataset.closeModalTarget === "movie-bulk-add-modal") {
+      closeBulkAddModal();
+      return;
+    }
+    closeModal(button.dataset.closeModalTarget);
+  });
 });
 
 document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
@@ -1499,7 +1706,8 @@ document.addEventListener("keydown", (event) => {
         modal.hidden = true;
       }
     });
-    els.actionsMenu.hidden = true;
+    if (els.actionsMenu) els.actionsMenu.hidden = true;
+    closeAddMovieMenu();
   }
 });
 
@@ -1509,8 +1717,33 @@ els.actionsToggle?.addEventListener("click", () => {
 });
 
 document.addEventListener("click", (event) => {
+  const addToggle = event.target.closest("[data-add-movie-menu-toggle]");
+  if (addToggle) {
+    event.preventDefault();
+    const menu = addToggle.closest(".movie-add-split")?.querySelector("[data-add-movie-menu]");
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    addToggle.setAttribute("aria-expanded", String(!menu.hidden));
+    return;
+  }
+
+  if (event.target.closest("[data-open-add-movie]")) {
+    event.preventDefault();
+    openAddMovieModal();
+    return;
+  }
+
+  if (event.target.closest("[data-open-bulk-add-movies]")) {
+    event.preventDefault();
+    openBulkAddMoviesModal();
+    return;
+  }
+
   if (!event.target.closest(".movie-actions-wrap") && els.actionsMenu) {
     els.actionsMenu.hidden = true;
+  }
+  if (!event.target.closest(".movie-add-split")) {
+    closeAddMovieMenu();
   }
 });
 
@@ -1826,6 +2059,38 @@ els.processContent?.addEventListener("click", async (event) => {
   } catch (error) {
     setDialogStatus(document.querySelector("[data-process-status]"), getReadableError(error), "error");
     button.disabled = false;
+  }
+});
+
+els.bulkAddForm?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-bulk-add-row]")) {
+    queueBulkAddMovie();
+    return;
+  }
+  const removeButton = event.target.closest("[data-remove-bulk-add-row]");
+  if (removeButton && !movieState.bulkAddProcessing) {
+    const clientId = Number(removeButton.dataset.removeBulkAddRow);
+    movieState.bulkAddRows = movieState.bulkAddRows.filter((row) => row.clientId !== clientId);
+    renderBulkAddRows();
+  }
+});
+
+els.bulkAddForm?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target.closest(".movie-bulk-add-entry")) {
+    event.preventDefault();
+    queueBulkAddMovie();
+  }
+});
+
+els.bulkAddForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await processBulkAddMovies();
+  } catch (error) {
+    movieState.bulkAddProcessing = false;
+    setBulkAddProcessing(false);
+    renderBulkAddRows();
+    setDialogStatus(els.bulkAddStatus, getReadableError(error), "error");
   }
 });
 
