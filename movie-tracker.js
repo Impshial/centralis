@@ -35,6 +35,17 @@ window.centralisMovieTrackerLoaded = true;
 
 const MOVIE_IMPORT_LOOKUP_DELAY_MS = 1200;
 const MOVIE_EMPTY_LOOKUP_FILTER = "__none";
+const MOVIE_MISSING_DATA_FILTER = [
+  "rated.is.null",
+  "director.is.null",
+  "date_released.is.null",
+  "runtime.is.null",
+  "genre.is.null",
+  "writers.is.null",
+  "actors.is.null",
+  "plot.is.null",
+  "poster_url.is.null",
+].join(",");
 const MOVIE_SORT_FIELDS = {
   title: { asc: "title-asc", desc: "title-desc", defaultDirection: "asc" },
   year: { asc: "year-asc", desc: "year-desc", defaultDirection: "desc" },
@@ -361,19 +372,16 @@ async function fetchMovieStats() {
     .eq("user_id", movieState.appUser.id)
     .eq("deleted", false);
 
-  const [totalResponse, downloadedResponse, missingResponse] = await Promise.all([
+  const [totalResponse, missingResponse] = await Promise.all([
     base(),
-    base().eq("downloaded", true),
-    base().or("director.is.null,actors.is.null,plot.is.null,date_released.is.null"),
+    base().or(MOVIE_MISSING_DATA_FILTER),
   ]);
 
   if (totalResponse.error) throw totalResponse.error;
-  if (downloadedResponse.error) throw downloadedResponse.error;
   if (missingResponse.error) throw missingResponse.error;
 
   movieState.stats = {
     total: Number(totalResponse.count || 0),
-    downloaded: Number(downloadedResponse.count || 0),
     franchises: movieState.franchises.length,
     collections: movieState.collections.length,
     missingData: Number(missingResponse.count || 0),
@@ -539,10 +547,9 @@ function renderStats() {
   if (!els.stats) return;
   els.stats.innerHTML = `
     <div><dt>Total Movies:</dt><dd>${movieState.stats.total}</dd></div>
-    <div><dt>Downloaded:</dt><dd>${movieState.stats.downloaded}</dd></div>
     <div><dt>Franchises:</dt><dd>${movieState.stats.franchises}</dd></div>
     <div><dt>Collections:</dt><dd>${movieState.stats.collections}</dd></div>
-    <div><dt>Missing Data:</dt><dd>${movieState.stats.missingData}</dd></div>
+    <div><dt>Missing Data:</dt><dd><button class="movie-stat-link" type="button" data-open-missing-data aria-label="Show movies missing data">${movieState.stats.missingData}</button></dd></div>
   `;
 }
 
@@ -1379,6 +1386,59 @@ function getProcessMovieReasons(movie) {
   return reasons;
 }
 
+async function fetchMissingDataMovies() {
+  const { data, error } = await movieSupabase
+    .from("movies")
+    .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")
+    .eq("user_id", movieState.appUser.id)
+    .eq("deleted", false)
+    .or(MOVIE_MISSING_DATA_FILTER)
+    .order("title", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+function renderMissingDataDialog(movies) {
+  els.processContent.innerHTML = `
+    <h2 id="movie-process-title">Movies Missing Data</h2>
+    <p class="modal-subtitle">Movies that still need OMDb details, a poster, or both.</p>
+    <div class="movie-missing-data-list">
+      ${movies.length ? movies.map((movie) => `
+        <button class="movie-missing-data-row" type="button" data-view-missing-movie="${movie.id}">
+          <span>
+            <strong>${escapeHtml(movie.title)}</strong>
+            <small>${escapeHtml(movie.year_released || "No year")}</small>
+          </span>
+          <span>${escapeHtml(getProcessMovieReasons(movie).join(" + ") || "Unknown missing data")}</span>
+          <span>${escapeHtml(movie.franchise?.name || "No Franchise")} / ${escapeHtml(movie.collection?.name || "No Collection")}</span>
+        </button>
+      `).join("") : '<p class="movie-process-empty">No movies are missing data.</p>'}
+    </div>
+    <div class="dialog-actions">
+      <button class="primary-action" type="button" data-close-modal-target="movie-process-modal">Close</button>
+    </div>
+  `;
+}
+
+async function openMissingDataDialog() {
+  els.processContent.innerHTML = `
+    <h2 id="movie-process-title">Movies Missing Data</h2>
+    <p class="modal-subtitle">Loading movies that need details...</p>
+  `;
+  openModal("movie-process-modal");
+  try {
+    renderMissingDataDialog(await fetchMissingDataMovies());
+  } catch (error) {
+    els.processContent.innerHTML = `
+      <h2 id="movie-process-title">Movies Missing Data</h2>
+      <p class="dialog-status is-error" role="status">${escapeHtml(getReadableError(error))}</p>
+      <div class="dialog-actions">
+        <button class="primary-action" type="button" data-close-modal-target="movie-process-modal">Close</button>
+      </div>
+    `;
+  }
+}
+
 function renderProcessMovieList(container, movies) {
   if (!container) return;
   const candidates = movies.filter(missingMovieDetails);
@@ -1794,6 +1854,12 @@ els.rows?.addEventListener("keydown", (event) => {
   renderMovieView(movie);
 });
 
+els.stats?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-open-missing-data]")) {
+    openMissingDataDialog();
+  }
+});
+
 els.selectAll?.addEventListener("change", () => {
   movieState.movies.forEach((movie) => {
     if (els.selectAll.checked) movieState.selectedIds.add(movie.id);
@@ -2046,6 +2112,32 @@ els.importForm?.addEventListener("submit", async (event) => {
 });
 
 els.processContent?.addEventListener("click", async (event) => {
+  const missingMovieButton = event.target.closest("[data-view-missing-movie]");
+  if (missingMovieButton) {
+    const movieId = Number(missingMovieButton.dataset.viewMissingMovie);
+    const movie = movieState.movies.find((item) => item.id === movieId);
+    if (movie) {
+      closeModal("movie-process-modal");
+      renderMovieView(movie);
+      return;
+    }
+    try {
+      const { data, error } = await movieSupabase
+        .from("movies")
+        .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")
+        .eq("id", movieId)
+        .eq("user_id", movieState.appUser.id)
+        .eq("deleted", false)
+        .single();
+      if (error) throw error;
+      closeModal("movie-process-modal");
+      renderMovieView(data);
+    } catch (error) {
+      setStatus(`Could not open movie: ${getReadableError(error)}`, "error");
+    }
+    return;
+  }
+
   const button = event.target.closest("[data-start-process]");
   const close = event.target.closest("[data-close-modal-target]");
   if (close) closeModal(close.dataset.closeModalTarget);
