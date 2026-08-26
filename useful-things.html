@@ -163,7 +163,7 @@
               aria-controls="useful-panel-generators"
               data-useful-tab="generators"
             >
-              <span>Generators</span>
+              <span>Basic Generators</span>
             </button>
             <button
               class="useful-things-tab"
@@ -175,6 +175,17 @@
               data-useful-tab="combine-split"
             >
               <span>Combine and Split</span>
+            </button>
+            <button
+              class="useful-things-tab"
+              type="button"
+              role="tab"
+              id="useful-tab-qr-codes"
+              aria-selected="false"
+              aria-controls="useful-panel-qr-codes"
+              data-useful-tab="qr-codes"
+            >
+              <span>QR Code Generator</span>
             </button>
             <button
               class="useful-things-tab"
@@ -451,7 +462,7 @@
             hidden
           >
             <div class="calculators-header generators-header">
-              <h2>Generators</h2>
+              <h2>Basic Generators</h2>
               <div class="calculator-add-menu" data-generator-add-menu>
                 <button
                   class="primary-action calculator-add-trigger"
@@ -552,6 +563,137 @@
                 </div>
               </div>
             </section>
+          </section>
+
+          <section
+            class="useful-things-tab-panel qr-codes-panel"
+            role="tabpanel"
+            id="useful-panel-qr-codes"
+            aria-labelledby="useful-tab-qr-codes"
+            data-useful-panel="qr-codes"
+            hidden
+          >
+            <div class="qr-codes-content-column">
+              <header class="qr-codes-header">
+                <div>
+                  <h2>QR Code Generator</h2>
+                  <p>Create a QR code for a website, contact card, or message.</p>
+                </div>
+                <nav class="qr-type-tabs" role="tablist" aria-label="QR code type">
+                  <button class="is-active" type="button" role="tab" aria-selected="true" data-qr-type-tab="website">
+                    <ph-globe-simple weight="bold" aria-hidden="true"></ph-globe-simple>
+                    Website
+                  </button>
+                  <button type="button" role="tab" aria-selected="false" data-qr-type-tab="contact">
+                    <ph-address-book weight="bold" aria-hidden="true"></ph-address-book>
+                    Contact
+                  </button>
+                  <button type="button" role="tab" aria-selected="false" data-qr-type-tab="text">
+                    <ph-text-t weight="bold" aria-hidden="true"></ph-text-t>
+                    Text
+                  </button>
+                </nav>
+              </header>
+
+              <div class="qr-content-card">
+                <section class="qr-type-panel is-active" data-qr-type-panel="website">
+                  <div class="qr-section-heading">
+                    <span class="qr-section-icon"><ph-link weight="bold" aria-hidden="true"></ph-link></span>
+                    <div>
+                      <h3>Website</h3>
+                      <p>Link directly to any page on the web.</p>
+                    </div>
+                  </div>
+                  <label class="qr-field qr-field-wide">
+                    <span>Website URL</span>
+                    <input type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" data-qr-field="website-url">
+                  </label>
+                </section>
+
+                <section class="qr-type-panel" data-qr-type-panel="contact" hidden>
+                  <div class="qr-section-heading">
+                    <span class="qr-section-icon"><ph-user-circle weight="bold" aria-hidden="true"></ph-user-circle></span>
+                    <div>
+                      <h3>Contact</h3>
+                      <p>Share a contact card that can be saved to an address book.</p>
+                    </div>
+                  </div>
+                  <div class="qr-contact-grid">
+                    <label class="qr-field qr-field-wide"><span>Full name</span><input type="text" autocomplete="name" data-qr-field="contact-name"></label>
+                    <label class="qr-field"><span>Phone number</span><input type="tel" autocomplete="tel" data-qr-field="contact-phone"></label>
+                    <label class="qr-field"><span>Email address</span><input type="email" autocomplete="email" data-qr-field="contact-email"></label>
+                    <label class="qr-field"><span>Company name</span><input type="text" autocomplete="organization" data-qr-field="contact-company"></label>
+                    <label class="qr-field"><span>Work title</span><input type="text" autocomplete="organization-title" data-qr-field="contact-title"></label>
+                    <label class="qr-field"><span>Work phone</span><input type="tel" data-qr-field="contact-work-phone"></label>
+                    <label class="qr-field"><span>Fax</span><input type="tel" data-qr-field="contact-fax"></label>
+                    <label class="qr-field"><span>Street</span><input type="text" autocomplete="street-address" data-qr-field="contact-street"></label>
+                    <label class="qr-field"><span>City</span><input type="text" autocomplete="address-level2" data-qr-field="contact-city"></label>
+                    <label class="qr-field"><span>State / Province</span><input type="text" autocomplete="address-level1" data-qr-field="contact-state"></label>
+                    <label class="qr-field"><span>Country</span><input type="text" autocomplete="country-name" data-qr-field="contact-country"></label>
+                    <label class="qr-field"><span>ZIP / Postal code</span><input type="text" autocomplete="postal-code" data-qr-field="contact-zip"></label>
+                    <label class="qr-field"><span>Website</span><input type="url" inputmode="url" autocomplete="url" data-qr-field="contact-website"></label>
+                  </div>
+                </section>
+
+                <section class="qr-type-panel" data-qr-type-panel="text" hidden>
+                  <div class="qr-section-heading">
+                    <span class="qr-section-icon"><ph-note-pencil weight="bold" aria-hidden="true"></ph-note-pencil></span>
+                    <div>
+                      <h3>Text</h3>
+                      <p>Encode a message that can be read without opening a link.</p>
+                    </div>
+                  </div>
+                  <label class="qr-field qr-field-wide">
+                    <span>Your text</span>
+                    <textarea rows="8" maxlength="1800" placeholder="Enter the text to include in your QR code" data-qr-field="text-value"></textarea>
+                    <small><span data-qr-text-count>0</span> / 1,800 characters</small>
+                  </label>
+                </section>
+              </div>
+            </div>
+
+            <aside class="qr-preview-card" aria-labelledby="qr-preview-title">
+                <div class="qr-preview-heading">
+                  <span>
+                    <ph-qr-code weight="bold" aria-hidden="true"></ph-qr-code>
+                    <strong id="qr-preview-title">Preview</strong>
+                  </span>
+                  <span class="qr-ready-badge" data-qr-ready-badge hidden>Ready</span>
+                </div>
+                <div class="qr-canvas-frame" data-qr-canvas-frame>
+                  <canvas width="768" height="768" data-qr-canvas role="img" aria-label="QR code preview" hidden></canvas>
+                  <div class="qr-empty-preview" data-qr-empty-preview>
+                    <ph-qr-code weight="thin" aria-hidden="true"></ph-qr-code>
+                    <p>Your QR code will appear here</p>
+                    <span>Enter content to generate a preview.</span>
+                  </div>
+                </div>
+                <p class="qr-status" data-qr-status role="status" aria-live="polite"></p>
+                <div class="qr-download-menu is-disabled" data-qr-download-menu>
+                  <button class="primary-action qr-download-primary" type="button" data-qr-download="jpg" disabled>
+                    <ph-download-simple weight="bold" aria-hidden="true"></ph-download-simple>
+                    Download JPG
+                  </button>
+                  <button
+                    class="primary-action qr-download-toggle"
+                    type="button"
+                    data-qr-download-toggle
+                    aria-label="Choose QR code download format"
+                    aria-expanded="false"
+                    aria-haspopup="menu"
+                    aria-controls="qr-download-options"
+                    disabled
+                  >
+                    <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
+                  </button>
+                  <div class="qr-download-options" id="qr-download-options" role="menu" data-qr-download-options hidden>
+                    <button type="button" role="menuitem" data-qr-download="svg"><span>SVG</span><small>Scalable vector</small></button>
+                    <button type="button" role="menuitem" data-qr-download="eps"><span>EPS</span><small>Print-ready vector</small></button>
+                    <button type="button" role="menuitem" data-qr-download="png"><span>PNG</span><small>Lossless image</small></button>
+                  </div>
+                </div>
+                <p class="qr-download-hint">High-resolution downloads suitable for screens and print.</p>
+            </aside>
           </section>
 
           <section
@@ -734,6 +876,7 @@
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
-  <script src="useful-things.js?v=combine-split-1"></script>
+  <script src="assets/vendor/qrcode.min.js?v=1.4.1"></script>
+  <script src="useful-things.js?v=qr-codes-1"></script>
 </body>
 </html>

@@ -19558,6 +19558,478 @@ body[data-page="useful-things"] {
   min-height: 0;
 }
 
+.qr-codes-panel {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(290px, 370px);
+  gap: 22px;
+  align-items: start;
+  overflow: auto;
+  padding: 18px;
+}
+
+.qr-codes-content-column {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.qr-codes-header {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 2px;
+}
+
+.qr-codes-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  letter-spacing: -0.035em;
+}
+
+.qr-codes-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.qr-type-tabs {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--field) 82%, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.qr-type-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 16px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: 800 0.86rem/1 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.qr-type-tabs button :where(ph-globe-simple, ph-address-book, ph-text-t) {
+  width: 17px;
+  height: 17px;
+}
+
+.qr-type-tabs button:hover,
+.qr-type-tabs button:focus-visible {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  outline: none;
+}
+
+.qr-type-tabs button.is-active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 5px 15px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.qr-content-card,
+.qr-preview-card {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 94%, var(--field));
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 8%);
+}
+
+.qr-content-card {
+  min-height: 240px;
+  padding: 22px;
+}
+
+.qr-type-panel[hidden] {
+  display: none;
+}
+
+.qr-type-panel.is-active {
+  display: grid;
+  gap: 24px;
+}
+
+.qr-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+.qr-section-icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border-radius: 11px;
+  place-items: center;
+}
+
+.qr-section-icon :where(ph-link, ph-user-circle, ph-note-pencil) {
+  width: 21px;
+  height: 21px;
+}
+
+.qr-section-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.qr-section-heading p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.qr-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.qr-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.83rem;
+  font-weight: 780;
+}
+
+.qr-field-wide {
+  grid-column: 1 / -1;
+}
+
+.qr-field input,
+.qr-field textarea {
+  width: 100%;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  outline: none;
+  font: 560 0.93rem/1.45 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.qr-field input {
+  min-height: 44px;
+  padding: 0 13px;
+}
+
+.qr-field textarea {
+  min-height: 190px;
+  padding: 12px 13px;
+  resize: vertical;
+}
+
+.qr-field input::placeholder,
+.qr-field textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.qr-field input:focus,
+.qr-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.qr-field small {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.qr-preview-card {
+  position: sticky;
+  top: 0;
+  display: grid;
+  justify-items: stretch;
+  padding: 18px;
+}
+
+.qr-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.qr-preview-heading > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qr-preview-heading ph-qr-code {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.qr-ready-badge {
+  padding: 5px 9px;
+  color: #31bd77;
+  background: color-mix(in srgb, #31bd77 12%, transparent);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.qr-ready-badge[hidden] {
+  display: none;
+}
+
+.qr-canvas-frame {
+  display: grid;
+  width: min(100%, 240px);
+  aspect-ratio: 1;
+  justify-self: center;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  border-radius: 12px;
+  place-items: center;
+}
+
+.qr-canvas-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.qr-canvas-frame canvas[hidden],
+.qr-empty-preview[hidden] {
+  display: none;
+}
+
+.qr-empty-preview {
+  display: grid;
+  max-width: 220px;
+  padding: 24px;
+  color: #8090a0;
+  text-align: center;
+  place-items: center;
+}
+
+.qr-empty-preview ph-qr-code {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 12px;
+  opacity: 0.42;
+}
+
+.qr-empty-preview p {
+  margin: 0;
+  color: #4f6070;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.qr-empty-preview span {
+  margin-top: 5px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.qr-status {
+  min-height: 19px;
+  margin: 9px 2px 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.qr-download-menu {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  width: 100%;
+  color: var(--primary-button-text);
+  background: var(--primary-button-bg);
+  border: 1px solid var(--primary-button-border);
+  border-radius: 9px;
+  transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.qr-download-menu:not(.is-disabled):hover,
+.qr-download-menu:not(.is-disabled):focus-within {
+  background: var(--primary-button-hover-bg);
+  border-color: var(--primary-button-hover-border);
+}
+
+.qr-download-menu.is-disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+  opacity: 0.58;
+}
+
+.qr-download-menu .primary-action {
+  min-height: 44px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  filter: none;
+  opacity: 1;
+}
+
+.qr-download-menu .primary-action:hover,
+.qr-download-menu .primary-action:focus-visible {
+  color: inherit;
+  background: transparent;
+  border-color: transparent;
+}
+
+.qr-download-primary {
+  gap: 8px;
+}
+
+.qr-download-primary ph-download-simple {
+  width: 18px;
+  height: 18px;
+}
+
+.qr-download-menu .qr-download-toggle {
+  min-width: 44px;
+  padding: 0;
+  border-left: 1px solid color-mix(in srgb, var(--primary-button-text) 24%, transparent);
+}
+
+.qr-download-toggle ph-caret-down {
+  width: 17px;
+  height: 17px;
+  transition: transform 140ms ease;
+}
+
+.qr-download-toggle[aria-expanded="true"] ph-caret-down {
+  transform: rotate(180deg);
+}
+
+.qr-download-options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  padding: 7px;
+  background: color-mix(in srgb, var(--surface) 96%, #000);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 18px 38px rgb(0 0 0 / 24%);
+}
+
+.qr-download-options[hidden] {
+  display: none;
+}
+
+.qr-download-options button {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  align-items: center;
+  min-height: 46px;
+  padding: 7px 10px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.qr-download-options button:hover,
+.qr-download-options button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
+}
+
+.qr-download-options button span {
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.qr-download-options button small {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.qr-download-hint {
+  margin: 10px 8px 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .qr-codes-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .qr-preview-card {
+    position: static;
+    width: min(100%, 410px);
+    justify-self: center;
+  }
+}
+
+@media (max-width: 820px) {
+  .qr-codes-panel {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .qr-codes-header {
+    align-items: flex-start;
+    gap: 13px;
+  }
+
+  .qr-type-tabs {
+    width: 100%;
+  }
+
+  .qr-type-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .qr-content-card {
+    padding: 17px;
+  }
+
+  .qr-contact-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .qr-field-wide {
+    grid-column: auto;
+  }
+}
+
 .calculators-header {
   display: flex;
   align-items: center;

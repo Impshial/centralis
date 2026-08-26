@@ -11,6 +11,7 @@
     unitLinks: "arc_unit_links",
     elementStates: "arc_element_states",
     diagnosticReports: "arc_diagnostic_reports",
+    sourceDocuments: "arc_source_documents",
     elements: "elements",
     universes: "universes",
   };
@@ -82,6 +83,7 @@
     tutorialSessionDismissed: false,
     stagedManuscript: null,
     activeManuscriptJobId: "",
+    workspaceManuscriptBusy: false,
     createStatusAnimationTimer: null,
     createStatusAnimationFrame: 0,
     createStatusAnimationMessage: "",
@@ -123,6 +125,8 @@
     dom.headerProjectName = document.querySelector("[data-arc-header-project-name]");
     dom.projectHero = document.querySelector("[data-arc-project-hero]");
     dom.workspaceStatus = document.querySelector("[data-arc-workspace-status]");
+    dom.workspaceManuscriptInput = document.querySelector("[data-arc-workspace-manuscript-file]");
+    dom.workspaceUploadManuscript = document.querySelector("[data-arc-upload-manuscript]");
     dom.outlineCount = document.querySelector("[data-arc-outline-count]");
     dom.outlineList = document.querySelector("[data-arc-outline-list]");
     dom.storySurface = document.querySelector("[data-arc-story-surface]");
@@ -190,6 +194,11 @@
     document.querySelector("[data-arc-setup-cancel]")?.addEventListener("click", closeSetupModal);
     dom.setupForm?.addEventListener("submit", handleSaveSetup);
     document.querySelector("[data-arc-analyze-story]")?.addEventListener("click", analyzeStory);
+    dom.workspaceUploadManuscript?.addEventListener("click", () => {
+      if (state.workspaceManuscriptBusy) return;
+      dom.workspaceManuscriptInput?.click();
+    });
+    dom.workspaceManuscriptInput?.addEventListener("change", handleWorkspaceManuscriptSelected);
     document.querySelector("[data-arc-tutorial-close]")?.addEventListener("click", closeTutorial);
     dom.tutorialPrev?.addEventListener("click", () => moveTutorial(-1));
     dom.tutorialNext?.addEventListener("click", () => moveTutorial(1));
@@ -1212,6 +1221,77 @@
     }).filter((unit) => unit.title || unit.summary);
   }
 
+  function normalizeGeneratedArcBreakdown(payload = {}) {
+    const allowedThreadTypes = new Set(["plot", "subplot", "mystery", "romance", "antagonist", "theme", "relationship", "custom"]);
+    const allowedThreadStatuses = new Set(["active", "paused", "resolved", "unresolved"]);
+    const allowedSetupTypes = new Set(["setup", "clue", "promise", "foreshadowing", "question", "misdirection"]);
+    const allowedPayoffTypes = new Set(["payoff", "reveal", "answer", "reversal", "subversion"]);
+    const allowedSetupStatuses = new Set(["unresolved", "prepared", "paid_off", "cut"]);
+    const allowedLinkTypes = new Set(["causes", "enables", "blocks", "reveals", "foreshadows", "pays_off", "contradicts", "follows"]);
+    const tempId = (value, fallback) => {
+      const cleaned = clean(value || fallback).replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+      return cleaned || fallback;
+    };
+    const enumValue = (value, allowed, fallback) => {
+      const cleaned = clean(value).toLowerCase().replace(/[^a-z_]+/g, "_");
+      return allowed.has(cleaned) ? cleaned : fallback;
+    };
+
+    const units = normalizeGeneratedArcUnits(payload.units || []);
+    const threads = (Array.isArray(payload.threads) ? payload.threads : []).slice(0, 48).map((thread, index) => ({
+      tempId: tempId(thread?.temp_id || thread?.tempId || thread?.id, `thread-${index + 1}`),
+      name: clean(thread?.name || thread?.title) || `Thread ${index + 1}`,
+      threadType: enumValue(thread?.thread_type || thread?.threadType || thread?.type, allowedThreadTypes, "plot"),
+      description: clean(thread?.description || thread?.summary),
+      status: enumValue(thread?.status, allowedThreadStatuses, "active"),
+      currentState: clean(thread?.current_state || thread?.currentState),
+      nextMovement: clean(thread?.next_movement || thread?.nextMovement),
+      resolutionNote: clean(thread?.resolution_note || thread?.resolutionNote),
+      sortOrder: Number.isFinite(Number(thread?.sort_order ?? thread?.sortOrder)) ? Math.round(Number(thread.sort_order ?? thread.sortOrder)) : (index + 1) * 100,
+    })).filter((thread) => thread.name);
+    const threadUnits = (Array.isArray(payload.thread_units || payload.threadUnits) ? (payload.thread_units || payload.threadUnits) : []).slice(0, 240).map((link, index) => ({
+      threadTempId: tempId(link?.thread_temp_id || link?.threadTempId || link?.thread_id || link?.threadId, ""),
+      unitTempId: tempId(link?.unit_temp_id || link?.unitTempId || link?.unit_id || link?.unitId, ""),
+      threadMoment: clean(link?.thread_moment || link?.threadMoment || link?.moment),
+      sortOrder: Number.isFinite(Number(link?.sort_order ?? link?.sortOrder)) ? Math.round(Number(link.sort_order ?? link.sortOrder)) : (index + 1) * 100,
+    })).filter((link) => link.threadTempId && link.unitTempId);
+    const characterArcs = (Array.isArray(payload.character_arcs || payload.characterArcs) ? (payload.character_arcs || payload.characterArcs) : []).slice(0, 36).map((arc, index) => ({
+      tempId: tempId(arc?.temp_id || arc?.tempId || arc?.id, `arc-${index + 1}`),
+      name: clean(arc?.name || arc?.title || arc?.character_name || arc?.characterName) || `Character Arc ${index + 1}`,
+      startingState: clean(arc?.starting_state || arc?.startingState),
+      externalGoal: clean(arc?.external_goal || arc?.externalGoal),
+      internalNeed: clean(arc?.internal_need || arc?.internalNeed),
+      falseBelief: clean(arc?.false_belief || arc?.falseBelief),
+      fear: clean(arc?.fear),
+      finalState: clean(arc?.final_state || arc?.finalState),
+      status: enumValue(arc?.status, allowedThreadStatuses, "active"),
+    })).filter((arc) => arc.name);
+    const arcStages = (Array.isArray(payload.arc_stages || payload.arcStages) ? (payload.arc_stages || payload.arcStages) : []).slice(0, 180).map((stage, index) => ({
+      characterArcTempId: tempId(stage?.character_arc_temp_id || stage?.characterArcTempId || stage?.character_arc_id || stage?.characterArcId, ""),
+      unitTempId: tempId(stage?.unit_temp_id || stage?.unitTempId || stage?.unit_id || stage?.unitId, ""),
+      title: clean(stage?.title || stage?.name) || `Arc Stage ${index + 1}`,
+      description: clean(stage?.description || stage?.summary),
+      sortOrder: Number.isFinite(Number(stage?.sort_order ?? stage?.sortOrder)) ? Math.round(Number(stage.sort_order ?? stage.sortOrder)) : (index + 1) * 100,
+    })).filter((stage) => stage.characterArcTempId && stage.title);
+    const setups = (Array.isArray(payload.setups || payload.setups_payoffs || payload.setupsPayoffs) ? (payload.setups || payload.setups_payoffs || payload.setupsPayoffs) : []).slice(0, 80).map((item, index) => ({
+      label: clean(item?.label || item?.title) || `Setup ${index + 1}`,
+      setupUnitTempId: tempId(item?.setup_unit_temp_id || item?.setupUnitTempId || item?.setup_unit_id || item?.setupUnitId, ""),
+      payoffUnitTempId: tempId(item?.payoff_unit_temp_id || item?.payoffUnitTempId || item?.payoff_unit_id || item?.payoffUnitId, ""),
+      setupType: enumValue(item?.setup_type || item?.setupType, allowedSetupTypes, "setup"),
+      payoffType: enumValue(item?.payoff_type || item?.payoffType, allowedPayoffTypes, "payoff"),
+      description: clean(item?.description || item?.summary),
+      status: enumValue(item?.status, allowedSetupStatuses, "unresolved"),
+    })).filter((item) => item.label);
+    const unitLinks = (Array.isArray(payload.unit_links || payload.unitLinks || payload.causality) ? (payload.unit_links || payload.unitLinks || payload.causality) : []).slice(0, 180).map((link) => ({
+      sourceUnitTempId: tempId(link?.source_unit_temp_id || link?.sourceUnitTempId || link?.source_unit_id || link?.sourceUnitId, ""),
+      targetUnitTempId: tempId(link?.target_unit_temp_id || link?.targetUnitTempId || link?.target_unit_id || link?.targetUnitId, ""),
+      linkType: enumValue(link?.link_type || link?.linkType || link?.type, allowedLinkTypes, "causes"),
+      description: clean(link?.description || link?.summary),
+    })).filter((link) => link.sourceUnitTempId && link.targetUnitTempId && link.sourceUnitTempId !== link.targetUnitTempId);
+
+    return { project: payload.project || {}, units, threads, threadUnits, characterArcs, arcStages, setups, unitLinks };
+  }
+
   async function handleManuscriptSelected() {
     const file = dom.manuscriptInput?.files?.[0] || null;
     if (!file) return;
@@ -1251,16 +1331,16 @@
       await startArcManuscriptBreakdownProcessor(jobId);
       startCreateStatusAnimation(MANUSCRIPT_READING_STATUS);
       const result = await pollArcManuscriptBreakdownJob(jobId);
-      const units = normalizeGeneratedArcUnits(result?.units || []);
-      if (!result?.project?.title && !units.length) {
+      const breakdown = normalizeGeneratedArcBreakdown(result || {});
+      const units = breakdown.units;
+      if (!breakdown.project?.title && !units.length) {
         throw new Error("The manuscript did not return usable project details or outline units.");
       }
 
       state.stagedManuscript = {
         file,
         source: result?.source || { original_filename: file.name, mime_type: file.type, file_size: file.size },
-        project: result?.project || {},
-        units,
+        ...breakdown,
       };
       applyExtractedArcProject({ project: state.stagedManuscript.project });
       renderStagedManuscript();
@@ -1288,11 +1368,13 @@
     return data?.document || null;
   }
 
-  async function pollArcManuscriptBreakdownJob(jobId) {
+  async function pollArcManuscriptBreakdownJob(jobId, options = {}) {
     state.activeManuscriptJobId = jobId;
     const startedAt = Date.now();
     let lastProgressLabel = "";
-    while (state.activeManuscriptJobId === jobId && !dom.createModal?.hidden) {
+    const isActive = typeof options.isActive === "function" ? options.isActive : () => !dom.createModal?.hidden;
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : (label) => startCreateStatusAnimation(label);
+    while (state.activeManuscriptJobId === jobId && isActive()) {
       await sleep(1800);
       const { data, error } = await window.centralisSupabase.functions.invoke("get-arc-manuscript-breakdown-job", {
         body: { jobId },
@@ -1302,7 +1384,7 @@
       const progressLabel = clean(job.progress_label);
       if (progressLabel && progressLabel !== lastProgressLabel && !["Ready", "Failed"].includes(progressLabel)) {
         lastProgressLabel = progressLabel;
-        startCreateStatusAnimation(`${progressLabel}...`);
+        onProgress(`${progressLabel}...`);
       }
       if (job.status === "completed") {
         state.activeManuscriptJobId = "";
@@ -1333,10 +1415,12 @@
     throw readable;
   }
 
-  async function insertGeneratedArcUnits(projectId, units = []) {
-    const usableUnits = normalizeGeneratedArcUnits(units);
+  async function insertGeneratedArcBreakdown(projectId, payload = {}) {
+    const breakdown = normalizeGeneratedArcBreakdown(payload);
+    const usableUnits = breakdown.units;
     if (!usableUnits.length) return [];
     const idByTempId = new Map(usableUnits.map((unit) => [unit.tempId, crypto.randomUUID()]));
+    const topLevelOffset = projectId === state.project?.id ? Math.max(0, ...state.units.filter((unit) => !unit.parent_unit_id).map((unit) => Number(unit.sort_order || 0))) : 0;
     const rows = usableUnits.map((unit, index) => ({
       id: idByTempId.get(unit.tempId),
       project_id: projectId,
@@ -1351,7 +1435,7 @@
       story_time: unit.storyTime || null,
       emotional_tone: unit.emotionalTone || null,
       status: "outlined",
-      sort_order: Number.isFinite(unit.sortOrder) ? unit.sortOrder : (index + 1) * 100,
+      sort_order: (unit.parentTempId ? 0 : topLevelOffset) + (Number.isFinite(unit.sortOrder) ? unit.sortOrder : (index + 1) * 100),
       beats: unit.beats,
     }));
     const { data, error } = await window.centralisSupabase
@@ -1359,7 +1443,105 @@
       .insert(rows)
       .select("id");
     if (error) throw error;
+    const idByThreadTempId = new Map(breakdown.threads.map((thread) => [thread.tempId, crypto.randomUUID()]));
+    if (breakdown.threads.length) {
+      const { error: threadError } = await window.centralisSupabase.from(TABLES.threads).insert(breakdown.threads.map((thread) => ({
+        id: idByThreadTempId.get(thread.tempId),
+        project_id: projectId,
+        user_id: state.user.id,
+        name: thread.name,
+        thread_type: thread.threadType,
+        description: thread.description || null,
+        status: thread.status,
+        current_state: thread.currentState || null,
+        next_movement: thread.nextMovement || null,
+        resolution_note: thread.resolutionNote || null,
+        sort_order: thread.sortOrder,
+      })));
+      if (threadError) throw threadError;
+    }
+    const threadUnitRows = breakdown.threadUnits
+      .map((link) => ({
+        project_id: projectId,
+        user_id: state.user.id,
+        thread_id: idByThreadTempId.get(link.threadTempId),
+        unit_id: idByTempId.get(link.unitTempId),
+        thread_moment: link.threadMoment || null,
+        sort_order: link.sortOrder,
+      }))
+      .filter((row) => row.thread_id && row.unit_id);
+    if (threadUnitRows.length) {
+      const { error: linkError } = await window.centralisSupabase.from(TABLES.threadUnits).insert(threadUnitRows);
+      if (linkError) throw linkError;
+    }
+    const idByCharacterArcTempId = new Map(breakdown.characterArcs.map((arc) => [arc.tempId, crypto.randomUUID()]));
+    if (breakdown.characterArcs.length) {
+      const { error: arcError } = await window.centralisSupabase.from(TABLES.characterArcs).insert(breakdown.characterArcs.map((arc) => ({
+        id: idByCharacterArcTempId.get(arc.tempId),
+        project_id: projectId,
+        user_id: state.user.id,
+        name: arc.name,
+        starting_state: arc.startingState || null,
+        external_goal: arc.externalGoal || null,
+        internal_need: arc.internalNeed || null,
+        false_belief: arc.falseBelief || null,
+        fear: arc.fear || null,
+        final_state: arc.finalState || null,
+        status: arc.status,
+      })));
+      if (arcError) throw arcError;
+    }
+    const arcStageRows = breakdown.arcStages
+      .map((stage) => ({
+        project_id: projectId,
+        user_id: state.user.id,
+        character_arc_id: idByCharacterArcTempId.get(stage.characterArcTempId),
+        unit_id: idByTempId.get(stage.unitTempId) || null,
+        title: stage.title,
+        description: stage.description || null,
+        sort_order: stage.sortOrder,
+      }))
+      .filter((row) => row.character_arc_id);
+    if (arcStageRows.length) {
+      const { error: stageError } = await window.centralisSupabase.from(TABLES.arcStages).insert(arcStageRows);
+      if (stageError) throw stageError;
+    }
+    const setupRows = breakdown.setups
+      .map((item) => ({
+        project_id: projectId,
+        user_id: state.user.id,
+        setup_unit_id: idByTempId.get(item.setupUnitTempId) || null,
+        payoff_unit_id: idByTempId.get(item.payoffUnitTempId) || null,
+        label: item.label,
+        setup_type: item.setupType,
+        payoff_type: item.payoffType,
+        description: item.description || null,
+        status: item.status,
+      }))
+      .filter((row) => row.setup_unit_id || row.payoff_unit_id);
+    if (setupRows.length) {
+      const { error: setupError } = await window.centralisSupabase.from(TABLES.setups).insert(setupRows);
+      if (setupError) throw setupError;
+    }
+    const unitLinkRows = breakdown.unitLinks
+      .map((link) => ({
+        project_id: projectId,
+        user_id: state.user.id,
+        source_unit_id: idByTempId.get(link.sourceUnitTempId),
+        target_unit_id: idByTempId.get(link.targetUnitTempId),
+        link_type: link.linkType,
+        description: link.description || null,
+      }))
+      .filter((row) => row.source_unit_id && row.target_unit_id && row.source_unit_id !== row.target_unit_id);
+    if (unitLinkRows.length) {
+      const { error: unitLinkError } = await window.centralisSupabase.from(TABLES.unitLinks).insert(unitLinkRows);
+      if (unitLinkError) throw unitLinkError;
+    }
     return data || [];
+  }
+
+  async function insertGeneratedArcUnits(projectId, units = []) {
+    return insertGeneratedArcBreakdown(projectId, { units });
   }
 
   async function handleCreateProject(event) {
@@ -1397,7 +1579,7 @@
 
       if (stagedUnits.length) {
         setStatus(dom.createStatus, "Creating Arc outline...");
-        await insertGeneratedArcUnits(createdProjectId, stagedUnits);
+        await insertGeneratedArcBreakdown(createdProjectId, state.stagedManuscript);
       }
 
       window.location.href = `arc-workspace.html?project_id=${encodeURIComponent(createdProjectId)}`;
@@ -1662,6 +1844,97 @@
     }
     setStatus(dom.workspaceStatus, "Thread notes saved.", "success");
     await refreshWorkspace(false);
+  }
+
+  function setWorkspaceManuscriptBusy(busy) {
+    state.workspaceManuscriptBusy = busy;
+    if (dom.workspaceUploadManuscript) dom.workspaceUploadManuscript.disabled = busy;
+    if (dom.workspaceManuscriptInput) dom.workspaceManuscriptInput.disabled = busy;
+  }
+
+  async function uploadWorkspaceArcSourceDocument(file) {
+    const uploadData = new FormData();
+    uploadData.set("projectId", state.project.id);
+    uploadData.set("file", file);
+    uploadData.set("displayName", file.name);
+    const { data, error } = await window.centralisSupabase.functions.invoke("upload-arc-source-document", {
+      body: uploadData,
+    });
+    if (error) throw await readableFunctionError(error);
+    return data?.document || null;
+  }
+
+  async function queueArcManuscriptBreakdown(file, format) {
+    const uploadData = new FormData();
+    uploadData.set("file", file);
+    uploadData.set("format", format || "custom");
+    const { data, error } = await window.centralisSupabase.functions.invoke("extract-arc-source-document", {
+      body: uploadData,
+    });
+    if (error) throw await readableFunctionError(error);
+    const jobId = clean(data?.job?.id);
+    if (!jobId) throw new Error("The manuscript breakdown job did not start.");
+    return jobId;
+  }
+
+  async function applyBreakdownToCurrentProjectOverview(project = {}) {
+    if (!state.project?.id || !project || typeof project !== "object") return;
+    const allowed = ["logline", "premise", "genre", "format", "target_length", "notes"];
+    const payload = { status: "outlined" };
+    for (const key of allowed) {
+      const current = clean(state.project[key]);
+      const proposed = clean(project[key] || project[key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())]);
+      if (!current && proposed) payload[key] = proposed;
+    }
+    if (Object.keys(payload).length <= 1 && state.project.status === "outlined") return;
+    const { error } = await window.centralisSupabase
+      .from(TABLES.projects)
+      .update(payload)
+      .eq("id", state.project.id)
+      .eq("user_id", state.user.id);
+    if (error) throw error;
+  }
+
+  async function handleWorkspaceManuscriptSelected() {
+    const file = dom.workspaceManuscriptInput?.files?.[0] || null;
+    if (!file || !state.project?.id || state.workspaceManuscriptBusy) return;
+    if (!window.centralisSupabase) {
+      setStatus(dom.workspaceStatus, "Supabase is not available yet. Refresh the page and try again.", "error");
+      return;
+    }
+
+    setWorkspaceManuscriptBusy(true);
+    setStatus(dom.workspaceStatus, "Saving source document...");
+    try {
+      await uploadWorkspaceArcSourceDocument(file);
+      setStatus(dom.workspaceStatus, "Queueing manuscript analysis...");
+      const jobId = await queueArcManuscriptBreakdown(file, state.project.format || "custom");
+      setStatus(dom.workspaceStatus, "Starting manuscript processor...");
+      await startArcManuscriptBreakdownProcessor(jobId);
+      const result = await pollArcManuscriptBreakdownJob(jobId, {
+        isActive: () => state.workspaceManuscriptBusy,
+        onProgress: (message) => setStatus(dom.workspaceStatus, message),
+      });
+      const breakdown = normalizeGeneratedArcBreakdown(result || {});
+      if (!breakdown.units.length) {
+        throw new Error("The uploaded document did not return usable Arc Studio units.");
+      }
+
+      setStatus(dom.workspaceStatus, "Adding analyzed story parts...");
+      await applyBreakdownToCurrentProjectOverview(breakdown.project);
+      await insertGeneratedArcBreakdown(state.project.id, breakdown);
+      state.selectedUnitId = "";
+      await refreshWorkspace(false);
+      setStatus(dom.workspaceStatus, "Running full story diagnostics...");
+      await analyzeStory();
+    } catch (error) {
+      state.activeManuscriptJobId = "";
+      await refreshWorkspace(false);
+      setStatus(dom.workspaceStatus, `Could not process source document: ${error.message}`, "error");
+    } finally {
+      setWorkspaceManuscriptBusy(false);
+      if (dom.workspaceManuscriptInput) dom.workspaceManuscriptInput.value = "";
+    }
   }
 
   async function analyzeStory() {

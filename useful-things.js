@@ -84,6 +84,18 @@
     combineOrderStatus: document.querySelector("[data-combine-order-status]"),
     combineOrderConfirm: document.querySelector("[data-combine-order-confirm]"),
     combineOrderCancelButtons: Array.from(document.querySelectorAll("[data-combine-order-cancel]")),
+    qrTypeTabs: Array.from(document.querySelectorAll("[data-qr-type-tab]")),
+    qrTypePanels: Array.from(document.querySelectorAll("[data-qr-type-panel]")),
+    qrFields: Array.from(document.querySelectorAll("[data-qr-field]")),
+    qrCanvas: document.querySelector("[data-qr-canvas]"),
+    qrEmptyPreview: document.querySelector("[data-qr-empty-preview]"),
+    qrReadyBadge: document.querySelector("[data-qr-ready-badge]"),
+    qrStatus: document.querySelector("[data-qr-status]"),
+    qrTextCount: document.querySelector("[data-qr-text-count]"),
+    qrDownloadMenu: document.querySelector("[data-qr-download-menu]"),
+    qrDownloadToggle: document.querySelector("[data-qr-download-toggle]"),
+    qrDownloadOptions: document.querySelector("[data-qr-download-options]"),
+    qrDownloadButtons: Array.from(document.querySelectorAll("[data-qr-download]")),
   };
 
   if (!els.modeSelect || !els.richEditor || !els.rawInput || !els.output) {
@@ -130,6 +142,12 @@
     files: [],
     draftFiles: [],
   };
+  const qrState = {
+    activeType: "website",
+    matrix: null,
+    payload: "",
+    debounceTimer: null,
+  };
 
   const converterTargetLabels = {
     markdown: "Markdown",
@@ -165,6 +183,21 @@
     "numbered-list": "txt",
     summary: "txt",
     custom: "txt",
+  };
+
+  const usefulTabUrlNames = {
+    "text-converter": "text-converter",
+    calculators: "calculators",
+    generators: "basic-generators",
+    "combine-split": "combine-split",
+    "qr-codes": "qr-code-generator",
+    storage: "storage",
+  };
+
+  const usefulTabHashAliases = {
+    "basic-generators": "generators",
+    generators: "generators",
+    "qr-codes": "qr-codes",
   };
 
   const customConverterInstructions = [
@@ -3687,6 +3720,256 @@
     return value ? new Date(value).toLocaleString() : "-";
   }
 
+  function getQrField(name) {
+    return els.qrFields.find((field) => field.dataset.qrField === name);
+  }
+
+  function getQrFieldValue(name) {
+    return getQrField(name)?.value.trim() || "";
+  }
+
+  function escapeVCardValue(value) {
+    return String(value || "")
+      .replaceAll("\\", "\\\\")
+      .replaceAll("\n", "\\n")
+      .replaceAll(";", "\\;")
+      .replaceAll(",", "\\,");
+  }
+
+  function buildQrContactPayload() {
+    const contact = {
+      name: getQrFieldValue("contact-name"),
+      phone: getQrFieldValue("contact-phone"),
+      email: getQrFieldValue("contact-email"),
+      company: getQrFieldValue("contact-company"),
+      title: getQrFieldValue("contact-title"),
+      workPhone: getQrFieldValue("contact-work-phone"),
+      fax: getQrFieldValue("contact-fax"),
+      street: getQrFieldValue("contact-street"),
+      city: getQrFieldValue("contact-city"),
+      state: getQrFieldValue("contact-state"),
+      country: getQrFieldValue("contact-country"),
+      zip: getQrFieldValue("contact-zip"),
+      website: getQrFieldValue("contact-website"),
+    };
+    if (!Object.values(contact).some(Boolean)) return "";
+
+    const lines = ["BEGIN:VCARD", "VERSION:3.0"];
+    if (contact.name) {
+      lines.push(`FN:${escapeVCardValue(contact.name)}`);
+      lines.push(`N:${escapeVCardValue(contact.name)};;;;`);
+    }
+    if (contact.company) lines.push(`ORG:${escapeVCardValue(contact.company)}`);
+    if (contact.title) lines.push(`TITLE:${escapeVCardValue(contact.title)}`);
+    if (contact.phone) lines.push(`TEL;TYPE=CELL:${escapeVCardValue(contact.phone)}`);
+    if (contact.workPhone) lines.push(`TEL;TYPE=WORK,VOICE:${escapeVCardValue(contact.workPhone)}`);
+    if (contact.fax) lines.push(`TEL;TYPE=WORK,FAX:${escapeVCardValue(contact.fax)}`);
+    if (contact.email) lines.push(`EMAIL;TYPE=INTERNET:${escapeVCardValue(contact.email)}`);
+    if ([contact.street, contact.city, contact.state, contact.zip, contact.country].some(Boolean)) {
+      lines.push(`ADR;TYPE=WORK:;;${escapeVCardValue(contact.street)};${escapeVCardValue(contact.city)};${escapeVCardValue(contact.state)};${escapeVCardValue(contact.zip)};${escapeVCardValue(contact.country)}`);
+    }
+    if (contact.website) lines.push(`URL:${escapeVCardValue(contact.website)}`);
+    lines.push("END:VCARD");
+    return lines.join("\r\n");
+  }
+
+  function normalizeQrWebsite(value) {
+    if (!value) return "";
+    return /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`;
+  }
+
+  function getQrPayload() {
+    if (qrState.activeType === "contact") return buildQrContactPayload();
+    if (qrState.activeType === "text") return getQrField("text-value")?.value.trim() || "";
+    return normalizeQrWebsite(getQrFieldValue("website-url"));
+  }
+
+  function setQrDownloadEnabled(enabled) {
+    els.qrDownloadButtons.forEach((button) => {
+      button.disabled = !enabled;
+    });
+    if (els.qrDownloadToggle) els.qrDownloadToggle.disabled = !enabled;
+    els.qrDownloadMenu?.classList.toggle("is-disabled", !enabled);
+  }
+
+  function setQrDownloadMenuOpen(open) {
+    const nextOpen = Boolean(open && qrState.matrix && els.qrDownloadOptions && els.qrDownloadToggle);
+    if (els.qrDownloadOptions) els.qrDownloadOptions.hidden = !nextOpen;
+    els.qrDownloadToggle?.setAttribute("aria-expanded", String(nextOpen));
+  }
+
+  function renderQrMatrixToCanvas(matrix) {
+    if (!els.qrCanvas) return;
+    const context = els.qrCanvas.getContext("2d");
+    const dimension = els.qrCanvas.width;
+    const quietZone = 4;
+    const totalModules = matrix.size + quietZone * 2;
+
+    context.imageSmoothingEnabled = false;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, dimension, dimension);
+    context.fillStyle = "#000000";
+    for (let row = 0; row < matrix.size; row += 1) {
+      for (let column = 0; column < matrix.size; column += 1) {
+        if (!matrix.data[row * matrix.size + column]) continue;
+        const left = Math.round(((column + quietZone) / totalModules) * dimension);
+        const top = Math.round(((row + quietZone) / totalModules) * dimension);
+        const right = Math.round(((column + quietZone + 1) / totalModules) * dimension);
+        const bottom = Math.round(((row + quietZone + 1) / totalModules) * dimension);
+        context.fillRect(left, top, right - left, bottom - top);
+      }
+    }
+  }
+
+  function clearQrPreview(message = "") {
+    qrState.matrix = null;
+    qrState.payload = "";
+    if (els.qrCanvas) els.qrCanvas.hidden = true;
+    if (els.qrEmptyPreview) els.qrEmptyPreview.hidden = false;
+    if (els.qrReadyBadge) els.qrReadyBadge.hidden = true;
+    if (els.qrStatus) els.qrStatus.textContent = message;
+    setQrDownloadEnabled(false);
+    setQrDownloadMenuOpen(false);
+  }
+
+  function generateQrCode() {
+    const payload = getQrPayload();
+    if (!payload) {
+      clearQrPreview();
+      return;
+    }
+    if (!window.QRCode?.create) {
+      clearQrPreview("The QR code generator could not be loaded. Check your connection and try again.");
+      return;
+    }
+
+    try {
+      const code = window.QRCode.create(payload, { errorCorrectionLevel: "M" });
+      qrState.matrix = code.modules;
+      qrState.payload = payload;
+      renderQrMatrixToCanvas(code.modules);
+      if (els.qrCanvas) els.qrCanvas.hidden = false;
+      if (els.qrEmptyPreview) els.qrEmptyPreview.hidden = true;
+      if (els.qrReadyBadge) els.qrReadyBadge.hidden = false;
+      if (els.qrStatus) els.qrStatus.textContent = "QR code generated automatically.";
+      setQrDownloadEnabled(true);
+    } catch (error) {
+      console.error("Unable to generate QR code", error);
+      clearQrPreview("That content is too long to fit in a QR code. Try shortening it.");
+    }
+  }
+
+  function scheduleQrGeneration() {
+    window.clearTimeout(qrState.debounceTimer);
+    qrState.debounceTimer = window.setTimeout(generateQrCode, 180);
+  }
+
+  function activateQrType(type) {
+    if (!els.qrTypeTabs.some((tab) => tab.dataset.qrTypeTab === type)) return;
+    qrState.activeType = type;
+    els.qrTypeTabs.forEach((tab) => {
+      const isActive = tab.dataset.qrTypeTab === type;
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-selected", String(isActive));
+      tab.tabIndex = isActive ? 0 : -1;
+    });
+    els.qrTypePanels.forEach((panel) => {
+      const isActive = panel.dataset.qrTypePanel === type;
+      panel.classList.toggle("is-active", isActive);
+      panel.hidden = !isActive;
+    });
+    setQrDownloadMenuOpen(false);
+    generateQrCode();
+    const firstField = els.qrTypePanels.find((panel) => panel.dataset.qrTypePanel === type)?.querySelector("input, textarea");
+    firstField?.focus({ preventScroll: true });
+  }
+
+  function getQrVectorPath(matrix, quietZone = 4) {
+    const commands = [];
+    for (let row = 0; row < matrix.size; row += 1) {
+      let column = 0;
+      while (column < matrix.size) {
+        if (!matrix.data[row * matrix.size + column]) {
+          column += 1;
+          continue;
+        }
+        const start = column;
+        while (column < matrix.size && matrix.data[row * matrix.size + column]) column += 1;
+        commands.push(`M${start + quietZone} ${row + quietZone}h${column - start}v1H${start + quietZone}z`);
+      }
+    }
+    return commands.join("");
+  }
+
+  function buildQrSvg(matrix) {
+    const quietZone = 4;
+    const size = matrix.size + quietZone * 2;
+    const path = getQrVectorPath(matrix, quietZone);
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="1024" height="1024" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
+  }
+
+  function buildQrEps(matrix) {
+    const quietZone = 4;
+    const moduleScale = 12;
+    const size = (matrix.size + quietZone * 2) * moduleScale;
+    const commands = [];
+    for (let row = 0; row < matrix.size; row += 1) {
+      let column = 0;
+      while (column < matrix.size) {
+        if (!matrix.data[row * matrix.size + column]) {
+          column += 1;
+          continue;
+        }
+        const start = column;
+        while (column < matrix.size && matrix.data[row * matrix.size + column]) column += 1;
+        const x = (start + quietZone) * moduleScale;
+        const y = size - (row + quietZone + 1) * moduleScale;
+        commands.push(`${x} ${y} ${(column - start) * moduleScale} ${moduleScale} rectfill`);
+      }
+    }
+    return [
+      "%!PS-Adobe-3.0 EPSF-3.0",
+      `%%BoundingBox: 0 0 ${size} ${size}`,
+      "%%LanguageLevel: 2",
+      "%%Pages: 1",
+      "%%EndComments",
+      "1 setgray",
+      `0 0 ${size} ${size} rectfill`,
+      "0 setgray",
+      ...commands,
+      "showpage",
+      "%%EOF",
+    ].join("\n");
+  }
+
+  function saveQrBlob(blob, extension) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `centralis-qr-${qrState.activeType}.${extension}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadQrCode(format) {
+    if (!qrState.matrix || !els.qrCanvas) return;
+    setQrDownloadMenuOpen(false);
+    if (format === "svg") {
+      saveQrBlob(new Blob([buildQrSvg(qrState.matrix)], { type: "image/svg+xml;charset=utf-8" }), "svg");
+      return;
+    }
+    if (format === "eps") {
+      saveQrBlob(new Blob([buildQrEps(qrState.matrix)], { type: "application/postscript" }), "eps");
+      return;
+    }
+    const mimeType = format === "jpg" ? "image/jpeg" : "image/png";
+    els.qrCanvas.toBlob((blob) => {
+      if (blob) saveQrBlob(blob, format === "jpg" ? "jpg" : "png");
+    }, mimeType, 0.96);
+  }
+
   function getStorageSortValue(item, sortKey) {
     if (sortKey === "modified") return item.kind === "object" ? Date.parse(item.object.lastModified || "") || 0 : 0;
     if (sortKey === "size") return item.kind === "object" ? Number(item.object.size || 0) : -1;
@@ -3723,7 +4006,28 @@
     return user?.admin === true;
   }
 
-  function activateUsefulTab(tabName) {
+  function getUsefulTabFromHash() {
+    let hashName = window.location.hash.slice(1);
+    try {
+      hashName = decodeURIComponent(hashName);
+    } catch (_error) {
+      // Keep the raw hash when it contains malformed escape sequences.
+    }
+    hashName = hashName.trim().toLowerCase();
+    if (!hashName) return "";
+    if (usefulTabHashAliases[hashName]) return usefulTabHashAliases[hashName];
+    return Object.keys(usefulTabUrlNames).find((tabName) => usefulTabUrlNames[tabName] === hashName) || "";
+  }
+
+  function updateUsefulTabUrl(tabName, replace = false) {
+    const hashName = usefulTabUrlNames[tabName];
+    if (!hashName || window.location.hash === `#${hashName}`) return;
+    const nextUrl = new URL(window.location.href);
+    nextUrl.hash = hashName;
+    window.history[replace ? "replaceState" : "pushState"]({ usefulTab: tabName }, "", nextUrl);
+  }
+
+  function activateUsefulTab(tabName, options = {}) {
     let tab = els.tabs.find((candidate) => candidate.dataset.usefulTab === tabName && !candidate.hidden);
     if (!tab) {
       tab = els.tabs.find((candidate) => candidate.dataset.usefulTab === "text-converter") || els.tabs.find((candidate) => !candidate.hidden);
@@ -3747,20 +4051,23 @@
     if (activeTabName === "storage") {
       initializeStorageBrowser();
     }
+    if (options.updateUrl) {
+      updateUsefulTabUrl(activeTabName, options.replaceUrl === true);
+    }
   }
 
   function syncUsefulAdminVisibility(user = window.centralisCurrentAppUser) {
     storageAccessAllowed = isUsefulAdmin(user);
     const activePanel = els.panels.find((panel) => panel.classList.contains("is-active"));
-    const nextTab = !storageAccessAllowed && activePanel?.dataset.usefulPanel === "storage"
-      ? "text-converter"
-      : activePanel?.dataset.usefulPanel || "text-converter";
+    const requestedTab = getUsefulTabFromHash();
+    const preferredTab = requestedTab || activePanel?.dataset.usefulPanel || "text-converter";
+    const nextTab = !storageAccessAllowed && preferredTab === "storage" ? "text-converter" : preferredTab;
 
     els.adminOnly.forEach((element) => {
       element.hidden = !storageAccessAllowed;
     });
 
-    activateUsefulTab(nextTab);
+    activateUsefulTab(nextTab, { updateUrl: !requestedTab, replaceUrl: true });
   }
 
   function setStorageMigrationBusy(busy) {
@@ -4284,9 +4591,66 @@
 
   els.tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
-      activateUsefulTab(tab.dataset.usefulTab);
+      activateUsefulTab(tab.dataset.usefulTab, { updateUrl: true });
     });
   });
+
+  const activateUsefulTabFromUrl = () => {
+    const requestedTab = getUsefulTabFromHash() || "text-converter";
+    activateUsefulTab(requestedTab, { updateUrl: !window.location.hash, replaceUrl: true });
+  };
+  window.addEventListener("popstate", activateUsefulTabFromUrl);
+  window.addEventListener("hashchange", activateUsefulTabFromUrl);
+
+  els.qrTypeTabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => activateQrType(tab.dataset.qrTypeTab));
+    tab.addEventListener("keydown", (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      let nextIndex = index;
+      if (event.key === "ArrowLeft") nextIndex = (index - 1 + els.qrTypeTabs.length) % els.qrTypeTabs.length;
+      if (event.key === "ArrowRight") nextIndex = (index + 1) % els.qrTypeTabs.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = els.qrTypeTabs.length - 1;
+      activateQrType(els.qrTypeTabs[nextIndex].dataset.qrTypeTab);
+    });
+  });
+
+  els.qrFields.forEach((field) => {
+    field.addEventListener("input", () => {
+      if (field.dataset.qrField === "text-value" && els.qrTextCount) {
+        els.qrTextCount.textContent = field.value.length.toLocaleString();
+      }
+      scheduleQrGeneration();
+    });
+  });
+
+  els.qrDownloadToggle?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setQrDownloadMenuOpen(els.qrDownloadOptions?.hidden);
+  });
+
+  els.qrDownloadButtons.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      downloadQrCode(button.dataset.qrDownload);
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (els.qrDownloadOptions?.hidden) return;
+    if (els.qrDownloadMenu?.contains(event.target)) return;
+    setQrDownloadMenuOpen(false);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && els.qrDownloadOptions && !els.qrDownloadOptions.hidden) {
+      setQrDownloadMenuOpen(false);
+      els.qrDownloadToggle?.focus({ preventScroll: true });
+    }
+  });
+
+  activateQrType("website");
 
   if (els.calculatorGrid) {
     createCalculatorCard("standard");

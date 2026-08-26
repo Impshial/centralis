@@ -27,6 +27,7 @@
           </strong>
         </div>
         <div class="arc-workspace-actions">
+          <input type="file" data-arc-workspace-manuscript-file hidden accept=".pdf,.txt,.md,.markdown,.html,.htm,.rtf,.doc,.docx,.csv,.tsv,.json,.yaml,.yml,.xml,application/pdf,text/*,application/rtf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/json,application/xml">
           <button class="secondary-action" type="button" data-arc-open-unit>
             <ph-plus weight="bold" aria-hidden="true"></ph-plus>
             Add Unit
@@ -38,6 +39,10 @@
           <button class="secondary-action" type="button" data-arc-open-setup>
             <ph-link weight="bold" aria-hidden="true"></ph-link>
             Setup/Payoff
+          </button>
+          <button class="secondary-action" type="button" data-arc-upload-manuscript>
+            <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+            Upload Source
           </button>
           <button class="secondary-action" type="button" data-arc-analyze-story>
             <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
@@ -296,6 +301,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="arc-studio.js?v=arc-redesign-2"></script>
+  <script src="arc-studio.js?v=arc-source-upload-1"></script>
 </body>
 </html>
