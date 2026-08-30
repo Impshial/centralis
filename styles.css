@@ -16525,6 +16525,57 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   padding: 0 8px;
 }
 
+.listmaker-link-field {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+}
+
+.listmaker-link-field a {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--accent, #78d5c8);
+  font-weight: 720;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listmaker-link-field a:hover {
+  color: color-mix(in srgb, var(--accent, #78d5c8) 72%, white);
+}
+
+.listmaker-link-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid var(--line, rgb(255 255 255 / 14%));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface, #111827) 84%, transparent);
+  color: var(--muted, #9ca3af);
+  cursor: pointer;
+}
+
+.listmaker-link-edit:hover,
+.listmaker-link-edit:focus-visible {
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 58%, var(--line, rgb(255 255 255 / 14%)));
+  color: var(--accent, #78d5c8);
+}
+
+.listmaker-link-edit ph-pencil-simple {
+  width: 15px;
+  height: 15px;
+}
+
 .listmaker-item-row input:not([type="checkbox"]),
 .listmaker-item-row select,
 .listmaker-item-row textarea {

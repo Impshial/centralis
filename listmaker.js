@@ -13,6 +13,7 @@
 
   const FIELD_TYPES = [
     ["text", "Text"],
+    ["link", "Link"],
     ["number", "Number"],
     ["checkbox", "Checkbox"],
     ["date", "Date"],
@@ -218,6 +219,7 @@
     }));
     dom.items?.addEventListener("change", handleItemChange);
     dom.items?.addEventListener("click", handleItemClick);
+    dom.items?.addEventListener("keydown", handleItemKeydown);
     dom.items?.addEventListener("contextmenu", handleItemContextMenu);
     dom.items?.addEventListener("paste", handleItemPaste);
     dom.bulkBar?.addEventListener("click", handleBulkClick);
@@ -594,8 +596,25 @@
       const options = Array.isArray(field.dropdown_options) ? field.dropdown_options : [];
       return `<select ${attrs} aria-label="${escapeAttribute(field.name)}"><option value="">No selection</option>${options.map((option) => `<option value="${escapeAttribute(option)}"${value?.text_value === option ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`;
     }
+    if (field.field_type === "link") return renderLinkField(item, field, value?.text_value || "", attrs);
     if (field.field_type === "long_text") return `<textarea rows="1" placeholder="${escapeAttribute(field.name)}" ${attrs}>${escapeHtml(value?.text_value || "")}</textarea>`;
     return `<input type="text" placeholder="${escapeAttribute(field.name)}" value="${escapeAttribute(value?.text_value || "")}" ${attrs}>`;
+  }
+
+  function renderLinkField(item, field, value, attrs) {
+    const rawValue = String(value || "").trim();
+    const href = normalizeWebLink(rawValue);
+    if (!href) {
+      return `<input class="listmaker-link-input" type="url" inputmode="url" autocomplete="url" spellcheck="false" aria-label="${escapeAttribute(field.name)}" placeholder="${escapeAttribute(field.name)}" value="${escapeAttribute(rawValue)}" ${attrs}>`;
+    }
+    return `
+      <span class="listmaker-link-field">
+        <a href="${escapeAttribute(href)}" target="_blank" rel="noopener noreferrer" title="${escapeAttribute(rawValue)}">${escapeHtml(rawValue)}</a>
+        <button class="listmaker-link-edit" type="button" data-link-field-edit data-item-id="${escapeHtml(item.id)}" data-field-id="${escapeHtml(field.id)}" aria-label="Edit ${escapeAttribute(field.name)}" title="Edit link">
+          <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
+        </button>
+      </span>
+    `;
   }
 
   function renderTable(rows) {
@@ -1139,11 +1158,18 @@
     }
     const custom = event.target.closest("[data-custom-field]");
     if (custom) {
-      await updateCustomFieldValue(custom.dataset.itemId, custom.dataset.customField, controlValue(custom));
+      const fieldDefinition = state.fields.find((item) => item.id === custom.dataset.customField);
+      const saved = await updateCustomFieldValue(custom.dataset.itemId, custom.dataset.customField, controlValue(custom));
+      if (saved && fieldDefinition?.field_type === "link") renderItems();
     }
   }
 
   async function handleItemClick(event) {
+    const linkEdit = event.target.closest("[data-link-field-edit]");
+    if (linkEdit) {
+      beginLinkFieldEdit(linkEdit);
+      return;
+    }
     const checkToggle = event.target.closest("[data-item-check-toggle]");
     if (checkToggle) {
       const item = state.items.find((row) => row.id === checkToggle.dataset.itemCheckToggle);
@@ -1182,6 +1208,38 @@
       await loadList();
       renderEditor();
     }
+  }
+
+  function handleItemKeydown(event) {
+    const linkInput = event.target.closest("input[type='url'][data-custom-field]");
+    if (!linkInput) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      linkInput.dispatchEvent(new Event("change", { bubbles: true }));
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      renderItems();
+    }
+  }
+
+  function beginLinkFieldEdit(button) {
+    const field = state.fields.find((item) => item.id === button.dataset.fieldId);
+    if (!field) return;
+    const value = getFieldValue(button.dataset.itemId, field.id)?.text_value || "";
+    const input = document.createElement("input");
+    input.className = "listmaker-link-input";
+    input.type = "url";
+    input.inputMode = "url";
+    input.autocomplete = "url";
+    input.spellcheck = false;
+    input.value = value;
+    input.placeholder = field.name;
+    input.setAttribute("aria-label", field.name);
+    input.dataset.customField = field.id;
+    input.dataset.itemId = button.dataset.itemId;
+    button.closest(".listmaker-link-field")?.replaceWith(input);
+    input.focus();
+    input.select();
   }
 
   async function runItemAction(itemId, action) {
@@ -1368,7 +1426,7 @@
 
   async function updateCustomFieldValue(itemId, fieldId, value) {
     const field = state.fields.find((item) => item.id === fieldId);
-    if (!field) return;
+    if (!field) return false;
     const payload = {
       list_id: state.listId,
       item_id: itemId,
@@ -1386,9 +1444,10 @@
     const { data, error } = await supabase.from(TABLES.values).upsert(payload, { onConflict: "item_id,field_id" }).select("*").maybeSingle();
     if (error) {
       setStatus(dom.editorStatus, error.message, "error");
-      return;
+      return false;
     }
     updateLocalFieldValue(data || payload);
+    return true;
   }
 
   function updateLocalFieldValue(row) {
@@ -1670,6 +1729,10 @@
   }
 
   function handleItemContextMenu(event) {
+    if (event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), a[href]")) {
+      hideContextMenu();
+      return;
+    }
     const openRowMenus = document.querySelectorAll(".listmaker-row-menu[open]");
     if (event.target.closest(".listmaker-row-menu[open]")) {
       event.preventDefault();
@@ -2245,7 +2308,7 @@
       scored: "Adds a numeric score field to each item.",
       categorized: "Lets items be grouped into named categories.",
       status: "Adds a workflow-style status field to each item.",
-      custom_fields: "Lets you define extra fields such as text, numbers, dates, dropdowns, or notes.",
+      custom_fields: "Lets you define extra fields such as text, links, numbers, dates, dropdowns, or notes.",
       rating: "Adds a rating control to each item.",
     };
     return messages[key] || "Adds this behavior to the list.";
@@ -2276,6 +2339,18 @@
 
   function clean(value) {
     return String(value ?? "").trim();
+  }
+
+  function normalizeWebLink(value) {
+    const rawValue = clean(value);
+    if (!rawValue) return "";
+    const candidate = /^[a-z][a-z\d+.-]*:/i.test(rawValue) ? rawValue : `https://${rawValue}`;
+    try {
+      const url = new URL(candidate);
+      return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+    } catch {
+      return "";
+    }
   }
 
   function escapeHtml(value) {
