@@ -20,6 +20,7 @@
     ["dropdown", "Dropdown"],
     ["long_text", "Long Text"],
   ];
+  const LINK_FIELD_MARKER = "__centralis_link_field__";
 
   const RATING_TYPES = [
     ["", "No rating"],
@@ -280,7 +281,7 @@
     state.list = listResponse.data;
     state.categories = categoryResponse.data || [];
     state.statuses = statusResponse.data || [];
-    state.fields = fieldResponse.data || [];
+    state.fields = (fieldResponse.data || []).map(normalizeStoredField);
     state.items = itemResponse.data || [];
     state.values = valueResponse.data || [];
     await loadItemImages();
@@ -699,12 +700,22 @@
       settings: { completedItems: formData.get("completed_items") || "keep" },
     };
     setStatus(dom.createForm.querySelector("[data-listmaker-create-status]"), "Creating list...");
+    const createButton = dom.createForm.querySelector("button[type='submit']");
+    if (createButton) createButton.disabled = true;
     const { data, error } = await supabase.from(TABLES.lists).insert(payload).select("*").single();
     if (error) {
       setStatus(dom.createForm.querySelector("[data-listmaker-create-status]"), error.message, "error");
+      if (createButton) createButton.disabled = false;
       return;
     }
-    await seedListConfiguration(data.id, behaviors, template, formData, customFields);
+    try {
+      await seedListConfiguration(data.id, behaviors, template, formData, customFields);
+    } catch (configurationError) {
+      await supabase.from(TABLES.lists).delete().eq("id", data.id).eq("user_id", state.user.id);
+      setStatus(dom.createForm.querySelector("[data-listmaker-create-status]"), `Could not create the list: ${readableError(configurationError)}`, "error");
+      if (createButton) createButton.disabled = false;
+      return;
+    }
     window.location.href = `listmaker-list.html?list=${encodeURIComponent(data.id)}`;
   }
 
@@ -715,7 +726,7 @@
     const statuses = (behaviors.status ? collectLines(formData.get("statuses")) : []).map((name, index) => ({
       list_id: listId, user_id: state.user.id, name, color: BASE_STATUSES[index % BASE_STATUSES.length]?.color || "#6366f1", sort_order: (index + 1) * 100,
     }));
-    const fields = (customFields || collectCreateFields()).map((field, index) => ({
+    const fields = (customFields || collectCreateFields()).map((field, index) => serializeFieldForStorage({
       list_id: listId,
       user_id: state.user.id,
       name: field.name,
@@ -723,12 +734,18 @@
       dropdown_options: field.dropdown_options || [],
       sort_order: (index + 1) * 100,
     }));
-    if (categories.length) await supabase.from(TABLES.categories).insert(categories);
-    if (statuses.length) await supabase.from(TABLES.statuses).insert(statuses);
-    if (fields.length) await supabase.from(TABLES.fields).insert(fields);
+    await insertConfigurationRows(TABLES.categories, categories);
+    await insertConfigurationRows(TABLES.statuses, statuses);
+    await insertConfigurationRows(TABLES.fields, fields);
     if (template.key === "pros-cons" && !categories.length) {
-      await supabase.from(TABLES.categories).insert(["Pros", "Cons"].map((name, index) => ({ list_id: listId, user_id: state.user.id, name, sort_order: (index + 1) * 100 })));
+      await insertConfigurationRows(TABLES.categories, ["Pros", "Cons"].map((name, index) => ({ list_id: listId, user_id: state.user.id, name, sort_order: (index + 1) * 100 })));
     }
+  }
+
+  async function insertConfigurationRows(table, rows) {
+    if (!rows.length) return;
+    const { error } = await supabase.from(table).insert(rows);
+    if (error) throw error;
   }
 
   function openCreateModal() {
@@ -760,7 +777,7 @@
         <section class="listmaker-config-section" data-checklist-config hidden><h3>Checklist Options ${infoTip("Choose what happens to checked checklist items in this list.")}</h3><select name="completed_items"><option value="keep">Checked Items: Keep in Place</option><option value="bottom">Checked Items: Move to Bottom</option><option value="hide">Checked Items: Hide</option></select></section>
         <section class="listmaker-config-section" data-category-config hidden><h3>Categories ${infoTip("Categories group items into named sections. Add one category per line.")}</h3><textarea name="categories" rows="3" placeholder="One category per line"></textarea></section>
         <section class="listmaker-config-section" data-status-config hidden><h3>Statuses ${infoTip("Statuses add a per-item workflow state such as Idea, Selected, or Rejected.")}</h3><textarea name="statuses" rows="3" placeholder="Idea&#10;Considering&#10;Selected&#10;Rejected"></textarea></section>
-        <section class="listmaker-config-section" data-custom-fields-config hidden><h3>Custom Fields ${infoTip("Custom fields add extra columns or row controls, such as quantity, date, notes, or dropdown choices.")}</h3><div data-create-fields></div><button class="secondary-action" type="button" data-create-add-field><ph-plus weight="bold" aria-hidden="true"></ph-plus>Add Field</button></section>
+        <section class="listmaker-config-section" data-custom-fields-config hidden><h3>Custom Fields ${infoTip("Custom fields add extra columns or row controls, such as links, quantity, dates, notes, or dropdown choices.")}</h3><div data-create-fields></div><button class="secondary-action" type="button" data-create-add-field><ph-plus weight="bold" aria-hidden="true"></ph-plus>Add Field</button></section>
         <section class="listmaker-config-section" data-rating-config hidden><h3>Rating ${infoTip("Ratings add a simple rating control to every item.")}</h3><select name="rating_type">${RATING_TYPES.filter((item) => item[0]).map(([value, name]) => `<option value="${value}">${name}</option>`).join("")}</select></section>
       </div>
       <p class="form-status" data-listmaker-create-status role="status"></p>
@@ -948,20 +965,26 @@
   }
 
   async function addSettingRow(kind) {
+    const status = dom.settingsForm.querySelector("[data-settings-status]");
+    let response;
     if (kind === "category") {
       const name = clean(dom.settingsForm.querySelector("[data-add-category-name]").value);
-      if (!name) return;
-      await supabase.from(TABLES.categories).insert({ list_id: state.listId, user_id: state.user.id, name, sort_order: nextOrder(state.categories) });
+      if (!name) return setStatus(status, "Enter a category name.", "error");
+      response = await supabase.from(TABLES.categories).insert({ list_id: state.listId, user_id: state.user.id, name, sort_order: nextOrder(state.categories) });
     } else if (kind === "status") {
       const name = clean(dom.settingsForm.querySelector("[data-add-status-name]").value);
-      if (!name) return;
-      await supabase.from(TABLES.statuses).insert({ list_id: state.listId, user_id: state.user.id, name, color: dom.settingsForm.querySelector("[data-add-status-color]").value, sort_order: nextOrder(state.statuses) });
+      if (!name) return setStatus(status, "Enter a status name.", "error");
+      response = await supabase.from(TABLES.statuses).insert({ list_id: state.listId, user_id: state.user.id, name, color: dom.settingsForm.querySelector("[data-add-status-color]").value, sort_order: nextOrder(state.statuses) });
     } else {
       const name = clean(dom.settingsForm.querySelector("[data-add-field-name]").value);
-      if (!name) return;
+      if (!name) return setStatus(status, "Enter a field name.", "error");
       const field_type = dom.settingsForm.querySelector("[data-add-field-type]").value;
       const dropdown_options = parseDropdownChoices(dom.settingsForm.querySelector("[data-add-field-options]").value);
-      await supabase.from(TABLES.fields).insert({ list_id: state.listId, user_id: state.user.id, name, field_type, dropdown_options, sort_order: nextOrder(state.fields) });
+      response = await supabase.from(TABLES.fields).insert(serializeFieldForStorage({ list_id: state.listId, user_id: state.user.id, name, field_type, dropdown_options, sort_order: nextOrder(state.fields) }));
+    }
+    if (response.error) {
+      setStatus(status, response.error.message, "error");
+      return;
     }
     await loadList();
     renderEditor();
@@ -2339,6 +2362,16 @@
 
   function clean(value) {
     return String(value ?? "").trim();
+  }
+
+  function normalizeStoredField(field) {
+    if (field?.field_type !== "text" || !Array.isArray(field.dropdown_options) || !field.dropdown_options.includes(LINK_FIELD_MARKER)) return field;
+    return { ...field, field_type: "link" };
+  }
+
+  function serializeFieldForStorage(field) {
+    if (field?.field_type !== "link") return field;
+    return { ...field, field_type: "text", dropdown_options: [LINK_FIELD_MARKER] };
   }
 
   function normalizeWebLink(value) {
