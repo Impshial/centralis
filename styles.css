@@ -26040,6 +26040,81 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   gap: 8px;
 }
 
+.roleplayer-start-session-control {
+  justify-self: end;
+}
+
+.roleplayer-disabled-control {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.roleplayer-disabled-control > button {
+  flex: 1 1 auto;
+}
+
+.roleplayer-disabled-control.has-disabled-reason {
+  cursor: help;
+}
+
+.roleplayer-disabled-control.has-disabled-reason > button:disabled {
+  pointer-events: none;
+}
+
+.roleplayer-disabled-control.has-disabled-reason:focus-visible {
+  border-radius: 7px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.roleplayer-disabled-tooltip {
+  position: absolute;
+  z-index: 80;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 28px));
+  padding: 8px 10px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 94%, black);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 7px;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 36%);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  visibility: hidden;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.roleplayer-disabled-tooltip[hidden] {
+  display: none;
+}
+
+.roleplayer-disabled-control-align-end .roleplayer-disabled-tooltip {
+  right: 0;
+  left: auto;
+  transform: translateY(4px);
+}
+
+.roleplayer-disabled-control.has-disabled-reason:hover .roleplayer-disabled-tooltip,
+.roleplayer-disabled-control.has-disabled-reason:focus-visible .roleplayer-disabled-tooltip,
+.roleplayer-disabled-control.has-disabled-reason:focus-within .roleplayer-disabled-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.roleplayer-disabled-control-align-end.has-disabled-reason:hover .roleplayer-disabled-tooltip,
+.roleplayer-disabled-control-align-end.has-disabled-reason:focus-visible .roleplayer-disabled-tooltip,
+.roleplayer-disabled-control-align-end.has-disabled-reason:focus-within .roleplayer-disabled-tooltip {
+  transform: translateY(0);
+}
+
 .roleplayer-start-session-button ph-chat-circle-text {
   flex: 0 0 auto;
 }
@@ -26693,6 +26768,11 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   outline: none;
 }
 
+.roleplayer-message-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .roleplayer-message-actions ph-copy,
 .roleplayer-message-actions ph-trash,
 .roleplayer-message-actions ph-arrow-bend-down-right {
@@ -26977,6 +27057,13 @@ body[data-page="stellar-architect"] .stellar-colonist-portrait-thumb img {
   .roleplayer-detail-card,
   .roleplayer-character-page-grid {
     grid-template-columns: 1fr;
+  }
+
+  .roleplayer-start-session-control,
+  .roleplayer-start-session-control > button,
+  .roleplayer-send-control,
+  .roleplayer-send-control > button {
+    width: 100%;
   }
 
   .roleplayer-detail-tools-menu {

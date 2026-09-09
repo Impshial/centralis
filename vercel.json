@@ -2,6 +2,10 @@
   "functions": {
     "api/generate-high-image.js": {
       "maxDuration": 300
+    },
+    "api/featherless/*.js": {
+      "maxDuration": 300,
+      "supportsCancellation": true
     }
   }
 }

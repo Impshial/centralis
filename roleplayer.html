@@ -6,7 +6,7 @@
   <title>Roleplayer | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=roleplayer-21">
+  <link rel="stylesheet" href="styles.css?v=roleplayer-22">
   <link rel="stylesheet" href="tailwind.generated.css?v=roleplayer-6">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -76,10 +76,13 @@
                 <select data-roleplayer-persona-select></select>
               </label>
             </div>
-            <button class="primary-action roleplayer-start-session-button" type="button" data-roleplayer-start-session>
-              <ph-chat-circle-text weight="bold" aria-hidden="true"></ph-chat-circle-text>
-              Start New Chat
-            </button>
+            <span class="roleplayer-disabled-control roleplayer-disabled-control-align-end roleplayer-start-session-control" data-roleplayer-disabled-control>
+              <button class="primary-action roleplayer-start-session-button" type="button" data-roleplayer-start-session>
+                <ph-chat-circle-text weight="bold" aria-hidden="true"></ph-chat-circle-text>
+                Start New Chat
+              </button>
+              <span class="roleplayer-disabled-tooltip" id="roleplayer-start-session-tooltip" role="tooltip" data-roleplayer-disabled-tooltip hidden></span>
+            </span>
           </div>
           <section class="roleplayer-sessions">
             <h2>Chats</h2>
@@ -115,10 +118,13 @@
             <form class="roleplayer-composer" data-roleplayer-form>
               <div class="roleplayer-composer-row">
                 <textarea rows="1" placeholder="Send a message to the character..." data-roleplayer-input disabled></textarea>
-                <button class="primary-action" type="submit" data-roleplayer-send disabled>
-                  <ph-paper-plane-tilt weight="bold" aria-hidden="true"></ph-paper-plane-tilt>
-                  Send
-                </button>
+                <span class="roleplayer-disabled-control roleplayer-disabled-control-align-end roleplayer-send-control" data-roleplayer-disabled-control>
+                  <button class="primary-action" type="submit" data-roleplayer-send disabled>
+                    <ph-paper-plane-tilt weight="bold" aria-hidden="true"></ph-paper-plane-tilt>
+                    Send
+                  </button>
+                  <span class="roleplayer-disabled-tooltip" id="roleplayer-send-tooltip" role="tooltip" data-roleplayer-disabled-tooltip hidden></span>
+                </span>
               </div>
               <p class="form-status" data-roleplayer-form-status role="status" hidden></p>
             </form>
@@ -166,10 +172,13 @@
                   Upload Image
                   <input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-roleplayer-character-image-input>
                 </label>
-                <button class="secondary-action roleplayer-generate-image-button" type="button" data-roleplayer-generate-character-image disabled>
-                  <ph-image-square weight="bold" aria-hidden="true"></ph-image-square>
-                  <span>Generate Image</span>
-                </button>
+                <span class="roleplayer-disabled-control" data-roleplayer-disabled-control>
+                  <button class="secondary-action roleplayer-generate-image-button" type="button" data-roleplayer-generate-character-image disabled>
+                    <ph-image-square weight="bold" aria-hidden="true"></ph-image-square>
+                    <span>Generate Image</span>
+                  </button>
+                  <span class="roleplayer-disabled-tooltip" id="roleplayer-generate-image-tooltip" role="tooltip" data-roleplayer-disabled-tooltip hidden></span>
+                </span>
                 <button class="ghost-action" type="button" data-roleplayer-character-image-clear hidden>
                   <ph-x weight="bold" aria-hidden="true"></ph-x>
                   Clear
@@ -456,6 +465,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="roleplayer.js?v=roleplayer-37"></script>
+  <script src="roleplayer.js?v=roleplayer-38"></script>
 </body>
 </html>

@@ -56,6 +56,17 @@ Optional:
 - `IDRIVE_E2_REGION` defaults to `us-east-1`
 - `IDRIVE_E2_PUBLIC_BASE_URL` is not required by the Vercel route
 
+### Roleplayer AI
+
+Roleplayer uses authenticated Vercel Functions under `api/featherless/` in production. Configure these Vercel environment variables for Production and Preview:
+
+- `FEATHERLESS_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
+
+Optional Featherless settings include `FEATHERLESS_MODEL`, `FEATHERLESS_VIBE_FALLBACK_MODEL`, `FEATHERLESS_MAX_TOKENS`, `FEATHERLESS_TIMEOUT_MS`, and `FEATHERLESS_STREAM_TIMEOUT_MS`. Roleplayer character-image generation also uses `OPENAI_API_KEY` and can fall back to `VENICE_API_KEY`.
+
 ## Major Modules
 
 ### Centralis Dashboard

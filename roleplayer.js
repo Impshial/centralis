@@ -166,6 +166,8 @@
     statusOk: false,
     models: [],
     selectedModel: localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_FEATHERLESS_MODEL,
+    readinessState: "idle",
+    readinessError: "",
     characters: [],
     characterImagesById: new Map(),
     personas: [],
@@ -354,6 +356,7 @@
     if (!["assistant", "user"].includes(message.role) || message.streaming) return "";
     const isAssistant = message.role === "assistant";
     const seconds = assistantElapsedSeconds(message);
+    const continueTooltipId = `roleplayer-continue-tooltip-${String(message.id || "message").replace(/[^a-z0-9_-]/gi, "-")}`;
     const timing = seconds === null
       ? "Time unavailable"
       : `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
@@ -366,10 +369,13 @@
         <button type="button" aria-label="${isAssistant ? "Delete reply" : "Delete message"}" title="${isAssistant ? "Delete reply" : "Delete message"}" data-roleplayer-delete-reply="${escapeHtml(message.id || "")}">
           <ph-trash weight="bold" aria-hidden="true"></ph-trash>
         </button>
-        ${isAssistant ? `<button type="button" data-roleplayer-continue-reply="${escapeHtml(message.id || "")}">
-          <ph-arrow-bend-down-right weight="bold" aria-hidden="true"></ph-arrow-bend-down-right>
-          Continue
-        </button>` : ""}
+        ${isAssistant ? `<span class="roleplayer-disabled-control roleplayer-message-continue-control" data-roleplayer-disabled-control>
+          <button type="button" data-roleplayer-continue-reply="${escapeHtml(message.id || "")}">
+            <ph-arrow-bend-down-right weight="bold" aria-hidden="true"></ph-arrow-bend-down-right>
+            Continue
+          </button>
+          <span class="roleplayer-disabled-tooltip" id="${continueTooltipId}" role="tooltip" data-roleplayer-disabled-tooltip hidden></span>
+        </span>` : ""}
       </footer>
     `;
   }
@@ -706,7 +712,7 @@
   }
 
   function renderModelOptions() {
-    ensurePreferredModelsInList();
+    if (state.statusOk) ensurePreferredModelsInList();
     if (state.models.length) {
       const storedModelStillAvailable = state.models.some((model) => model.name === state.selectedModel);
       if (!storedModelStillAvailable) {
@@ -951,25 +957,108 @@
     );
   }
 
+  function providerDisabledReason() {
+    if (state.readinessState === "checking") return "Checking Featherless availability...";
+    if (!state.statusOk) {
+      return state.readinessError
+        ? `Featherless is unavailable: ${state.readinessError}`
+        : "Featherless is unavailable. Refresh Roleplayer to try again.";
+    }
+    if (!state.selectedModel) return "Select a Featherless model first.";
+    return "";
+  }
+
+  function startSessionDisabledReason() {
+    if (!state.selectedCharacterId) return "Select a character first.";
+    const providerReason = providerDisabledReason();
+    if (providerReason) return providerReason;
+    if (state.busy) return "Wait for the current Roleplayer action to finish.";
+    return "";
+  }
+
+  function sendDisabledReason() {
+    if (!state.selectedSessionId) return "Start a new chat or select an existing chat first.";
+    return providerDisabledReason();
+  }
+
+  function continuationDisabledReason() {
+    if (state.abortController) return "Wait for the current reply to finish, or use Stop below.";
+    if (state.busy) return "Wait for the current Roleplayer action to finish.";
+    return sendDisabledReason();
+  }
+
+  function characterImageDisabledReason() {
+    if (state.characterImageBusy) return "A character image is being generated.";
+    const character = characterFormSnapshot();
+    if (!character.short_description && !character.description && !character.appearance) {
+      return "Add a short description, description, or appearance first.";
+    }
+    return "";
+  }
+
+  function setDisabledControlState(element, disabled, reason = "") {
+    if (!element) return;
+    element.disabled = Boolean(disabled);
+    const host = element.closest("[data-roleplayer-disabled-control]");
+    const tooltip = host?.querySelector("[data-roleplayer-disabled-tooltip]");
+    const hasReason = Boolean(disabled && normalizeText(reason));
+    if (!host || !tooltip) {
+      if (hasReason) element.title = normalizeText(reason);
+      else element.removeAttribute("title");
+      return;
+    }
+
+    host.classList.toggle("has-disabled-reason", hasReason);
+    tooltip.hidden = !hasReason;
+    tooltip.textContent = hasReason ? normalizeText(reason) : "";
+    if (hasReason) {
+      host.tabIndex = 0;
+      host.setAttribute("role", "group");
+      host.setAttribute("aria-label", `${normalizeText(element.textContent) || "Control"} unavailable`);
+      host.setAttribute("aria-disabled", "true");
+      host.setAttribute("aria-describedby", tooltip.id);
+      element.setAttribute("aria-describedby", tooltip.id);
+    } else {
+      host.removeAttribute("tabindex");
+      host.removeAttribute("role");
+      host.removeAttribute("aria-label");
+      host.removeAttribute("aria-disabled");
+      host.removeAttribute("aria-describedby");
+      element.removeAttribute("aria-describedby");
+    }
+  }
+
   function renderControls() {
-    const modelReady = state.statusOk && Boolean(state.selectedModel);
-    if (els.startSession) els.startSession.disabled = !state.selectedCharacterId || !modelReady || state.busy;
+    const startReason = startSessionDisabledReason();
+    setDisabledControlState(els.startSession, Boolean(startReason), startReason);
     if (els.aiVibeOpen) els.aiVibeOpen.disabled = state.aiVibeBusy;
     if (els.aiVibeGenerate) els.aiVibeGenerate.disabled = state.aiVibeBusy;
     if (els.generateCharacterImage) {
-      els.generateCharacterImage.disabled = !canGenerateCharacterImage();
+      const imageReason = characterImageDisabledReason();
+      setDisabledControlState(els.generateCharacterImage, !canGenerateCharacterImage(), imageReason);
       els.generateCharacterImage.innerHTML = state.characterImageBusy
         ? '<ph-spinner-gap weight="bold" aria-hidden="true"></ph-spinner-gap><span>Generating...</span>'
         : '<ph-image-square weight="bold" aria-hidden="true"></ph-image-square><span>Generate Image</span>';
     }
-    if (els.input) els.input.disabled = !state.selectedSessionId || !modelReady;
+    const composerReason = sendDisabledReason();
+    if (els.input) {
+      els.input.disabled = Boolean(composerReason);
+      if (composerReason) els.input.setAttribute("aria-describedby", "roleplayer-send-tooltip");
+      else els.input.removeAttribute("aria-describedby");
+    }
     if (els.send) {
-      els.send.disabled = !state.busy && !canSend();
-      els.send.classList.toggle("roleplayer-stop-button", state.busy);
-      els.send.innerHTML = state.busy
+      const isGenerating = Boolean(state.abortController);
+      const sendDisabled = !isGenerating && !canSend();
+      els.send.classList.toggle("roleplayer-stop-button", isGenerating);
+      els.send.innerHTML = isGenerating
         ? '<ph-stop-circle weight="bold" aria-hidden="true"></ph-stop-circle>Stop'
         : '<ph-paper-plane-tilt weight="bold" aria-hidden="true"></ph-paper-plane-tilt>Send';
+      setDisabledControlState(els.send, sendDisabled, sendDisabled ? composerReason : "");
     }
+    const continueReason = continuationDisabledReason();
+    document.querySelectorAll("[data-roleplayer-continue-reply]").forEach((button) => {
+      setDisabledControlState(button, Boolean(continueReason), continueReason);
+    });
   }
 
   function renderPersonaList() {
@@ -1005,13 +1094,28 @@
     renderPersonaList();
   }
 
+  async function roleplayerApiHeaders(initialHeaders = {}) {
+    const { data, error } = await requireSupabase().auth.getSession();
+    if (error || !data.session?.access_token) {
+      throw error || new Error("You must be signed in to use Roleplayer AI.");
+    }
+    return {
+      ...initialHeaders,
+      Authorization: `Bearer ${data.session.access_token}`
+    };
+  }
+
   async function fetchJson(path, options = {}) {
+    let headers = {
+      ...(options.headers || {}),
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    };
+    if (path.startsWith("/api/featherless/")) {
+      headers = await roleplayerApiHeaders(headers);
+    }
     const response = await fetch(path, {
       ...options,
-      headers: {
-        ...(options.headers || {}),
-        ...(options.body ? { "Content-Type": "application/json" } : {})
-      }
+      headers
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -1022,6 +1126,8 @@
 
   async function refreshReadiness() {
     state.busy = true;
+    state.readinessState = "checking";
+    state.readinessError = "";
     setFormStatus("");
     setStatus("loading", "Checking Featherless...", "Centralis is checking the local proxy and available Featherless models.");
     renderControls();
@@ -1031,14 +1137,19 @@
       state.statusOk = status.ok === true;
       if (!state.statusOk) {
         state.models = [];
-        setStatus("error", "Featherless is unavailable", status.error || "Set FEATHERLESS_API_KEY, restart npm run dev, and refresh this page.");
+        state.readinessState = "error";
+        state.readinessError = status.error || "Roleplayer AI is not configured on this deployment.";
+        setStatus("error", "Featherless is unavailable", state.readinessError);
         return;
       }
 
       const modelPayload = await fetchJson("/api/featherless/models");
       state.models = Array.isArray(modelPayload.models) ? modelPayload.models : [];
       if (!state.models.length) {
-        setStatus("error", "No Featherless models found", modelPayload.error || "Confirm your Featherless plan has available chat models, then refresh this module.");
+        state.statusOk = false;
+        state.readinessState = "error";
+        state.readinessError = modelPayload.error || "No Featherless chat models are available for this account.";
+        setStatus("error", "No Featherless models found", state.readinessError);
         return;
       }
 
@@ -1050,11 +1161,15 @@
       const readyDetails = modelPayload.error || status.warning
         ? `Using ${state.selectedModel}. ${modelPayload.error || status.warning}`
         : `Connected to Featherless at ${status.baseUrl || "https://api.featherless.ai/v1"}.`;
+      state.readinessState = "ready";
+      state.readinessError = "";
       setStatus("ready", "Featherless ready", readyDetails);
     } catch (error) {
       state.statusOk = false;
       state.models = [];
-      setStatus("error", "Featherless chat is unavailable", error.message || "Run Centralis with FEATHERLESS_API_KEY set, then refresh this page.");
+      state.readinessState = "error";
+      state.readinessError = error.message || "Roleplayer AI could not be reached.";
+      setStatus("error", "Featherless chat is unavailable", state.readinessError);
     } finally {
       state.busy = false;
       renderAll();
@@ -1763,9 +1878,11 @@
       if (!image.base64) throw new Error("The image generator did not return image data.");
 
       revokePendingCharacterImagePreview();
-      const filename = `${safeFilenamePart(character.name || character.short_description)}-generated.png`;
-      state.pendingCharacterImageFile = base64ToFile(image.base64, filename, image.contentType || "image/png");
-      state.pendingCharacterImagePreviewUrl = `data:${image.contentType || "image/png"};base64,${image.base64}`;
+      const contentType = image.contentType || "image/jpeg";
+      const extension = contentType === "image/webp" ? "webp" : contentType === "image/png" ? "png" : "jpg";
+      const filename = `${safeFilenamePart(character.name || character.short_description)}-generated.${extension}`;
+      state.pendingCharacterImageFile = base64ToFile(image.base64, filename, contentType);
+      state.pendingCharacterImagePreviewUrl = `data:${contentType};base64,${image.base64}`;
       setCharacterImagePreview({
         src: state.pendingCharacterImagePreviewUrl,
         label: `${image.provider === "venice" ? "Generated with Nano Banana Pro" : "Generated with GPT Image 2"} - save to attach`,
@@ -2019,7 +2136,7 @@
 
   async function startSession() {
     const character = selectedCharacter();
-    if (!character || !state.selectedModel) return;
+    if (!character || startSessionDisabledReason()) return;
     setFormStatus("");
     try {
       const supabase = requireSupabase();
@@ -2376,7 +2493,7 @@
     try {
       response = await fetch("/api/featherless/chat-stream-json", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await roleplayerApiHeaders({ "Content-Type": "application/json" }),
         signal: state.abortController.signal,
         body: JSON.stringify({
           model: state.selectedModel,
@@ -2471,7 +2588,8 @@
   }
 
   function stopStreaming() {
-    state.abortController?.abort();
+    if (!state.abortController) return;
+    state.abortController.abort();
     setFormStatus("Stopping Featherless response...");
   }
 
@@ -2902,7 +3020,7 @@
   async function sendMessage(event) {
     event.preventDefault();
     if (state.busy) {
-      stopStreaming();
+      if (state.abortController) stopStreaming();
       return;
     }
     if (!canSend()) return;
@@ -2944,7 +3062,7 @@
 
   async function continueReply(messageId) {
     if (state.busy) {
-      stopStreaming();
+      if (state.abortController) stopStreaming();
       return;
     }
     if (!canSend()) return;
