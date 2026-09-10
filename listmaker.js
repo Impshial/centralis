@@ -1,6 +1,7 @@
 (() => {
   const supabase = window.centralisSupabase;
   if (!supabase) return;
+  const importCore = window.ListMakerImportCore;
 
   const TABLES = {
     lists: "listmaker_lists",
@@ -58,6 +59,12 @@
     mode: "home",
     homeFilter: "active",
     homeSearch: "",
+    importBusy: false,
+    importCommitting: false,
+    importDraft: null,
+    importRequestToken: 0,
+    importReturnFocus: null,
+    importShellWasInert: false,
     lists: [],
     itemCounts: new Map(),
     listId: new URLSearchParams(window.location.search).get("list") || "",
@@ -88,9 +95,19 @@
   function bindDom() {
     dom.home = document.querySelector("[data-listmaker-home]");
     dom.editor = document.querySelector("[data-listmaker-editor]");
+    dom.appShell = document.querySelector(".app-shell");
     dom.homeSearch = document.querySelector("[data-listmaker-home-search]");
     dom.homeStatus = document.querySelector("[data-listmaker-home-status]");
     dom.homeTabs = [...document.querySelectorAll("[data-listmaker-home-filter]")];
+    dom.homeMenu = document.querySelector("[data-listmaker-home-menu]");
+    dom.homeMenuSummary = document.querySelector("[data-listmaker-home-menu-summary]");
+    dom.importJsonOpen = document.querySelector("[data-listmaker-import-json-open]");
+    dom.importJsonFile = document.querySelector("[data-listmaker-import-json-file]");
+    dom.importModal = document.getElementById("listmaker-import-modal");
+    dom.importForm = document.querySelector("[data-listmaker-import-form]");
+    dom.importContent = document.querySelector("[data-listmaker-import-content]");
+    dom.importStatus = document.querySelector("[data-listmaker-import-status]");
+    dom.importConfirm = document.querySelector("[data-listmaker-import-confirm]");
     dom.listGrid = document.querySelector("[data-listmaker-list-grid]");
     dom.createModal = document.getElementById("listmaker-create-modal");
     dom.createForm = document.querySelector("[data-listmaker-create-form]");
@@ -187,9 +204,16 @@
     });
     dom.homeTabs.forEach((button) => button.addEventListener("click", async () => {
       state.homeFilter = button.dataset.listmakerHomeFilter || "active";
+      dom.homeMenu?.removeAttribute("open");
+      dom.homeMenuSummary?.focus();
       await loadHome();
       renderHome();
     }));
+    dom.importJsonOpen?.addEventListener("click", openJsonFileDialog);
+    dom.importJsonFile?.addEventListener("change", handleJsonFileSelected);
+    dom.importForm?.addEventListener("submit", handleImportConfirm);
+    dom.importForm?.addEventListener("change", handleImportReviewChange);
+    document.querySelectorAll("[data-listmaker-import-close]").forEach((button) => button.addEventListener("click", closeImportModal));
     dom.createForm?.addEventListener("submit", handleCreateList);
     dom.createForm?.addEventListener("change", handleCreateFormChange);
     dom.createForm?.addEventListener("click", handleCreateFormClick);
@@ -231,6 +255,7 @@
     dom.fieldChoicesForm?.addEventListener("submit", handleFieldChoicesSubmit);
     dom.listGrid?.addEventListener("click", handleHomeAction);
     dom.ioContent?.addEventListener("click", handleIoClick);
+    dom.ioContent?.addEventListener("change", handleIoChange);
   }
 
   async function waitForAuth() {
@@ -314,7 +339,16 @@
 
   function renderHome() {
     renderShellMode();
-    dom.homeTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.listmakerHomeFilter === state.homeFilter));
+    const selectedFilterLabel = state.homeFilter === "archived" ? "Archived" : state.homeFilter === "trash" ? "Trash" : "Active";
+    dom.homeTabs.forEach((button) => {
+      const selected = button.dataset.listmakerHomeFilter === state.homeFilter;
+      button.classList.toggle("is-active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    if (dom.homeMenuSummary) {
+      dom.homeMenuSummary.setAttribute("aria-label", `List views and import; ${selectedFilterLabel} selected`);
+      dom.homeMenuSummary.title = `List views and import — ${selectedFilterLabel} selected`;
+    }
     const lists = state.homeSearch
       ? state.lists.filter((list) => `${list.title} ${list.description || ""} ${templateName(list.template_key)}`.toLowerCase().includes(state.homeSearch))
       : state.lists;
@@ -355,6 +389,436 @@
         </article>
       `;
     }).join("");
+  }
+
+  function openJsonFileDialog() {
+    if (!dom.importJsonFile) return;
+    if (!importCore) {
+      setStatus(dom.homeStatus, "The JSON importer did not load. Refresh the page and try again.", "error");
+      return;
+    }
+    state.importReturnFocus = dom.homeMenuSummary || document.activeElement;
+    dom.importJsonFile.value = "";
+    dom.importJsonFile.click();
+  }
+
+  async function handleJsonFileSelected(event) {
+    const input = event.currentTarget;
+    const file = input?.files?.[0];
+    if (input) input.value = "";
+    if (!file) return;
+
+    const requestToken = ++state.importRequestToken;
+    dom.homeMenu?.removeAttribute("open");
+    state.importBusy = true;
+    state.importCommitting = false;
+    state.importDraft = null;
+    openImportAnalysis(file.name);
+
+    try {
+      if (!/\.json$/i.test(file.name || "")) throw new Error("Choose a JSON file with a .json extension.");
+      if (!file.size) throw new Error("The selected JSON file is empty.");
+      if (file.size > importCore.MAX_JSON_BYTES) {
+        throw new Error(`JSON files must be ${formatBytes(importCore.MAX_JSON_BYTES)} or smaller.`);
+      }
+
+      const sourceText = await file.text();
+      if (requestToken !== state.importRequestToken) return;
+      const source = importCore.parseJsonInput(sourceText);
+      let draft;
+
+      if (source?.format === importCore.NATIVE_FORMAT) {
+        const payload = importCore.normalizeNativeV1(source);
+        draft = createLocalImportDraft("native", file.name, source, payload, {
+          confidence: 1,
+          rationale: "Recognized a native ListMaker v1 export and restored its configuration locally.",
+          warnings: [],
+        });
+      } else if ((typeof importCore.isLegacyExport === "function" && importCore.isLegacyExport(source)) || looksLikeLegacyListMakerExport(source)) {
+        const payload = typeof importCore.normalizeLegacyExport === "function"
+          ? importCore.normalizeLegacyExport(source)
+          : normalizeLegacyListMakerExport(source);
+        draft = createLocalImportDraft("legacy", file.name, source, payload, {
+          confidence: 0.85,
+          rationale: "Recognized an older unversioned ListMaker export and converted it locally on a best-effort basis.",
+          warnings: ["Older ListMaker exports may not include every category, status, or typed field value."],
+        });
+      } else {
+        if (Array.isArray(source) && source.length > importCore.MAX_IMPORT_ITEMS) {
+          throw new Error(`JSON imports may contain at most ${importCore.MAX_IMPORT_ITEMS.toLocaleString()} items.`);
+        }
+        setStatus(dom.importStatus, "Sending this unknown JSON to OpenAI for structural analysis…");
+        const { data, error } = await supabase.functions.invoke("analyze-listmaker-json", {
+          body: { filename: file.name, json: sourceText },
+        });
+        if (requestToken !== state.importRequestToken) return;
+        if (error) throw new Error(await functionErrorMessage(error, "OpenAI could not analyze this JSON file."));
+        const normalizedAnalysis = importCore.normalizeAiAnalysis(data);
+        const payload = importCore.applyAnalysisMapping(source, data);
+        const match = data?.match || normalizedAnalysis.match || {};
+        draft = {
+          kind: "ai",
+          filename: file.name,
+          source,
+          analysis: data,
+          basePayload: payload,
+          originalTemplateKey: normalizedAnalysis.match?.template_key || payload.list.template_key || "custom",
+          templateKey: normalizedAnalysis.match?.template_key || payload.list.template_key || "custom",
+          title: payload.list.title,
+          confidence: normalizeConfidence(match.confidence),
+          rationale: clean(match.rationale) || "OpenAI inferred a ListMaker structure from the uploaded JSON.",
+          warnings: Array.isArray(data?.warnings) ? data.warnings.map(clean).filter(Boolean) : [],
+        };
+      }
+
+      if (requestToken !== state.importRequestToken) return;
+      state.importDraft = draft;
+      state.importBusy = false;
+      renderImportReview();
+    } catch (error) {
+      if (requestToken !== state.importRequestToken) return;
+      state.importBusy = false;
+      state.importDraft = null;
+      renderImportFailure(file.name, error);
+    }
+  }
+
+  function createLocalImportDraft(kind, filename, source, payload, metadata) {
+    const templateKey = importCore.IMPORT_TEMPLATE_KEYS.includes(payload.list.template_key) ? payload.list.template_key : "custom";
+    return {
+      kind,
+      filename,
+      source,
+      analysis: null,
+      basePayload: payload,
+      originalTemplateKey: templateKey,
+      templateKey,
+      title: payload.list.title,
+      confidence: normalizeConfidence(metadata.confidence),
+      rationale: metadata.rationale,
+      warnings: metadata.warnings || [],
+    };
+  }
+
+  function looksLikeLegacyListMakerExport(source) {
+    return Boolean(source && !Array.isArray(source)
+      && Array.isArray(source.items)
+      && typeof source.title === "string"
+      && (Array.isArray(source.fields) || source.behaviors || Object.prototype.hasOwnProperty.call(source, "rating_type")));
+  }
+
+  function normalizeLegacyListMakerExport(source) {
+    const native = importCore.exportNativeV1({
+      list: {
+        title: source.title,
+        description: source.description,
+        template_key: source.template_key || "custom",
+        behaviors: source.behaviors,
+        rating_type: source.rating_type,
+        default_view: source.default_view,
+        settings: source.settings,
+      },
+      categories: source.categories || [],
+      statuses: source.statuses || [],
+      fields: source.fields || [],
+      items: source.items,
+      values: source.values || source.field_values || [],
+    });
+    return importCore.normalizeNativeV1(native);
+  }
+
+  function openImportAnalysis(filename) {
+    if (!dom.importModal || !dom.importContent) return;
+    dom.importModal.hidden = false;
+    setImportModalEnvironment(true);
+    dom.importContent.innerHTML = `
+      <section class="listmaker-import-analyzing" aria-label="Analyzing JSON import">
+        <span class="listmaker-import-spinner" aria-hidden="true"></span>
+        <div>
+          <h3>Analyzing ${escapeHtml(filename)}</h3>
+          <p>Native ListMaker exports stay local. Unknown JSON is sent in full to OpenAI so its structure can be matched safely.</p>
+        </div>
+      </section>
+    `;
+    setStatus(dom.importStatus, "Checking the file…");
+    syncImportControls();
+    dom.importModal.querySelector("[data-listmaker-import-close]")?.focus();
+  }
+
+  function renderImportFailure(filename, error) {
+    if (!dom.importModal || !dom.importContent) return;
+    dom.importModal.hidden = false;
+    dom.importContent.innerHTML = `
+      <section class="listmaker-import-error" role="alert">
+        <ph-warning-circle weight="duotone" aria-hidden="true"></ph-warning-circle>
+        <div><h3>Could not import ${escapeHtml(filename)}</h3><p>${escapeHtml(importErrorMessage(error))}</p></div>
+      </section>
+    `;
+    setStatus(dom.importStatus, "No list was created.", "error");
+    syncImportControls();
+  }
+
+  function renderImportReview() {
+    const draft = state.importDraft;
+    if (!draft || !dom.importContent) return;
+    try {
+      const payload = buildImportPayload(draft);
+      draft.previewPayload = payload;
+      const behaviors = Object.entries(normalizeBehaviors(payload.list.behaviors)).filter(([, enabled]) => enabled).map(([key]) => label(key));
+      const warnings = importWarnings(draft, payload);
+      const sampleRows = payload.items.slice(0, 5).map((item) => importSampleRow(item, payload));
+      const confidence = `${Math.round(draft.confidence * 100)}%`;
+      const sourceLabel = draft.kind === "ai" ? "AI-analyzed JSON" : draft.kind === "native" ? "Native ListMaker v1" : "Legacy ListMaker export";
+
+      dom.importContent.innerHTML = `
+        <div class="listmaker-import-edit-grid">
+          <label class="form-field"><span>List Name</span><input name="import_title" type="text" maxlength="180" required value="${escapeAttribute(draft.title)}"></label>
+          <label class="form-field"><span>Template</span><select name="import_template">${renderImportTemplateOptions(draft.templateKey)}</select></label>
+        </div>
+        <section class="listmaker-import-match" aria-label="Import match">
+          <div><span>Source</span><strong>${escapeHtml(sourceLabel)}</strong></div>
+          <div><span>Match confidence</span><strong>${escapeHtml(confidence)}</strong></div>
+          <div><span>Items</span><strong>${payload.items.length.toLocaleString()}</strong></div>
+          <p>${escapeHtml(draft.rationale)}</p>
+        </section>
+        <section class="listmaker-import-review-section">
+          <h3>Inferred configuration</h3>
+          <dl class="listmaker-import-config">
+            <div><dt>Behaviors</dt><dd>${renderImportTokens(behaviors, "None")}</dd></div>
+            <div><dt>Fields</dt><dd>${renderImportTokens(payload.fields.map((field) => `${field.name} · ${label(field.field_type)}`), "None")}</dd></div>
+            <div><dt>Categories</dt><dd>${renderImportTokens(payload.categories.map((category) => category.name), "None")}</dd></div>
+            <div><dt>Statuses</dt><dd>${renderImportTokens(payload.statuses.map((status) => status.name), "None")}</dd></div>
+          </dl>
+        </section>
+        ${warnings.length ? `<section class="listmaker-import-review-section listmaker-import-warnings"><h3>Warnings</h3><ul>${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></section>` : ""}
+        <section class="listmaker-import-review-section">
+          <h3>Sample rows</h3>
+          ${sampleRows.length ? `<div class="listmaker-import-samples">${sampleRows.map((row, index) => `<article><strong>${index + 1}. ${escapeHtml(row.title)}</strong><pre>${escapeHtml(JSON.stringify(row.preview, null, 2))}</pre></article>`).join("")}</div>` : '<p class="listmaker-muted">This import contains no items.</p>'}
+        </section>
+      `;
+      setStatus(dom.importStatus, draft.kind === "ai"
+        ? "Review the AI proposal. Source values are mapped locally and are never rewritten by the model."
+        : "This file was recognized and processed locally; it was not sent to OpenAI.");
+      syncImportControls();
+    } catch (error) {
+      state.importDraft = null;
+      renderImportFailure(draft.filename, error);
+    }
+  }
+
+  function renderImportTemplateOptions(selectedKey) {
+    return [
+      ...TEMPLATES.map((template) => [template.key, template.name]),
+      ["custom", "Custom"],
+    ].map(([key, name]) => `<option value="${escapeAttribute(key)}"${key === selectedKey ? " selected" : ""}>${escapeHtml(name)}</option>`).join("");
+  }
+
+  function renderImportTokens(values, fallback) {
+    return values.length
+      ? `<span class="listmaker-import-tokens">${values.map((value) => `<span>${escapeHtml(value)}</span>`).join("")}</span>`
+      : `<span class="listmaker-muted">${escapeHtml(fallback)}</span>`;
+  }
+
+  function importWarnings(draft, payload) {
+    const warnings = [...draft.warnings];
+    if (draft.templateKey !== draft.originalTemplateKey) {
+      warnings.unshift(`Template changed from ${templateName(draft.originalTemplateKey)} to ${templateName(draft.templateKey)}. Source properties remain preserved as custom fields when needed.`);
+    }
+    const analysisFields = Array.isArray(draft.analysis?.list?.fields) ? draft.analysis.list.fields : [];
+    analysisFields.forEach((field) => {
+      const normalized = payload.fields.find((candidate) => candidate.key === field.key || candidate.name === field.name);
+      if (normalized && clean(field.field_type) && normalized.field_type !== field.field_type) {
+        warnings.push(`${normalized.name} was changed to ${label(normalized.field_type)} because its values were not consistently ${label(field.field_type)}.`);
+      }
+    });
+    return [...new Set(warnings.map(clean).filter(Boolean))];
+  }
+
+  function importSampleRow(item, payload) {
+    const categories = new Map(payload.categories.map((category) => [category.key, category.name]));
+    const statuses = new Map(payload.statuses.map((status) => [status.key, status.name]));
+    const fields = new Map(payload.fields.map((field) => [field.key, field.name]));
+    const preview = Object.create(null);
+    if (item.completed) preview.completed = true;
+    if (item.score !== null && item.score !== undefined) preview.score = item.score;
+    if (item.rating !== null && item.rating !== undefined) preview.rating = item.rating;
+    if (item.category_key) preview.category = categories.get(item.category_key) || item.category_key;
+    if (item.status_key) preview.status = statuses.get(item.status_key) || item.status_key;
+    if (item.notes) preview.notes = item.notes;
+    (item.values || []).forEach((value) => {
+      const scalar = value.text_value ?? value.number_value ?? value.boolean_value ?? value.date_value;
+      if (scalar !== null && scalar !== undefined && scalar !== "") preview[fields.get(value.field_key) || value.field_key] = scalar;
+    });
+    return { title: item.title, preview };
+  }
+
+  function handleImportReviewChange(event) {
+    if (event.target?.name !== "import_template" || !state.importDraft || state.importCommitting) return;
+    state.importDraft.title = clean(dom.importForm.elements.import_title?.value) || state.importDraft.title;
+    state.importDraft.templateKey = event.target.value;
+    renderImportReview();
+    dom.importForm.elements.import_template?.focus();
+  }
+
+  function buildImportPayload(draft) {
+    let payload;
+    if (draft.kind === "ai") {
+      const options = draft.templateKey === draft.originalTemplateKey ? {} : { templateKeyOverride: draft.templateKey };
+      payload = importCore.applyAnalysisMapping(draft.source, draft.analysis, options);
+    } else {
+      payload = JSON.parse(JSON.stringify(draft.basePayload));
+      if (draft.templateKey !== draft.originalTemplateKey) {
+        if (typeof importCore.applyTemplateOverride === "function") {
+          payload = importCore.applyTemplateOverride(payload, draft.templateKey);
+        } else {
+          payload.list.template_key = draft.templateKey;
+          const template = TEMPLATES.find((candidate) => candidate.key === draft.templateKey);
+          if (template) {
+            payload.list.behaviors = normalizeBehaviors(template.behaviors);
+            payload.list.rating_type = template.rating_type || null;
+            payload.list.default_view = template.default_view || (template.fields?.length ? "table" : "list");
+          }
+        }
+      }
+    }
+    payload.list.title = clean(draft.title).slice(0, 180) || "Imported List";
+    return importCore.normalizeAtomicImportPayload(payload, {
+      strictKeys: true,
+      strictReferences: true,
+      defaultTemplate: draft.templateKey,
+      preserveBehaviors: true,
+    });
+  }
+
+  async function handleImportConfirm(event) {
+    event.preventDefault();
+    if (!state.importDraft || state.importBusy || state.importCommitting) return;
+    const titleInput = dom.importForm.elements.import_title;
+    const title = clean(titleInput?.value);
+    if (!title) {
+      titleInput?.setCustomValidity("Enter a list name.");
+      titleInput?.reportValidity();
+      titleInput?.setCustomValidity("");
+      return;
+    }
+
+    state.importDraft.title = title;
+    state.importDraft.templateKey = dom.importForm.elements.import_template?.value || state.importDraft.templateKey;
+    state.importCommitting = true;
+    state.importBusy = true;
+    syncImportControls();
+    setStatus(dom.importStatus, `Creating ${title} atomically…`);
+    try {
+      const payload = buildImportPayload(state.importDraft);
+      const { data, error } = await supabase.rpc("import_listmaker_json", { p_payload: payload });
+      if (error) throw error;
+      const listId = typeof data === "string" ? data : data?.id;
+      if (!listId) throw new Error("The import completed without returning a list ID.");
+      window.location.assign(`listmaker-list.html?list=${encodeURIComponent(listId)}`);
+    } catch (error) {
+      state.importCommitting = false;
+      state.importBusy = false;
+      syncImportControls();
+      const message = importErrorMessage(error);
+      const outcomeMayBeAmbiguous = /fetch|network|connection|timeout|load failed/i.test(message);
+      setStatus(dom.importStatus, outcomeMayBeAmbiguous
+        ? `${message} The result could not be confirmed; check Active lists before retrying.`
+        : `${message} The transaction was rolled back and no list was created.`, "error");
+    }
+  }
+
+  function closeImportModal() {
+    if (!dom.importModal || state.importCommitting) return;
+    state.importRequestToken += 1;
+    state.importBusy = false;
+    state.importDraft = null;
+    dom.importModal.hidden = true;
+    setImportModalEnvironment(false);
+    if (dom.importContent) dom.importContent.innerHTML = "";
+    setStatus(dom.importStatus, "");
+    const returnFocus = state.importReturnFocus;
+    state.importReturnFocus = null;
+    returnFocus?.focus?.();
+  }
+
+  function setImportModalEnvironment(isOpen) {
+    document.body.classList.toggle("centralis-modal-open", isOpen);
+    if (!dom.appShell) return;
+    if (isOpen) {
+      state.importShellWasInert = dom.appShell.inert;
+      dom.appShell.inert = true;
+    } else {
+      dom.appShell.inert = state.importShellWasInert;
+      state.importShellWasInert = false;
+    }
+  }
+
+  function trapImportFocus(event) {
+    const focusable = [...dom.importModal.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !dom.importModal.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !dom.importModal.contains(document.activeElement))) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function syncImportControls() {
+    if (dom.importConfirm) {
+      dom.importConfirm.disabled = state.importBusy || !state.importDraft;
+      dom.importConfirm.title = state.importBusy
+        ? state.importCommitting ? "The list is being created." : "Wait for JSON analysis to finish."
+        : !state.importDraft ? "Select a valid JSON file before importing." : "Create this list.";
+    }
+    dom.importModal?.querySelectorAll("[data-listmaker-import-close]").forEach((button) => {
+      button.disabled = state.importCommitting;
+      button.title = state.importCommitting ? "The atomic import is finishing." : "Cancel without creating a list.";
+    });
+    dom.importContent?.querySelectorAll("input, select, textarea").forEach((control) => {
+      control.disabled = state.importCommitting;
+    });
+  }
+
+  async function functionErrorMessage(error, fallback) {
+    const context = error?.context;
+    if (context && typeof context.clone === "function") {
+      try {
+        const body = await context.clone().json();
+        if (body?.error) return String(body.error);
+        if (body?.message) return String(body.message);
+      } catch {
+        try {
+          const textValue = await context.clone().text();
+          if (textValue.trim()) return textValue.trim();
+        } catch {
+          // Fall through to the SDK error below.
+        }
+      }
+    }
+    return clean(error?.message) || fallback;
+  }
+
+  function importErrorMessage(error) {
+    const code = error?.code;
+    if (code === "JSON_TOO_LARGE") return `JSON files must be ${formatBytes(importCore.MAX_JSON_BYTES)} or smaller.`;
+    if (code === "TOO_MANY_ITEMS") return `JSON imports may contain at most ${importCore.MAX_IMPORT_ITEMS.toLocaleString()} items.`;
+    if (code === "INVALID_JSON") return error.message || "The selected file is not valid JSON.";
+    if (code === "UNSUPPORTED_NATIVE_VERSION") return error.message;
+    return readableError(error);
+  }
+
+  function normalizeConfidence(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : 0;
+  }
+
+  function formatBytes(bytes) {
+    return bytes === 256 * 1024 ? "256 KiB" : `${bytes.toLocaleString()} bytes`;
   }
 
   function renderEditor() {
@@ -1888,7 +2352,7 @@
 
   function handleDocumentClick(event) {
     hideContextMenu();
-    document.querySelectorAll(".listmaker-actions-menu[open], .listmaker-bulk-menu[open], .listmaker-row-menu[open]").forEach((menu) => {
+    document.querySelectorAll(".listmaker-actions-menu[open], .listmaker-bulk-menu[open], .listmaker-row-menu[open], [data-listmaker-home-menu][open]").forEach((menu) => {
       if (!menu.contains(event.target)) menu.removeAttribute("open");
     });
   }
@@ -1973,6 +2437,7 @@
     return `
       <label class="form-field"><span>Format</span><select data-export-format><option value="txt">TXT</option><option value="markdown">Markdown</option><option value="csv">CSV</option><option value="json">JSON</option></select></label>
       <textarea class="listmaker-io-textarea" rows="14" readonly data-export-text>${escapeHtml(exportList("txt"))}</textarea>
+      <p class="form-status" data-io-status role="status"></p>
       <div class="modal-actions"><button class="secondary-action" type="button" data-export-copy>Copy</button><button class="primary-action" type="button" data-export-download>Download</button></div>
     `;
   }
@@ -1987,10 +2452,30 @@
       await addItems(rows);
       closeIoModal();
     }
-    const formatSelect = event.target.closest("[data-export-format]");
-    if (formatSelect) dom.ioContent.querySelector("[data-export-text]").value = exportList(formatSelect.value);
     if (event.target.closest("[data-export-copy]")) await navigator.clipboard?.writeText(dom.ioContent.querySelector("[data-export-text]").value);
-    if (event.target.closest("[data-export-download]")) downloadText(`listmaker-${slug(state.list.title)}.${exportExtension(dom.ioContent.querySelector("[data-export-format]").value)}`, dom.ioContent.querySelector("[data-export-text]").value);
+    if (event.target.closest("[data-export-download]")) {
+      const format = dom.ioContent.querySelector("[data-export-format]").value;
+      try {
+        const exported = exportList(format);
+        dom.ioContent.querySelector("[data-export-text]").value = exported;
+        setStatus(dom.ioContent.querySelector("[data-io-status]"), "");
+        downloadText(`listmaker-${slug(state.list.title)}.${exportExtension(format)}`, exported);
+      } catch (error) {
+        setStatus(dom.ioContent.querySelector("[data-io-status]"), `Could not export: ${readableError(error)}`, "error");
+      }
+    }
+  }
+
+  function handleIoChange(event) {
+    const formatSelect = event.target.closest("[data-export-format]");
+    if (!formatSelect) return;
+    try {
+      dom.ioContent.querySelector("[data-export-text]").value = exportList(formatSelect.value);
+      setStatus(dom.ioContent.querySelector("[data-io-status]"), "");
+    } catch (error) {
+      dom.ioContent.querySelector("[data-export-text]").value = "";
+      setStatus(dom.ioContent.querySelector("[data-io-status]"), `Could not export: ${readableError(error)}`, "error");
+    }
   }
 
   function importRows(format, value) {
@@ -2010,14 +2495,15 @@
   function exportList(format) {
     const rows = visibleItems();
     if (format === "json") {
-      return JSON.stringify({
-        title: state.list.title,
-        description: state.list.description,
-        behaviors: state.list.behaviors,
-        rating_type: state.list.rating_type,
+      if (!importCore) throw new Error("The ListMaker JSON exporter did not load.");
+      return JSON.stringify(importCore.exportNativeV1({
+        list: state.list,
+        categories: state.categories,
+        statuses: state.statuses,
         fields: state.fields,
-        items: rows.map((item) => ({ ...item, field_values: state.fields.reduce((acc, field) => ({ ...acc, [field.name]: fieldValueForExport(item.id, field) }), {}) })),
-      }, null, 2);
+        items: state.items,
+        values: state.values,
+      }), null, 2);
     }
     if (format === "csv") {
       const headers = ["Title", "Completed", "Score", "Rating", "Category", "Status", ...state.fields.map((field) => field.name)];
@@ -2129,8 +2615,21 @@
   }
 
   function handleGlobalKeydown(event) {
+    const importModalOpen = Boolean(dom.importModal && !dom.importModal.hidden);
+    if (importModalOpen && event.key === "Tab") {
+      trapImportFocus(event);
+      return;
+    }
     if (event.key === "Escape") {
       hideContextMenu();
+      if (dom.homeMenu?.hasAttribute("open")) {
+        dom.homeMenu.removeAttribute("open");
+        dom.homeMenuSummary?.focus();
+      }
+      if (importModalOpen) {
+        event.preventDefault();
+        closeImportModal();
+      }
       if (dom.fieldChoicesModal && !dom.fieldChoicesModal.hidden) closeFieldChoicesModal();
     }
     if (state.mode !== "editor") return;

@@ -11,7 +11,7 @@
     }
   </script>
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=listmaker-link-field-2">
+  <link rel="stylesheet" href="styles.css?v=listmaker-json-import-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -38,11 +38,29 @@
             <span class="sr-only">Search saved lists</span>
             <input type="search" placeholder="Search lists..." data-listmaker-home-search>
           </label>
-          <div class="listmaker-home-tabs" role="group" aria-label="Saved list filter">
-            <button type="button" class="is-active" data-listmaker-home-filter="active">Active</button>
-            <button type="button" data-listmaker-home-filter="archived">Archived</button>
-            <button type="button" data-listmaker-home-filter="trash">Trash</button>
-          </div>
+          <details class="listmaker-row-menu listmaker-home-menu" data-listmaker-home-menu>
+            <summary
+              title="List options"
+              aria-label="List options"
+              data-listmaker-home-menu-summary
+            >
+              <ph-dots-three-vertical weight="bold" aria-hidden="true"></ph-dots-three-vertical>
+            </summary>
+            <div class="listmaker-home-menu-popover">
+              <button type="button" data-listmaker-import-json-open aria-controls="listmaker-import-modal">
+                <ph-upload-simple weight="bold" aria-hidden="true"></ph-upload-simple>
+                <span>Import JSON</span>
+              </button>
+              <p class="listmaker-home-menu-note">Unknown JSON is sent in full to OpenAI for structural analysis.</p>
+              <hr class="listmaker-home-menu-separator">
+              <div class="listmaker-home-menu-filters" role="group" aria-label="Saved list filter">
+                <button type="button" class="is-active" aria-pressed="true" data-listmaker-home-filter="active">Active</button>
+                <button type="button" aria-pressed="false" data-listmaker-home-filter="archived">Archived</button>
+                <button type="button" aria-pressed="false" data-listmaker-home-filter="trash">Trash</button>
+              </div>
+            </div>
+          </details>
+          <input type="file" accept=".json,application/json" data-listmaker-import-json-file hidden>
         </section>
 
         <p class="listmaker-status" data-listmaker-home-status role="status">Loading ListMaker...</p>
@@ -65,9 +83,37 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="listmaker-import-modal" data-strict-modal hidden>
+    <section
+      class="modal-dialog listmaker-import-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="listmaker-import-title"
+      aria-describedby="listmaker-import-description"
+    >
+      <div class="modal-header">
+        <div>
+          <p class="settings-eyebrow">ListMaker</p>
+          <h2 id="listmaker-import-title">Review JSON Import</h2>
+          <p class="modal-subtitle" id="listmaker-import-description">Review the list and items before adding them to ListMaker.</p>
+        </div>
+        <button class="modal-close" type="button" data-listmaker-import-close aria-label="Close import review">&times;</button>
+      </div>
+      <form class="listmaker-import-form" data-listmaker-import-form>
+        <div class="listmaker-import-content" data-listmaker-import-content></div>
+        <p class="form-status listmaker-import-status" data-listmaker-import-status role="status" aria-live="polite"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-listmaker-import-close>Cancel</button>
+          <button class="primary-action" type="submit" data-listmaker-import-confirm>Import</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=listmaker-1"></script>
-  <script src="listmaker.js?v=listmaker-link-field-2"></script>
+  <script src="listmaker-import-core.js?v=listmaker-json-import-1"></script>
+  <script src="listmaker.js?v=listmaker-json-import-1"></script>
 </body>
 </html>

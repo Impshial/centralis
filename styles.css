@@ -16283,6 +16283,69 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   background: color-mix(in srgb, var(--surface, #111827) 84%, transparent);
 }
 
+.listmaker-home-menu {
+  justify-self: end;
+}
+
+.listmaker-home-menu[open] {
+  z-index: 70;
+}
+
+.listmaker-home-menu > summary {
+  width: 42px;
+  min-height: 42px;
+}
+
+.listmaker-home-menu > summary ph-dots-three-vertical {
+  width: 20px;
+  height: 20px;
+}
+
+.listmaker-home-menu > summary:focus-visible {
+  border-color: var(--accent, #78d5c8);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #78d5c8) 24%, transparent);
+  outline: none;
+}
+
+.listmaker-home-menu[open] > summary {
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 58%, var(--line, rgb(255 255 255 / 14%)));
+  background: color-mix(in srgb, var(--accent, #78d5c8) 14%, var(--surface, #111827));
+  color: var(--accent, #78d5c8);
+}
+
+.listmaker-home-menu > .listmaker-home-menu-popover {
+  min-width: 210px;
+  max-width: calc(100vw - 32px);
+}
+
+.listmaker-home-menu-filters {
+  display: grid;
+  gap: 4px;
+}
+
+.listmaker-home-menu-separator {
+  width: 100%;
+  height: 1px;
+  margin: 4px 0;
+  border: 0;
+  background: color-mix(in srgb, var(--line, rgb(255 255 255 / 14%)) 82%, transparent);
+}
+
+.listmaker-home-menu-note {
+  max-width: 220px;
+  margin: 2px 8px 5px;
+  color: var(--muted, #9ca3af);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.listmaker-home-menu button.is-active,
+.listmaker-home-menu button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent, #78d5c8) 56%, transparent);
+  background: color-mix(in srgb, var(--accent, #78d5c8) 16%, transparent);
+  color: var(--accent, #78d5c8);
+}
+
 .listmaker-bulk-bar:not(.has-selection) button {
   display: none;
 }
@@ -16301,6 +16364,10 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   color: var(--muted, #9ca3af);
   font-size: 0.9rem;
   text-align: right;
+}
+
+.listmaker-status:not(:empty) {
+  display: block;
 }
 
 .listmaker-status.is-error,
@@ -16863,6 +16930,7 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 .modal-dialog.listmaker-create-dialog,
 .modal-dialog.listmaker-settings-dialog,
 .modal-dialog.listmaker-io-dialog,
+.modal-dialog.listmaker-import-dialog,
 .modal-dialog.listmaker-category-dialog,
 .modal-dialog.listmaker-field-choices-dialog {
   width: min(1040px, calc(100vw - 32px));
@@ -16874,6 +16942,10 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 }
 
 #listmaker-settings-modal.modal-backdrop {
+  overflow: hidden;
+}
+
+#listmaker-import-modal.modal-backdrop {
   overflow: hidden;
 }
 
@@ -16906,6 +16978,21 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
   width: min(960px, calc(100vw - 32px));
 }
 
+.modal-dialog.listmaker-import-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(820px, 100%);
+  max-height: min(760px, calc(100vh - var(--header-height, 76px) - 48px));
+  overflow: hidden;
+}
+
+.modal-dialog.listmaker-import-dialog > .modal-header {
+  align-items: flex-start;
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line, #304149) 74%, transparent);
+}
+
 .modal-dialog.listmaker-category-dialog {
   width: min(460px, calc(100vw - 32px));
 }
@@ -16916,10 +17003,226 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 
 .listmaker-create-form,
 .listmaker-settings-form,
+.listmaker-import-form,
 .listmaker-category-form,
 .listmaker-field-choices-form {
   display: grid;
   gap: 14px;
+}
+
+.listmaker-import-form {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.listmaker-import-content {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 120px;
+  padding: 2px 6px 2px 0;
+  overflow: auto;
+}
+
+.listmaker-import-content > :first-child {
+  margin-top: 0;
+}
+
+.listmaker-import-content > :last-child {
+  margin-bottom: 0;
+}
+
+.listmaker-import-status {
+  min-height: 20px;
+  margin: 0;
+}
+
+.listmaker-import-form > .modal-actions {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line, #304149) 74%, transparent);
+}
+
+.listmaker-import-analyzing,
+.listmaker-import-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--line, #304149) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface, #111827) 88%, transparent);
+}
+
+.listmaker-import-analyzing h3,
+.listmaker-import-error h3,
+.listmaker-import-review-section h3 {
+  margin: 0 0 6px;
+}
+
+.listmaker-import-analyzing p,
+.listmaker-import-error p {
+  margin: 0;
+  color: var(--muted, #9ca3af);
+  line-height: 1.55;
+}
+
+.listmaker-import-error {
+  border-color: color-mix(in srgb, #ef4444 48%, var(--line, #304149));
+}
+
+.listmaker-import-error ph-warning-circle {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  color: #ffaaa7;
+}
+
+.listmaker-import-spinner {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border: 3px solid color-mix(in srgb, var(--accent, #78d5c8) 22%, transparent);
+  border-top-color: var(--accent, #78d5c8);
+  border-radius: 999px;
+  animation: listmaker-import-spin 800ms linear infinite;
+}
+
+@keyframes listmaker-import-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listmaker-import-spinner {
+    animation: none;
+    border-color: var(--accent, #78d5c8);
+  }
+}
+
+.listmaker-import-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.52fr);
+  gap: 12px;
+}
+
+.modal-dialog.listmaker-import-dialog :is(input:not([type="checkbox"]), select, textarea) {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--line, #304149) 92%, transparent);
+  border-radius: 8px;
+  outline: none;
+  background: color-mix(in srgb, var(--field, #121212) 86%, #000);
+  color: var(--ink, #f8fafc);
+}
+
+.listmaker-import-match {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #78d5c8) 28%, var(--line, #304149));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent, #78d5c8) 7%, var(--surface, #111827));
+}
+
+.listmaker-import-match > div {
+  display: grid;
+  gap: 3px;
+}
+
+.listmaker-import-match span,
+.listmaker-import-config dt {
+  color: var(--muted, #9ca3af);
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.listmaker-import-match p {
+  grid-column: 1 / -1;
+  margin: 5px 0 0;
+  color: var(--muted, #9ca3af);
+  line-height: 1.5;
+}
+
+.listmaker-import-review-section {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line, #304149) 78%, transparent);
+  border-radius: 8px;
+}
+
+.listmaker-import-config {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.listmaker-import-config > div {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.listmaker-import-config dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.listmaker-import-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.listmaker-import-tokens > span {
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent, #78d5c8) 24%, var(--line, #304149));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #78d5c8) 8%, transparent);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.listmaker-import-warnings {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--line, #304149));
+}
+
+.listmaker-import-warnings ul {
+  margin: 0;
+  padding-left: 20px;
+  color: color-mix(in srgb, #fbbf24 72%, var(--ink, #f8fafc));
+}
+
+.listmaker-import-samples {
+  display: grid;
+  gap: 8px;
+}
+
+.listmaker-import-samples article {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--field, #121212) 78%, transparent);
+}
+
+.listmaker-import-samples pre {
+  max-height: 150px;
+  margin: 7px 0 0;
+  overflow: auto;
+  color: var(--muted, #9ca3af);
+  font: 0.78rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.listmaker-import-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
 }
 
 .listmaker-create-form {
@@ -17073,6 +17376,7 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 .modal-dialog.listmaker-create-dialog button:not(.primary-action):not(.secondary-action),
 .modal-dialog.listmaker-settings-dialog button:not(.primary-action):not(.secondary-action),
 .modal-dialog.listmaker-io-dialog button:not(.primary-action):not(.secondary-action),
+.modal-dialog.listmaker-import-dialog button:not(.primary-action):not(.secondary-action):not(.modal-close),
 .modal-dialog.listmaker-category-dialog button:not(.primary-action):not(.secondary-action),
 .modal-dialog.listmaker-field-choices-dialog button:not(.primary-action):not(.secondary-action) {
   display: inline-flex;
@@ -17096,6 +17400,8 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 .modal-dialog.listmaker-settings-dialog button:not(.primary-action):not(.secondary-action):focus-visible,
 .modal-dialog.listmaker-io-dialog button:not(.primary-action):not(.secondary-action):hover,
 .modal-dialog.listmaker-io-dialog button:not(.primary-action):not(.secondary-action):focus-visible,
+.modal-dialog.listmaker-import-dialog button:not(.primary-action):not(.secondary-action):not(.modal-close):hover,
+.modal-dialog.listmaker-import-dialog button:not(.primary-action):not(.secondary-action):not(.modal-close):focus-visible,
 .modal-dialog.listmaker-category-dialog button:not(.primary-action):not(.secondary-action):hover,
 .modal-dialog.listmaker-category-dialog button:not(.primary-action):not(.secondary-action):focus-visible,
 .modal-dialog.listmaker-field-choices-dialog button:not(.primary-action):not(.secondary-action):hover,
@@ -17273,6 +17579,21 @@ body[data-page="listmaker"] :is(select, input, textarea):focus {
 
   .listmaker-item-row {
     grid-template-columns: auto minmax(170px, 220px);
+  }
+
+  .listmaker-home-menu {
+    justify-self: end;
+  }
+
+  .modal-dialog.listmaker-import-dialog {
+    width: 100%;
+    max-height: 100%;
+  }
+
+  .listmaker-import-edit-grid,
+  .listmaker-import-match,
+  .listmaker-import-config > div {
+    grid-template-columns: 1fr;
   }
 
   .listmaker-row-actions {
