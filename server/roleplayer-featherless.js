@@ -1,7 +1,6 @@
 const FEATHERLESS_DEFAULT_MODEL = "anthracite-org/magnum-v4-9b";
 const FEATHERLESS_PREFERRED_MODELS = [
-  FEATHERLESS_DEFAULT_MODEL,
-  "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated"
+  FEATHERLESS_DEFAULT_MODEL
 ];
 const FEATHERLESS_STOP_SEQUENCES = [
   "<|im_end|>",
@@ -223,34 +222,20 @@ function normalizeFeatherlessModel(model) {
     modified_at: null,
     size: null,
     context_length: typeof model?.context_length === "number" ? model.context_length : null,
-    max_completion_tokens: typeof model?.max_completion_tokens === "number" ? model.max_completion_tokens : null
+    max_completion_tokens: typeof model?.max_completion_tokens === "number" ? model.max_completion_tokens : null,
+    status: String(model?.status || "").trim() || null,
+    available_on_current_plan: typeof model?.available_on_current_plan === "boolean"
+      ? model.available_on_current_plan
+      : null
   };
 }
 
-function fallbackFeatherlessModels() {
-  return preferredModels().map((name) => ({
-    name,
-    modified_at: null,
-    size: null,
-    context_length: null,
-    max_completion_tokens: null
-  }));
-}
-
-async function fetchFeatherlessModelDetail(request, modelId) {
-  if (!modelId) return null;
-  const fallback = { name: modelId, modified_at: null, size: null, context_length: null, max_completion_tokens: null };
-  try {
-    const response = await fetchFeatherless(request, `/models/${encodeURIComponent(modelId)}`, {
-      headers: featherlessHeaders(request)
-    }, envNumber("FEATHERLESS_HEALTH_TIMEOUT_MS", 10000));
-    if (!response.ok) return fallback;
-    const payload = await responsePayload(response);
-    const normalized = normalizeFeatherlessModel(payload);
-    return normalized.name ? normalized : fallback;
-  } catch (_error) {
-    return fallback;
-  }
+function isEligibleFeatherlessModel(model) {
+  const name = String(model?.id || model?.name || "").trim();
+  const status = String(model?.status || "").trim().toLowerCase();
+  const planAvailable = model?.available_on_current_plan;
+  if (!name) return false;
+  return (!status || status === "active") && planAvailable !== false;
 }
 
 async function handleStatus(request, response) {
@@ -280,11 +265,12 @@ async function handleStatus(request, response) {
 
 async function handleModels(request, response) {
   try {
+    const requestedPageSize = Math.round(envNumber("FEATHERLESS_MODELS_PER_PAGE", 1000));
     const params = new URLSearchParams({
       available_on_current_plan: "true",
       conversational: "true",
       status: "active",
-      per_page: String(envNumber("FEATHERLESS_MODELS_PER_PAGE", 100)),
+      per_page: String(Math.max(1, Math.min(1000, requestedPageSize))),
       sort: process.env.FEATHERLESS_MODELS_SORT || "-popularity"
     });
     if (process.env.FEATHERLESS_MODELS_QUERY) params.set("q", process.env.FEATHERLESS_MODELS_QUERY);
@@ -294,24 +280,27 @@ async function handleModels(request, response) {
     const payload = await responsePayload(providerResponse);
     if (!providerResponse.ok) {
       return sendJson(response, 200, {
-        models: fallbackFeatherlessModels(),
-        error: `${providerErrorMessage(payload, providerResponse.status)} Using configured model fallback.`
+        models: [],
+        error: providerErrorMessage(payload, providerResponse.status)
       });
     }
     const models = Array.isArray(payload.data)
-      ? payload.data.map(normalizeFeatherlessModel).filter((model) => model.name)
+      ? payload.data
+        .filter((model) => isEligibleFeatherlessModel(model))
+        .map(normalizeFeatherlessModel)
       : [];
-    const preferred = await Promise.all(preferredModels().map((modelId) => fetchFeatherlessModelDetail(request, modelId)));
-    for (const model of preferred.filter((item) => item?.name).reverse()) {
-      const existingIndex = models.findIndex((item) => item.name === model.name);
-      if (existingIndex !== -1) models.splice(existingIndex, 1);
-      models.unshift(model);
+    const preferredNames = preferredModels();
+    for (const modelId of preferredNames.slice().reverse()) {
+      const existingIndex = models.findIndex((model) => model.name === modelId);
+      if (existingIndex === -1) continue;
+      const [preferredModel] = models.splice(existingIndex, 1);
+      models.unshift(preferredModel);
     }
     return sendJson(response, 200, { models });
   } catch (error) {
     return sendJson(response, 200, {
-      models: fallbackFeatherlessModels(),
-      error: `${error.message || "Could not load Featherless models."} Using configured model fallback.`
+      models: [],
+      error: error.message || "Could not load Featherless models."
     });
   }
 }
@@ -500,14 +489,25 @@ async function handleChatStream(request, response) {
   }
 }
 
-function isCapacityError(status, message) {
+function isRetryableModelError(status, payload, message) {
+  const code = String(payload?.error?.code || payload?.code || "").trim().toLowerCase();
   const text = String(message || "").toLowerCase();
   return status === 429
+    || status === 503
+    || ["model_not_found", "model_unavailable", "no_valid_executor"].includes(code)
     || text.includes("temporarily at capacity")
     || text.includes("capacity")
     || text.includes("concurrency limit")
     || text.includes("concurrent requests")
-    || text.includes("over limit");
+    || text.includes("over limit")
+    || text.includes("not available for inference")
+    || text.includes("model is not available")
+    || text.includes("model not found")
+    || text.includes("unknown model")
+    || text.includes("no valid executor")
+    || text.includes("model is cold")
+    || text.includes("not ready for inference")
+    || (status === 403 && (text.includes("gated") || text.includes("subscription tier") || text.includes("current plan")));
 }
 
 function parseJsonFromModelText(text) {
@@ -701,6 +701,12 @@ function buildCharacterVibePrompt(vibe, existingCharacter) {
 async function handleCharacterVibe(request, response) {
   const body = await readJsonBody(request);
   const model = String(body.model || preferredModels()[0] || "").trim();
+  const fallbackModels = Array.isArray(body.fallbackModels)
+    ? body.fallbackModels
+      .map((candidate) => String(candidate || "").trim())
+      .filter((candidate) => candidate && candidate.length <= 300)
+      .slice(0, 8)
+    : [];
   const vibe = body.vibe && typeof body.vibe === "object" ? body.vibe : {};
   const existingCharacter = body.existingCharacter && typeof body.existingCharacter === "object" ? body.existingCharacter : {};
   if (!model) throw httpError("No Featherless model is configured for AI Vibe.", 400);
@@ -716,7 +722,8 @@ async function handleCharacterVibe(request, response) {
     },
     { role: "user", content: buildCharacterVibePrompt(vibe, existingCharacter) }
   ];
-  const vibeModels = [model, ...preferredModels()].filter((item, index, values) => item && values.indexOf(item) === index);
+  const vibeModels = [model, ...fallbackModels, ...preferredModels()]
+    .filter((item, index, values) => item && values.indexOf(item) === index);
   const attempts = [];
   let payload = null;
   let usedModel = "";
@@ -746,9 +753,13 @@ async function handleCharacterVibe(request, response) {
     }
     const message = providerErrorMessage(attemptPayload, providerResponse.status);
     attempts.push({ model: attemptModel, status: "error", responseStatus: providerResponse.status, error: message });
-    if (!isCapacityError(providerResponse.status, message) || index === vibeModels.length - 1) {
+    if (!isRetryableModelError(providerResponse.status, attemptPayload, message)) {
       throw httpError(message, providerResponse.status || 502, { attempts });
     }
+  }
+
+  if (!payload) {
+    throw httpError("No currently available Featherless model could generate this character.", 503, { attempts });
   }
 
   const text = String(payload?.choices?.[0]?.message?.content || "").trim();

@@ -2,8 +2,7 @@
   const MODEL_STORAGE_KEY = "centralis:roleplayer:selected-model";
   const DEFAULT_FEATHERLESS_MODEL = "anthracite-org/magnum-v4-9b";
   const PREFERRED_FEATHERLESS_MODELS = [
-    DEFAULT_FEATHERLESS_MODEL,
-    "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated"
+    DEFAULT_FEATHERLESS_MODEL
   ];
   const RECENT_MESSAGE_LIMIT = 8;
   const MEMORY_RECALL_LIMIT = 8;
@@ -168,6 +167,7 @@
     selectedModel: localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_FEATHERLESS_MODEL,
     readinessState: "idle",
     readinessError: "",
+    readinessPromise: null,
     characters: [],
     characterImagesById: new Map(),
     personas: [],
@@ -564,6 +564,7 @@
     if (els.personaPage) els.personaPage.hidden = true;
     if (els.controls) els.controls.hidden = true;
     updateChatUrl();
+    if (state.readinessState !== "ready") refreshReadiness();
   }
 
   function showPersonasPage() {
@@ -683,14 +684,18 @@
     ].join("");
   }
 
-  function ensurePreferredModelsInList() {
-    const knownModelNames = new Set(state.models.map((model) => model.name));
-    for (const preferredModel of PREFERRED_FEATHERLESS_MODELS.slice().reverse()) {
-      if (!knownModelNames.has(preferredModel)) {
-        state.models.unshift({ name: preferredModel });
-        knownModelNames.add(preferredModel);
-      }
-    }
+  function isAvailableModel(modelName) {
+    const normalizedName = normalizeText(modelName);
+    return Boolean(normalizedName && state.models.some((model) => model.name === normalizedName));
+  }
+
+  function resolveAvailableModel(...candidates) {
+    return candidates
+      .flat()
+      .map(normalizeText)
+      .find((modelName) => isAvailableModel(modelName))
+      || state.models[0]?.name
+      || "";
   }
 
   function renderModelSelect(select, selectedValue = state.selectedModel) {
@@ -701,27 +706,22 @@
       return;
     }
 
+    const availableSelection = resolveAvailableModel(selectedValue, state.selectedModel);
     select.innerHTML = state.models.map((model) => {
       const detail = model.context_length
         ? `${Number(model.context_length).toLocaleString()} context`
         : formatSize(model.size);
       const label = detail ? `${model.name} (${detail})` : model.name;
-      return `<option value="${escapeHtml(model.name)}"${model.name === selectedValue ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      return `<option value="${escapeHtml(model.name)}"${model.name === availableSelection ? " selected" : ""}>${escapeHtml(label)}</option>`;
     }).join("");
     select.disabled = false;
   }
 
   function renderModelOptions() {
-    if (state.statusOk) ensurePreferredModelsInList();
     if (state.models.length) {
-      const storedModelStillAvailable = state.models.some((model) => model.name === state.selectedModel);
-      if (!storedModelStillAvailable) {
-        if (PREFERRED_FEATHERLESS_MODELS.includes(state.selectedModel)) {
-          state.models = [{ name: state.selectedModel }, ...state.models.filter((model) => model.name !== state.selectedModel)];
-        } else {
-          state.selectedModel = state.models[0].name;
-          localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
-        }
+      if (!isAvailableModel(state.selectedModel)) {
+        state.selectedModel = resolveAvailableModel(PREFERRED_FEATHERLESS_MODELS);
+        localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
       }
     }
     renderModelSelect(els.model, state.selectedModel);
@@ -942,7 +942,7 @@
   }
 
   function canSend() {
-    return Boolean(state.selectedSessionId && state.statusOk && state.selectedModel && !state.busy);
+    return Boolean(state.selectedSessionId && state.statusOk && isAvailableModel(state.selectedModel) && !state.busy);
   }
 
   function canGenerateCharacterImage() {
@@ -965,6 +965,9 @@
         : "Featherless is unavailable. Refresh Roleplayer to try again.";
     }
     if (!state.selectedModel) return "Select a Featherless model first.";
+    if (!isAvailableModel(state.selectedModel)) {
+      return "The saved Featherless model is no longer available. Refresh Roleplayer to select a current model.";
+    }
     return "";
   }
 
@@ -1124,7 +1127,7 @@
     return payload;
   }
 
-  async function refreshReadiness() {
+  async function runReadinessCheck() {
     state.busy = true;
     state.readinessState = "checking";
     state.readinessError = "";
@@ -1153,9 +1156,13 @@
         return;
       }
 
-      if (!state.selectedModel || !state.models.some((model) => model.name === state.selectedModel)) {
-        state.selectedModel = PREFERRED_FEATHERLESS_MODELS.find((modelName) => state.models.some((model) => model.name === modelName))
-          || state.models[0].name;
+      const resolvedModel = resolveAvailableModel(
+        selectedSession()?.model_name,
+        state.selectedModel,
+        PREFERRED_FEATHERLESS_MODELS
+      );
+      if (resolvedModel !== state.selectedModel) {
+        state.selectedModel = resolvedModel;
         localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
       }
       const readyDetails = modelPayload.error || status.warning
@@ -1174,6 +1181,15 @@
       state.busy = false;
       renderAll();
     }
+  }
+
+  function refreshReadiness() {
+    if (!state.readinessPromise) {
+      state.readinessPromise = runReadinessCheck().finally(() => {
+        state.readinessPromise = null;
+      });
+    }
+    return state.readinessPromise;
   }
 
   async function loadCharacters() {
@@ -1833,24 +1849,39 @@
     }
 
     state.aiVibeBusy = true;
-    setDialogStatus(els.aiVibeStatus, "Generating character vibe...");
+    setDialogStatus(els.aiVibeStatus, "Checking available Featherless models...");
     renderControls();
     try {
+      if (state.readinessState !== "ready" || !state.statusOk || !isAvailableModel(state.selectedModel)) {
+        await refreshReadiness();
+      }
+      if (!state.statusOk || !isAvailableModel(state.selectedModel)) {
+        throw new Error(state.readinessError || "No currently available Featherless model was found.");
+      }
+      setDialogStatus(els.aiVibeStatus, "Generating character vibe...");
       const payload = await fetchJson("/api/featherless/character-vibe", {
         method: "POST",
         body: JSON.stringify({
           model: state.selectedModel,
+          fallbackModels: state.models
+            .map((model) => model.name)
+            .filter((modelName) => modelName !== state.selectedModel)
+            .slice(0, 8),
           vibe,
           existingCharacter: characterFormSnapshot()
         })
       });
+      if (payload.fallbackUsed && isAvailableModel(payload.model)) {
+        state.selectedModel = payload.model;
+        localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
+      }
       const appliedCount = applyAiVibeDraft(payload.character || {});
       if (!appliedCount) {
         setDialogStatus(els.aiVibeStatus, "AI generated a draft, but every matching character field already had text.", true);
         return;
       }
       const fallbackNote = payload.fallbackUsed
-        ? ` Selected model was at capacity, so AI Vibe used ${payload.model}.`
+        ? ` The selected model was unavailable, so AI Vibe used ${payload.model}.`
         : "";
       setDialogStatus(els.aiVibeStatus, `Applied ${appliedCount} empty field${appliedCount === 1 ? "" : "s"}. Review before saving.${fallbackNote}`);
       setDialogStatus(els.characterStatus, `AI Vibe filled empty fields. Review before saving.${fallbackNote}`);
@@ -2185,7 +2216,7 @@
     state.modelLog = [];
     updateChatUrl();
     const session = selectedSession();
-    if (session?.model_name) {
+    if (isAvailableModel(session?.model_name)) {
       state.selectedModel = session.model_name;
       localStorage.setItem(MODEL_STORAGE_KEY, state.selectedModel);
     }
@@ -2507,7 +2538,10 @@
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      if (response.status === 404 || String(payload.error || "").includes("Unknown route")) {
+      const errorMessage = normalizeText(payload.error);
+      const routeMissing = response.status === 404
+        && (!errorMessage || errorMessage.includes("Unknown Roleplayer AI route"));
+      if (routeMissing) {
         updateModelLogEntry(logId, { status: "fallback", response: payload });
         const text = await nonStreamingModel(promptMessages, state.abortController.signal, "Character response fallback");
         return { text, metadata: { model: state.selectedModel, stream_fallback: "non_streaming" }, logId };

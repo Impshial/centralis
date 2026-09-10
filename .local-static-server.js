@@ -41,8 +41,7 @@ const featherlessDefaultTopP = Number(process.env.FEATHERLESS_TOP_P || 0.92);
 const featherlessPreferredModels = [
   process.env.FEATHERLESS_MODEL,
   process.env.FEATHERLESS_VIBE_FALLBACK_MODEL,
-  "anthracite-org/magnum-v4-9b",
-  "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated"
+  "anthracite-org/magnum-v4-9b"
 ].filter(Boolean);
 const featherlessDefaultModel = featherlessPreferredModels[0];
 const featherlessStopSequences = [
@@ -191,14 +190,25 @@ function requireVeniceKey() {
   }
 }
 
-function isCapacityError(status, message) {
+function isRetryableModelError(status, payload, message) {
+  const code = String(payload?.error?.code || payload?.code || "").trim().toLowerCase();
   const text = String(message || "").toLowerCase();
   return status === 429
+    || status === 503
+    || ["model_not_found", "model_unavailable", "no_valid_executor"].includes(code)
     || text.includes("temporarily at capacity")
     || text.includes("capacity")
     || text.includes("concurrency limit")
     || text.includes("concurrent requests")
-    || text.includes("over limit");
+    || text.includes("over limit")
+    || text.includes("not available for inference")
+    || text.includes("model is not available")
+    || text.includes("model not found")
+    || text.includes("unknown model")
+    || text.includes("no valid executor")
+    || text.includes("model is cold")
+    || text.includes("not ready for inference")
+    || (status === 403 && (text.includes("gated") || text.includes("subscription tier") || text.includes("current plan")));
 }
 
 async function fetchFeatherless(pathname, init = {}, timeoutMs = Number(process.env.FEATHERLESS_TIMEOUT_MS || 120000)) {
@@ -618,33 +628,20 @@ function normalizeFeatherlessModel(model) {
     modified_at: null,
     size: null,
     context_length: typeof model?.context_length === "number" ? model.context_length : null,
-    max_completion_tokens: typeof model?.max_completion_tokens === "number" ? model.max_completion_tokens : null
+    max_completion_tokens: typeof model?.max_completion_tokens === "number" ? model.max_completion_tokens : null,
+    status: String(model?.status || "").trim() || null,
+    available_on_current_plan: typeof model?.available_on_current_plan === "boolean"
+      ? model.available_on_current_plan
+      : null
   };
 }
 
-function fallbackFeatherlessModels() {
-  return featherlessPreferredModels.map((name) => ({
-    name,
-    modified_at: null,
-    size: null,
-    context_length: null,
-    max_completion_tokens: null
-  }));
-}
-
-async function fetchFeatherlessModelDetail(modelId) {
-  if (!modelId) return null;
-  try {
-    const detailResponse = await fetchFeatherless(`/models/${encodeURIComponent(modelId)}`, {
-      headers: featherlessHeaders()
-    }, Number(process.env.FEATHERLESS_HEALTH_TIMEOUT_MS || 10000));
-    if (!detailResponse.ok) return { name: modelId, modified_at: null, size: null, context_length: null, max_completion_tokens: null };
-    const detail = await detailResponse.json().catch(() => ({}));
-    const normalized = normalizeFeatherlessModel(detail);
-    return normalized.name ? normalized : { name: modelId, modified_at: null, size: null, context_length: null, max_completion_tokens: null };
-  } catch (_error) {
-    return { name: modelId, modified_at: null, size: null, context_length: null, max_completion_tokens: null };
-  }
+function isEligibleFeatherlessModel(model) {
+  const name = String(model?.id || model?.name || "").trim();
+  const status = String(model?.status || "").trim().toLowerCase();
+  const planAvailable = model?.available_on_current_plan;
+  if (!name) return false;
+  return (!status || status === "active") && planAvailable !== false;
 }
 
 function normalizeModelRoutePathname(pathname) {
@@ -679,11 +676,13 @@ async function handleModelRoute(request, response, pathname) {
 
   if (modelPathname === "/api/ollama/models" && request.method === "GET") {
     try {
+      const configuredPageSize = Number(process.env.FEATHERLESS_MODELS_PER_PAGE);
+      const requestedPageSize = Number.isFinite(configuredPageSize) ? Math.round(configuredPageSize) : 1000;
       const params = new URLSearchParams({
         available_on_current_plan: "true",
         conversational: "true",
         status: "active",
-        per_page: String(Number(process.env.FEATHERLESS_MODELS_PER_PAGE || 100)),
+        per_page: String(Math.max(1, Math.min(1000, requestedPageSize))),
         sort: process.env.FEATHERLESS_MODELS_SORT || "-popularity"
       });
       if (process.env.FEATHERLESS_MODELS_QUERY) {
@@ -695,29 +694,27 @@ async function handleModelRoute(request, response, pathname) {
       const payload = await featherlessResponse.json().catch(() => ({}));
       if (!featherlessResponse.ok) {
         sendJson(response, 200, {
-          models: fallbackFeatherlessModels(),
-          error: payload.error?.message || payload.error || `Featherless returned HTTP ${featherlessResponse.status}. Using configured model fallback.`
+          models: [],
+          error: payload.error?.message || payload.error || `Featherless returned HTTP ${featherlessResponse.status}.`
         });
         return;
       }
       const models = Array.isArray(payload.data)
-        ? payload.data.map(normalizeFeatherlessModel).filter((model) => model.name)
+        ? payload.data
+          .filter((model) => isEligibleFeatherlessModel(model))
+          .map(normalizeFeatherlessModel)
         : [];
-      const preferredModels = await Promise.all(featherlessPreferredModels.map(fetchFeatherlessModelDetail));
-      for (const preferredModel of preferredModels.filter((model) => model?.name).reverse()) {
-        const existingIndex = models.findIndex((model) => model.name === preferredModel.name);
-        if (existingIndex === -1) {
-          models.unshift(preferredModel);
-        } else {
-          models.splice(existingIndex, 1);
-          models.unshift(preferredModel);
-        }
+      for (const modelId of featherlessPreferredModels.slice().reverse()) {
+        const existingIndex = models.findIndex((model) => model.name === modelId);
+        if (existingIndex === -1) continue;
+        const [preferredModel] = models.splice(existingIndex, 1);
+        models.unshift(preferredModel);
       }
       sendJson(response, 200, { models });
     } catch (error) {
       sendJson(response, 200, {
-        models: fallbackFeatherlessModels(),
-        error: `${error.message || "Could not load Featherless models."} Using configured model fallback.`
+        models: [],
+        error: error.message || "Could not load Featherless models."
       });
     }
     return;
@@ -814,6 +811,12 @@ async function handleModelRoute(request, response, pathname) {
     try {
       const body = await readJsonBody(request);
       const model = String(body.model || featherlessDefaultModel || "").trim();
+      const fallbackModels = Array.isArray(body.fallbackModels)
+        ? body.fallbackModels
+          .map((candidate) => String(candidate || "").trim())
+          .filter((candidate) => candidate && candidate.length <= 300)
+          .slice(0, 8)
+        : [];
       const vibe = body.vibe && typeof body.vibe === "object" ? body.vibe : {};
       const existingCharacter = body.existingCharacter && typeof body.existingCharacter === "object" ? body.existingCharacter : {};
       if (!model) {
@@ -836,6 +839,7 @@ async function handleModelRoute(request, response, pathname) {
       ];
       const vibeModels = [
         model,
+        ...fallbackModels,
         ...featherlessPreferredModels
       ].filter((item, index, list) => item && list.indexOf(item) === index);
       const attempts = [];
@@ -880,7 +884,7 @@ async function handleModelRoute(request, response, pathname) {
 
         const error = attemptPayload.error?.message || attemptPayload.error || `Featherless returned HTTP ${featherlessResponse.status}.`;
         attempts.push({ model: attemptModel, status: "error", responseStatus: featherlessResponse.status, error });
-        if (!isCapacityError(featherlessResponse.status, error) || index === vibeModels.length - 1) {
+        if (!isRetryableModelError(featherlessResponse.status, attemptPayload, error)) {
           appendPhysicalModelLog({
             type: "featherless.character_vibe",
             status: "error",
@@ -892,6 +896,20 @@ async function handleModelRoute(request, response, pathname) {
           sendJson(response, featherlessResponse.status, { error, attempts });
           return;
         }
+      }
+
+      if (!payload) {
+        const error = "No currently available Featherless model could generate this character.";
+        appendPhysicalModelLog({
+          type: "featherless.character_vibe",
+          status: "error",
+          request: logRequest,
+          responseStatus: 503,
+          error,
+          attempts
+        });
+        sendJson(response, 503, { error, attempts });
+        return;
       }
 
       const text = String(payload.choices?.[0]?.message?.content || "").trim();

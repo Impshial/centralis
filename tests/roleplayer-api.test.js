@@ -175,14 +175,19 @@ test("models returns the provider catalog with preferred models first", async ()
     if (url.startsWith("https://featherless.test/v1/models?")) {
       return jsonResponse({
         data: [
-          { id: "catalog/model", context_length: 8192 },
-          { id: "anthracite-org/magnum-v4-9b", context_length: 4096 }
+          { id: "catalog/model", context_length: 8192, status: "active", available_on_current_plan: true },
+          { id: "anthracite-org/magnum-v4-9b", context_length: 4096, status: "active", available_on_current_plan: true }
         ]
       });
     }
     if (url.startsWith("https://featherless.test/v1/models/")) {
       const id = decodeURIComponent(url.slice(url.lastIndexOf("/") + 1));
-      return jsonResponse({ id, context_length: 16384 });
+      return jsonResponse({
+        id,
+        context_length: 16384,
+        status: "active",
+        available_on_current_plan: true
+      });
     }
     throw new Error(`Unexpected upstream URL: ${url}`);
   });
@@ -194,11 +199,57 @@ test("models returns the provider catalog with preferred models first", async ()
   const payload = response.json();
   assert.deepEqual(payload.models.map((model) => model.name), [
     "anthracite-org/magnum-v4-9b",
-    "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated",
     "catalog/model"
   ]);
-  assert.equal(payload.models[0].context_length, 16384);
-  assert.equal(upstreamCalls(calls).length, 3);
+  assert.equal(payload.models[0].context_length, 4096);
+  assert.equal(upstreamCalls(calls).length, 1);
+});
+
+test("models never synthesizes configured preferences absent from the active catalog", async () => {
+  process.env.FEATHERLESS_MODEL = "configured/unavailable-model";
+  process.env.FEATHERLESS_VIBE_FALLBACK_MODEL = "configured/not-deployed-model";
+  try {
+    installAdminFetch(async (url) => {
+      if (url.startsWith("https://featherless.test/v1/models?")) {
+        return jsonResponse({
+          data: [{
+            id: "catalog/model",
+            context_length: 8192,
+            status: "active",
+            available_on_current_plan: true
+          }]
+        });
+      }
+      throw new Error(`Unexpected upstream URL: ${url}`);
+    });
+    const response = new MockResponse();
+
+    await modelsHandler(request("GET"), response);
+
+    assert.equal(response.statusCode, 200);
+    const names = response.json().models.map((model) => model.name);
+    assert.equal(names.includes("configured/unavailable-model"), false);
+    assert.equal(names.includes("configured/not-deployed-model"), false);
+    assert.deepEqual(names, ["catalog/model"]);
+  } finally {
+    delete process.env.FEATHERLESS_MODEL;
+    delete process.env.FEATHERLESS_VIBE_FALLBACK_MODEL;
+  }
+});
+
+test("models returns no unverified choices when catalog discovery fails", async () => {
+  installAdminFetch(async (url) => {
+    assert.match(url, /^https:\/\/featherless\.test\/v1\/models\?/);
+    return jsonResponse({ error: { message: "Model catalog is temporarily unavailable." } }, 503);
+  });
+  const response = new MockResponse();
+
+  await modelsHandler(request("GET"), response);
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.deepEqual(payload.models, []);
+  assert.match(payload.error, /model catalog is temporarily unavailable/i);
 });
 
 test("chat proxies a cleaned non-streaming completion", async () => {
@@ -289,6 +340,78 @@ test("character-vibe returns a complete generated character draft", async () => 
   assert.equal(payload.fallbackUsed, false);
   assert.deepEqual(payload.attempts, [{ model: "model/test", status: "complete" }]);
   assert.equal(upstreamCalls(calls).length, 1);
+});
+
+test("character-vibe falls back from the exact unavailable-model error to a verified client candidate", async () => {
+  const attemptedModels = [];
+  installAdminFetch(async (url, init) => {
+    assert.equal(url, "https://featherless.test/v1/chat/completions");
+    const body = JSON.parse(init.body);
+    attemptedModels.push(body.model);
+    if (body.model === "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated") {
+      return jsonResponse({
+        error: {
+          message: "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated is not available for inference"
+        }
+      }, 400);
+    }
+    assert.equal(body.model, "verified/model");
+    return jsonResponse({
+      id: "vibe-fallback-1",
+      model: "verified/model",
+      choices: [{
+        message: { content: JSON.stringify({ name: "Fallback Muse" }) },
+        finish_reason: "stop"
+      }]
+    });
+  });
+  const response = new MockResponse();
+
+  await characterVibeHandler(request("POST", {
+    model: "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated",
+    fallbackModels: ["verified/model"],
+    vibe: { general_vibe: "Playful space opera" },
+    existingCharacter: {}
+  }), response);
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.equal(payload.character.name, "Fallback Muse");
+  assert.equal(payload.requestedModel, "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated");
+  assert.equal(payload.model, "verified/model");
+  assert.equal(payload.fallbackUsed, true);
+  assert.deepEqual(attemptedModels, [
+    "huihui-ai/Qwen2.5-Coder-32B-Instruct-abliterated",
+    "verified/model"
+  ]);
+  assert.deepEqual(payload.attempts.map((attempt) => attempt.status), ["error", "complete"]);
+});
+
+test("character-vibe does not retry a different model for an unrelated 400", async () => {
+  const attemptedModels = [];
+  installAdminFetch(async (url, init) => {
+    assert.equal(url, "https://featherless.test/v1/chat/completions");
+    const body = JSON.parse(init.body);
+    attemptedModels.push(body.model);
+    return jsonResponse({
+      error: {
+        message: "temperature must be between 0 and 1",
+        code: "invalid_request_error"
+      }
+    }, 400);
+  });
+  const response = new MockResponse();
+
+  await characterVibeHandler(request("POST", {
+    model: "model/test",
+    fallbackModels: ["verified/model"],
+    vibe: { general_vibe: "Playful space opera" },
+    existingCharacter: {}
+  }), response);
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "temperature must be between 0 and 1");
+  assert.deepEqual(attemptedModels, ["model/test"]);
 });
 
 test("character-image requests a compressed production-safe portrait", async () => {
