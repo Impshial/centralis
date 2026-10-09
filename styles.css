@@ -31977,3 +31977,344 @@ body[data-page="home"] .home-glance-item:hover {
   }
 
 }
+/* SecureIt */
+body[data-page="secureit"] {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgb(var(--theme-primary-rgb, 120 213 200) / 0.12), transparent 32rem),
+    var(--color-page);
+}
+
+.secureit-page {
+  width: min(1440px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 32px 0 48px;
+}
+
+.secureit-hero,
+.secureit-toolbar,
+.secureit-sidebar-header,
+.secureit-editor header,
+.secureit-editor-actions,
+.secureit-lock-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.secureit-hero {
+  margin-bottom: 20px;
+}
+
+.secureit-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4rem);
+}
+
+.secureit-hero p:not(.settings-eyebrow) {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+}
+
+.secureit-hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.secureit-locked,
+.secureit-recovery-reveal {
+  min-height: 58vh;
+  display: grid;
+  place-items: center;
+}
+
+.secureit-lock-card {
+  width: min(560px, 100%);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  padding: 28px;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.28);
+}
+
+.secureit-lock-card h2 {
+  margin: 12px 0 8px;
+}
+
+.secureit-lock-card p {
+  color: var(--color-muted);
+}
+
+.secureit-lock-card form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.secureit-lock-card pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-field);
+  padding: 16px;
+  color: var(--color-text);
+  user-select: all;
+}
+
+.secureit-lock-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgb(var(--theme-primary-rgb, 120 213 200) / 0.13);
+  color: var(--color-primary);
+  font-size: 1.8rem;
+}
+
+.secureit-workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(360px, 1fr) minmax(340px, 440px);
+  gap: 16px;
+  min-height: calc(100vh - 190px);
+}
+
+.secureit-sidebar,
+.secureit-main,
+.secureit-detail {
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+}
+
+.secureit-sidebar,
+.secureit-main {
+  padding: 16px;
+}
+
+.secureit-sidebar-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.secureit-collection-list,
+.secureit-item-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.secureit-collection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 6px;
+  align-items: center;
+}
+
+.secureit-collection,
+.secureit-item-card {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.secureit-collection {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+}
+
+.secureit-collection:hover,
+.secureit-collection:focus-visible,
+.secureit-collection.is-active,
+.secureit-item-card:hover,
+.secureit-item-card:focus-visible,
+.secureit-item-card.is-active {
+  border-color: var(--color-border);
+  background: rgb(var(--theme-primary-rgb, 120 213 200) / 0.1);
+}
+
+.secureit-collection strong,
+.secureit-item-card strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secureit-collection em,
+.secureit-item-card em {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-style: normal;
+}
+
+.secureit-collection-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--secureit-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secureit-color) 22%, transparent);
+}
+
+.secureit-search {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-field);
+  padding: 0 10px;
+}
+
+.secureit-search input,
+.secureit-toolbar select,
+.secureit-editor input,
+.secureit-editor select,
+.secureit-editor textarea,
+.secureit-modal-form input,
+.secureit-modal-form textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-field);
+  color: var(--color-text);
+  padding: 10px 12px;
+}
+
+.secureit-search input {
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+}
+
+.secureit-status {
+  min-height: 1.2em;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.secureit-status.is-error,
+.secureit-modal-form .form-status.is-error,
+.secureit-lock-card .form-status.is-error {
+  color: var(--color-danger);
+}
+
+.secureit-status.is-success,
+.secureit-modal-form .form-status.is-success,
+.secureit-lock-card .form-status.is-success {
+  color: var(--color-success);
+}
+
+.secureit-item-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+
+.secureit-item-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgb(var(--theme-secondary-rgb, 81 70 184) / 0.16);
+  color: var(--color-primary);
+  font-size: 1.35rem;
+}
+
+.secureit-detail {
+  overflow: auto;
+}
+
+.secureit-empty,
+.secureit-empty-detail {
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  padding: 24px;
+  color: var(--color-muted);
+}
+
+.secureit-editor {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.secureit-editor header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.secureit-field-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.secureit-secret-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 8px;
+}
+
+.secureit-small-dialog {
+  width: min(560px, calc(100vw - 24px));
+}
+
+.secureit-modal-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.secureit-modal-form input[type="color"] {
+  height: 44px;
+  padding: 4px;
+}
+
+@media (max-width: 1120px) {
+  .secureit-workspace {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .secureit-detail {
+    grid-column: 1 / -1;
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 760px) {
+  .secureit-page {
+    width: min(100vw - 20px, 100%);
+    padding-top: 18px;
+  }
+
+  .secureit-hero,
+  .secureit-toolbar,
+  .secureit-editor header,
+  .secureit-editor-actions,
+  .secureit-lock-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .secureit-workspace {
+    grid-template-columns: 1fr;
+  }
+}
