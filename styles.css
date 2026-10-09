@@ -32584,6 +32584,13 @@ body[data-page="secureit"] .app-shell {
   overflow-wrap: anywhere;
 }
 
+.secureit-field-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
 .secureit-page .secureit-field-label .icon-button {
   width: 26px;
   height: 26px;
@@ -32651,7 +32658,9 @@ body[data-page="secureit"] .app-shell {
   display: none;
 }
 
-.secureit-field-dialog {
+.modal-dialog.secureit-field-dialog {
+  display: flex;
+  flex-direction: column;
   position: fixed;
   inset: 0;
   margin: auto;
@@ -32660,17 +32669,43 @@ body[data-page="secureit"] .app-shell {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
+  overflow: hidden;
 }
 
-.secureit-field-dialog:not([open]) {
+.modal-dialog.secureit-field-dialog:not([open]) {
   display: none;
+}
+
+.secureit-field-dialog .secureit-modal-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+  padding: 0;
+}
+
+.secureit-field-dialog-body {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.secureit-field-dialog .modal-header,
+.secureit-field-dialog .modal-actions {
+  flex-shrink: 0;
+}
+
+.secureit-field-dialog .modal-actions {
+  margin: 0 18px 18px;
 }
 
 .secureit-field-dialog::backdrop {
   background: rgb(0 0 0 / 60%);
 }
 
-.secureit-field-kind {
+:is(.secureit-field-kind, .secureit-field-options) {
   display: grid;
   gap: 8px;
   min-width: 0;
@@ -32679,13 +32714,13 @@ body[data-page="secureit"] .app-shell {
   border: 0;
 }
 
-.secureit-field-kind legend {
+:is(.secureit-field-kind, .secureit-field-options) legend {
   margin-bottom: 8px;
   font-size: 0.92rem;
   font-weight: 720;
 }
 
-.secureit-field-kind label {
+:is(.secureit-field-kind, .secureit-field-options) label {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -32697,17 +32732,22 @@ body[data-page="secureit"] .app-shell {
   font-size: 0.875rem;
 }
 
-.secureit-field-kind label:hover,
-.secureit-field-kind label:focus-within,
-.secureit-field-kind label:has(input:checked) {
+:is(.secureit-field-kind, .secureit-field-options) label:hover:not(:has(input:disabled)),
+:is(.secureit-field-kind, .secureit-field-options) label:focus-within,
+:is(.secureit-field-kind, .secureit-field-options) label:has(input:checked) {
   border-color: var(--accent);
   background: var(--hover-bg);
 }
 
-.secureit-field-kind input {
+:is(.secureit-field-kind, .secureit-field-options) input {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
+}
+
+.secureit-field-options label:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1120px) {

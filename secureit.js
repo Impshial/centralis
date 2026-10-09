@@ -129,6 +129,7 @@
       if (window.innerWidth > 560) showDefaultFields(true);
     });
     dom.fieldForm?.addEventListener("submit", handleCustomFieldSubmit);
+    dom.fieldForm?.addEventListener("change", syncCustomFieldOptions);
     document.querySelectorAll("[data-secureit-field-cancel]").forEach((button) => button.addEventListener("click", () => dom.fieldDialog.close()));
     dom.fieldDialog?.addEventListener("close", () => {
       customFieldForm?.querySelector("[data-secureit-add-field]")?.focus({ preventScroll: true });
@@ -658,7 +659,7 @@
   function itemTypeFields(type, payload = {}) {
     const fields = [...(ITEM_TYPES[type]?.fields || [])];
     if (type !== "custom") return fields;
-    return fields.concat(customFieldDefinitions(payload).map(({ key, label, kind }) => [key, label, kind]));
+    return fields.concat(customFieldDefinitions(payload).map(({ key, label, kind, copyButton, passwordBehavior }) => [key, label, kind, copyButton, passwordBehavior]));
   }
 
   function customFieldDefinitions(payload = {}) {
@@ -672,7 +673,18 @@
       if (!field || typeof field.key !== "string" || !field.key || seen.has(field.key)) return false;
       seen.add(field.key);
       return true;
-    }).map((field) => ({ key: field.key, label: String(field.label || labelFromKey(field.key)), kind: field.kind === "multiline" ? "multiline" : "text" }));
+    }).map((field) => {
+      const kind = field.kind === "multiline" ? "multiline" : "text";
+      // Fields saved before these options existed retain their copy and masking behavior.
+      const passwordBehavior = kind !== "multiline" && (typeof field.passwordBehavior === "boolean" ? field.passwordBehavior : /password|key|token|secret/i.test(field.key));
+      return {
+        key: field.key,
+        label: String(field.label || labelFromKey(field.key)),
+        kind,
+        copyButton: passwordBehavior || field.copyButton !== false,
+        passwordBehavior,
+      };
+    });
   }
 
   function captureItemDraft(form) {
@@ -759,23 +771,24 @@
   function renderTypeFields(type, payload = {}) {
     const fields = itemTypeFields(type, payload);
     if (!fields.length) return "";
-    return fields.map(([key, label, kind]) => {
+    return fields.map(([key, label, kind, copyButton, passwordBehavior]) => {
       const value = payload.fields?.[key] || "";
       const isMultiline = kind === "multiline";
-      const isSecret = !isMultiline && /password|key|token|secret/i.test(key);
-      const canCopy = type === "login" || type === "api_key" || (type === "custom" && key !== "custom_type");
-      const hasActions = isSecret || canCopy;
+      const isSecret = !isMultiline && (type === "custom" ? passwordBehavior === true : /password|key|token|secret/i.test(key));
+      const canCopy = type === "login" || type === "api_key" || (type === "custom" && copyButton === true);
+      const hasInlineActions = !isMultiline && (isSecret || canCopy);
+      const copyAction = canCopy ? `<button class="icon-button" type="button" data-secureit-copy-field="${escapeAttr(label)}" aria-label="Copy ${escapeAttr(label)}" title="Copy ${escapeAttr(label)}"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>` : "";
       return `
         <div class="form-field">
           <div class="secureit-field-label">
             <label for="secureit-field-${escapeAttr(key)}">${escapeHtml(label)}</label>
-            ${type === "custom" && key !== "custom_type" ? `<button class="icon-button" type="button" data-secureit-remove-field="${escapeAttr(key)}" title="Remove ${escapeAttr(label)}" aria-label="Remove ${escapeAttr(label)}"><ph-minus weight="bold" aria-hidden="true"></ph-minus></button>` : ""}
+            ${type === "custom" && key !== "custom_type" ? `<div class="secureit-field-actions"><button class="icon-button" type="button" data-secureit-remove-field="${escapeAttr(key)}" title="Remove ${escapeAttr(label)}" aria-label="Remove ${escapeAttr(label)}"><ph-minus weight="bold" aria-hidden="true"></ph-minus></button>${isMultiline ? copyAction : ""}</div>` : ""}
           </div>
-          ${hasActions ? `<div class="${isSecret ? "secureit-secret-field " : ""}${canCopy ? "secureit-copy-field" : ""}">` : ""}
+          ${hasInlineActions ? `<div class="${isSecret ? "secureit-secret-field " : ""}${canCopy ? "secureit-copy-field" : ""}">` : ""}
             ${isMultiline ? `<textarea id="secureit-field-${escapeAttr(key)}" name="field:${escapeAttr(key)}" rows="4">${escapeHtml(value)}</textarea>` : `<input id="secureit-field-${escapeAttr(key)}" type="${isSecret ? "password" : "text"}" name="field:${escapeAttr(key)}" autocomplete="off" value="${escapeAttr(value)}">`}
             ${isSecret ? '<button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show field" title="Show field" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>' : ""}
-            ${canCopy ? `<button class="icon-button" type="button" data-secureit-copy-field="${escapeAttr(label)}" aria-label="Copy ${escapeAttr(label)}" title="Copy ${escapeAttr(label)}"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>` : ""}
-          ${hasActions ? "</div>" : ""}
+            ${!isMultiline ? copyAction : ""}
+          ${hasInlineActions ? "</div>" : ""}
         </div>
       `;
     }).join("");
@@ -915,6 +928,7 @@
       customFieldForm = fieldMenuForm;
       closeFieldMenu();
       dom.fieldForm.reset();
+      syncCustomFieldOptions();
       setStatus(dom.fieldStatus, "");
       dom.fieldDialog.showModal();
       return;
@@ -968,6 +982,15 @@
     if (overflow > 0) scroller.scrollTop += overflow + 12;
   }
 
+  function syncCustomFieldOptions() {
+    const fields = dom.fieldForm.elements;
+    const isMultiline = fields.field_kind.value === "multiline";
+    if (isMultiline) fields.password_behavior.checked = false;
+    fields.password_behavior.disabled = isMultiline;
+    if (fields.password_behavior.checked) fields.copy_button.checked = true;
+    fields.copy_button.disabled = fields.password_behavior.checked;
+  }
+
   function handleCustomFieldSubmit(event) {
     event.preventDefault();
     if (!customFieldForm?.isConnected) return dom.fieldDialog.close();
@@ -980,8 +1003,10 @@
     const form = customFieldForm;
     customFieldForm = null;
     const kind = dom.fieldForm.elements.field_kind.value === "multiline" ? "multiline" : "text";
+    const passwordBehavior = kind !== "multiline" && dom.fieldForm.elements.password_behavior.checked;
+    const copyButton = passwordBehavior || dom.fieldForm.elements.copy_button.checked;
     dom.fieldDialog.close();
-    addCustomField(form, { key: `custom_${crypto.randomUUID()}`, label, kind });
+    addCustomField(form, { key: `custom_${crypto.randomUUID()}`, label, kind, copyButton, passwordBehavior });
   }
 
   async function handleItemSubmit(event) {
@@ -1060,7 +1085,7 @@
   }
 
   async function copyItemField(button) {
-    const input = button.closest(".secureit-copy-field")?.querySelector("input, textarea");
+    const input = button.closest(".form-field")?.querySelector("input, textarea");
     if (!input) return;
     const label = button.dataset.secureitCopyField;
     const status = button.closest("[data-secureit-item-form]")?.querySelector("[data-secureit-item-status]");

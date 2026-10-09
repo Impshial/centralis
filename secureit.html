@@ -6,7 +6,7 @@
   <title>SecureIt | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=secureit-custom-fields-4">
+  <link rel="stylesheet" href="styles.css?v=secureit-field-options-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -220,16 +220,23 @@
       <button class="icon-button" type="button" data-secureit-field-cancel title="Close" aria-label="Close"><ph-x weight="bold" aria-hidden="true"></ph-x></button>
     </div>
     <form class="secureit-modal-form" data-secureit-field-form>
-      <label class="form-field">
-        <span>Field Name</span>
-        <input type="text" name="field_name" maxlength="80" required autocomplete="off" autofocus>
-      </label>
-      <fieldset class="secureit-field-kind">
-        <legend>Field Type</legend>
-        <label><input type="radio" name="field_kind" value="text" checked><span>Single Line Textbox</span></label>
-        <label><input type="radio" name="field_kind" value="multiline"><span>Multiline Textbox</span></label>
-      </fieldset>
-      <p class="form-status" data-secureit-field-status role="status"></p>
+      <div class="secureit-field-dialog-body">
+        <label class="form-field">
+          <span>Field Name</span>
+          <input type="text" name="field_name" maxlength="80" required autocomplete="off" autofocus>
+        </label>
+        <fieldset class="secureit-field-kind">
+          <legend>Field Type</legend>
+          <label><input type="radio" name="field_kind" value="text" checked><span>Single Line Textbox</span></label>
+          <label><input type="radio" name="field_kind" value="multiline"><span>Multiline Textbox</span></label>
+        </fieldset>
+        <fieldset class="secureit-field-options">
+          <legend>Options</legend>
+          <label><input type="checkbox" name="copy_button" checked><span>Copy Button</span></label>
+          <label><input type="checkbox" name="password_behavior"><span>Password Behavior</span></label>
+        </fieldset>
+        <p class="form-status" data-secureit-field-status role="status"></p>
+      </div>
       <div class="modal-actions">
         <button class="secondary-action" type="button" data-secureit-field-cancel>Cancel</button>
         <button class="primary-action" type="submit">Create Field</button>
@@ -240,6 +247,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=secureit-1"></script>
-  <script src="secureit.js?v=secureit-custom-fields-4"></script>
+  <script src="secureit.js?v=secureit-field-options-1"></script>
 </body>
 </html>

@@ -63,7 +63,7 @@ function harness({ clipboard } = {}) {
     globalThis.api = { state, dom, handleUnlock, handleItemSubmit, lockVault,
       importAesKey, wrapVaultKey, encryptJson, decryptJson, setSecretVisibility,
       itemTypeFields, renderTypeFields, handleDetailChange, copyItemField,
-      customFieldDefinitions, itemFieldDrafts };
+      customFieldDefinitions, itemFieldDrafts, syncCustomFieldOptions };
   })();`), context);
   const api = context.api;
   for (const key of ["workspace", "locked", "unlockedActions", "recoveryReveal", "setup", "unlock", "recovery", "unlockStatus", "collections", "items", "detail", "status", "listTitle"]) {
@@ -232,7 +232,7 @@ function fieldCopyButton(input, status) {
   return {
     dataset: { secureitCopyField: "Password" },
     innerHTML: '<ph-copy></ph-copy>',
-    closest: (selector) => selector === ".secureit-copy-field"
+    closest: (selector) => selector === ".form-field"
       ? { querySelector: () => input }
       : { querySelector: () => status },
   };
@@ -276,14 +276,75 @@ test("Custom fields are explicit while older populated Custom fields remain avai
   assert.doesNotMatch(html, /name="field:(website|username|password|service|key|environment)"/);
 });
 
-test("custom field names, kinds, and values are encrypted together when saved", async () => {
+test("custom field copy and password options override name-based behavior", () => {
+  const { api } = harness();
+  const render = (field) => api.renderTypeFields("custom", { customFields: [field] });
+  const plain = render({ key: "custom_secret", label: "Plain", kind: "text", copyButton: false, passwordBehavior: false });
+  assert.doesNotMatch(plain, /data-secureit-copy-field|data-secureit-reveal-secret|type="password"/);
+  const copy = render({ key: "custom_location", label: "Location", kind: "text", copyButton: true, passwordBehavior: false });
+  assert.match(copy, /data-secureit-copy-field="Location"/);
+  assert.doesNotMatch(copy, /data-secureit-reveal-secret|type="password"/);
+  const password = render({ key: "custom_access", label: "Access", kind: "text", copyButton: false, passwordBehavior: true });
+  assert.match(password, /type="password" name="field:custom_access"/);
+  assert.match(password, /data-secureit-reveal-secret/);
+  assert.match(password, /data-secureit-copy-field="Access"/);
+  const legacy = render({ key: "key", label: "Key", kind: "text" });
+  assert.match(legacy, /type="password"/);
+  assert.match(legacy, /data-secureit-copy-field="Key"/);
+});
+
+test("multiline copy belongs in the label row and never enables password behavior", () => {
+  const { api } = harness();
+  const field = { key: "custom_secret", label: "Details", kind: "multiline", copyButton: true, passwordBehavior: true };
+  const html = api.renderTypeFields("custom", { customFields: [field] });
+  assert.match(html, /class="secureit-field-actions">[^]*data-secureit-copy-field="Details"[^]*<\/div>\s*<\/div>\s*<textarea/);
+  assert.doesNotMatch(html, /secureit-copy-field"|data-secureit-reveal-secret|type="password"/);
+  const normalized = api.customFieldDefinitions({ customFields: [field] })[0];
+  assert.equal(normalized.passwordBehavior, false);
+  assert.equal(normalized.copyButton, true);
+  const noCopy = api.renderTypeFields("custom", { customFields: [{ ...field, copyButton: false }] });
+  assert.doesNotMatch(noCopy, /data-secureit-copy-field|data-secureit-reveal-secret/);
+});
+
+test("popup options require copy for passwords and disable passwords for multiline", () => {
+  const { api } = harness();
+  const fields = {
+    field_kind: { value: "text" },
+    copy_button: { checked: false },
+    password_behavior: { checked: true },
+  };
+  api.dom.fieldForm = { elements: fields };
+  api.syncCustomFieldOptions();
+  assert.equal(fields.copy_button.checked, true);
+  assert.equal(fields.copy_button.disabled, true);
+  assert.equal(fields.password_behavior.disabled, false);
+  fields.field_kind.value = "multiline";
+  api.syncCustomFieldOptions();
+  assert.equal(fields.password_behavior.checked, false);
+  assert.equal(fields.password_behavior.disabled, true);
+  assert.equal(fields.copy_button.disabled, false);
+  fields.field_kind.value = "text";
+  api.syncCustomFieldOptions();
+  assert.equal(fields.password_behavior.checked, false);
+  assert.equal(fields.password_behavior.disabled, false);
+  fields.password_behavior.checked = true;
+  api.syncCustomFieldOptions();
+  fields.password_behavior.checked = false;
+  api.syncCustomFieldOptions();
+  assert.equal(fields.copy_button.disabled, false);
+  fields.copy_button.checked = false;
+  api.syncCustomFieldOptions();
+  assert.equal(fields.copy_button.checked, false);
+});
+
+test("custom field names, kinds, options, and values are encrypted together when saved", async () => {
   const h = harness();
   await seedVault(h);
   await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
   const customFields = [
-    { key: "custom_bucket", label: "Bucket Name", kind: "text" },
-    { key: "custom_details", label: "Details", kind: "multiline" },
-    { key: "key", label: "Key", kind: "text" },
+    { key: "custom_bucket", label: "Bucket Name", kind: "text", copyButton: false, passwordBehavior: false },
+    { key: "custom_details", label: "Details", kind: "multiline", copyButton: true, passwordBehavior: false },
+    { key: "key", label: "Key", kind: "text", copyButton: true, passwordBehavior: true },
   ];
   const values = { item_id: "", type: "custom", title: "Storage", collection_id: "collection-1", notes: "", "field:custom_type": "iDrive Bucket", "field:custom_bucket": "private-bucket", "field:custom_details": "First line\nSecond line", "field:key": "private-key" };
   const elements = Object.entries(values).map(([name, value]) => ({ name, value }));
