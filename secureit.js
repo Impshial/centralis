@@ -36,6 +36,7 @@
     },
   };
   const DEFAULT_COLLECTION = { name: "General", description: "Default SecureIt collection.", color: "#38bdf8" };
+  const DEFAULT_FIELDS = ITEM_TYPES.login.fields;
 
   const state = {
     user: null,
@@ -54,6 +55,8 @@
 
   const dom = {};
   const itemFieldDrafts = new WeakMap();
+  let fieldMenuForm = null;
+  let customFieldForm = null;
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -85,6 +88,13 @@
     dom.collectionTitle = document.querySelector("[data-secureit-collection-title]");
     dom.collectionStatus = document.querySelector("[data-secureit-collection-status]");
     dom.deleteCollection = document.querySelector("[data-secureit-delete-collection]");
+    dom.fieldMenu = document.getElementById("secureit-add-field-menu");
+    dom.defaultFieldsMenu = document.getElementById("secureit-default-fields-menu");
+    dom.defaultFieldsToggle = document.querySelector("[data-secureit-default-fields-toggle]");
+    dom.defaultFieldOptions = document.querySelector("[data-secureit-default-field-options]");
+    dom.fieldDialog = document.getElementById("secureit-field-dialog");
+    dom.fieldForm = document.querySelector("[data-secureit-field-form]");
+    dom.fieldStatus = document.querySelector("[data-secureit-field-status]");
   }
 
   function bindEvents() {
@@ -106,6 +116,27 @@
     dom.detail?.addEventListener("submit", handleItemSubmit);
     dom.detail?.addEventListener("click", handleDetailClick);
     dom.detail?.addEventListener("change", handleDetailChange);
+    dom.fieldMenu?.addEventListener("click", handleFieldMenuClick);
+    dom.fieldMenu?.addEventListener("keydown", handleFieldMenuKeydown);
+    dom.fieldMenu?.addEventListener("toggle", (event) => {
+      if (event.newState === "closed") {
+        fieldMenuForm?.querySelector("[data-secureit-add-field]")?.setAttribute("aria-expanded", "false");
+        fieldMenuForm = null;
+        showDefaultFields(false);
+      }
+    });
+    dom.defaultFieldsToggle?.addEventListener("mouseenter", () => {
+      if (window.innerWidth > 560) showDefaultFields(true);
+    });
+    dom.fieldForm?.addEventListener("submit", handleCustomFieldSubmit);
+    document.querySelectorAll("[data-secureit-field-cancel]").forEach((button) => button.addEventListener("click", () => dom.fieldDialog.close()));
+    dom.fieldDialog?.addEventListener("close", () => {
+      customFieldForm?.querySelector("[data-secureit-add-field]")?.focus({ preventScroll: true });
+      customFieldForm = null;
+      dom.fieldForm.reset();
+    });
+    window.addEventListener("resize", () => closeFieldMenu());
+    dom.detail?.addEventListener("scroll", () => positionFieldMenu(), true);
     document.querySelector(".secureit-page")?.addEventListener("click", (event) => {
       const button = event.target.closest("[data-secureit-reveal-secret]");
       if (button) setSecretVisibility(button, button.getAttribute("aria-pressed") !== "true");
@@ -126,7 +157,7 @@
     const header = document.querySelector(".site-header");
     if (header) {
       new ResizeObserver(() => {
-        document.querySelector(".secureit-page").style.setProperty("--secureit-header-height", `${header.getBoundingClientRect().height}px`);
+        document.body.style.setProperty("--secureit-header-height", `${header.getBoundingClientRect().height}px`);
       }).observe(header);
     }
     try {
@@ -617,6 +648,7 @@
   function renderDetail() {
     const item = state.items.find((candidate) => candidate.id === state.selectedItemId);
     if (!item) {
+      dom.workspace.classList.toggle("is-editing", false);
       dom.detail.innerHTML = '<div class="secureit-detail-heading"><h2>Item Details</h2></div><div class="secureit-empty-detail"><ph-shield-check weight="duotone" aria-hidden="true"></ph-shield-check><h3>No item selected</h3></div>';
       return;
     }
@@ -626,11 +658,30 @@
   function itemTypeFields(type, payload = {}) {
     const fields = [...(ITEM_TYPES[type]?.fields || [])];
     if (type !== "custom") return fields;
-    const storedFields = payload.fields || {};
-    Object.keys(storedFields).forEach((key) => {
-      if (!fields.some(([fieldKey]) => fieldKey === key)) fields.push([key, labelFromKey(key)]);
+    return fields.concat(customFieldDefinitions(payload).map(({ key, label, kind }) => [key, label, kind]));
+  }
+
+  function customFieldDefinitions(payload = {}) {
+    // Keep populated fields on older Custom items, but never inherit a different type's fields.
+    const definitions = Array.isArray(payload.customFields) ? payload.customFields
+      : payload.type === "custom" ? Object.entries(payload.fields || {})
+        .filter(([key, value]) => key !== "custom_type" && (!DEFAULT_FIELDS.some(([name]) => name === key) || value !== ""))
+        .map(([key]) => ({ key, label: labelFromKey(key), kind: "text" })) : [];
+    const seen = new Set(["custom_type"]);
+    return definitions.filter((field) => {
+      if (!field || typeof field.key !== "string" || !field.key || seen.has(field.key)) return false;
+      seen.add(field.key);
+      return true;
+    }).map((field) => ({ key: field.key, label: String(field.label || labelFromKey(field.key)), kind: field.kind === "multiline" ? "multiline" : "text" }));
+  }
+
+  function captureItemDraft(form) {
+    const draft = itemFieldDrafts.get(form) || { fields: {}, customFields: [] };
+    [...form.elements].forEach((element) => {
+      if (element.name?.startsWith("field:")) draft.fields[element.name.slice(6)] = element.value;
     });
-    return fields;
+    itemFieldDrafts.set(form, draft);
+    return draft;
   }
 
   function labelFromKey(key) {
@@ -641,6 +692,7 @@
     const payload = item?.payload || { type: "login", title: "", fields: {}, notes: "" };
     const type = payload.type || "login";
     state.selectedItemId = item?.id || "";
+    dom.workspace.classList.toggle("is-editing", true);
     dom.detail.innerHTML = `
       <form class="secureit-editor" data-secureit-item-form>
         <input type="hidden" name="item_id" value="${escapeAttr(item?.id || "")}">
@@ -678,6 +730,9 @@
             <span data-secureit-notes-label>${type === "idea" ? "Idea" : "Notes"}</span>
             <textarea name="notes" rows="5">${escapeHtml(payload.notes || "")}</textarea>
           </label>
+          <div class="secureit-add-field" data-secureit-add-field-row${type === "custom" ? "" : " hidden"}>
+            <button class="secondary-action" type="button" data-secureit-add-field aria-haspopup="menu" aria-expanded="false" aria-controls="secureit-add-field-menu"><ph-plus weight="bold" aria-hidden="true"></ph-plus>Add Field<ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down></button>
+          </div>
           <p class="form-status" data-secureit-item-status role="status"></p>
         </div>
         <div class="secureit-editor-actions">
@@ -688,13 +743,12 @@
       </form>
     `;
     const form = dom.detail.querySelector("[data-secureit-item-form]");
-    itemFieldDrafts.set(form, { ...payload.fields });
+    itemFieldDrafts.set(form, { fields: { ...payload.fields }, customFields: customFieldDefinitions(payload) });
   }
 
   function openItemEditor(item = null) {
     renderItemEditor(item);
     renderItems();
-    dom.detail.scrollIntoView({ block: "nearest" });
     dom.detail.querySelector('[name="title"]')?.focus({ preventScroll: true });
   }
 
@@ -705,16 +759,20 @@
   function renderTypeFields(type, payload = {}) {
     const fields = itemTypeFields(type, payload);
     if (!fields.length) return "";
-    return fields.map(([key, label]) => {
+    return fields.map(([key, label, kind]) => {
       const value = payload.fields?.[key] || "";
-      const isSecret = /password|key|token|secret/i.test(key);
-      const canCopy = type === "login" || type === "api_key";
+      const isMultiline = kind === "multiline";
+      const isSecret = !isMultiline && /password|key|token|secret/i.test(key);
+      const canCopy = type === "login" || type === "api_key" || (type === "custom" && key !== "custom_type");
       const hasActions = isSecret || canCopy;
       return `
         <div class="form-field">
-          <label for="secureit-field-${escapeAttr(key)}">${escapeHtml(label)}</label>
+          <div class="secureit-field-label">
+            <label for="secureit-field-${escapeAttr(key)}">${escapeHtml(label)}</label>
+            ${type === "custom" && key !== "custom_type" ? `<button class="icon-button" type="button" data-secureit-remove-field="${escapeAttr(key)}" title="Remove ${escapeAttr(label)}" aria-label="Remove ${escapeAttr(label)}"><ph-minus weight="bold" aria-hidden="true"></ph-minus></button>` : ""}
+          </div>
           ${hasActions ? `<div class="${isSecret ? "secureit-secret-field " : ""}${canCopy ? "secureit-copy-field" : ""}">` : ""}
-            <input id="secureit-field-${escapeAttr(key)}" type="${isSecret ? "password" : "text"}" name="field:${escapeAttr(key)}" autocomplete="off" value="${escapeAttr(value)}">
+            ${isMultiline ? `<textarea id="secureit-field-${escapeAttr(key)}" name="field:${escapeAttr(key)}" rows="4">${escapeHtml(value)}</textarea>` : `<input id="secureit-field-${escapeAttr(key)}" type="${isSecret ? "password" : "text"}" name="field:${escapeAttr(key)}" autocomplete="off" value="${escapeAttr(value)}">`}
             ${isSecret ? '<button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show field" title="Show field" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>' : ""}
             ${canCopy ? `<button class="icon-button" type="button" data-secureit-copy-field="${escapeAttr(label)}" aria-label="Copy ${escapeAttr(label)}" title="Copy ${escapeAttr(label)}"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>` : ""}
           ${hasActions ? "</div>" : ""}
@@ -747,18 +805,29 @@
   function handleDetailChange(event) {
     if (event.target.matches("[data-secureit-item-type]")) {
       const form = event.target.closest("[data-secureit-item-form]");
-      const fields = itemFieldDrafts.get(form) || {};
-      [...form.elements].forEach((element) => {
-        if (element.name?.startsWith("field:")) fields[element.name.slice(6)] = element.value;
-      });
-      itemFieldDrafts.set(form, fields);
-      form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields(event.target.value, { fields });
+      const draft = captureItemDraft(form);
+      form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields(event.target.value, draft);
       form.querySelector("[data-secureit-notes-label]").textContent = event.target.value === "idea" ? "Idea" : "Notes";
+      form.querySelector("[data-secureit-add-field-row]").hidden = event.target.value !== "custom";
       setStatus(form.querySelector("[data-secureit-item-status]"), "");
     }
   }
 
   function handleDetailClick(event) {
+    const addField = event.target.closest("[data-secureit-add-field]");
+    if (addField) {
+      openFieldMenu(addField);
+      return;
+    }
+    const removeField = event.target.closest("[data-secureit-remove-field]");
+    if (removeField) {
+      const form = removeField.closest("[data-secureit-item-form]");
+      const draft = captureItemDraft(form);
+      draft.customFields = draft.customFields.filter((field) => field.key !== removeField.dataset.secureitRemoveField);
+      renderCustomDraft(form);
+      form.querySelector("[data-secureit-add-field]")?.focus({ preventScroll: true });
+      return;
+    }
     const copyField = event.target.closest("[data-secureit-copy-field]");
     if (copyField) {
       copyItemField(copyField);
@@ -783,6 +852,138 @@
     }
   }
 
+  function closeFieldMenu() {
+    if (!dom.fieldMenu?.matches(":popover-open")) return;
+    dom.fieldMenu.hidePopover();
+  }
+
+  function openFieldMenu(button) {
+    if (dom.fieldMenu.matches(":popover-open")) return closeFieldMenu();
+    fieldMenuForm = button.closest("[data-secureit-item-form]");
+    const draft = captureItemDraft(fieldMenuForm);
+    dom.defaultFieldOptions.innerHTML = DEFAULT_FIELDS.map(([key, label]) => {
+      const exists = draft.customFields.some((field) => field.key === key || field.label.toLowerCase() === label.toLowerCase());
+      return `<button type="button" role="menuitem" data-secureit-default-field="${key}"${exists ? ' disabled title="Already added"' : ""}>${label}</button>`;
+    }).join("");
+    showDefaultFields(false);
+    dom.fieldMenu.showPopover();
+    button.setAttribute("aria-expanded", "true");
+    positionFieldMenu();
+    dom.fieldMenu.querySelector("[data-secureit-custom-field-open]").focus({ preventScroll: true });
+  }
+
+  function positionFieldMenu() {
+    if (!dom.fieldMenu?.matches(":popover-open")) return;
+    const button = fieldMenuForm?.querySelector("[data-secureit-add-field]");
+    if (!button) return closeFieldMenu();
+    const anchor = button.getBoundingClientRect();
+    const menu = dom.fieldMenu.getBoundingClientRect();
+    dom.fieldMenu.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - menu.width - 8))}px`;
+    dom.fieldMenu.style.top = `${Math.max(8, anchor.bottom + menu.height + 8 <= window.innerHeight ? anchor.bottom + 4 : anchor.top - menu.height - 4)}px`;
+    if (!dom.defaultFieldsMenu.hidden) showDefaultFields(true);
+  }
+
+  function showDefaultFields(open) {
+    dom.defaultFieldsMenu.hidden = !open;
+    dom.defaultFieldsToggle.setAttribute("aria-expanded", String(open));
+    dom.fieldMenu.classList.toggle("is-submenu-open", open);
+    if (!open) return;
+    if (window.innerWidth <= 560) {
+      const menu = dom.fieldMenu.getBoundingClientRect();
+      dom.fieldMenu.style.top = `${Math.max(8, Math.min(menu.top, window.innerHeight - menu.height - 8))}px`;
+      return;
+    }
+    const anchor = dom.fieldMenu.getBoundingClientRect();
+    const menu = dom.defaultFieldsMenu.getBoundingClientRect();
+    const left = anchor.left >= menu.width + 12 ? anchor.left - menu.width - 4 : anchor.right + 4;
+    dom.defaultFieldsMenu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - menu.width - 8))}px`;
+    dom.defaultFieldsMenu.style.top = `${Math.max(8, Math.min(anchor.top, window.innerHeight - menu.height - 8))}px`;
+  }
+
+  function handleFieldMenuClick(event) {
+    if (event.target.closest("[data-secureit-default-fields-toggle]")) {
+      showDefaultFields(true);
+      dom.defaultFieldsMenu.querySelector("[data-secureit-default-field]:not(:disabled)")?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.target.closest("[data-secureit-default-fields-back]")) {
+      showDefaultFields(false);
+      dom.defaultFieldsToggle.focus({ preventScroll: true });
+      return;
+    }
+    if (event.target.closest("[data-secureit-custom-field-open]")) {
+      customFieldForm = fieldMenuForm;
+      closeFieldMenu();
+      dom.fieldForm.reset();
+      setStatus(dom.fieldStatus, "");
+      dom.fieldDialog.showModal();
+      return;
+    }
+    const button = event.target.closest("[data-secureit-default-field]");
+    if (!button || button.disabled) return;
+    const field = DEFAULT_FIELDS.find(([key]) => key === button.dataset.secureitDefaultField);
+    if (field) addCustomField(fieldMenuForm, { key: field[0], label: field[1], kind: "text" });
+    closeFieldMenu();
+  }
+
+  function handleFieldMenuKeydown(event) {
+    const button = event.target.closest('[role="menuitem"]');
+    if (!button) return;
+    const inSubmenu = dom.defaultFieldsMenu.contains(button);
+    if (event.key === "ArrowRight" && button === dom.defaultFieldsToggle) {
+      event.preventDefault();
+      showDefaultFields(true);
+      dom.defaultFieldsMenu.querySelector("[data-secureit-default-field]:not(:disabled)")?.focus({ preventScroll: true });
+    } else if ((event.key === "ArrowLeft" || event.key === "Escape") && inSubmenu) {
+      event.preventDefault();
+      event.stopPropagation();
+      showDefaultFields(false);
+      dom.defaultFieldsToggle.focus({ preventScroll: true });
+    } else if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      const menu = button.closest('[role="menu"]');
+      const buttons = [...menu.querySelectorAll('[role="menuitem"]')].filter((item) => item.closest('[role="menu"]') === menu && !item.disabled && item.getClientRects().length);
+      const current = buttons.indexOf(button);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length;
+      buttons[next]?.focus({ preventScroll: true });
+    }
+  }
+
+  function renderCustomDraft(form) {
+    const draft = itemFieldDrafts.get(form);
+    form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields("custom", draft);
+    setStatus(form.querySelector("[data-secureit-item-status]"), "");
+  }
+
+  function addCustomField(form, field) {
+    if (!form?.isConnected || form.elements.type.value !== "custom") return;
+    const draft = captureItemDraft(form);
+    if (draft.customFields.some((existing) => existing.key === field.key)) return;
+    draft.customFields.push(field);
+    renderCustomDraft(form);
+    const input = form.elements.namedItem(`field:${field.key}`);
+    input.focus({ preventScroll: true });
+    const scroller = form.querySelector(".secureit-editor-fields");
+    const overflow = input.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
+    if (overflow > 0) scroller.scrollTop += overflow + 12;
+  }
+
+  function handleCustomFieldSubmit(event) {
+    event.preventDefault();
+    if (!customFieldForm?.isConnected) return dom.fieldDialog.close();
+    const label = dom.fieldForm.elements.field_name.value.trim();
+    if (!label) return setStatus(dom.fieldStatus, "Enter a field name.", "error");
+    const draft = captureItemDraft(customFieldForm);
+    if (label.toLowerCase() === "custom type" || draft.customFields.some((field) => field.label.toLowerCase() === label.toLowerCase())) {
+      return setStatus(dom.fieldStatus, "A field with that name already exists.", "error");
+    }
+    const form = customFieldForm;
+    customFieldForm = null;
+    const kind = dom.fieldForm.elements.field_kind.value === "multiline" ? "multiline" : "text";
+    dom.fieldDialog.close();
+    addCustomField(form, { key: `custom_${crypto.randomUUID()}`, label, kind });
+  }
+
   async function handleItemSubmit(event) {
     event.preventDefault();
     const form = event.target.closest("[data-secureit-item-form]");
@@ -799,6 +1000,7 @@
       fields,
       notes: form.elements.notes.value,
     };
+    if (payload.type === "custom") payload.customFields = captureItemDraft(form).customFields;
     if (!payload.title) return setStatus(status, "Enter a title.", "error");
     setStatus(status, "Encrypting and saving...");
     try {
@@ -858,7 +1060,7 @@
   }
 
   async function copyItemField(button) {
-    const input = button.closest(".secureit-copy-field")?.querySelector("input");
+    const input = button.closest(".secureit-copy-field")?.querySelector("input, textarea");
     if (!input) return;
     const label = button.dataset.secureitCopyField;
     const status = button.closest("[data-secureit-item-form]")?.querySelector("[data-secureit-item-status]");

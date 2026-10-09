@@ -62,7 +62,8 @@ function harness({ clipboard } = {}) {
   vm.runInContext(source.replace(/\}\)\(\);\s*$/, `
     globalThis.api = { state, dom, handleUnlock, handleItemSubmit, lockVault,
       importAesKey, wrapVaultKey, encryptJson, decryptJson, setSecretVisibility,
-      itemTypeFields, renderTypeFields, handleDetailChange, copyItemField };
+      itemTypeFields, renderTypeFields, handleDetailChange, copyItemField,
+      customFieldDefinitions, itemFieldDrafts };
   })();`), context);
   const api = context.api;
   for (const key of ["workspace", "locked", "unlockedActions", "recoveryReveal", "setup", "unlock", "recovery", "unlockStatus", "collections", "items", "detail", "status", "listTitle"]) {
@@ -192,7 +193,7 @@ test("built-in types show only their own fields, including all six Login fields"
   assert.deepEqual(keys("api_key"), ["service", "key", "environment"]);
   assert.deepEqual(keys("secure_note"), []);
   assert.deepEqual(keys("idea"), ["topic"]);
-  assert.ok(keys("custom").includes("service"));
+  assert.deepEqual(keys("custom"), ["custom_type"]);
   assert.equal(api.renderTypeFields("secure_note", payload), "");
   assert.doesNotMatch(api.renderTypeFields("idea", payload), /name="field:(service|key|environment)"/);
   assert.equal((api.renderTypeFields("login", payload).match(/data-secureit-copy-field=/g) || []).length, 6);
@@ -259,4 +260,42 @@ test("clipboard failures report an error and leave the copy button available", a
   assert.match(status.textContent, /Could not copy password/);
   assert.equal(button.disabled, false);
   assert.doesNotMatch(button.innerHTML, /ph-check/);
+});
+
+test("Custom fields are explicit while older populated Custom fields remain available", () => {
+  const { api } = harness();
+  const legacy = { type: "custom", fields: { custom_type: "Bucket", website: "", key: "saved-key", location: "Example" } };
+  assert.deepEqual(Array.from(api.customFieldDefinitions(legacy), (field) => field.key), ["key", "location"]);
+  assert.equal(api.customFieldDefinitions({ ...legacy, customFields: [] }).length, 0);
+  assert.equal(api.customFieldDefinitions({ ...legacy, type: "login" }).length, 0);
+  const definition = { key: "custom_instructions", label: 'Instructions & "notes"', kind: "multiline" };
+  const html = api.renderTypeFields("custom", { customFields: [definition], fields: { custom_instructions: "line 1\n<line 2>" } });
+  assert.match(html, /<textarea[^>]*name="field:custom_instructions"/);
+  assert.match(html, /line 1\n&lt;line 2&gt;/);
+  assert.match(html, /data-secureit-remove-field="custom_instructions"/);
+  assert.doesNotMatch(html, /name="field:(website|username|password|service|key|environment)"/);
+});
+
+test("custom field names, kinds, and values are encrypted together when saved", async () => {
+  const h = harness();
+  await seedVault(h);
+  await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
+  const customFields = [
+    { key: "custom_bucket", label: "Bucket Name", kind: "text" },
+    { key: "custom_details", label: "Details", kind: "multiline" },
+    { key: "key", label: "Key", kind: "text" },
+  ];
+  const values = { item_id: "", type: "custom", title: "Storage", collection_id: "collection-1", notes: "", "field:custom_type": "iDrive Bucket", "field:custom_bucket": "private-bucket", "field:custom_details": "First line\nSecond line", "field:key": "private-key" };
+  const elements = Object.entries(values).map(([name, value]) => ({ name, value }));
+  elements.forEach((element) => { elements[element.name] = element; });
+  const form = { elements, querySelector: () => node(), closest() { return form; } };
+  h.api.itemFieldDrafts.set(form, { fields: {}, customFields });
+  await h.api.handleItemSubmit({ target: form, currentTarget: h.api.dom.detail, preventDefault() {} });
+  const stored = h.tables.secureit_items[0];
+  assert.equal(JSON.stringify(stored).includes("private-bucket"), false);
+  assert.equal(JSON.stringify(stored).includes("Bucket Name"), false);
+  const decrypted = await h.api.decryptJson(stored.encrypted_payload);
+  assert.equal(JSON.stringify(decrypted.customFields), JSON.stringify(customFields));
+  assert.equal(decrypted.fields.custom_details, "First line\nSecond line");
+  assert.equal(decrypted.fields.key, "private-key");
 });

@@ -6,7 +6,7 @@
   <title>SecureIt | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=secureit-fields-3">
+  <link rel="stylesheet" href="styles.css?v=secureit-custom-fields-4">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -200,9 +200,46 @@
     </section>
   </div>
 
+  <div class="secureit-field-menu" id="secureit-add-field-menu" popover="auto" role="menu" aria-label="Add Field">
+    <div data-secureit-field-menu-main>
+      <button type="button" role="menuitem" data-secureit-custom-field-open><ph-textbox weight="bold" aria-hidden="true"></ph-textbox>Custom Field</button>
+      <button type="button" role="menuitem" data-secureit-default-fields-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="secureit-default-fields-menu"><ph-list-plus weight="bold" aria-hidden="true"></ph-list-plus>Default Fields<ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right></button>
+    </div>
+    <div class="secureit-default-fields-menu" id="secureit-default-fields-menu" role="menu" aria-label="Default Fields" hidden>
+      <button class="secureit-field-menu-back" type="button" role="menuitem" data-secureit-default-fields-back><ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>Default Fields</button>
+      <div data-secureit-default-field-options></div>
+    </div>
+  </div>
+
+  <dialog class="modal-dialog secureit-small-dialog secureit-field-dialog" id="secureit-field-dialog" aria-labelledby="secureit-field-dialog-title">
+    <div class="modal-header">
+      <div>
+        <p class="settings-eyebrow">SecureIt</p>
+        <h2 id="secureit-field-dialog-title">Custom Field</h2>
+      </div>
+      <button class="icon-button" type="button" data-secureit-field-cancel title="Close" aria-label="Close"><ph-x weight="bold" aria-hidden="true"></ph-x></button>
+    </div>
+    <form class="secureit-modal-form" data-secureit-field-form>
+      <label class="form-field">
+        <span>Field Name</span>
+        <input type="text" name="field_name" maxlength="80" required autocomplete="off" autofocus>
+      </label>
+      <fieldset class="secureit-field-kind">
+        <legend>Field Type</legend>
+        <label><input type="radio" name="field_kind" value="text" checked><span>Single Line Textbox</span></label>
+        <label><input type="radio" name="field_kind" value="multiline"><span>Multiline Textbox</span></label>
+      </fieldset>
+      <p class="form-status" data-secureit-field-status role="status"></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-secureit-field-cancel>Cancel</button>
+        <button class="primary-action" type="submit">Create Field</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=secureit-1"></script>
-  <script src="secureit.js?v=secureit-fields-3"></script>
+  <script src="secureit.js?v=secureit-custom-fields-4"></script>
 </body>
 </html>

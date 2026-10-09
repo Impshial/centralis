@@ -31979,7 +31979,17 @@ body[data-page="home"] .home-glance-item:hover {
 }
 /* SecureIt */
 body[data-page="secureit"] {
+  height: 100dvh;
+  overflow: hidden;
   background: var(--page);
+}
+
+body[data-page="secureit"] .app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: var(--secureit-header-height, var(--header-height, 76px));
+  overflow: hidden;
 }
 
 .secureit-page {
@@ -31987,10 +31997,11 @@ body[data-page="secureit"] {
   display: flex;
   flex-direction: column;
   width: min(1500px, calc(100% - 32px));
-  height: calc(100dvh - var(--secureit-header-offset));
-  min-height: 560px;
-  margin: var(--secureit-header-offset) auto 0;
+  flex: 1;
+  min-height: 0;
+  margin: 0 auto;
   padding: 24px 0;
+  overflow: hidden;
   color: var(--ink);
 }
 
@@ -32033,9 +32044,11 @@ body[data-page="secureit"] {
 .secureit-locked,
 .secureit-recovery-reveal {
   flex: 1;
+  min-height: 0;
   display: grid;
-  place-items: center;
+  place-items: safe center;
   padding: 24px 0;
+  overflow-y: auto;
 }
 
 .secureit-lock-card {
@@ -32103,9 +32116,11 @@ body[data-page="secureit"] {
   flex: 1;
   display: grid;
   grid-template-columns: 230px minmax(300px, 1fr) minmax(340px, 440px);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   border-block: 1px solid var(--line);
   background: var(--surface);
+  overflow: hidden;
 }
 
 .secureit-sidebar,
@@ -32340,7 +32355,7 @@ body[data-page="secureit"] {
 }
 
 .secureit-detail {
-  overflow: auto;
+  overflow: hidden;
   scroll-margin-top: calc(var(--secureit-header-offset) + 16px);
 }
 
@@ -32396,6 +32411,12 @@ body[data-page="secureit"] {
   overflow-y: auto;
 }
 
+.secureit-editor-fields,
+.secureit-item-list,
+.secureit-sidebar {
+  overscroll-behavior: contain;
+}
+
 .secureit-editor header h2 {
   margin: 0;
   font-size: 1.125rem;
@@ -32439,7 +32460,7 @@ body[data-page="secureit"] {
   background: var(--field);
 }
 
-.secureit-page :is(.secureit-secret-field, .secureit-copy-field) input {
+.secureit-page :is(.secureit-secret-field, .secureit-copy-field) :is(input, textarea) {
   flex: 1;
   border: 0;
   border-radius: 0;
@@ -32551,43 +32572,165 @@ body[data-page="secureit"] {
   margin-right: auto;
 }
 
-@media (max-width: 1120px) {
-  .secureit-page {
-    height: auto;
-    min-height: calc(100dvh - var(--secureit-header-offset));
-  }
+.secureit-field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
 
+.secureit-field-label label {
+  overflow-wrap: anywhere;
+}
+
+.secureit-page .secureit-field-label .icon-button {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  font-size: 0.9rem;
+}
+
+.secureit-add-field > button {
+  width: 100%;
+}
+
+.secureit-add-field > button > ph-caret-down {
+  margin-left: auto;
+}
+
+.secureit-field-menu,
+.secureit-default-fields-menu {
+  position: fixed;
+  width: 210px;
+  max-width: calc(100vw - 16px);
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--menu-shadow);
+  overflow: visible;
+}
+
+.secureit-field-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.secureit-field-menu button:hover:not(:disabled),
+.secureit-field-menu button:focus-visible {
+  border-color: var(--accent);
+  background: var(--hover-bg);
+  outline: none;
+}
+
+.secureit-field-menu button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.secureit-field-menu button > ph-caret-right {
+  margin-left: auto;
+}
+
+.secureit-field-menu .secureit-field-menu-back {
+  display: none;
+}
+
+.secureit-field-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-height: calc(100dvh - 32px);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.secureit-field-dialog:not([open]) {
+  display: none;
+}
+
+.secureit-field-dialog::backdrop {
+  background: rgb(0 0 0 / 60%);
+}
+
+.secureit-field-kind {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.secureit-field-kind legend {
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+  font-weight: 720;
+}
+
+.secureit-field-kind label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.secureit-field-kind label:hover,
+.secureit-field-kind label:focus-within,
+.secureit-field-kind label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--hover-bg);
+}
+
+.secureit-field-kind input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 1120px) {
   .secureit-workspace {
     grid-template-columns: 210px minmax(0, 1fr);
   }
 
   .secureit-main {
-    min-height: 340px;
     border-right: 0;
   }
 
-  .secureit-item-list {
-    max-height: 400px;
-  }
-
   .secureit-detail {
-    grid-column: 1 / -1;
-    border-top: 1px solid var(--line);
+    display: none;
   }
 
-  .secureit-empty-detail {
-    min-height: 200px;
+  .secureit-workspace.is-editing .secureit-main {
+    display: none;
   }
 
-  .secureit-editor {
-    height: auto;
-    grid-template-rows: auto auto auto;
-    max-width: 680px;
-    margin: 0 auto;
-  }
-
-  .secureit-editor-fields {
-    overflow: visible;
+  .secureit-workspace.is-editing .secureit-detail {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 
@@ -32612,17 +32755,37 @@ body[data-page="secureit"] {
 
   .secureit-workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, auto) minmax(0, 1fr);
   }
 
   .secureit-sidebar {
+    display: flex;
+    flex-direction: column;
+    max-height: 180px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .secureit-collection-list {
-    max-height: 180px;
+    min-height: 0;
     overflow-y: auto;
     padding: 2px;
+  }
+
+  .secureit-sidebar-header {
+    flex: 0 0 auto;
+  }
+
+  .secureit-workspace.is-editing {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .secureit-workspace.is-editing .secureit-sidebar {
+    display: none;
+  }
+
+  .secureit-workspace.is-editing .secureit-detail {
+    grid-column: 1;
   }
 
   .secureit-main,
@@ -32642,5 +32805,24 @@ body[data-page="secureit"] {
 
   .secureit-small-dialog .modal-actions {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .secureit-default-fields-menu {
+    position: static;
+    width: auto;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .secureit-field-menu.is-submenu-open [data-secureit-field-menu-main] {
+    display: none;
+  }
+
+  .secureit-field-menu .secureit-field-menu-back {
+    display: flex;
+    border-bottom: 1px solid var(--line);
   }
 }
