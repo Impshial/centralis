@@ -6,7 +6,7 @@
   <title>SecureIt | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=secureit-1">
+  <link rel="stylesheet" href="styles.css?v=secureit-fields-3">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -19,7 +19,6 @@
         <div>
           <p class="settings-eyebrow">Utilities</p>
           <h1 id="secureit-title">SecureIt</h1>
-          <p>Encrypted collections for keys, logins, private notes, and ideas.</p>
         </div>
         <div class="secureit-hero-actions" data-secureit-unlocked-actions hidden>
           <button class="secondary-action" type="button" data-secureit-lock>
@@ -39,14 +38,20 @@
           <h2>Create your SecureIt vault</h2>
           <p>Your passphrase encrypts SecureIt in this browser before anything is saved. Centralis cannot read or recover your items without your passphrase or recovery key.</p>
           <form data-secureit-setup-form>
-            <label class="form-field">
-              <span>Passphrase</span>
-              <input type="password" name="passphrase" autocomplete="new-password" minlength="10" required>
-            </label>
-            <label class="form-field">
-              <span>Confirm Passphrase</span>
-              <input type="password" name="confirm" autocomplete="new-password" minlength="10" required>
-            </label>
+            <div class="form-field">
+              <label for="secureit-setup-passphrase">Passphrase</label>
+              <div class="secureit-secret-field">
+                <input id="secureit-setup-passphrase" type="password" name="passphrase" autocomplete="new-password" minlength="10" required>
+                <button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show passphrase" title="Show passphrase" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="secureit-setup-confirm">Confirm Passphrase</label>
+              <div class="secureit-secret-field">
+                <input id="secureit-setup-confirm" type="password" name="confirm" autocomplete="new-password" minlength="10" required>
+                <button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show passphrase" title="Show passphrase" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>
+              </div>
+            </div>
             <p class="form-status" data-secureit-setup-status role="status"></p>
             <button class="primary-action" type="submit">Create Vault</button>
           </form>
@@ -55,15 +60,18 @@
         <article class="secureit-lock-card" data-secureit-unlock hidden>
           <div class="secureit-lock-icon" aria-hidden="true"><ph-lock-key weight="duotone"></ph-lock-key></div>
           <h2>Unlock SecureIt</h2>
-          <p>Enter your SecureIt passphrase. You only need this when opening SecureIt after a page load.</p>
+          <p>Enter your passphrase to unlock your vault.</p>
           <form data-secureit-unlock-form>
-            <label class="form-field">
-              <span>Passphrase</span>
-              <input type="password" name="passphrase" autocomplete="current-password" required>
-            </label>
+            <div class="form-field">
+              <label for="secureit-unlock-passphrase">Passphrase</label>
+              <div class="secureit-secret-field">
+                <input id="secureit-unlock-passphrase" type="password" name="passphrase" autocomplete="current-password" required>
+                <button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show passphrase" title="Show passphrase" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>
+              </div>
+            </div>
             <p class="form-status" data-secureit-unlock-status role="status"></p>
             <div class="secureit-lock-actions">
-              <button class="primary-action" type="submit">Unlock</button>
+              <button class="primary-action" type="submit"><ph-lock-key-open weight="bold" aria-hidden="true"></ph-lock-key-open>Unlock</button>
               <button class="secondary-action" type="button" data-secureit-recovery-open>Use Recovery Key</button>
             </div>
           </form>
@@ -78,14 +86,20 @@
               <span>Recovery Key</span>
               <textarea name="recovery" rows="3" autocomplete="off" required></textarea>
             </label>
-            <label class="form-field">
-              <span>New Passphrase</span>
-              <input type="password" name="passphrase" autocomplete="new-password" minlength="10" required>
-            </label>
-            <label class="form-field">
-              <span>Confirm New Passphrase</span>
-              <input type="password" name="confirm" autocomplete="new-password" minlength="10" required>
-            </label>
+            <div class="form-field">
+              <label for="secureit-recovery-passphrase">New Passphrase</label>
+              <div class="secureit-secret-field">
+                <input id="secureit-recovery-passphrase" type="password" name="passphrase" autocomplete="new-password" minlength="10" required>
+                <button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show passphrase" title="Show passphrase" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="secureit-recovery-confirm">Confirm New Passphrase</label>
+              <div class="secureit-secret-field">
+                <input id="secureit-recovery-confirm" type="password" name="confirm" autocomplete="new-password" minlength="10" required>
+                <button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show passphrase" title="Show passphrase" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>
+              </div>
+            </div>
             <p class="form-status" data-secureit-recovery-status role="status"></p>
             <div class="secureit-lock-actions">
               <button class="primary-action" type="submit">Reset and Unlock</button>
@@ -100,7 +114,13 @@
           <div class="secureit-lock-icon" aria-hidden="true"><ph-key weight="duotone"></ph-key></div>
           <h2>Save this recovery key</h2>
           <p>This is the only way to reset your SecureIt passphrase if you forget it. Store it somewhere outside Centralis.</p>
-          <pre data-secureit-recovery-key></pre>
+          <div class="secureit-recovery-key-row">
+            <pre data-secureit-recovery-key></pre>
+            <button class="icon-button secureit-recovery-copy" type="button" data-secureit-copy-recovery-key title="Copy recovery key" aria-label="Copy recovery key">
+              <ph-copy weight="bold" aria-hidden="true"></ph-copy>
+            </button>
+          </div>
+          <p class="form-status" data-secureit-recovery-copy-status role="status"></p>
           <button class="primary-action" type="button" data-secureit-recovery-saved>I Saved My Recovery Key</button>
         </article>
       </section>
@@ -117,10 +137,15 @@
         </aside>
 
         <section class="secureit-main" aria-label="SecureIt items">
+          <div class="secureit-list-header">
+            <h2 data-secureit-list-title>All Items</h2>
+            <p class="secureit-status" data-secureit-status role="status"></p>
+          </div>
           <div class="secureit-toolbar">
             <label class="secureit-search">
               <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
-              <input type="search" placeholder="Search unlocked items..." data-secureit-search autocomplete="off">
+              <span class="sr-only">Search unlocked items</span>
+              <input type="search" placeholder="Search items..." data-secureit-search autocomplete="off">
             </label>
             <select data-secureit-type-filter aria-label="Filter by type">
               <option value="">All types</option>
@@ -131,12 +156,12 @@
               <option value="custom">Custom</option>
             </select>
           </div>
-          <p class="secureit-status" data-secureit-status role="status"></p>
           <div class="secureit-item-list" data-secureit-items></div>
         </section>
 
         <aside class="secureit-detail" data-secureit-detail aria-label="SecureIt item details">
-          <p class="secureit-empty-detail">Select an item or create a new one.</p>
+          <div class="secureit-detail-heading"><h2>Item Details</h2></div>
+          <div class="secureit-empty-detail"><ph-shield-check weight="duotone" aria-hidden="true"></ph-shield-check><h3>No item selected</h3></div>
         </aside>
       </section>
     </main>
@@ -149,7 +174,7 @@
           <p class="settings-eyebrow">SecureIt</p>
           <h2 id="secureit-collection-title" data-secureit-collection-title>New Collection</h2>
         </div>
-        <button class="modal-close" type="button" data-secureit-collection-close aria-label="Close">&times;</button>
+        <button class="modal-close icon-button" type="button" data-secureit-collection-close aria-label="Close" title="Close"><ph-x weight="bold" aria-hidden="true"></ph-x></button>
       </div>
       <form class="secureit-modal-form" data-secureit-collection-form>
         <input type="hidden" name="collection_id">
@@ -168,7 +193,6 @@
         <p class="form-status" data-secureit-collection-status role="status"></p>
         <div class="modal-actions">
           <button class="danger-action" type="button" data-secureit-delete-collection hidden>Delete</button>
-          <span></span>
           <button class="secondary-action" type="button" data-secureit-collection-close>Cancel</button>
           <button class="primary-action" type="submit">Save Collection</button>
         </div>
@@ -179,6 +203,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=secureit-1"></script>
-  <script src="secureit.js?v=secureit-1"></script>
+  <script src="secureit.js?v=secureit-fields-3"></script>
 </body>
 </html>

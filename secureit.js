@@ -12,7 +12,7 @@
     login: {
       label: "Login",
       icon: "ph-identification-card",
-      fields: [["website", "Website"], ["username", "Username"], ["password", "Password"]],
+      fields: [["website", "Website"], ["username", "Username"], ["password", "Password"], ["service", "Service"], ["key", "Key"], ["environment", "Environment"]],
     },
     api_key: {
       label: "API Key",
@@ -53,6 +53,7 @@
   };
 
   const dom = {};
+  const itemFieldDrafts = new WeakMap();
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -69,12 +70,14 @@
     dom.recoveryStatus = document.querySelector("[data-secureit-recovery-status]");
     dom.recoveryReveal = document.querySelector("[data-secureit-recovery-reveal]");
     dom.recoveryKey = document.querySelector("[data-secureit-recovery-key]");
+    dom.recoveryCopyStatus = document.querySelector("[data-secureit-recovery-copy-status]");
     dom.workspace = document.querySelector("[data-secureit-workspace]");
     dom.unlockedActions = document.querySelector("[data-secureit-unlocked-actions]");
     dom.collections = document.querySelector("[data-secureit-collections]");
     dom.items = document.querySelector("[data-secureit-items]");
     dom.detail = document.querySelector("[data-secureit-detail]");
     dom.status = document.querySelector("[data-secureit-status]");
+    dom.listTitle = document.querySelector("[data-secureit-list-title]");
     dom.search = document.querySelector("[data-secureit-search]");
     dom.typeFilter = document.querySelector("[data-secureit-type-filter]");
     dom.collectionModal = document.getElementById("secureit-collection-modal");
@@ -90,9 +93,10 @@
     dom.recoveryForm?.addEventListener("submit", handleRecovery);
     document.querySelector("[data-secureit-recovery-open]")?.addEventListener("click", showRecovery);
     document.querySelector("[data-secureit-recovery-cancel]")?.addEventListener("click", showUnlock);
+    document.querySelector("[data-secureit-copy-recovery-key]")?.addEventListener("click", copyRecoveryKey);
     document.querySelector("[data-secureit-recovery-saved]")?.addEventListener("click", finishRecoveryReveal);
     document.querySelector("[data-secureit-lock]")?.addEventListener("click", lockVault);
-    document.querySelector("[data-secureit-new-item]")?.addEventListener("click", () => renderItemEditor());
+    document.querySelector("[data-secureit-new-item]")?.addEventListener("click", () => openItemEditor());
     document.querySelector("[data-secureit-new-collection]")?.addEventListener("click", () => openCollectionModal());
     document.querySelectorAll("[data-secureit-collection-close]").forEach((button) => button.addEventListener("click", closeCollectionModal));
     dom.collectionForm?.addEventListener("submit", handleCollectionSubmit);
@@ -102,6 +106,10 @@
     dom.detail?.addEventListener("submit", handleItemSubmit);
     dom.detail?.addEventListener("click", handleDetailClick);
     dom.detail?.addEventListener("change", handleDetailChange);
+    document.querySelector(".secureit-page")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-secureit-reveal-secret]");
+      if (button) setSecretVisibility(button, button.getAttribute("aria-pressed") !== "true");
+    });
     dom.search?.addEventListener("input", () => {
       state.search = dom.search.value.trim().toLowerCase();
       renderItems();
@@ -115,6 +123,12 @@
   async function init() {
     bindDom();
     bindEvents();
+    const header = document.querySelector(".site-header");
+    if (header) {
+      new ResizeObserver(() => {
+        document.querySelector(".secureit-page").style.setProperty("--secureit-header-height", `${header.getBoundingClientRect().height}px`);
+      }).observe(header);
+    }
     try {
       await waitForAuth();
       state.user = await window.centralisGetCurrentAppUser();
@@ -149,6 +163,24 @@
     return error?.message || error?.details || error?.hint || String(error || "Unknown error");
   }
 
+  function setSecretVisibility(button, visible) {
+    const input = button.closest(".secureit-secret-field")?.querySelector("input");
+    if (!input) return;
+    input.type = visible ? "text" : "password";
+    const label = `${visible ? "Hide" : "Show"} ${/^(passphrase|confirm)$/.test(input.name) ? "passphrase" : "field"}`;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+    button.setAttribute("aria-pressed", String(visible));
+    button.innerHTML = visible
+      ? '<ph-eye-slash weight="bold" aria-hidden="true"></ph-eye-slash>'
+      : '<ph-eye weight="bold" aria-hidden="true"></ph-eye>';
+  }
+
+  function resetSecretForm(form) {
+    form.reset();
+    form.querySelectorAll("[data-secureit-reveal-secret]").forEach((button) => setSecretVisibility(button, false));
+  }
+
   function escapeHtml(value) {
     const div = document.createElement("div");
     div.textContent = String(value ?? "");
@@ -156,7 +188,7 @@
   }
 
   function escapeAttr(value) {
-    return escapeHtml(value).replaceAll("`", "&#096;");
+    return escapeHtml(value).replaceAll('"', "&quot;").replaceAll("`", "&#096;");
   }
 
   function bytesToBase64(bytes) {
@@ -317,7 +349,7 @@
       state.unlocked = true;
       await createDefaultCollection();
       await loadEncryptedData();
-      form.reset();
+      resetSecretForm(form);
       showRecoveryKey();
     } catch (error) {
       setStatus(dom.setupStatus, readableError(error), "error");
@@ -329,19 +361,34 @@
   async function handleUnlock(event) {
     event.preventDefault();
     if (state.busy || !state.vault) return;
-    const passphrase = event.currentTarget.elements.passphrase.value;
+    // currentTarget is cleared once the submit listener yields to async work.
+    const form = event.currentTarget;
+    const passphrase = form.elements.passphrase.value;
+    const submit = form.querySelector('[type="submit"]');
+    let decrypted = false;
     state.busy = true;
+    submit.disabled = true;
     setStatus(dom.unlockStatus, "Unlocking...");
     try {
       state.vaultKey = await unwrapVaultKey(state.vault.wrapped_key, passphrase, state.vault.salt, state.vault.kdf_iterations);
-      state.unlocked = true;
+      decrypted = true;
       await loadEncryptedData();
-      event.currentTarget.reset();
+      state.unlocked = true;
+      resetSecretForm(form);
+      setStatus(dom.unlockStatus, "");
       showWorkspace();
-    } catch {
-      setStatus(dom.unlockStatus, "That passphrase could not unlock this vault.", "error");
+    } catch (error) {
+      state.vaultKey = null;
+      state.unlocked = false;
+      state.collections = [];
+      state.items = [];
+      const message = !decrypted && error?.name === "OperationError"
+        ? "That passphrase could not unlock this vault."
+        : `Could not load your vault: ${readableError(error)}`;
+      setStatus(dom.unlockStatus, message, "error");
     } finally {
       state.busy = false;
+      submit.disabled = false;
     }
   }
 
@@ -372,7 +419,7 @@
       state.vault = data;
       state.unlocked = true;
       await loadEncryptedData();
-      form.reset();
+      resetSecretForm(form);
       showWorkspace();
     } catch {
       setStatus(dom.recoveryStatus, "That recovery key could not reset this vault.", "error");
@@ -386,12 +433,25 @@
     dom.recoveryReveal.hidden = false;
     dom.workspace.hidden = true;
     dom.unlockedActions.hidden = true;
+    setStatus(dom.recoveryCopyStatus, "");
     dom.recoveryKey.textContent = state.recoveryKey;
+  }
+
+  async function copyRecoveryKey() {
+    if (!state.recoveryKey) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable.");
+      await navigator.clipboard.writeText(state.recoveryKey);
+      setStatus(dom.recoveryCopyStatus, "Recovery key copied.", "success");
+    } catch {
+      setStatus(dom.recoveryCopyStatus, "Copy failed. Select the key and copy it manually.", "error");
+    }
   }
 
   function finishRecoveryReveal() {
     state.recoveryKey = "";
     dom.recoveryKey.textContent = "";
+    setStatus(dom.recoveryCopyStatus, "");
     showWorkspace();
   }
 
@@ -410,6 +470,11 @@
     state.selectedCollectionId = "all";
     state.selectedItemId = "";
     state.unlocked = false;
+    dom.collections.replaceChildren();
+    dom.items.replaceChildren();
+    dom.detail.replaceChildren();
+    resetSecretForm(dom.unlockForm);
+    setStatus(dom.unlockStatus, "");
     renderLockState();
   }
 
@@ -468,20 +533,20 @@
   function renderCollections() {
     const allCount = state.items.length;
     dom.collections.innerHTML = `
-      <button class="secureit-collection ${state.selectedCollectionId === "all" ? "is-active" : ""}" type="button" data-secureit-collection-id="all">
-        <span class="secureit-collection-dot" style="--secureit-color:#94a3b8"></span>
-        <span><strong>All Items</strong><em>${allCount} stored</em></span>
+      <button class="secureit-collection ${state.selectedCollectionId === "all" ? "is-active" : ""}" type="button" data-secureit-collection-id="all" aria-pressed="${state.selectedCollectionId === "all"}">
+        <ph-squares-four class="secureit-collection-icon" weight="duotone" aria-hidden="true"></ph-squares-four>
+        <strong>All Items</strong><span class="secureit-collection-count">${allCount}</span>
       </button>
       ${state.collections.map((collection) => {
         const count = state.items.filter((item) => item.collection_id === collection.id).length;
         const color = collection.payload?.color || "#38bdf8";
         return `
           <div class="secureit-collection-row">
-            <button class="secureit-collection ${state.selectedCollectionId === collection.id ? "is-active" : ""}" type="button" data-secureit-collection-id="${escapeAttr(collection.id)}">
-              <span class="secureit-collection-dot" style="--secureit-color:${escapeAttr(color)}"></span>
-              <span><strong>${escapeHtml(collectionName(collection))}</strong><em>${count} ${count === 1 ? "item" : "items"}</em></span>
+            <button class="secureit-collection ${state.selectedCollectionId === collection.id ? "is-active" : ""}" type="button" data-secureit-collection-id="${escapeAttr(collection.id)}" aria-pressed="${state.selectedCollectionId === collection.id}" title="${escapeAttr(collectionName(collection))}">
+              <ph-folder class="secureit-collection-icon" weight="duotone" aria-hidden="true" style="--secureit-color:${escapeAttr(color)}"></ph-folder>
+              <strong>${escapeHtml(collectionName(collection))}</strong><span class="secureit-collection-count">${count}</span>
             </button>
-            <button class="icon-button" type="button" data-secureit-edit-collection="${escapeAttr(collection.id)}" aria-label="Edit ${escapeAttr(collectionName(collection))}">
+            <button class="icon-button" type="button" data-secureit-edit-collection="${escapeAttr(collection.id)}" aria-label="Edit ${escapeAttr(collectionName(collection))}" title="Edit collection">
               <ph-pencil-simple weight="bold" aria-hidden="true"></ph-pencil-simple>
             </button>
           </div>
@@ -511,23 +576,34 @@
 
   function renderItems() {
     const items = visibleItems();
-    setStatus(dom.status, `${items.length} ${items.length === 1 ? "item" : "items"} unlocked.`);
+    dom.listTitle.textContent = state.selectedCollectionId === "all"
+      ? "All Items"
+      : collectionName(state.collections.find((collection) => collection.id === state.selectedCollectionId));
+    setStatus(dom.status, `${items.length} ${items.length === 1 ? "item" : "items"}`);
     if (!items.length) {
+      const filtered = Boolean(state.search || state.typeFilter);
       dom.items.innerHTML = `
         <div class="secureit-empty">
-          <h2>No matching items</h2>
-          <p>Create a SecureIt item or adjust the current filters.</p>
-          <button class="primary-action" type="button" data-secureit-empty-new><ph-plus weight="bold"></ph-plus><span>New Item</span></button>
+          <ph-${filtered ? "magnifying-glass" : "folder"} weight="duotone" aria-hidden="true"></ph-${filtered ? "magnifying-glass" : "folder"}>
+          <h3>${filtered ? "No matching items" : "No items yet"}</h3>
+          ${filtered ? '<button class="secondary-action" type="button" data-secureit-clear-filters>Clear Filters</button>' : '<button class="primary-action" type="button" data-secureit-empty-new><ph-plus weight="bold" aria-hidden="true"></ph-plus><span>New Item</span></button>'}
         </div>
       `;
-      dom.items.querySelector("[data-secureit-empty-new]")?.addEventListener("click", () => renderItemEditor());
+      dom.items.querySelector("[data-secureit-empty-new]")?.addEventListener("click", () => openItemEditor());
+      dom.items.querySelector("[data-secureit-clear-filters]")?.addEventListener("click", () => {
+        state.search = "";
+        state.typeFilter = "";
+        dom.search.value = "";
+        dom.typeFilter.value = "";
+        renderItems();
+      });
       return;
     }
     dom.items.innerHTML = items.map((item) => {
       const type = item.payload?.type || "custom";
       const collection = state.collections.find((candidate) => candidate.id === item.collection_id);
       return `
-        <button class="secureit-item-card ${state.selectedItemId === item.id ? "is-active" : ""}" type="button" data-secureit-item-id="${escapeAttr(item.id)}">
+        <button class="secureit-item-card ${state.selectedItemId === item.id ? "is-active" : ""}" type="button" data-secureit-item-id="${escapeAttr(item.id)}" aria-pressed="${state.selectedItemId === item.id}">
           <span class="secureit-item-icon" aria-hidden="true"><${ITEM_TYPES[type]?.icon || "ph-squares-four"} weight="duotone"></${ITEM_TYPES[type]?.icon || "ph-squares-four"}></span>
           <span>
             <strong>${escapeHtml(itemTitle(item))}</strong>
@@ -541,7 +617,7 @@
   function renderDetail() {
     const item = state.items.find((candidate) => candidate.id === state.selectedItemId);
     if (!item) {
-      dom.detail.innerHTML = '<p class="secureit-empty-detail">Select an item or create a new one.</p>';
+      dom.detail.innerHTML = '<div class="secureit-detail-heading"><h2>Item Details</h2></div><div class="secureit-empty-detail"><ph-shield-check weight="duotone" aria-hidden="true"></ph-shield-check><h3>No item selected</h3></div>';
       return;
     }
     renderItemEditor(item);
@@ -549,6 +625,7 @@
 
   function itemTypeFields(type, payload = {}) {
     const fields = [...(ITEM_TYPES[type]?.fields || [])];
+    if (type !== "custom") return fields;
     const storedFields = payload.fields || {};
     Object.keys(storedFields).forEach((key) => {
       if (!fields.some(([fieldKey]) => fieldKey === key)) fields.push([key, labelFromKey(key)]);
@@ -572,38 +649,53 @@
             <p class="settings-eyebrow">${item ? "Edit SecureIt Item" : "New SecureIt Item"}</p>
             <h2>${escapeHtml(item ? itemTitle(item) : "New Item")}</h2>
           </div>
-          ${item ? '<button class="danger-action" type="button" data-secureit-delete-item><ph-trash weight="bold"></ph-trash><span>Delete</span></button>' : ""}
+          <div class="secureit-editor-tools">
+            ${item ? '<button class="icon-button danger-action" type="button" data-secureit-delete-item title="Delete item" aria-label="Delete item"><ph-trash weight="bold" aria-hidden="true"></ph-trash></button>' : ""}
+            <button class="icon-button" type="button" data-secureit-close-item title="Close item" aria-label="Close item"><ph-x weight="bold" aria-hidden="true"></ph-x></button>
+          </div>
         </header>
-        <label class="form-field">
-          <span>Type</span>
-          <select name="type" data-secureit-item-type>
-            ${Object.entries(ITEM_TYPES).map(([key, config]) => `<option value="${escapeAttr(key)}"${key === type ? " selected" : ""}>${escapeHtml(config.label)}</option>`).join("")}
-          </select>
-        </label>
-        <label class="form-field">
-          <span>Title</span>
-          <input type="text" name="title" maxlength="180" required autocomplete="off" value="${escapeAttr(payload.title || "")}">
-        </label>
-        <label class="form-field">
-          <span>Collection</span>
-          <select name="collection_id">
-            ${state.collections.map((collection) => `<option value="${escapeAttr(collection.id)}"${collection.id === (item?.collection_id || selectedCollectionForNewItem()) ? " selected" : ""}>${escapeHtml(collectionName(collection))}</option>`).join("")}
-          </select>
-        </label>
-        <div class="secureit-field-grid" data-secureit-type-fields>
-          ${renderTypeFields(type, payload)}
+        <div class="secureit-editor-fields">
+          <label class="form-field">
+            <span>Type</span>
+            <select name="type" data-secureit-item-type>
+              ${Object.entries(ITEM_TYPES).map(([key, config]) => `<option value="${escapeAttr(key)}"${key === type ? " selected" : ""}>${escapeHtml(config.label)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Title</span>
+            <input type="text" name="title" maxlength="180" required autocomplete="off" value="${escapeAttr(payload.title || "")}">
+          </label>
+          <label class="form-field">
+            <span>Collection</span>
+            <select name="collection_id">
+              ${state.collections.map((collection) => `<option value="${escapeAttr(collection.id)}"${collection.id === (item?.collection_id || selectedCollectionForNewItem()) ? " selected" : ""}>${escapeHtml(collectionName(collection))}</option>`).join("")}
+            </select>
+          </label>
+          <div class="secureit-field-grid" data-secureit-type-fields>
+            ${renderTypeFields(type, payload)}
+          </div>
+          <label class="form-field">
+            <span data-secureit-notes-label>${type === "idea" ? "Idea" : "Notes"}</span>
+            <textarea name="notes" rows="5">${escapeHtml(payload.notes || "")}</textarea>
+          </label>
+          <p class="form-status" data-secureit-item-status role="status"></p>
         </div>
-        <label class="form-field">
-          <span>Notes</span>
-          <textarea name="notes" rows="7">${escapeHtml(payload.notes || "")}</textarea>
-        </label>
-        <p class="form-status" data-secureit-item-status role="status"></p>
         <div class="secureit-editor-actions">
-          <button class="secondary-action" type="button" data-secureit-copy-json>Copy Decrypted JSON</button>
-          <button class="primary-action" type="submit">${item ? "Save Item" : "Create Item"}</button>
+          ${item ? '<button class="icon-button" type="button" data-secureit-copy-json title="Copy decrypted JSON" aria-label="Copy decrypted JSON"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>' : ""}
+          <button class="secondary-action" type="button" data-secureit-cancel-item>Cancel</button>
+          <button class="primary-action" type="submit"><ph-${item ? "floppy-disk" : "plus"} weight="bold" aria-hidden="true"></ph-${item ? "floppy-disk" : "plus"}>${item ? "Save Item" : "Create Item"}</button>
         </div>
       </form>
     `;
+    const form = dom.detail.querySelector("[data-secureit-item-form]");
+    itemFieldDrafts.set(form, { ...payload.fields });
+  }
+
+  function openItemEditor(item = null) {
+    renderItemEditor(item);
+    renderItems();
+    dom.detail.scrollIntoView({ block: "nearest" });
+    dom.detail.querySelector('[name="title"]')?.focus({ preventScroll: true });
   }
 
   function selectedCollectionForNewItem() {
@@ -616,14 +708,17 @@
     return fields.map(([key, label]) => {
       const value = payload.fields?.[key] || "";
       const isSecret = /password|key|token|secret/i.test(key);
+      const canCopy = type === "login" || type === "api_key";
+      const hasActions = isSecret || canCopy;
       return `
-        <label class="form-field">
-          <span>${escapeHtml(label)}</span>
-          <span class="secureit-secret-field">
-            <input type="${isSecret ? "password" : "text"}" name="field:${escapeAttr(key)}" autocomplete="off" value="${escapeAttr(value)}">
-            ${isSecret ? '<button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Reveal field"><ph-eye weight="bold"></ph-eye></button>' : ""}
-          </span>
-        </label>
+        <div class="form-field">
+          <label for="secureit-field-${escapeAttr(key)}">${escapeHtml(label)}</label>
+          ${hasActions ? `<div class="${isSecret ? "secureit-secret-field " : ""}${canCopy ? "secureit-copy-field" : ""}">` : ""}
+            <input id="secureit-field-${escapeAttr(key)}" type="${isSecret ? "password" : "text"}" name="field:${escapeAttr(key)}" autocomplete="off" value="${escapeAttr(value)}">
+            ${isSecret ? '<button class="icon-button" type="button" data-secureit-reveal-secret aria-label="Show field" title="Show field" aria-pressed="false"><ph-eye weight="bold" aria-hidden="true"></ph-eye></button>' : ""}
+            ${canCopy ? `<button class="icon-button" type="button" data-secureit-copy-field="${escapeAttr(label)}" aria-label="Copy ${escapeAttr(label)}" title="Copy ${escapeAttr(label)}"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>` : ""}
+          ${hasActions ? "</div>" : ""}
+        </div>
       `;
     }).join("");
   }
@@ -645,26 +740,38 @@
   function handleItemClick(event) {
     const button = event.target.closest("[data-secureit-item-id]");
     if (!button) return;
-    state.selectedItemId = button.dataset.secureitItemId;
-    renderItems();
-    renderDetail();
+    const item = state.items.find((candidate) => candidate.id === button.dataset.secureitItemId);
+    if (item) openItemEditor(item);
   }
 
   function handleDetailChange(event) {
     if (event.target.matches("[data-secureit-item-type]")) {
       const form = event.target.closest("[data-secureit-item-form]");
-      const item = state.items.find((candidate) => candidate.id === form?.elements.item_id?.value);
-      const payload = item?.payload || { fields: {} };
-      payload.type = event.target.value;
-      form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields(event.target.value, payload);
+      const fields = itemFieldDrafts.get(form) || {};
+      [...form.elements].forEach((element) => {
+        if (element.name?.startsWith("field:")) fields[element.name.slice(6)] = element.value;
+      });
+      itemFieldDrafts.set(form, fields);
+      form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields(event.target.value, { fields });
+      form.querySelector("[data-secureit-notes-label]").textContent = event.target.value === "idea" ? "Idea" : "Notes";
+      setStatus(form.querySelector("[data-secureit-item-status]"), "");
     }
   }
 
   function handleDetailClick(event) {
-    const reveal = event.target.closest("[data-secureit-reveal-secret]");
-    if (reveal) {
-      const input = reveal.closest(".secureit-secret-field")?.querySelector("input");
-      if (input) input.type = input.type === "password" ? "text" : "password";
+    const copyField = event.target.closest("[data-secureit-copy-field]");
+    if (copyField) {
+      copyItemField(copyField);
+      return;
+    }
+    if (event.target.closest("[data-secureit-close-item]")) {
+      state.selectedItemId = "";
+      renderItems();
+      renderDetail();
+      return;
+    }
+    if (event.target.closest("[data-secureit-cancel-item]")) {
+      renderDetail();
       return;
     }
     if (event.target.closest("[data-secureit-delete-item]")) {
@@ -678,7 +785,8 @@
 
   async function handleItemSubmit(event) {
     event.preventDefault();
-    const form = event.currentTarget;
+    const form = event.target.closest("[data-secureit-item-form]");
+    if (!form) return;
     const status = form.querySelector("[data-secureit-item-status]");
     const id = form.elements.item_id.value;
     const fields = {};
@@ -739,8 +847,38 @@
   async function copySelectedItemJson(form) {
     const item = state.items.find((candidate) => candidate.id === form?.elements.item_id?.value);
     if (!item) return;
-    await navigator.clipboard?.writeText(JSON.stringify(item.payload, null, 2));
-    setStatus(form.querySelector("[data-secureit-item-status]"), "Copied decrypted JSON.", "success");
+    const status = form.querySelector("[data-secureit-item-status]");
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable.");
+      await navigator.clipboard.writeText(JSON.stringify(item.payload, null, 2));
+      setStatus(status, "Copied decrypted JSON.", "success");
+    } catch {
+      setStatus(status, "Could not copy this item. Try again.", "error");
+    }
+  }
+
+  async function copyItemField(button) {
+    const input = button.closest(".secureit-copy-field")?.querySelector("input");
+    if (!input) return;
+    const label = button.dataset.secureitCopyField;
+    const status = button.closest("[data-secureit-item-form]")?.querySelector("[data-secureit-item-status]");
+    button.disabled = true;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable.");
+      await navigator.clipboard.writeText(input.value);
+      button.innerHTML = '<ph-check weight="bold" aria-hidden="true"></ph-check>';
+      button.title = `${label} copied`;
+      setStatus(status, `${label} copied.`, "success");
+      window.setTimeout(() => {
+        if (!button.isConnected) return;
+        button.innerHTML = '<ph-copy weight="bold" aria-hidden="true"></ph-copy>';
+        button.title = `Copy ${label}`;
+      }, 1500);
+    } catch {
+      setStatus(status, `Could not copy ${label.toLowerCase()}. Select the field and copy it manually.`, "error");
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function openCollectionModal(collection = null) {

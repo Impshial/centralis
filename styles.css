@@ -31979,21 +31979,30 @@ body[data-page="home"] .home-glance-item:hover {
 }
 /* SecureIt */
 body[data-page="secureit"] {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 0%, rgb(var(--theme-primary-rgb, 120 213 200) / 0.12), transparent 32rem),
-    var(--color-page);
+  background: var(--page);
 }
 
 .secureit-page {
-  width: min(1440px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 32px 0 48px;
+  --secureit-header-offset: var(--secureit-header-height, var(--header-height, 76px));
+  display: flex;
+  flex-direction: column;
+  width: min(1500px, calc(100% - 32px));
+  height: calc(100dvh - var(--secureit-header-offset));
+  min-height: 560px;
+  margin: var(--secureit-header-offset) auto 0;
+  padding: 24px 0;
+  color: var(--ink);
+}
+
+.secureit-page .settings-eyebrow,
+.secureit-small-dialog .settings-eyebrow {
+  letter-spacing: 0;
 }
 
 .secureit-hero,
-.secureit-toolbar,
 .secureit-sidebar-header,
+.secureit-list-header,
+.secureit-detail-heading,
 .secureit-editor header,
 .secureit-editor-actions,
 .secureit-lock-actions {
@@ -32005,16 +32014,14 @@ body[data-page="secureit"] {
 
 .secureit-hero {
   margin-bottom: 20px;
+  flex: 0 0 auto;
 }
 
 .secureit-hero h1 {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 4rem);
-}
-
-.secureit-hero p:not(.settings-eyebrow) {
-  margin: 6px 0 0;
-  color: var(--color-muted);
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: 0;
 }
 
 .secureit-hero-actions {
@@ -32025,26 +32032,28 @@ body[data-page="secureit"] {
 
 .secureit-locked,
 .secureit-recovery-reveal {
-  min-height: 58vh;
+  flex: 1;
   display: grid;
   place-items: center;
+  padding: 24px 0;
 }
 
 .secureit-lock-card {
   width: min(560px, 100%);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  background: var(--surface);
   padding: 28px;
-  box-shadow: 0 24px 80px rgb(0 0 0 / 0.28);
 }
 
 .secureit-lock-card h2 {
   margin: 12px 0 8px;
+  font-size: 1.35rem;
 }
 
 .secureit-lock-card p {
-  color: var(--color-muted);
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .secureit-lock-card form {
@@ -32056,56 +32065,100 @@ body[data-page="secureit"] {
 .secureit-lock-card pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-field);
-  padding: 16px;
-  color: var(--color-text);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  padding: 12px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.6;
   user-select: all;
 }
 
+.secureit-recovery-key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: stretch;
+  margin: 16px 0 8px;
+}
+
+.secureit-recovery-key-row pre {
+  margin: 0;
+}
+
 .secureit-lock-icon {
-  width: 54px;
-  height: 54px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: rgb(var(--theme-primary-rgb, 120 213 200) / 0.13);
-  color: var(--color-primary);
-  font-size: 1.8rem;
+  background: var(--active-bg);
+  color: var(--accent);
+  font-size: 1.6rem;
 }
 
 .secureit-workspace {
+  flex: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(360px, 1fr) minmax(340px, 440px);
-  gap: 16px;
-  min-height: calc(100vh - 190px);
+  grid-template-columns: 230px minmax(300px, 1fr) minmax(340px, 440px);
+  min-height: 0;
+  border-block: 1px solid var(--line);
+  background: var(--surface);
 }
 
 .secureit-sidebar,
 .secureit-main,
 .secureit-detail {
+  min-width: 0;
   min-height: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
 }
 
 .secureit-sidebar,
 .secureit-main {
   padding: 16px;
+  border-right: 1px solid var(--line);
 }
 
-.secureit-sidebar-header h2 {
+.secureit-sidebar {
+  overflow-y: auto;
+}
+
+.secureit-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.secureit-sidebar-header,
+.secureit-list-header,
+.secureit-detail-heading {
+  min-height: 36px;
+  margin-bottom: 16px;
+}
+
+.secureit-sidebar-header h2,
+.secureit-list-header h2,
+.secureit-detail-heading h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .secureit-collection-list,
 .secureit-item-list {
   display: grid;
   gap: 8px;
-  margin-top: 14px;
+  align-content: start;
+}
+
+.secureit-item-list {
+  flex: 1;
+  min-height: 0;
+  margin-top: 16px;
+  padding: 2px;
+  overflow-y: auto;
 }
 
 .secureit-collection-row {
@@ -32118,30 +32171,28 @@ body[data-page="secureit"] {
 .secureit-collection,
 .secureit-item-card {
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
 
 .secureit-collection {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: center;
   padding: 10px;
 }
 
-.secureit-collection:hover,
-.secureit-collection:focus-visible,
 .secureit-collection.is-active,
-.secureit-item-card:hover,
-.secureit-item-card:focus-visible,
 .secureit-item-card.is-active {
-  border-color: var(--color-border);
-  background: rgb(var(--theme-primary-rgb, 120 213 200) / 0.1);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .secureit-collection strong,
@@ -32150,116 +32201,227 @@ body[data-page="secureit"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.87rem;
 }
 
-.secureit-collection em,
 .secureit-item-card em {
   display: block;
   margin-top: 2px;
-  color: var(--color-muted);
+  color: var(--muted);
   font-size: 0.78rem;
   font-style: normal;
 }
 
-.secureit-collection-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--secureit-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secureit-color) 22%, transparent);
+.secureit-collection-icon {
+  display: inline-flex;
+  color: var(--secureit-color, var(--accent));
+  font-size: 1.1rem;
+}
+
+.secureit-collection-count {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.secureit-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 142px;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 .secureit-search {
-  flex: 1;
-  min-width: 220px;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--muted);
   padding: 0 10px;
 }
 
-.secureit-search input,
 .secureit-toolbar select,
-.secureit-editor input,
-.secureit-editor select,
-.secureit-editor textarea,
-.secureit-modal-form input,
-.secureit-modal-form textarea {
+.secureit-page .form-field :is(input, select, textarea),
+.secureit-modal-form .form-field :is(input, select, textarea) {
   width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-field);
-  color: var(--color-text);
-  padding: 10px 12px;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--ink);
+  padding: 9px 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.secureit-page select,
+.secureit-small-dialog select {
+  cursor: pointer;
+}
+
+.secureit-page select option,
+.secureit-small-dialog select option {
+  color: var(--ink);
+  background: var(--field);
 }
 
 .secureit-search input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
   border: 0;
   background: transparent;
-  padding-left: 0;
+  color: var(--ink);
+  padding: 0;
+  outline: none;
+  box-shadow: none;
+  font-size: 0.875rem;
 }
 
 .secureit-status {
   min-height: 1.2em;
-  color: var(--color-muted);
-  font-size: 0.85rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .secureit-status.is-error,
-.secureit-modal-form .form-status.is-error,
-.secureit-lock-card .form-status.is-error {
-  color: var(--color-danger);
+.secureit-page .form-status.is-error,
+.secureit-modal-form .form-status.is-error {
+  color: var(--danger);
 }
 
 .secureit-status.is-success,
-.secureit-modal-form .form-status.is-success,
-.secureit-lock-card .form-status.is-success {
-  color: var(--color-success);
+.secureit-page .form-status.is-success,
+.secureit-modal-form .form-status.is-success {
+  color: var(--success);
+}
+
+.secureit-page .form-status,
+.secureit-modal-form .form-status {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.secureit-page .form-status:empty,
+.secureit-modal-form .form-status:empty {
+  display: none;
+}
+
+.secureit-recovery-reveal .form-status:not(:empty) {
+  margin-bottom: 12px;
 }
 
 .secureit-item-card {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  padding: 12px;
+  padding: 10px;
 }
 
 .secureit-item-icon {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: rgb(var(--theme-secondary-rgb, 81 70 184) / 0.16);
-  color: var(--color-primary);
-  font-size: 1.35rem;
+  border-radius: 6px;
+  background: var(--active-bg);
+  color: var(--accent);
+  font-size: 1.2rem;
 }
 
 .secureit-detail {
   overflow: auto;
+  scroll-margin-top: calc(var(--secureit-header-offset) + 16px);
+}
+
+.secureit-detail-heading {
+  margin: 16px 18px 0;
 }
 
 .secureit-empty,
 .secureit-empty-detail {
-  border: 1px dashed var(--color-border);
-  border-radius: 8px;
-  padding: 24px;
-  color: var(--color-muted);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 260px;
+  padding: 32px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.secureit-empty > [aria-hidden="true"],
+.secureit-empty-detail > [aria-hidden="true"] {
+  font-size: 2rem;
+  color: var(--muted);
+}
+
+.secureit-empty h3,
+.secureit-empty-detail h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.secureit-empty p {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .secureit-editor {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
+  height: 100%;
   padding: 18px;
+}
+
+.secureit-editor-fields {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  gap: 14px;
+  padding: 2px;
+  overflow-y: auto;
 }
 
 .secureit-editor header h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.125rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.secureit-editor header > div:first-child {
+  min-width: 0;
+}
+
+.secureit-editor-tools {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.secureit-editor-actions {
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.secureit-editor-actions > .icon-button {
+  margin-right: auto;
 }
 
 .secureit-field-grid {
@@ -32267,14 +32429,103 @@ body[data-page="secureit"] {
   gap: 12px;
 }
 
-.secureit-secret-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
-  gap: 8px;
+.secureit-secret-field,
+.secureit-copy-field {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
 }
 
-.secureit-small-dialog {
+.secureit-page :is(.secureit-secret-field, .secureit-copy-field) input {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+:is(.secureit-page, .secureit-small-dialog) .icon-button {
+  flex: 0 0 auto;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--field);
+  font-size: 1.1rem;
+  padding: 0;
+}
+
+.secureit-page :is(.secureit-secret-field, .secureit-copy-field) .icon-button {
+  width: 40px;
+  height: auto;
+  min-height: 40px;
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.secureit-page .secureit-recovery-copy {
+  width: 44px;
+  height: auto;
+  align-self: stretch;
+}
+
+:is(.secureit-page, .secureit-small-dialog) :is(button, select, input, textarea, .secureit-search, .secureit-secret-field, .secureit-copy-field) {
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+:is(.secureit-page, .secureit-small-dialog) :is(button:not(.primary-action), select, .form-field > input, textarea, .secureit-search, .secureit-secret-field, .secureit-copy-field):hover:not(:disabled) {
+  border-color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 9%, var(--field));
+}
+
+:is(.secureit-page, .secureit-small-dialog) button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.secureit-page :is(.secureit-search, .secureit-secret-field, .secureit-copy-field):focus-within,
+:is(.secureit-page, .secureit-small-dialog) :is(.form-field > input, .form-field > select, textarea, .secureit-toolbar select):focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+:is(.secureit-page, .secureit-small-dialog) .danger-action {
+  border: 1px solid color-mix(in srgb, var(--danger) 65%, var(--line));
+  background: var(--field);
+  color: var(--danger);
+}
+
+:is(.secureit-page, .secureit-small-dialog) .danger-action:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--field));
+  filter: none;
+}
+
+:is(.secureit-page, .secureit-small-dialog) button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.modal-dialog.secureit-small-dialog {
   width: min(560px, calc(100vw - 24px));
+  padding: 0;
+  overflow-y: auto;
+}
+
+.secureit-small-dialog .modal-header {
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+  margin: 0;
 }
 
 .secureit-modal-form {
@@ -32284,37 +32535,112 @@ body[data-page="secureit"] {
 }
 
 .secureit-modal-form input[type="color"] {
+  width: 64px;
   height: 44px;
   padding: 4px;
+  cursor: pointer;
+}
+
+.secureit-small-dialog .modal-actions {
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.secureit-small-dialog .modal-actions .danger-action {
+  margin-right: auto;
 }
 
 @media (max-width: 1120px) {
+  .secureit-page {
+    height: auto;
+    min-height: calc(100dvh - var(--secureit-header-offset));
+  }
+
   .secureit-workspace {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+
+  .secureit-main {
+    min-height: 340px;
+    border-right: 0;
+  }
+
+  .secureit-item-list {
+    max-height: 400px;
   }
 
   .secureit-detail {
     grid-column: 1 / -1;
-    min-height: 420px;
+    border-top: 1px solid var(--line);
+  }
+
+  .secureit-empty-detail {
+    min-height: 200px;
+  }
+
+  .secureit-editor {
+    height: auto;
+    grid-template-rows: auto auto auto;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  .secureit-editor-fields {
+    overflow: visible;
   }
 }
 
 @media (max-width: 760px) {
   .secureit-page {
-    width: min(100vw - 20px, 100%);
+    width: calc(100% - 24px);
     padding-top: 18px;
   }
 
-  .secureit-hero,
-  .secureit-toolbar,
-  .secureit-editor header,
-  .secureit-editor-actions,
+  .secureit-hero {
+    flex-wrap: wrap;
+  }
+
+  .secureit-hero-actions {
+    gap: 8px;
+  }
+
   .secureit-lock-actions {
     align-items: stretch;
-    flex-direction: column;
+    flex-wrap: wrap;
   }
 
   .secureit-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .secureit-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .secureit-collection-list {
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 2px;
+  }
+
+  .secureit-main,
+  .secureit-sidebar,
+  .secureit-editor {
+    padding: 12px;
+  }
+
+  .secureit-toolbar {
+    grid-template-columns: minmax(0, 1fr) 128px;
+    gap: 8px;
+  }
+
+  .secureit-lock-card {
+    padding: 20px;
+  }
+
+  .secureit-small-dialog .modal-actions {
+    flex-wrap: wrap;
   }
 }
