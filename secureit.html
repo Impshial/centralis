@@ -6,7 +6,7 @@
   <title>SecureIt | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=secureit-field-options-1">
+  <link rel="stylesheet" href="styles.css?v=secureit-types-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -207,7 +207,8 @@
     </div>
     <div class="secureit-default-fields-menu" id="secureit-default-fields-menu" role="menu" aria-label="Default Fields" hidden>
       <button class="secureit-field-menu-back" type="button" role="menuitem" data-secureit-default-fields-back><ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left>Default Fields</button>
-      <div data-secureit-default-field-options></div>
+      <div class="secureit-menu-options" data-secureit-default-field-options></div>
+      <div id="secureit-template-fields-menu" role="menu" hidden></div>
     </div>
   </div>
 
@@ -244,9 +245,28 @@
     </form>
   </dialog>
 
+  <dialog class="modal-dialog secureit-small-dialog secureit-field-dialog" id="secureit-type-dialog" aria-labelledby="secureit-type-dialog-title" aria-describedby="secureit-type-question">
+    <div class="modal-header">
+      <div>
+        <p class="settings-eyebrow">SecureIt</p>
+        <h2 id="secureit-type-dialog-title">Create Default Type</h2>
+      </div>
+      <button class="icon-button" type="button" data-secureit-type-cancel title="Cancel" aria-label="Cancel"><ph-x weight="bold" aria-hidden="true"></ph-x></button>
+    </div>
+    <form method="dialog" class="secureit-modal-form">
+      <div class="secureit-field-dialog-body">
+        <p id="secureit-type-question" data-secureit-type-question></p>
+      </div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="submit" value="item-only" autofocus>Save Item Only</button>
+        <button class="primary-action" type="submit" value="create"><ph-plus weight="bold" aria-hidden="true"></ph-plus>Create Type</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=secureit-1"></script>
-  <script src="secureit.js?v=secureit-field-options-1"></script>
+  <script src="secureit.js?v=secureit-types-1"></script>
 </body>
 </html>

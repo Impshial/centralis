@@ -19,8 +19,8 @@ function node() {
   };
 }
 
-function harness({ clipboard } = {}) {
-  const tables = { secureit_collections: [], secureit_items: [] };
+function harness({ clipboard, typeReadError, typeWriteError, typeChoice = "item-only" } = {}) {
+  const tables = { secureit_collections: [], secureit_items: [], secureit_types: [] };
   let failReads = false;
   const supabase = {
     from(table) {
@@ -31,11 +31,13 @@ function harness({ clipboard } = {}) {
         order() { return query; },
         insert(value) { inserted = value; return query; },
         single() {
+          if (table === "secureit_types" && typeWriteError) return Promise.resolve({ data: null, error: typeWriteError });
           const data = { ...inserted, id: "saved-item", created_at: new Date().toISOString() };
           tables[table].push(data);
           return Promise.resolve({ data, error: null });
         },
         then(resolve, reject) {
+          if (table === "secureit_types" && typeReadError) return Promise.resolve({ data: null, error: typeReadError }).then(resolve, reject);
           return Promise.resolve(failReads
             ? { error: { message: "Connection interrupted" } }
             : { data: tables[table], error: null }).then(resolve, reject);
@@ -63,7 +65,9 @@ function harness({ clipboard } = {}) {
     globalThis.api = { state, dom, handleUnlock, handleItemSubmit, lockVault,
       importAesKey, wrapVaultKey, encryptJson, decryptJson, setSecretVisibility,
       itemTypeFields, renderTypeFields, handleDetailChange, copyItemField,
-      customFieldDefinitions, itemFieldDrafts, syncCustomFieldOptions };
+      customFieldDefinitions, itemFieldDrafts, syncCustomFieldOptions,
+      templateFromItem, createSavedType, loadSavedTypes, savedTypeKey,
+      typeOptions, typeLabel, hasCustomField, visibleItems };
   })();`), context);
   const api = context.api;
   for (const key of ["workspace", "locked", "unlockedActions", "recoveryReveal", "setup", "unlock", "recovery", "unlockStatus", "collections", "items", "detail", "status", "listTitle"]) {
@@ -71,6 +75,12 @@ function harness({ clipboard } = {}) {
   }
   api.state.user = { id: "test-user" };
   api.dom.detail.querySelector = () => ({});
+  api.dom.typeQuestion = node();
+  api.dom.typeDialog = {
+    prompts: 0, choice: typeChoice,
+    addEventListener(event, callback) { this.onClose = callback; },
+    showModal() { this.prompts += 1; this.returnValue = this.choice; this.onClose(); },
+  };
   return { api, tables, failReads() { failReads = true; } };
 }
 
@@ -78,6 +88,7 @@ async function seedVault(h) {
   const rawKey = webcrypto.getRandomValues(new Uint8Array(32));
   const salt = Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString("base64");
   h.api.state.vault = {
+    id: "vault-1",
     salt,
     kdf_iterations: 1000,
     wrapped_key: await h.api.wrapVaultKey(rawKey, "test passphrase", salt, 1000),
@@ -359,4 +370,168 @@ test("custom field names, kinds, options, and values are encrypted together when
   assert.equal(JSON.stringify(decrypted.customFields), JSON.stringify(customFields));
   assert.equal(decrypted.fields.custom_details, "First line\nSecond line");
   assert.equal(decrypted.fields.key, "private-key");
+});
+
+function namedCustomForm(api, name = "Storage Account") {
+  const values = { item_id: "", type: "custom", title: "Private Account", collection_id: "collection-1", notes: "private notes", "field:custom_type": name, "field:credential": "private credential" };
+  const elements = Object.entries(values).map(([name, value]) => ({ name, value }));
+  elements.forEach((element) => { elements[element.name] = element; });
+  const status = node();
+  const submit = { disabled: false };
+  const form = { elements, querySelector: (selector) => selector === '[type="submit"]' ? submit : status, closest() { return form; } };
+  api.itemFieldDrafts.set(form, { fields: {}, customFields: [{ key: "credential", label: "Access Code", kind: "text", passwordBehavior: true, copyButton: true }] });
+  return { form, status, submit, event: { target: form, preventDefault() {} } };
+}
+
+test("a confirmed default type stores only encrypted field definitions, never item values", async () => {
+  const h = harness({ typeChoice: "create" });
+  await seedVault(h);
+  await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
+  const item = namedCustomForm(h.api);
+  await h.api.handleItemSubmit(item.event);
+  assert.equal(h.api.dom.typeDialog.prompts, 1);
+  assert.match(h.api.dom.typeQuestion.textContent, /Storage Account/);
+  assert.equal(h.tables.secureit_types.length, 1);
+  const stored = h.tables.secureit_types[0];
+  assert.equal(stored.user_id, "test-user");
+  assert.equal(stored.vault_id, "vault-1");
+  assert.doesNotMatch(JSON.stringify(stored), /Storage Account|Access Code|private/);
+  const template = await h.api.decryptJson(stored.encrypted_payload);
+  assert.deepEqual(Object.keys(template).sort(), ["customFields", "name"]);
+  assert.equal(template.name, "Storage Account");
+  assert.equal(template.customFields[0].passwordBehavior, true);
+  assert.doesNotMatch(JSON.stringify(template), /private credential|Private Account|private notes/);
+  const saved = await h.api.decryptJson(h.tables.secureit_items[0].encrypted_payload);
+  assert.equal(saved.type, `template:${stored.id}`);
+  assert.equal(saved.typeName, "Storage Account");
+  assert.equal(saved.fields.credential, "private credential");
+  assert.equal(saved.fields.custom_type, undefined);
+  assert.equal(saved.customFields[0].label, "Access Code");
+  assert.equal(item.submit.disabled, false);
+  await h.api.loadSavedTypes();
+  const html = h.api.renderTypeFields(saved.type);
+  assert.match(html, /type="password" name="field:credential"[^>]*value=""/);
+  assert.match(html, /data-secureit-copy-field="Access Code"/);
+  assert.doesNotMatch(html, /private credential|field:custom_type/);
+  const second = namedCustomForm(h.api, "  STORAGE account  ");
+  await h.api.handleItemSubmit(second.event);
+  assert.equal(h.api.dom.typeDialog.prompts, 1);
+  assert.equal(h.tables.secureit_types.length, 1);
+});
+
+test("declining creates only the item, while canceling saves neither item nor template", async () => {
+  for (const choice of ["item-only", "cancel", ""]) {
+    const h = harness({ typeChoice: choice });
+    await seedVault(h);
+    await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
+    const item = namedCustomForm(h.api);
+    await h.api.handleItemSubmit(item.event);
+    assert.equal(h.tables.secureit_types.length, 0);
+    assert.equal(h.tables.secureit_items.length, choice === "item-only" ? 1 : 0);
+    assert.equal(item.submit.disabled, false);
+    if (choice === "item-only") {
+      const payload = await h.api.decryptJson(h.tables.secureit_items[0].encrypted_payload);
+      assert.equal(payload.type, "custom");
+      assert.equal(payload.declinedTypeName, "Storage Account");
+    }
+  }
+});
+
+test("missing types migration does not prevent unlocking or saving ordinary items", async () => {
+  const h = harness({ typeChoice: "create", typeReadError: { code: "PGRST205", message: "Table missing" } });
+  await seedVault(h);
+  await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
+  assert.equal(h.api.state.unlocked, true);
+  assert.equal(h.api.state.typesAvailable, false);
+  const item = namedCustomForm(h.api);
+  await h.api.handleItemSubmit(item.event);
+  assert.match(item.status.textContent, /202610090003/);
+  assert.equal(h.tables.secureit_types.length, 0);
+  assert.equal(h.tables.secureit_items.length, 0);
+  h.api.dom.typeDialog.choice = "item-only";
+  await h.api.handleItemSubmit(item.event);
+  assert.equal(h.tables.secureit_items.length, 1);
+});
+
+test("template write failures keep the item draft intact for retry", async () => {
+  const h = harness({ typeChoice: "create", typeWriteError: { message: "Storage unavailable" } });
+  await seedVault(h);
+  await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
+  const item = namedCustomForm(h.api);
+  await h.api.handleItemSubmit(item.event);
+  assert.equal(item.status.textContent, "Storage unavailable");
+  assert.equal(item.form.elements['field:credential'].value, "private credential");
+  assert.equal(item.submit.disabled, false);
+  assert.equal(h.tables.secureit_items.length, 0);
+  assert.equal(h.tables.secureit_types.length, 0);
+});
+
+test("template definitions sanitize extra properties and duplicate fields do not overwrite values", () => {
+  const { api } = harness();
+  const field = { key: "key", label: "Access Code", kind: "text", copyButton: false, passwordBehavior: true, value: "must not copy" };
+  const template = api.templateFromItem({ fields: { custom_type: "Storage", key: "private" }, notes: "private", customFields: [field] });
+  assert.equal(template.customFields[0].value, undefined);
+  assert.equal(template.customFields[0].copyButton, true);
+  assert.equal(api.hasCustomField({ customFields: [field] }, { key: "different", label: " access code " }), true);
+  assert.equal(api.hasCustomField({ customFields: [field] }, { key: "key", label: "Different" }), true);
+  assert.equal(api.hasCustomField({ customFields: [field] }, { key: "region", label: "Region" }), false);
+});
+
+test("saved type labels are escaped and existing items keep their own field definitions", () => {
+  const { api } = harness();
+  api.state.types = [{ id: "template-1", payload: { name: '<Storage "Account">', customFields: [{ key: "new", label: "New Field", kind: "text" }] } }];
+  const key = "template:template-1";
+  const options = api.typeOptions(key);
+  assert.match(options, /value="template:template-1" selected/);
+  assert.match(options, /&lt;Storage "Account"&gt;/);
+  assert.doesNotMatch(options, /<Storage/);
+  const html = api.renderTypeFields(key, { customFields: [{ key: "original", label: "Original Field", kind: "multiline" }], fields: { original: "Original value" } });
+  assert.match(html, /Original value/);
+  assert.doesNotMatch(html, /New Field/);
+  api.state.items = [{ payload: { type: key, title: "Example" } }, { payload: { type: "login" } }];
+  api.state.typeFilter = key;
+  assert.equal(api.visibleItems().length, 1);
+});
+
+test("pending confirmations block duplicate submits and cannot save after the vault locks", async () => {
+  const h = harness();
+  await seedVault(h);
+  await h.api.handleUnlock({ currentTarget: unlockForm("test passphrase"), preventDefault() {} });
+  h.api.dom.typeDialog.showModal = function () { this.prompts += 1; };
+  const item = namedCustomForm(h.api);
+  const pending = h.api.handleItemSubmit(item.event);
+  assert.equal(item.submit.disabled, true);
+  await h.api.handleItemSubmit(item.event);
+  assert.equal(h.api.dom.typeDialog.prompts, 1);
+  h.api.state.vaultKey = null;
+  h.api.dom.typeDialog.returnValue = "create";
+  h.api.dom.typeDialog.onClose();
+  await pending;
+  assert.equal(h.tables.secureit_types.length, 0);
+  assert.equal(h.tables.secureit_items.length, 0);
+  assert.equal(item.submit.disabled, false);
+});
+
+test("switching templates preserves each draft schema without changing the saved template", () => {
+  const { api } = harness();
+  const original = { key: "first", label: "Original", kind: "text", copyButton: false, passwordBehavior: false };
+  const templateField = { key: "second", label: "Second", kind: "multiline", copyButton: true, passwordBehavior: false };
+  api.state.types = [{ id: "second", payload: { name: "Second Type", customFields: [templateField] } }];
+  const fields = node();
+  const form = {
+    elements: [{ name: "field:first", value: "Keep my draft" }],
+    querySelector: (selector) => selector === "[data-secureit-type-fields]" ? fields : node(),
+  };
+  api.itemFieldDrafts.set(form, { fields: {}, customFields: [original], activeType: "custom", schemas: {} });
+  const change = (value) => api.handleDetailChange({ target: { value, matches: () => true, closest: () => form } });
+  change("template:second");
+  assert.match(fields.innerHTML, /<textarea[^>]*name="field:second"/);
+  api.itemFieldDrafts.get(form).customFields = [];
+  form.elements = [];
+  change("custom");
+  assert.match(fields.innerHTML, /Keep my draft/);
+  assert.doesNotMatch(fields.innerHTML, /field:second/);
+  change("template:second");
+  assert.equal(fields.innerHTML, "");
+  assert.equal(api.state.types[0].payload.customFields.length, 1);
 });

@@ -32654,6 +32654,30 @@ body[data-page="secureit"] .app-shell {
   margin-left: auto;
 }
 
+.secureit-field-menu button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.secureit-menu-options {
+  max-height: min(420px, calc(100dvh - 76px));
+  overflow-y: auto;
+}
+
+.secureit-field-menu .secureit-template-back {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.secureit-default-fields-menu.is-template-open > [data-secureit-default-fields-back] {
+  display: none;
+}
+
+#secureit-type-question {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .secureit-field-menu .secureit-field-menu-back {
   display: none;
 }

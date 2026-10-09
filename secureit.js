@@ -6,6 +6,7 @@
     vaults: "secureit_vaults",
     collections: "secureit_collections",
     items: "secureit_items",
+    types: "secureit_types",
   };
   const KDF_ITERATIONS = 310000;
   const ITEM_TYPES = {
@@ -45,6 +46,8 @@
     recoveryKey: "",
     collections: [],
     items: [],
+    types: [],
+    typesAvailable: true,
     selectedCollectionId: "all",
     selectedItemId: "",
     search: "",
@@ -55,8 +58,10 @@
 
   const dom = {};
   const itemFieldDrafts = new WeakMap();
+  const savingForms = new WeakSet();
   let fieldMenuForm = null;
   let customFieldForm = null;
+  let templateMenuId = "";
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -95,6 +100,9 @@
     dom.fieldDialog = document.getElementById("secureit-field-dialog");
     dom.fieldForm = document.querySelector("[data-secureit-field-form]");
     dom.fieldStatus = document.querySelector("[data-secureit-field-status]");
+    dom.templateFieldsMenu = document.getElementById("secureit-template-fields-menu");
+    dom.typeDialog = document.getElementById("secureit-type-dialog");
+    dom.typeQuestion = document.querySelector("[data-secureit-type-question]");
   }
 
   function bindEvents() {
@@ -130,6 +138,11 @@
     });
     dom.fieldForm?.addEventListener("submit", handleCustomFieldSubmit);
     dom.fieldForm?.addEventListener("change", syncCustomFieldOptions);
+    document.querySelector("[data-secureit-type-cancel]")?.addEventListener("click", () => dom.typeDialog.close("cancel"));
+    dom.typeDialog?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      dom.typeDialog.close("cancel");
+    });
     document.querySelectorAll("[data-secureit-field-cancel]").forEach((button) => button.addEventListener("click", () => dom.fieldDialog.close()));
     dom.fieldDialog?.addEventListener("close", () => {
       customFieldForm?.querySelector("[data-secureit-add-field]")?.focus({ preventScroll: true });
@@ -414,6 +427,7 @@
       state.unlocked = false;
       state.collections = [];
       state.items = [];
+      state.types = [];
       const message = !decrypted && error?.name === "OperationError"
         ? "That passphrase could not unlock this vault."
         : `Could not load your vault: ${readableError(error)}`;
@@ -496,9 +510,18 @@
   }
 
   function lockVault() {
+    closeFieldMenu();
+    if (dom.fieldDialog?.open) dom.fieldDialog.close();
+    if (dom.typeDialog?.open) dom.typeDialog.close("cancel");
     state.vaultKey = null;
     state.collections = [];
     state.items = [];
+    state.types = [];
+    state.typeFilter = "";
+    if (dom.defaultFieldOptions) dom.defaultFieldOptions.replaceChildren();
+    if (dom.templateFieldsMenu) dom.templateFieldsMenu.replaceChildren();
+    if (dom.typeQuestion) dom.typeQuestion.textContent = "";
+    renderTypeFilter();
     state.selectedCollectionId = "all";
     state.selectedItemId = "";
     state.unlocked = false;
@@ -535,6 +558,7 @@
     for (const row of itemsResponse.data || []) {
       state.items.push({ ...row, payload: await decryptJson(row.encrypted_payload) });
     }
+    await loadSavedTypes();
     if (!state.collections.length) {
       await createDefaultCollection();
       return loadEncryptedData();
@@ -545,6 +569,7 @@
   }
 
   function renderAll() {
+    renderTypeFilter();
     renderCollections();
     renderItems();
     renderDetail();
@@ -554,8 +579,90 @@
     return collection?.payload?.name || "Untitled Collection";
   }
 
-  function typeLabel(type) {
-    return ITEM_TYPES[type]?.label || "Custom";
+  function isCustomType(type) {
+    return type === "custom" || String(type).startsWith("template:");
+  }
+
+  function savedTypeKey(type) {
+    return `template:${type.id}`;
+  }
+
+  function savedType(type) {
+    return state.types.find((entry) => savedTypeKey(entry) === type);
+  }
+
+  function typeLabel(type, payload = {}) {
+    return ITEM_TYPES[type]?.label || savedType(type)?.payload.name || payload.typeName || "Custom";
+  }
+
+  function typeOptions(selected = "", payload = {}) {
+    const choices = Object.entries(ITEM_TYPES).map(([key, config]) => [key, config.label]);
+    choices.push(...state.types.map((type) => [savedTypeKey(type), type.payload.name]));
+    if (selected && !choices.some(([key]) => key === selected)) choices.push([selected, typeLabel(selected, payload)]);
+    return choices.map(([key, label]) => `<option value="${escapeAttr(key)}"${key === selected ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
+  }
+
+  function renderTypeFilter() {
+    if (!dom.typeFilter) return;
+    dom.typeFilter.innerHTML = '<option value="">All types</option>' + typeOptions(state.typeFilter);
+    dom.typeFilter.value = state.typeFilter;
+  }
+
+  async function loadSavedTypes() {
+    const { data, error } = await supabase.from(TABLES.types).select("*")
+      .eq("user_id", state.user.id).eq("vault_id", state.vault.id).order("created_at");
+    state.types = [];
+    state.typesAvailable = !error;
+    // Keep existing vaults usable until the optional types migration is installed.
+    if (error && ["42P01", "PGRST205"].includes(error.code)) return;
+    if (error) throw error;
+    for (const row of data || []) {
+      const payload = await decryptJson(row.encrypted_payload);
+      if (typeof payload.name !== "string" || !payload.name.trim()) continue;
+      state.types.push({ ...row, payload: { name: payload.name.trim(), customFields: customFieldDefinitions(payload) } });
+    }
+    state.types.sort((a, b) => a.payload.name.localeCompare(b.payload.name));
+  }
+
+  function templateNameKey(name) {
+    return String(name || "").trim().toLowerCase();
+  }
+
+  function savedTypeByName(name) {
+    return state.types.find((type) => templateNameKey(type.payload.name) === templateNameKey(name));
+  }
+
+  function templateFromItem(payload) {
+    return { name: String(payload.fields?.custom_type || "").trim(), customFields: customFieldDefinitions(payload) };
+  }
+
+  async function createSavedType(payload) {
+    if (!state.typesAvailable) throw new Error("Apply the SecureIt types migration (202610090003) before creating a default type. You can still save the item only.");
+    const template = templateFromItem(payload);
+    const existing = savedTypeByName(template.name);
+    if (existing) return existing;
+    const vaultKey = state.vaultKey;
+    const encryptedPayload = await encryptJson(template);
+    if (state.vaultKey !== vaultKey) throw new Error("SecureIt was locked. Unlock and try again.");
+    const { data, error } = await supabase.from(TABLES.types).insert({
+      user_id: state.user.id, vault_id: state.vault.id, encrypted_payload: encryptedPayload,
+    }).select("*").single();
+    if (error) throw error;
+    const type = { ...data, payload: template };
+    if (state.vaultKey === vaultKey) {
+      state.types.push(type);
+      state.types.sort((a, b) => a.payload.name.localeCompare(b.payload.name));
+    }
+    return type;
+  }
+
+  function confirmDefaultType(name) {
+    dom.typeQuestion.textContent = `Create "${name}" as a default type?`;
+    dom.typeDialog.returnValue = "cancel";
+    return new Promise((resolve) => {
+      dom.typeDialog.addEventListener("close", () => resolve(dom.typeDialog.returnValue), { once: true });
+      dom.typeDialog.showModal();
+    });
   }
 
   function itemTitle(item) {
@@ -595,7 +702,7 @@
         if (!state.search) return true;
         const haystack = [
           item.payload?.title,
-          typeLabel(item.payload?.type),
+          typeLabel(item.payload?.type, item.payload),
           item.payload?.notes,
           item.payload?.customType,
           ...Object.values(item.payload?.fields || {}),
@@ -639,7 +746,7 @@
           <span class="secureit-item-icon" aria-hidden="true"><${ITEM_TYPES[type]?.icon || "ph-squares-four"} weight="duotone"></${ITEM_TYPES[type]?.icon || "ph-squares-four"}></span>
           <span>
             <strong>${escapeHtml(itemTitle(item))}</strong>
-            <em>${escapeHtml(typeLabel(type))} · ${escapeHtml(collectionName(collection))}</em>
+            <em>${escapeHtml(typeLabel(type, item.payload))} · ${escapeHtml(collectionName(collection))}</em>
           </span>
         </button>
       `;
@@ -658,8 +765,10 @@
 
   function itemTypeFields(type, payload = {}) {
     const fields = [...(ITEM_TYPES[type]?.fields || [])];
-    if (type !== "custom") return fields;
-    return fields.concat(customFieldDefinitions(payload).map(({ key, label, kind, copyButton, passwordBehavior }) => [key, label, kind, copyButton, passwordBehavior]));
+    if (!isCustomType(type)) return fields;
+    const definitions = Array.isArray(payload.customFields) ? customFieldDefinitions(payload)
+      : customFieldDefinitions(savedType(type)?.payload || payload);
+    return fields.concat(definitions.map(({ key, label, kind, copyButton, passwordBehavior }) => [key, label, kind, copyButton, passwordBehavior]));
   }
 
   function customFieldDefinitions(payload = {}) {
@@ -722,7 +831,7 @@
           <label class="form-field">
             <span>Type</span>
             <select name="type" data-secureit-item-type>
-              ${Object.entries(ITEM_TYPES).map(([key, config]) => `<option value="${escapeAttr(key)}"${key === type ? " selected" : ""}>${escapeHtml(config.label)}</option>`).join("")}
+              ${typeOptions(type, payload)}
             </select>
           </label>
           <label class="form-field">
@@ -742,7 +851,7 @@
             <span data-secureit-notes-label>${type === "idea" ? "Idea" : "Notes"}</span>
             <textarea name="notes" rows="5">${escapeHtml(payload.notes || "")}</textarea>
           </label>
-          <div class="secureit-add-field" data-secureit-add-field-row${type === "custom" ? "" : " hidden"}>
+          <div class="secureit-add-field" data-secureit-add-field-row${isCustomType(type) ? "" : " hidden"}>
             <button class="secondary-action" type="button" data-secureit-add-field aria-haspopup="menu" aria-expanded="false" aria-controls="secureit-add-field-menu"><ph-plus weight="bold" aria-hidden="true"></ph-plus>Add Field<ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down></button>
           </div>
           <p class="form-status" data-secureit-item-status role="status"></p>
@@ -755,7 +864,7 @@
       </form>
     `;
     const form = dom.detail.querySelector("[data-secureit-item-form]");
-    itemFieldDrafts.set(form, { fields: { ...payload.fields }, customFields: customFieldDefinitions(payload) });
+    itemFieldDrafts.set(form, { fields: { ...payload.fields }, customFields: customFieldDefinitions(payload), activeType: type, schemas: {} });
   }
 
   function openItemEditor(item = null) {
@@ -774,15 +883,15 @@
     return fields.map(([key, label, kind, copyButton, passwordBehavior]) => {
       const value = payload.fields?.[key] || "";
       const isMultiline = kind === "multiline";
-      const isSecret = !isMultiline && (type === "custom" ? passwordBehavior === true : /password|key|token|secret/i.test(key));
-      const canCopy = type === "login" || type === "api_key" || (type === "custom" && copyButton === true);
+      const isSecret = !isMultiline && (isCustomType(type) ? passwordBehavior === true : /password|key|token|secret/i.test(key));
+      const canCopy = type === "login" || type === "api_key" || (isCustomType(type) && copyButton === true);
       const hasInlineActions = !isMultiline && (isSecret || canCopy);
       const copyAction = canCopy ? `<button class="icon-button" type="button" data-secureit-copy-field="${escapeAttr(label)}" aria-label="Copy ${escapeAttr(label)}" title="Copy ${escapeAttr(label)}"><ph-copy weight="bold" aria-hidden="true"></ph-copy></button>` : "";
       return `
         <div class="form-field">
           <div class="secureit-field-label">
             <label for="secureit-field-${escapeAttr(key)}">${escapeHtml(label)}</label>
-            ${type === "custom" && key !== "custom_type" ? `<div class="secureit-field-actions"><button class="icon-button" type="button" data-secureit-remove-field="${escapeAttr(key)}" title="Remove ${escapeAttr(label)}" aria-label="Remove ${escapeAttr(label)}"><ph-minus weight="bold" aria-hidden="true"></ph-minus></button>${isMultiline ? copyAction : ""}</div>` : ""}
+            ${isCustomType(type) && key !== "custom_type" ? `<div class="secureit-field-actions"><button class="icon-button" type="button" data-secureit-remove-field="${escapeAttr(key)}" title="Remove ${escapeAttr(label)}" aria-label="Remove ${escapeAttr(label)}"><ph-minus weight="bold" aria-hidden="true"></ph-minus></button>${isMultiline ? copyAction : ""}</div>` : ""}
           </div>
           ${hasInlineActions ? `<div class="${isSecret ? "secureit-secret-field " : ""}${canCopy ? "secureit-copy-field" : ""}">` : ""}
             ${isMultiline ? `<textarea id="secureit-field-${escapeAttr(key)}" name="field:${escapeAttr(key)}" rows="4">${escapeHtml(value)}</textarea>` : `<input id="secureit-field-${escapeAttr(key)}" type="${isSecret ? "password" : "text"}" name="field:${escapeAttr(key)}" autocomplete="off" value="${escapeAttr(value)}">`}
@@ -819,9 +928,13 @@
     if (event.target.matches("[data-secureit-item-type]")) {
       const form = event.target.closest("[data-secureit-item-form]");
       const draft = captureItemDraft(form);
+      draft.schemas ||= {};
+      if (isCustomType(draft.activeType)) draft.schemas[draft.activeType] = draft.customFields;
+      draft.activeType = event.target.value;
+      draft.customFields = draft.schemas[draft.activeType] || customFieldDefinitions(savedType(draft.activeType)?.payload || {});
       form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields(event.target.value, draft);
       form.querySelector("[data-secureit-notes-label]").textContent = event.target.value === "idea" ? "Idea" : "Notes";
-      form.querySelector("[data-secureit-add-field-row]").hidden = event.target.value !== "custom";
+      form.querySelector("[data-secureit-add-field-row]").hidden = !isCustomType(event.target.value);
       setStatus(form.querySelector("[data-secureit-item-status]"), "");
     }
   }
@@ -875,9 +988,9 @@
     fieldMenuForm = button.closest("[data-secureit-item-form]");
     const draft = captureItemDraft(fieldMenuForm);
     dom.defaultFieldOptions.innerHTML = DEFAULT_FIELDS.map(([key, label]) => {
-      const exists = draft.customFields.some((field) => field.key === key || field.label.toLowerCase() === label.toLowerCase());
+      const exists = hasCustomField(draft, { key, label });
       return `<button type="button" role="menuitem" data-secureit-default-field="${key}"${exists ? ' disabled title="Already added"' : ""}>${label}</button>`;
-    }).join("");
+    }).join("") + state.types.map((type) => `<button type="button" role="menuitem" data-secureit-template-fields-toggle="${escapeAttr(type.id)}" aria-haspopup="menu" aria-expanded="false" aria-controls="secureit-template-fields-menu"><span>${escapeHtml(type.payload.name)}</span><ph-caret-right weight="bold" aria-hidden="true"></ph-caret-right></button>`).join("");
     showDefaultFields(false);
     dom.fieldMenu.showPopover();
     button.setAttribute("aria-expanded", "true");
@@ -900,7 +1013,10 @@
     dom.defaultFieldsMenu.hidden = !open;
     dom.defaultFieldsToggle.setAttribute("aria-expanded", String(open));
     dom.fieldMenu.classList.toggle("is-submenu-open", open);
-    if (!open) return;
+    if (!open) {
+      showTemplateFields("");
+      return;
+    }
     if (window.innerWidth <= 560) {
       const menu = dom.fieldMenu.getBoundingClientRect();
       dom.fieldMenu.style.top = `${Math.max(8, Math.min(menu.top, window.innerHeight - menu.height - 8))}px`;
@@ -913,7 +1029,54 @@
     dom.defaultFieldsMenu.style.top = `${Math.max(8, Math.min(anchor.top, window.innerHeight - menu.height - 8))}px`;
   }
 
+  function hasCustomField(draft, field) {
+    return draft.customFields.some((existing) => existing.key === field.key || templateNameKey(existing.label) === templateNameKey(field.label));
+  }
+
+  function showTemplateFields(id) {
+    templateMenuId = id;
+    const type = state.types.find((entry) => entry.id === id);
+    dom.templateFieldsMenu.hidden = !type;
+    dom.defaultFieldOptions.hidden = Boolean(type);
+    dom.defaultFieldsMenu.classList.toggle("is-template-open", Boolean(type));
+    dom.defaultFieldOptions.querySelectorAll("[data-secureit-template-fields-toggle]").forEach((button) => button.setAttribute("aria-expanded", String(button.dataset.secureitTemplateFieldsToggle === id)));
+    if (!type || !fieldMenuForm) return;
+    const draft = captureItemDraft(fieldMenuForm);
+    const fields = type.payload.customFields;
+    dom.templateFieldsMenu.setAttribute("aria-label", type.payload.name);
+    dom.templateFieldsMenu.innerHTML = `
+      <button class="secureit-template-back" type="button" role="menuitem" data-secureit-template-fields-back><ph-caret-left weight="bold" aria-hidden="true"></ph-caret-left><span>${escapeHtml(type.payload.name)}</span></button>
+      <div class="secureit-menu-options">
+        <button type="button" role="menuitem" data-secureit-template-field="all"${fields.every((field) => hasCustomField(draft, field)) ? " disabled" : ""}><ph-list-plus weight="bold" aria-hidden="true"></ph-list-plus>Add All Fields</button>
+        ${fields.map((field, index) => `<button type="button" role="menuitem" data-secureit-template-field="${index}"${hasCustomField(draft, field) ? ' disabled title="Already added"' : ""}>${escapeHtml(field.label)}</button>`).join("")}
+      </div>`;
+    showDefaultFields(true);
+  }
+
+  function backToDefaultFields() {
+    const id = templateMenuId;
+    showTemplateFields("");
+    showDefaultFields(true);
+    [...dom.defaultFieldOptions.querySelectorAll("[data-secureit-template-fields-toggle]")].find((button) => button.dataset.secureitTemplateFieldsToggle === id)?.focus({ preventScroll: true });
+  }
+
   function handleFieldMenuClick(event) {
+    const templateToggle = event.target.closest("[data-secureit-template-fields-toggle]");
+    if (templateToggle) {
+      showTemplateFields(templateToggle.dataset.secureitTemplateFieldsToggle);
+      dom.templateFieldsMenu.querySelector("[role=menuitem]")?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.target.closest("[data-secureit-template-fields-back]")) return backToDefaultFields();
+    const templateField = event.target.closest("[data-secureit-template-field]");
+    if (templateField && !templateField.disabled) {
+      const fields = state.types.find((type) => type.id === templateMenuId)?.payload.customFields || [];
+      const selected = templateField.dataset.secureitTemplateField;
+      const additions = selected === "all" ? fields : fields.filter((field, index) => String(index) === selected);
+      for (const field of additions) addCustomField(fieldMenuForm, { ...field });
+      closeFieldMenu();
+      return;
+    }
     if (event.target.closest("[data-secureit-default-fields-toggle]")) {
       showDefaultFields(true);
       dom.defaultFieldsMenu.querySelector("[data-secureit-default-field]:not(:disabled)")?.focus({ preventScroll: true });
@@ -944,7 +1107,14 @@
     const button = event.target.closest('[role="menuitem"]');
     if (!button) return;
     const inSubmenu = dom.defaultFieldsMenu.contains(button);
-    if (event.key === "ArrowRight" && button === dom.defaultFieldsToggle) {
+    if (event.key === "ArrowRight" && button.matches("[data-secureit-template-fields-toggle]")) {
+      event.preventDefault();
+      button.click();
+    } else if ((event.key === "ArrowLeft" || event.key === "Escape") && dom.templateFieldsMenu.contains(button)) {
+      event.preventDefault();
+      event.stopPropagation();
+      backToDefaultFields();
+    } else if (event.key === "ArrowRight" && button === dom.defaultFieldsToggle) {
       event.preventDefault();
       showDefaultFields(true);
       dom.defaultFieldsMenu.querySelector("[data-secureit-default-field]:not(:disabled)")?.focus({ preventScroll: true });
@@ -965,14 +1135,14 @@
 
   function renderCustomDraft(form) {
     const draft = itemFieldDrafts.get(form);
-    form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields("custom", draft);
+    form.querySelector("[data-secureit-type-fields]").innerHTML = renderTypeFields(form.elements.type.value, draft);
     setStatus(form.querySelector("[data-secureit-item-status]"), "");
   }
 
   function addCustomField(form, field) {
-    if (!form?.isConnected || form.elements.type.value !== "custom") return;
+    if (!form?.isConnected || !isCustomType(form.elements.type.value)) return;
     const draft = captureItemDraft(form);
-    if (draft.customFields.some((existing) => existing.key === field.key)) return;
+    if (hasCustomField(draft, field)) return;
     draft.customFields.push(field);
     renderCustomDraft(form);
     const input = form.elements.namedItem(`field:${field.key}`);
@@ -1012,7 +1182,7 @@
   async function handleItemSubmit(event) {
     event.preventDefault();
     const form = event.target.closest("[data-secureit-item-form]");
-    if (!form) return;
+    if (!form || savingForms.has(form)) return;
     const status = form.querySelector("[data-secureit-item-status]");
     const id = form.elements.item_id.value;
     const fields = {};
@@ -1025,11 +1195,41 @@
       fields,
       notes: form.elements.notes.value,
     };
-    if (payload.type === "custom") payload.customFields = captureItemDraft(form).customFields;
+    if (isCustomType(payload.type)) payload.customFields = customFieldDefinitions(captureItemDraft(form));
+    if (isCustomType(payload.type) && payload.type !== "custom") {
+      payload.typeName = typeLabel(payload.type, state.items.find((item) => item.id === id)?.payload);
+    }
     if (!payload.title) return setStatus(status, "Enter a title.", "error");
-    setStatus(status, "Encrypting and saving...");
+    const vaultKey = state.vaultKey;
+    const submit = form.querySelector('[type="submit"]');
+    savingForms.add(form);
+    if (submit) submit.disabled = true;
     try {
+      if (payload.type === "custom") {
+        const name = String(fields.custom_type || "").trim();
+        const previous = state.items.find((item) => item.id === id)?.payload;
+        let type = name ? savedTypeByName(name) : null;
+        const reserved = Object.values(ITEM_TYPES).some((config) => templateNameKey(config.label) === templateNameKey(name));
+        if (name && !type && !reserved) {
+          if (templateNameKey(previous?.declinedTypeName) === templateNameKey(name)) {
+            payload.declinedTypeName = name;
+          } else {
+            const choice = await confirmDefaultType(name);
+            if (!["create", "item-only"].includes(choice) || state.vaultKey !== vaultKey) return;
+            if (choice === "create") type = await createSavedType(payload);
+            else payload.declinedTypeName = name;
+          }
+        }
+        if (type) {
+          payload.type = savedTypeKey(type);
+          payload.typeName = type.payload.name;
+          delete payload.fields.custom_type;
+        }
+      }
+      if (state.vaultKey !== vaultKey) return;
+      setStatus(status, "Encrypting and saving...");
       const encryptedPayload = await encryptJson(payload);
+      if (state.vaultKey !== vaultKey) return;
       if (id) {
         const { data, error } = await supabase.from(TABLES.items)
           .update({ collection_id: form.elements.collection_id.value, encrypted_payload: encryptedPayload })
@@ -1038,6 +1238,7 @@
           .select("*")
           .single();
         if (error) throw error;
+        if (state.vaultKey !== vaultKey) return;
         const index = state.items.findIndex((item) => item.id === id);
         state.items[index] = { ...data, payload };
       } else {
@@ -1048,6 +1249,7 @@
           sort_order: state.items.length,
         }).select("*").single();
         if (error) throw error;
+        if (state.vaultKey !== vaultKey) return;
         state.items.push({ ...data, payload });
         state.selectedItemId = data.id;
       }
@@ -1055,6 +1257,9 @@
       setStatus(dom.status, "SecureIt item saved.", "success");
     } catch (error) {
       setStatus(status, readableError(error), "error");
+    } finally {
+      savingForms.delete(form);
+      if (submit) submit.disabled = false;
     }
   }
 
