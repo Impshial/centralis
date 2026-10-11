@@ -37,8 +37,8 @@ unavailable provider data, and empty schedules.
 
 ## Behavior
 
-- Games uses Previous, Current (default), and Following tabs around the selected
-  calendar week. Only the visible week is loaded/refreshed. Two-column game cards
+- Games uses the week dropdown and previous/next arrows to browse the selected
+  calendar week. Only that week is loaded/refreshed. Two-column game cards
   collapse to one column on narrow screens, with independent game and team links.
 - Conference standings sort by wins descending, then losses ascending; equal
   records retain provider order. Division grouping and playoff seeds are preserved.
@@ -53,7 +53,8 @@ unavailable provider data, and empty schedules.
   TBD kickoff, overtime, ties, canceled and postponed games are distinct states.
 - Current-season games and in-progress game details refresh every 60 seconds.
   Historical views do not poll. Background tabs pause. Homepage favorites use
-  the current three-week window and deduplicate games across selected teams.
+  only the active calendar week and deduplicate games across selected teams.
+  The homepage widget shares the dashboard's bordered, shaded panel styling.
 - Active scores cache for 20 seconds, reference data for 15 minutes, and season
   metadata for 24 hours. Requests coalesce, upstream concurrency is limited to
   four, and each upstream request has a 12-second timeout. Refresh bypasses the

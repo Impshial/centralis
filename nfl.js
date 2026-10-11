@@ -59,19 +59,15 @@ function controls() {
   document.querySelector('.nfl-week-actions').hidden = state.section === 'favorites';
 }
 async function games(refresh) {
-  const views = [['previous', 'Previous'], ['current', 'Current'], ['following', 'Following']];
-  const tab = views.some(([id]) => id === state.tab) ? state.tab : 'current';
-  const top = `<div class="nfl-games-heading">${heading('Weekly Games')}${tabs(views, tab, 'Week views')}</div>`;
-  if (!selected) return top + section('Offseason', empty('There is no active NFL week in the provider calendar. Select a week to browse the season.'), String(state.season));
-  const index = views.findIndex(([id]) => id === tab), w = weekWindow(calendar, selected)[index];
-  if (!w) return top + section(`${views[index][1]} week`, empty(index === 0 ? 'Start of the selected season.' : 'End of the selected season.'));
+  if (!selected) return section('Offseason', empty('There is no active NFL week in the provider calendar. Select a week to browse the season.'), String(state.season));
+  const w = selected;
   let html;
   try {
     const data = await read('scoreboard', { season: state.season, type: w.type, week: w.week }, refresh);
     html = gameGrid(data.games, link);
     if (data.byes?.length) html += `<p class="nfl-muted">On bye: ${data.byes.map(t => e(t.name)).join(', ')}</p>`;
   } catch (error) { currentWarnings.push(`${w.label}: ${error.message}`); html = empty('Scores unavailable. Try Refresh.'); }
-  return top + section(w.label, html, w.detail);
+  return section('Weekly Games', html, [w.label, w.detail].filter(Boolean).join(' | '));
 }
 function standingTable(teams, title, picture = false, conference = false) {
   const stats = [['wins', 'W'], ['losses', 'L'], ['ties', 'T'], ['winPercent', 'Pct'], ['pointsFor', 'PF'], ['pointsAgainst', 'PA'], ['pointDifferential', 'Diff'], ['streak', 'Strk']];
@@ -204,7 +200,7 @@ async function render(refresh = false, polling = false) {
     selected = hasWeek ? selectWeek(calendar, p.get('type'), p.get('week')) : season === boot.calendar.year ? activeWeek(calendar) : calendar.weeks.at(-1);
     state = { section: p.get('section') || 'games', season, id: p.get('id'), tab: p.get('tab') };
     if (![...sections.map(s => s[0]), 'game', 'team', 'player'].includes(state.section)) state.section = 'games';
-    history.replaceState({}, '', link({ section: state.section, season, type: selected?.type, week: selected?.week }));
+    history.replaceState({}, '', link({ section: state.section, season, type: selected?.type, week: selected?.week, ...(state.section === 'games' ? { tab: null } : {}) }));
     controls();
     const renderer = { games, standings, playoffs, byes, favorites, game: gameDetail, team: teamDetail, player: playerDetail }[state.section];
     const html = await renderer(refresh);

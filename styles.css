@@ -31413,6 +31413,7 @@ body[data-page="home"] .home-feature-card,
 body[data-page="home"] .home-today-card,
 body[data-page="home"] .home-mini-calendar-card,
 body[data-page="home"] .home-glance-section,
+body[data-page="home"] .home-nfl-panel,
 body[data-page="home"] .home-gallery-section {
   border: 1px solid var(--home-line);
   border-radius: 8px;
@@ -31555,6 +31556,7 @@ body[data-page="home"] .home-card-link:focus-visible {
 body[data-page="home"] .home-today-card,
 body[data-page="home"] .home-mini-calendar-card,
 body[data-page="home"] .home-glance-section,
+body[data-page="home"] .home-nfl-panel,
 body[data-page="home"] .home-gallery-section {
   padding: 14px;
 }
