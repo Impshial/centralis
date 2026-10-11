@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFL | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=nfl-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="nfl.css?v=1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="nfl">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+    <main class="nfl-page">
+      <div class="nfl-heading"><div class="nfl-brand"><span class="nfl-image nfl-league-mark"><span aria-hidden="true">NFL</span><img src="https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png" alt="NFL" width="42" height="48"></span><div><p class="section-eyebrow">Entertainment</p><h1>NFL</h1></div></div><div class="nfl-heading-right"><span class="nfl-muted">Eastern Time</span><button class="nfl-control" id="nfl-refresh" title="Refresh NFL data" aria-label="Refresh NFL data"><ph-arrow-clockwise aria-hidden="true"></ph-arrow-clockwise></button></div></div>
+      <div class="nfl-workspace">
+        <aside class="nfl-sidebar"><nav aria-label="NFL navigation" id="nfl-nav"></nav><p class="nfl-provider">Scores &amp; statistics<br>ESPN</p></aside>
+        <div class="nfl-main">
+          <div class="nfl-toolbar"><label class="nfl-mobile-nav">Section<select id="nfl-mobile-section" aria-label="NFL section"></select></label><label>Season<select id="nfl-season" aria-label="Season" disabled><option>Loading...</option></select></label><label class="nfl-week-control">Week<select id="nfl-week" aria-label="Week" disabled><option>Loading...</option></select></label><div class="nfl-week-actions"><button class="nfl-control" id="nfl-prev" title="Previous week" aria-label="Previous week" disabled><ph-caret-left aria-hidden="true"></ph-caret-left></button><button class="nfl-control" id="nfl-next" title="Next week" aria-label="Next week" disabled><ph-caret-right aria-hidden="true"></ph-caret-right></button><button class="nfl-control" id="nfl-today">Today</button></div></div>
+          <div id="nfl-notice" class="nfl-notice" role="status" aria-live="polite"></div>
+          <div class="nfl-content" id="nfl-content" aria-busy="true"><p class="nfl-empty">Loading NFL...</p></div>
+          <footer class="nfl-footer" id="nfl-updated">ESPN data</footer>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=nfl-1"></script>
+  <script type="module" src="nfl.js?v=1"></script>
+</body>
+</html>

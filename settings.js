@@ -24,6 +24,7 @@
     { id: "generation_jobs", label: "Generation Jobs", description: "Background generation job records across modules." },
     { id: "movies", label: "Movies", description: "Movies, franchises, and collections." },
     { id: "episode_roulette", label: "Episode Roulette Saved Shows", description: "Saved recent shows." },
+    { id: "nfl", label: "NFL Favorites", description: "Favorite NFL team selections." },
     { id: "stellar", label: "Stellar Architect Systems", description: "Systems, stars, planets, moons, lifeforms, colonies, and colonists." },
     { id: "users", label: "Users", description: "Full account purge for selected users. Disabled when the active admin is selected." }
   ];
@@ -55,6 +56,7 @@
     { id: "generation_jobs", label: "Generation Jobs" },
     { id: "movies", label: "Movies" },
     { id: "episode_roulette", label: "Episode Roulette" },
+    { id: "nfl", label: "NFL" },
     { id: "stellar", label: "Stellar Architect" }
   ];
   const DEFAULT_ELEMENT_TYPE_FORMAT = "centralis.default-element-type.v1";

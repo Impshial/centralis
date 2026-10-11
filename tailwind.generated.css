@@ -1110,9 +1110,7 @@ html[data-color-scheme="dark"] .moon-icon {
   transform: none;
 }
 
-.menu-trigger[aria-expanded="true"] + .dropdown-menu,
-.category-nav .menu-wrap:hover > .dropdown-menu,
-.category-nav .menu-wrap:focus-within > .dropdown-menu {
+.menu-trigger[aria-expanded="true"] + .dropdown-menu {
   display: grid;
   gap: 2px;
 }
@@ -2638,9 +2636,28 @@ body[data-page="stellar-architect"] {
   }
 
   .category-nav {
+    position: static;
+    z-index: auto;
     grid-column: 1 / -1;
     order: 2;
     overflow-x: auto;
+  }
+
+  .category-nav .menu-wrap {
+    position: static;
+  }
+
+  .category-nav .menu-wrap::after {
+    display: none;
+  }
+
+  .category-nav .dropdown-menu {
+    top: calc(100% + 2px);
+    left: 12px;
+    right: 12px;
+    max-height: min(420px, calc(100dvh - 140px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .stellar-page {

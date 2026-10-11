@@ -2910,12 +2910,6 @@ html[data-color-scheme="dark"] .moon-icon {
   gap: 2px;
 }
 
-.category-nav .menu-wrap:hover > .dropdown-menu,
-.category-nav .menu-wrap:focus-within > .dropdown-menu {
-  display: grid;
-  gap: 2px;
-}
-
 .dropdown-menu button,
 .dropdown-menu a {
   display: flex;
@@ -23632,6 +23626,8 @@ body[data-page="useful-things"] {
   }
 
   .category-nav {
+    position: static;
+    z-index: auto;
     grid-column: 1 / -1;
     grid-row: 2;
     width: 100%;
@@ -23650,7 +23646,22 @@ body[data-page="useful-things"] {
   }
 
   .category-nav .menu-wrap {
+    position: static;
     flex: 0 0 auto;
+  }
+
+  .category-nav .menu-wrap::after {
+    display: none;
+  }
+
+  /* Anchor mobile dropdowns to the header, outside the scrolling category strip. */
+  .category-nav .dropdown-menu {
+    top: calc(100% + 2px);
+    left: 12px;
+    right: 12px;
+    max-height: min(420px, calc(100dvh - 140px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .dropdown-menu {

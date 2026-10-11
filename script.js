@@ -451,6 +451,7 @@ const CENTRALIS_HEADER_MARKUP = `
       <div class="dropdown-menu" role="menu">
         <a href="movie-tracker.html" role="menuitem"><ph-film-slate weight="duotone" aria-hidden="true"></ph-film-slate><span>Movie Tracker</span></a>
         <a href="episode-roulette.html" role="menuitem"><ph-dice-five weight="duotone" aria-hidden="true"></ph-dice-five><span>Episode Roulette</span></a>
+        <a href="nfl.html" role="menuitem"><ph-football weight="duotone" aria-hidden="true"></ph-football><span>NFL</span></a>
         <a href="fusion.html" role="menuitem"><ph-atom weight="duotone" aria-hidden="true"></ph-atom><span>Fusion</span></a>
       </div>
     </div>
@@ -4997,16 +4998,21 @@ function bindUniverseCardMenus() {
 }
 
 menuTriggers.forEach((trigger) => {
+  let openedByHover = false;
   if (trigger.classList.contains("category-button")) {
     const wrap = trigger.closest(".menu-wrap");
 
-    wrap?.addEventListener("mouseenter", () => {
+    wrap?.addEventListener("pointerenter", (event) => {
+      if (event.pointerType !== "mouse" || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
       closeMenus(trigger);
       trigger.setAttribute("aria-expanded", "true");
+      openedByHover = true;
     });
 
-    wrap?.addEventListener("mouseleave", () => {
+    wrap?.addEventListener("pointerleave", (event) => {
+      if (event.pointerType !== "mouse") return;
       trigger.setAttribute("aria-expanded", "false");
+      openedByHover = false;
     });
 
     wrap?.addEventListener("focusout", (event) => {
@@ -5014,23 +5020,23 @@ menuTriggers.forEach((trigger) => {
         trigger.setAttribute("aria-expanded", "false");
       }
     });
-
-    trigger.addEventListener("focus", () => {
-      closeMenus(trigger);
-      trigger.setAttribute("aria-expanded", "true");
-    });
-
-    trigger.addEventListener("click", (event) => {
-      event.preventDefault();
-    });
-
-    return;
   }
 
-  trigger.addEventListener("click", () => {
-    const isOpen = trigger.getAttribute("aria-expanded") === "true";
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    const isOpen = trigger.getAttribute("aria-expanded") === "true" && !openedByHover;
     closeMenus(trigger);
     trigger.setAttribute("aria-expanded", String(!isOpen));
+    openedByHover = false;
+  });
+
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown") return;
+    event.preventDefault();
+    closeMenus(trigger);
+    trigger.setAttribute("aria-expanded", "true");
+    openedByHover = false;
+    trigger.nextElementSibling?.querySelector('[role="menuitem"]:not([hidden]):not(:disabled)')?.focus();
   });
 });
 
@@ -5068,7 +5074,9 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    const openTrigger = [...menuTriggers].find(trigger => trigger.getAttribute("aria-expanded") === "true" && trigger.closest(".menu-wrap")?.contains(document.activeElement));
     closeMenus();
+    openTrigger?.focus({ preventScroll: true });
     closeUniverseCardMenus();
     closeModal();
   }
