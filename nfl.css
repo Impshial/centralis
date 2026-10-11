@@ -20,7 +20,8 @@ body[data-page="nfl"] { overflow: hidden; }
 .nfl-toolbar .nfl-week-control { flex: 1; max-width: 340px; min-width: 150px; }
 .nfl-page select { background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; height: 38px; padding: 0 30px 0 10px; min-width: 0; width: 100%; font: inherit; font-size: 13px; cursor: pointer; }
 .nfl-page select option { color: var(--ink); background: var(--surface); }
-.nfl-week-actions { display: flex; gap: 6px; }
+.nfl-week-actions { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+#nfl-live-filter { width: 124px; flex: 0 0 124px; }
 .nfl-control { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 36px; min-height: 36px; padding: 7px 10px; border: 1px solid var(--line); background: var(--field); color: var(--ink); border-radius: 5px; cursor: pointer; text-decoration: none; font: inherit; font-size: 13px; white-space: nowrap; }
 :is(.nfl-page,.nfl-home) :is(button,a,select,input):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 :is(.nfl-control,.nfl-page select):hover:not(:disabled) { background: var(--hover-bg); border-color: var(--accent); }

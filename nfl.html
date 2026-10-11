@@ -8,7 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=nfl-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="nfl.css?v=2">
+  <link rel="stylesheet" href="nfl.css?v=3">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="nfl">
@@ -19,7 +19,7 @@
       <div class="nfl-workspace">
         <aside class="nfl-sidebar"><nav aria-label="NFL navigation" id="nfl-nav"></nav><p class="nfl-provider">Scores &amp; statistics<br>ESPN</p></aside>
         <div class="nfl-main">
-          <div class="nfl-toolbar"><label class="nfl-mobile-nav">Section<select id="nfl-mobile-section" aria-label="NFL section"></select></label><label>Season<select id="nfl-season" aria-label="Season" disabled><option>Loading...</option></select></label><label class="nfl-week-control">Week<select id="nfl-week" aria-label="Week" disabled><option>Loading...</option></select></label><div class="nfl-week-actions"><button class="nfl-control" id="nfl-prev" title="Previous week" aria-label="Previous week" disabled><ph-caret-left aria-hidden="true"></ph-caret-left></button><button class="nfl-control" id="nfl-next" title="Next week" aria-label="Next week" disabled><ph-caret-right aria-hidden="true"></ph-caret-right></button><button class="nfl-control" id="nfl-today">Today</button></div></div>
+          <div class="nfl-toolbar"><label class="nfl-mobile-nav">Section<select id="nfl-mobile-section" aria-label="NFL section"></select></label><label>Season<select id="nfl-season" aria-label="Season" disabled><option>Loading...</option></select></label><label class="nfl-week-control">Week<select id="nfl-week" aria-label="Week" disabled><option>Loading...</option></select></label><div class="nfl-week-actions"><button class="nfl-control" id="nfl-prev" title="Previous week" aria-label="Previous week" disabled><ph-caret-left aria-hidden="true"></ph-caret-left></button><button class="nfl-control" id="nfl-next" title="Next week" aria-label="Next week" disabled><ph-caret-right aria-hidden="true"></ph-caret-right></button><button class="nfl-control" id="nfl-today">Today</button><button class="nfl-control" id="nfl-live-filter" title="Show only games in progress" aria-pressed="false" aria-controls="nfl-content" disabled><ph-funnel aria-hidden="true"></ph-funnel><span>In Progress</span></button></div></div>
           <div id="nfl-notice" class="nfl-notice" role="status" aria-live="polite"></div>
           <div class="nfl-content" id="nfl-content" aria-busy="true"><p class="nfl-empty">Loading NFL...</p></div>
           <footer class="nfl-footer" id="nfl-updated">ESPN data</footer>
@@ -30,6 +30,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=nfl-1"></script>
-  <script type="module" src="nfl.js?v=2"></script>
+  <script type="module" src="nfl.js?v=3"></script>
 </body>
 </html>

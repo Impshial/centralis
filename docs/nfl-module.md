@@ -40,6 +40,10 @@ unavailable provider data, and empty schedules.
 - Games uses the week dropdown and previous/next arrows to browse the selected
   calendar week. Only that week is loaded/refreshed. Two-column game cards
   collapse to one column on narrow screens, with independent game and team links.
+- The Games toolbar's In Progress toggle limits the selected week to live games
+  (including halftime and overtime). It changes to All Games to clear the filter.
+  The `live=1` URL parameter preserves this filter through refresh and navigation;
+  Today returns to the current week without changing the filter.
 - Conference standings sort by wins descending, then losses ascending; equal
   records retain provider order. Division grouping and playoff seeds are preserved.
 - The NFL workspace fills the available window with scrolling inside the content

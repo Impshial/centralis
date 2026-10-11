@@ -43,6 +43,7 @@ function table(labels, rows, caption, titles = labels) {
 }
 function navigation() {
   const active = params().get('section') || 'games';
+  $('nfl-live-filter').hidden = active !== 'games';
   $('nfl-nav').innerHTML = sections.map(([id, name, glyph]) => `<a href="${e(link({ section: id, id: null, tab: null }))}" ${active === id ? 'aria-current="page"' : ''}>${icon(glyph)}${e(name)}</a>`).join('');
   $('nfl-mobile-section').innerHTML = sections.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
   $('nfl-mobile-section').value = sections.some(s => s[0] === active) ? active : 'games';
@@ -57,6 +58,11 @@ function controls() {
   $('nfl-prev').disabled = !previous; $('nfl-next').disabled = !next;
   $('nfl-week').closest('label').hidden = state.section === 'favorites';
   document.querySelector('.nfl-week-actions').hidden = state.section === 'favorites';
+  const liveFilter = $('nfl-live-filter');
+  liveFilter.disabled = false;
+  liveFilter.setAttribute('aria-pressed', String(state.liveOnly));
+  liveFilter.querySelector('span').textContent = state.liveOnly ? 'All Games' : 'In Progress';
+  liveFilter.title = state.liveOnly ? 'Show all games' : 'Show only games in progress';
 }
 async function games(refresh) {
   if (!selected) return section('Offseason', empty('There is no active NFL week in the provider calendar. Select a week to browse the season.'), String(state.season));
@@ -64,8 +70,9 @@ async function games(refresh) {
   let html;
   try {
     const data = await read('scoreboard', { season: state.season, type: w.type, week: w.week }, refresh);
-    html = gameGrid(data.games, link);
-    if (data.byes?.length) html += `<p class="nfl-muted">On bye: ${data.byes.map(t => e(t.name)).join(', ')}</p>`;
+    const visible = state.liveOnly ? data.games.filter(g => g.state === 'in' && !g.completed && !/DELAY|SUSPEND|POSTPON|CANCEL/i.test(g.statusName)) : data.games;
+    html = state.liveOnly && !visible.length ? empty('No games are in progress in this week.') : gameGrid(visible, link);
+    if (!state.liveOnly && data.byes?.length) html += `<p class="nfl-muted">On bye: ${data.byes.map(t => e(t.name)).join(', ')}</p>`;
   } catch (error) { currentWarnings.push(`${w.label}: ${error.message}`); html = empty('Scores unavailable. Try Refresh.'); }
   return section('Weekly Games', html, [w.label, w.detail].filter(Boolean).join(' | '));
 }
@@ -198,7 +205,7 @@ async function render(refresh = false, polling = false) {
     if (token !== revision) return;
     const hasWeek = p.has('week') && p.has('type');
     selected = hasWeek ? selectWeek(calendar, p.get('type'), p.get('week')) : season === boot.calendar.year ? activeWeek(calendar) : calendar.weeks.at(-1);
-    state = { section: p.get('section') || 'games', season, id: p.get('id'), tab: p.get('tab') };
+    state = { section: p.get('section') || 'games', season, id: p.get('id'), tab: p.get('tab'), liveOnly: p.get('live') === '1' };
     if (![...sections.map(s => s[0]), 'game', 'team', 'player'].includes(state.section)) state.section = 'games';
     history.replaceState({}, '', link({ section: state.section, season, type: selected?.type, week: selected?.week, ...(state.section === 'games' ? { tab: null } : {}) }));
     controls();
@@ -246,7 +253,8 @@ $('nfl-season').addEventListener('change', event => navigate({ season: event.tar
 $('nfl-week').addEventListener('change', event => { const [type, week] = event.target.value.split(':'); navigate({ type, week }); });
 $('nfl-prev').addEventListener('click', () => { const w = weekWindow(calendar, selected)[0]; if (w) navigate({ type: w.type, week: w.week }); });
 $('nfl-next').addEventListener('click', () => { const w = weekWindow(calendar, selected)[2]; if (w) navigate({ type: w.type, week: w.week }); });
-$('nfl-today').addEventListener('click', async () => { boot = null; history.pushState({}, '', 'nfl.html?section=games'); await render(true); });
+$('nfl-today').addEventListener('click', async () => { boot = null; history.pushState({}, '', `nfl.html?section=games${params().get('live') === '1' ? '&live=1' : ''}`); await render(true); });
+$('nfl-live-filter').addEventListener('click', () => navigate({ live: params().get('live') === '1' ? null : '1' }));
 $('nfl-refresh').addEventListener('click', () => render(true));
 window.addEventListener('popstate', () => render());
 window.addEventListener('storage', event => { if (event.key === 'centralis:nfl-change' && ['favorites', 'team'].includes(state?.section)) void render(false, true); });

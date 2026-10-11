@@ -47,7 +47,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
     const page = await context.newPage(), errors = [], calls = [];
     const fixtureTime = new Date(fixtures.scoreboard.fetchedAt);
     await page.clock.install({ time: fixtureTime });
-    let failure = '', optionalFailure = false;
+    let failure = '', optionalFailure = false, scoreboardOverride = null;
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', msg => { if (msg.type() === 'warning' && msg.text().includes('Phosphor')) errors.push(msg.text()); });
     await page.route('**/*', async route => {
@@ -66,7 +66,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
         const r = copy(fixtures[key]);
         if (!r) throw new Error('Missing fixture ' + key);
         if (b.action === 'scoreboard') {
-          r.data.games = r.data.games.map(g => ({ ...g, week: b.week }));
+          r.data.games = (scoreboardOverride || r.data.games).map(g => ({ ...g, week: b.week }));
         }
         if (b.action === 'team' && b.id) r.data.id = b.id;
         return route.fulfill({ json: r });
@@ -93,6 +93,61 @@ const copy = value => JSON.parse(JSON.stringify(value));
     const borderHover = await page.locator('.nfl-game-card').first().evaluate(el => getComputedStyle(el).borderTopColor);
     assert.notEqual(borderHover, borderBefore, 'Game card has a visible hover border');
     await page.screenshot({ path: path.join(output, 'games-dark-desktop.png') });
+    const liveFilter = page.locator('#nfl-live-filter');
+    const allGameCount = await page.locator('.nfl-game-card').count();
+    const gameIds = () => page.locator('.nfl-game-card-open').evaluateAll(links => links.map(a => new URL(a.href).searchParams.get('id')));
+    const expectedLiveIds = fixtures.scoreboard.data.games.filter(g => g.state === 'in' && !g.completed && !/DELAY|SUSPEND|POSTPON|CANCEL/i.test(g.statusName)).map(g => g.id);
+    assert.ok(expectedLiveIds.length > 0 && expectedLiveIds.length < allGameCount, 'Fixture includes live and non-live games');
+    assert.equal(await liveFilter.textContent(), 'In Progress');
+    assert.equal(await liveFilter.getAttribute('aria-pressed'), 'false');
+    assert.equal(await liveFilter.evaluate(el => el.previousElementSibling.id), 'nfl-today');
+    const filterWidth = (await liveFilter.boundingBox()).width;
+    await liveFilter.focus(); await page.keyboard.press('Enter'); await ready();
+    assert.equal(await liveFilter.textContent(), 'All Games');
+    assert.equal(await liveFilter.getAttribute('aria-pressed'), 'true');
+    assert.equal((await liveFilter.boundingBox()).width, filterWidth, 'Button does not resize when its label changes');
+    assert.deepEqual(await gameIds(), expectedLiveIds);
+    assert.equal(new URL(page.url()).searchParams.get('live'), '1');
+    await page.locator('.nfl-game-card-open').first().click({ position: { x: 5, y: 5 } }); await ready();
+    assert.equal(await liveFilter.isVisible(), false, 'Filter belongs to the Games page only');
+    await page.getByRole('link', { name: 'NFL Games', exact: true }).click(); await ready();
+    assert.deepEqual(await gameIds(), expectedLiveIds, 'Returning from game details preserves the filter');
+    await page.reload(); await ready();
+    assert.deepEqual(await gameIds(), expectedLiveIds, 'Reload preserves the filter');
+    await page.getByRole('button', { name: 'Next week', exact: true }).click(); await ready();
+    assert.equal(await liveFilter.getAttribute('aria-pressed'), 'true', 'Week navigation preserves the filter');
+    await page.getByRole('button', { name: 'Previous week', exact: true }).click(); await ready();
+    assert.deepEqual(await gameIds(), expectedLiveIds);
+    await page.getByRole('button', { name: 'All Games', exact: true }).click(); await ready();
+    assert.equal(await page.locator('.nfl-game-card').count(), allGameCount);
+    assert.equal(new URL(page.url()).searchParams.has('live'), false);
+    await page.goBack(); await ready(); assert.equal(await liveFilter.getAttribute('aria-pressed'), 'true');
+    await page.goForward(); await ready(); assert.equal(await liveFilter.getAttribute('aria-pressed'), 'false');
+    const sampleGame = fixtures.scoreboard.data.games.find(g => g.state === 'in');
+    scoreboardOverride = [
+      ['in', 'STATUS_IN_PROGRESS', false], ['in', 'STATUS_HALFTIME', false], ['in', 'STATUS_OVERTIME', false],
+      ['pre', 'STATUS_SCHEDULED', false], ['post', 'STATUS_FINAL', true], ['in', 'STATUS_DELAYED', false],
+      ['in', 'STATUS_SUSPENDED', false], ['in', 'STATUS_CANCELED', false], ['in', 'STATUS_POSTPONED', false],
+    ].map(([state, statusName, completed], i) => ({ ...copy(sampleGame), id: String(900000001 + i), state, statusName, completed, status: statusName }));
+    await liveFilter.click(); await ready();
+    await page.getByRole('button', { name: 'Refresh NFL data', exact: true }).click(); await ready();
+    assert.deepEqual(await gameIds(), ['900000001', '900000002', '900000003'], 'Halftime and overtime are included; interrupted and non-live games are excluded');
+    scoreboardOverride[0] = { ...scoreboardOverride[0], state: 'post', completed: true, statusName: 'STATUS_FINAL', status: 'Final' };
+    await page.clock.fastForward(61000); await ready();
+    assert.deepEqual(await gameIds(), ['900000002', '900000003'], 'Polling removes a game that has finished');
+    assert.equal(await liveFilter.textContent(), 'All Games', 'Polling preserves the filter');
+    scoreboardOverride = scoreboardOverride.map(g => ({ ...g, state: 'post', completed: true }));
+    await page.getByRole('button', { name: 'Refresh NFL data', exact: true }).click(); await ready();
+    assert.equal(await page.locator('.nfl-game-card').count(), 0);
+    assert.match(await page.locator('#nfl-content').textContent(), /No games are in progress in this week/);
+    await liveFilter.click(); await ready();
+    assert.equal(await page.locator('.nfl-game-card').count(), scoreboardOverride.length, 'All Games restores the unfiltered list');
+    scoreboardOverride = null;
+    await liveFilter.click(); await ready();
+    await page.getByRole('button', { name: 'Today', exact: true }).click(); await ready();
+    assert.equal(await liveFilter.textContent(), 'All Games', 'Today preserves the filter');
+    assert.deepEqual(await gameIds(), expectedLiveIds);
+    await liveFilter.click(); await ready();
     await page.getByRole('button', { name: 'Previous week', exact: true }).click(); await ready();
     assert.equal(calls.filter(c => c.action === 'scoreboard').at(-1).week, Number(centerWeek.split(':')[1]) - 1);
     const browsedWeek = await page.locator('#nfl-week').inputValue();
@@ -265,6 +320,14 @@ const copy = value => JSON.parse(JSON.stringify(value));
           assert.equal(cards[0].y === cards[1].y, width >= 1440, 'Two columns on wide screens, one on narrow screens');
           const overflow = await page.locator('.nfl-game-card').evaluateAll(cards => cards.some(c => c.scrollWidth > c.clientWidth + 1));
           assert.equal(overflow, false, 'Card text stays within its border');
+          await liveFilter.click(); await ready();
+          assert.equal(await liveFilter.textContent(), 'All Games');
+          assert.deepEqual(await gameIds(), expectedLiveIds);
+          const fit = await liveFilter.evaluate(el => {
+            const r = el.getBoundingClientRect();
+            return r.left >= 0 && r.right <= innerWidth && r.bottom < innerHeight && el.scrollWidth <= el.clientWidth;
+          });
+          assert.equal(fit, true, `Live filter fits at ${width}px`);
         }
         if ([320, 390, 1440, 1920].includes(width)) await page.screenshot({ path: path.join(output, `${section}-${width}.png`) });
       }
