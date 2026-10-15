@@ -115,14 +115,14 @@ fs.mkdirSync(output, {recursive:true});
 
       await search('');
       await page.locator('[data-select-all-movies]:visible').check();
-      await openAction('[data-bulk-collection]');
+      await openAction('[data-bulk-membership="collection"][data-operation="add"]');
       await page.locator('#movie-bulk-modal [data-collection-picker] summary').click();
       await page.locator('#movie-bulk-modal input[value="2"]').check();
       await page.locator('#movie-bulk-modal [data-collection-picker] summary').click();
       await page.locator('#movie-bulk-modal button[type="submit"]').click();
       await page.locator('#movie-bulk-modal').waitFor({state:'hidden'}); await ready();
-      assert.equal(await page.locator('.movie-collection-cell').evaluateAll(cells=>cells.every(cell=>cell.textContent==='Watch Again')),true,'Bulk replace applies to every selected movie');
-      await search('Added with multiple collections'); await assertMembership(['Watch Again']);
+      assert.equal(await page.locator('.movie-collection-cell').evaluateAll(cells=>cells.every(cell=>cell.textContent.includes('Watch Again'))),true,'Bulk add preserves existing memberships on every selected movie');
+      await search('Added with multiple collections'); await assertMembership(['Favorites','Watch Again']);
       await edit(); await editPicker.locator('summary').click(); await editPicker.locator('input[value="1"]').check(); await save();
       await openAction('[data-open-collections]');
       page.once('dialog',dialog=>dialog.accept());

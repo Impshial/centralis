@@ -8,7 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=movie-missing-data-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="movie-tracker.css?v=collections-popover-3">
+  <link rel="stylesheet" href="movie-tracker.css?v=membership-actions-4">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="movie-tracker">
@@ -206,9 +206,10 @@
           </button>
           <div class="movie-actions-menu" data-actions-menu hidden>
             <button type="button" data-open-import><ph-upload-simple weight="bold"></ph-upload-simple>Import Movies</button>
-            <button type="button" data-bulk-downloaded disabled><ph-download-simple weight="bold"></ph-download-simple>Mark Downloaded (0)</button>
-            <button type="button" data-bulk-franchise disabled><ph-film-slate weight="bold"></ph-film-slate>Set Franchise (0)</button>
-            <button type="button" data-bulk-collection disabled><ph-film-slate weight="bold"></ph-film-slate>Set Collections (0)</button>
+            <button type="button" data-bulk-membership="collection" data-operation="add" disabled><ph-plus weight="bold"></ph-plus>Add to Collection (0)</button>
+            <button type="button" data-bulk-membership="collection" data-operation="remove" disabled><ph-minus weight="bold"></ph-minus>Remove from Collection (0)</button>
+            <button type="button" data-bulk-membership="franchise" data-operation="add" disabled><ph-plus weight="bold"></ph-plus>Add to Franchise (0)</button>
+            <button type="button" data-bulk-membership="franchise" data-operation="remove" disabled><ph-minus weight="bold"></ph-minus>Remove from Franchise (0)</button>
             <hr>
             <button type="button" data-refresh-movies><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Refresh Movies</button>
             <button type="button" data-open-missing-details><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Get Missing Details</button>
@@ -380,7 +381,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="movie-tracker.js?v=collections-popover-3"></script>
+  <script src="movie-tracker.js?v=membership-actions-4"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {

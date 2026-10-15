@@ -52,8 +52,8 @@ async function reachable(locator) {
       await page.locator('.movie-select-page').tap();
       assert.equal(await page.locator('[data-select-movie]:checked').count(), 50);
       await page.locator('[data-actions-toggle]').tap();
-      await reachable(page.locator('[data-bulk-collection]'));
-      await page.locator('[data-bulk-collection]').tap();
+      await reachable(page.locator('[data-bulk-membership="collection"][data-operation="add"]'));
+      await page.locator('[data-bulk-membership="collection"][data-operation="add"]').tap();
       await noHorizontalOverflow(page, '#movie-bulk-modal .modal-dialog');
       await page.locator('#movie-bulk-modal [data-close-modal-target]').first().tap();
 

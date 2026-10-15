@@ -309,6 +309,7 @@ function openModal(id) {
 }
 
 function closeModal(id) {
+  if (id === "movie-bulk-modal" && els.bulkForm?.dataset.saving === "true") return;
   const modal = document.getElementById(id);
   if (modal) {
     modal.hidden = true;
@@ -675,13 +676,10 @@ function renderMoviePagination() {
 
 function renderActionsState() {
   const count = movieState.selectedIds.size;
-  const downloaded = document.querySelector("[data-bulk-downloaded]");
-  const franchise = document.querySelector("[data-bulk-franchise]");
-  const collection = document.querySelector("[data-bulk-collection]");
-  [[downloaded, "Mark Downloaded"], [franchise, "Set Franchise"], [collection, "Set Collections"]].forEach(([button, label]) => {
-    if (!button) return;
+  document.querySelectorAll("[data-bulk-membership]").forEach((button) => {
+    const label = membershipActionLabel(button.dataset.bulkMembership, button.dataset.operation);
     button.disabled = count === 0;
-    button.innerHTML = `${button.querySelector("ph-download-simple,ph-film-slate")?.outerHTML || ""}${label} (${count})`;
+    button.innerHTML = `${button.querySelector("ph-plus,ph-minus")?.outerHTML || ""}${label} (${count})`;
   });
 }
 
@@ -726,12 +724,6 @@ function movieFieldValue(value, fallback = "Not set") {
   return text || fallback;
 }
 
-function movieDateTimeValue(value) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? movieFieldValue(value) : date.toLocaleString();
-}
-
 function movieDetailRow(label, value, className = "") {
   return `<div${className ? ` class="${className}"` : ""}><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
 }
@@ -739,14 +731,10 @@ function movieDetailRow(label, value, className = "") {
 function renderMovieView(movie) {
   movieState.activeMovie = movie;
   const detailRows = [
-    ["ID", movie.id],
     ["Title", movie.title],
     ["Year Released", movie.year_released],
-    ["Downloaded", movie.downloaded],
     ["Franchise", movie.franchise?.name || null, "None"],
-    ["Franchise ID", movie.franchise_id],
     ["Collections", movieCollectionNames(movie).join(", ") || null, "None"],
-    ["Collection IDs", movieCollectionIds(movie).join(", ") || null],
     ["Poster URL", movie.poster_url],
     ["Rating", movie.rated],
     ["Director", movie.director],
@@ -756,11 +744,6 @@ function renderMovieView(movie) {
     ["Writers", movie.writers],
     ["Actors", movie.actors],
     ["Plot", movie.plot, "Not set", "movie-detail-wide"],
-    ["Created", movieDateTimeValue(movie.created_at)],
-    ["Updated", movieDateTimeValue(movie.updated_at)],
-    ["Deleted", movie.deleted],
-    ["Deleted At", movieDateTimeValue(movie.deleted_at)],
-    ["Deleted By", movie.deleted_by],
   ];
   els.viewContent.innerHTML = `
     <div class="movie-dialog-layout">
@@ -814,7 +797,6 @@ function renderMovieEdit(movie) {
         <label class="form-field"><span>Writers</span><input name="writers" value="${escapeHtml(movie.writers || "")}"></label>
         <label class="form-field"><span>Actors</span><input name="actors" value="${escapeHtml(movie.actors || "")}"></label>
         <label class="form-field movie-span"><span>Plot</span><textarea name="plot">${escapeHtml(movie.plot || "")}</textarea></label>
-        <label class="checkbox-field movie-span"><input type="checkbox" name="downloaded" ${movie.downloaded ? "checked" : ""}>Downloaded</label>
         </div>
         <p class="dialog-status" data-edit-movie-status role="status"></p>
       </div>
@@ -1047,7 +1029,6 @@ async function saveMovie(formData) {
     writers: String(formData.get("writers") || "").trim() || null,
     actors: String(formData.get("actors") || "").trim() || null,
     plot: String(formData.get("plot") || "").trim() || null,
-    downloaded: formData.get("downloaded") === "on",
     updated_at: new Date().toISOString(),
   };
   const { error } = await movieSupabase
@@ -1871,38 +1852,46 @@ async function processMissingMovieDetails() {
   );
 }
 
-function openBulkDialog(kind) {
+function membershipActionLabel(kind, operation) {
+  return `${operation === "add" ? "Add to" : "Remove from"} ${kind === "franchise" ? "Franchise" : "Collection"}`;
+}
+
+function updateBulkMembershipState() {
+  const submit = els.bulkForm?.querySelector('[type="submit"]');
+  if (!submit) return;
+  const hasTarget = els.bulkForm.dataset.membershipType === "franchise"
+    ? Boolean(els.bulkForm.elements.lookup_id?.value)
+    : selectedCollectionValues(els.bulkForm).length > 0;
+  submit.disabled = els.bulkForm.dataset.saving === "true" || !hasTarget;
+}
+
+function openBulkDialog(kind, operation) {
   const count = movieState.selectedIds.size;
   if (!count) return;
-  const label = kind === "franchise" ? "Franchise" : "Collections";
+  els.actionsMenu.hidden = true;
+  els.actionsToggle.setAttribute("aria-expanded", "false");
+  els.bulkForm.dataset.membershipType = kind;
+  els.bulkForm.dataset.operation = operation;
+  els.bulkForm.dataset.saving = "false";
+  const adding = operation === "add";
+  const help = kind === "franchise"
+    ? (adding ? "Move the selected movies to this franchise, replacing any current franchise." : "Remove the selected movies from this franchise only. Other franchise assignments stay unchanged.")
+    : (adding ? "Add the checked collections to each selected movie. Existing memberships stay unchanged." : "Remove only the checked collections from each selected movie. Other memberships stay unchanged.");
   const field = kind === "franchise"
-    ? `<label class="form-field"><span>Franchise</span><select name="lookup_id">${noneOptionMarkup(movieState.franchises, "No Franchise")}</select></label>`
-    : `<div class="form-field"><span>Collections</span>${collectionPickerMarkup("collection_ids")}</div><p class="movie-collection-help">These selections replace the current collections on all selected movies. Leave all unchecked to remove their collections.</p>`;
+    ? `<label class="form-field"><span>Franchise</span><select name="lookup_id" required>${noneOptionMarkup(movieState.franchises, "Choose a franchise")}</select></label>`
+    : `<div class="form-field"><span>Collections</span>${collectionPickerMarkup("collection_ids")}</div>`;
   els.bulkForm.innerHTML = `
-    <h2 id="movie-bulk-title">Set ${label}</h2>
+    <h2 id="movie-bulk-title">${membershipActionLabel(kind, operation)}</h2>
     <p class="modal-subtitle">Update ${count} selected movies.</p>
     ${field}
+    <p class="movie-collection-help">${help}</p>
     <p class="dialog-status" data-bulk-status role="status"></p>
     <div class="dialog-actions">
       <button class="secondary-action" type="button" data-close-modal-target="movie-bulk-modal">Cancel</button>
-      <button class="primary-action" type="submit" data-bulk-kind="${kind}">Save</button>
+      <button class="primary-action" type="submit" disabled>${adding ? "Add" : "Remove"}</button>
     </div>
   `;
   openModal("movie-bulk-modal");
-}
-
-async function bulkSetDownloaded() {
-  const ids = Array.from(movieState.selectedIds);
-  if (!ids.length) return;
-  const { error } = await movieSupabase
-    .from("movies")
-    .update({ downloaded: true, updated_at: new Date().toISOString() })
-    .in("id", ids)
-    .eq("user_id", movieState.appUser.id)
-    .eq("deleted", false);
-  if (error) throw error;
-  movieState.selectedIds.clear();
-  await refreshMovieTracker("Marked selected movies as downloaded.");
 }
 
 async function initializeMovieTracker() {
@@ -1930,7 +1919,7 @@ document.querySelectorAll("[data-close-modal-target]").forEach((button) => {
 
 document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
   backdrop.addEventListener("click", (event) => {
-    if (event.target === backdrop && backdrop.dataset.strictModal === undefined) backdrop.hidden = true;
+    if (event.target === backdrop && backdrop.dataset.strictModal === undefined) closeModal(backdrop.id);
   });
 });
 
@@ -1945,7 +1934,7 @@ document.addEventListener("keydown", (event) => {
     }
     document.querySelectorAll(".modal-backdrop").forEach((modal) => {
       if (modal.dataset.strictModal === undefined) {
-        modal.hidden = true;
+        closeModal(modal.id);
       }
     });
     if (els.actionsMenu) els.actionsMenu.hidden = true;
@@ -1967,6 +1956,7 @@ document.addEventListener("click", (event) => {
     const picker = clearCollections.closest("[data-collection-picker]");
     picker.querySelectorAll("[data-collection-choice]").forEach((input) => { input.checked = false; });
     updateCollectionPicker(picker);
+    updateBulkMembershipState();
     return;
   }
   const addToggle = event.target.closest("[data-add-movie-menu-toggle]");
@@ -2140,15 +2130,9 @@ document.querySelector("[data-export-movies]")?.addEventListener("click", async 
     setStatus(`Could not export movies: ${getReadableError(error)}`, "error");
   }
 });
-document.querySelector("[data-bulk-downloaded]")?.addEventListener("click", async () => {
-  try {
-    await bulkSetDownloaded();
-  } catch (error) {
-    setStatus(`Could not update movies: ${getReadableError(error)}`, "error");
-  }
+document.querySelectorAll("[data-bulk-membership]").forEach((button) => {
+  button.addEventListener("click", () => openBulkDialog(button.dataset.bulkMembership, button.dataset.operation));
 });
-document.querySelector("[data-bulk-franchise]")?.addEventListener("click", () => openBulkDialog("franchise"));
-document.querySelector("[data-bulk-collection]")?.addEventListener("click", () => openBulkDialog("collection"));
 
 document.querySelectorAll("[data-sort-header]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -2415,28 +2399,43 @@ els.bulkForm?.addEventListener("click", (event) => {
   if (close) closeModal(close.dataset.closeModalTarget);
 });
 
+els.bulkForm?.addEventListener("change", updateBulkMembershipState);
+
 els.bulkForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const submit = event.submitter;
-  const kind = submit?.dataset.bulkKind;
+  if (els.bulkForm.dataset.saving === "true") return;
+  const kind = els.bulkForm.dataset.membershipType;
+  const operation = els.bulkForm.dataset.operation;
   const formData = new FormData(els.bulkForm);
-  const membership = kind === "franchise"
-    ? { franchise_id: normalizeId(formData.get("lookup_id")) }
-    : { collection_ids: normalizeCollectionIds(formData.getAll("collection_ids")) };
+  const targets = kind === "franchise"
+    ? normalizeCollectionIds([formData.get("lookup_id")])
+    : normalizeCollectionIds(formData.getAll("collection_ids"));
   const ids = Array.from(movieState.selectedIds);
+  const status = els.bulkForm.querySelector("[data-bulk-status]");
+  if (!ids.length || !targets.length) {
+    setDialogStatus(status, "Choose movies and at least one membership.", "error");
+    return;
+  }
+  els.bulkForm.dataset.saving = "true";
+  const controls = document.querySelectorAll('#movie-bulk-modal :is(input, select, button)');
+  controls.forEach((control) => { control.disabled = true; });
+  updateBulkMembershipState();
+  setDialogStatus(status, "Updating movies...");
   try {
-    const { error } = await movieSupabase
-      .from("movies")
-      .update({ ...membership, updated_at: new Date().toISOString() })
-      .in("id", ids)
-      .eq("user_id", movieState.appUser.id)
-      .eq("deleted", false);
+    const { data, error } = await movieSupabase.rpc("update_movie_memberships", {
+      p_movie_ids: ids, p_membership_type: kind, p_operation: operation, p_target_ids: targets,
+    });
     if (error) throw error;
+    els.bulkForm.dataset.saving = "false";
     closeModal("movie-bulk-modal");
     movieState.selectedIds.clear();
-    await refreshMovieTracker("Selected movies updated.");
+    await refreshMovieTracker(data ? `Updated ${data} movie${data === 1 ? "" : "s"}.` : "No membership changes needed.");
   } catch (error) {
-    setDialogStatus(document.querySelector("[data-bulk-status]"), getReadableError(error), "error");
+    setDialogStatus(status, getReadableError(error), "error");
+  } finally {
+    els.bulkForm.dataset.saving = "false";
+    controls.forEach((control) => { control.disabled = false; });
+    updateBulkMembershipState();
   }
 });
 

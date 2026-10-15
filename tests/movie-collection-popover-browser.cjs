@@ -68,7 +68,7 @@ async function expectWithinViewport(options) {
 
       await page.locator('[data-select-all-movies]:visible').check();
       await page.locator('[data-actions-toggle]').click();
-      await page.locator('[data-bulk-collection]').click();
+      await page.locator('[data-bulk-membership="collection"][data-operation="add"]').click();
       const dialog = page.locator('#movie-bulk-modal .modal-dialog');
       const picker = dialog.locator('[data-collection-picker]');
       const options = picker.locator('.movie-collection-options');
@@ -105,11 +105,14 @@ async function expectWithinViewport(options) {
       assert.equal(await options.isVisible(),false);
       await picker.locator('summary').click();
       await options.locator(':scope:popover-open').waitFor();
-      await dialog.locator('h2').click();
+      // The menu can open upward over the title on short screens; use the dialog padding.
+      await dialog.click({position:{x:4,y:20}});
       assert.equal(await options.isVisible(),false,'Outside click closes the list');
       await picker.locator('summary').click();
       await options.locator(':scope:popover-open').waitFor();
-      await page.locator('#movie-bulk-modal .modal-close').click();
+      // An upward-opening list may cover the close button, which remains keyboard accessible.
+      await page.locator('#movie-bulk-modal .modal-close').focus();
+      await page.keyboard.press('Enter');
       assert.equal(await page.locator(':popover-open').count(),0,'Closing the dialog leaves no floating menu');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
       assert.deepEqual(errors,[]);

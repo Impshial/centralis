@@ -11,6 +11,13 @@
   margin-block: 16px;
 }
 
+.movie-actions-wrap > .movie-actions-menu {
+  width: 280px;
+  max-height: calc(100dvh - 160px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .movie-filters > summary {
   color: var(--ink);
   font-weight: 800;

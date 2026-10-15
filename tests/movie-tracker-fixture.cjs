@@ -20,6 +20,24 @@ const movieTestTables = JSON.parse(localStorage.getItem('movie-test-tables') || 
 };
 window.movieTestWrites = [];
 window.centralisSupabase = {
+  async rpc(name, args) {
+    if (name !== 'update_movie_memberships') throw new Error('Unexpected RPC');
+    window.movieTestWrites.push({rpc:name,args});
+    if (window.movieTestFailNextSave) { window.movieTestFailNextSave=false; return {error:{message:'Test save failed'},data:null}; }
+    let changed=0;
+    for (const movie of movieTestTables.movies.filter(row=>args.p_movie_ids.includes(row.id))) {
+      const before=JSON.stringify([movie.collection_ids,movie.franchise_id]);
+      const targets=args.p_target_ids;
+      if (args.p_membership_type==='collection') {
+        movie.collection_ids=args.p_operation==='add' ? [...new Set([...movie.collection_ids,...targets])] : movie.collection_ids.filter(id=>!targets.includes(id));
+      } else if (args.p_operation==='add') movie.franchise_id=targets[0];
+      else if (targets.includes(movie.franchise_id)) movie.franchise_id=null;
+      movie.franchise=movieTestTables.franchise.find(row=>row.id===movie.franchise_id) || null;
+      if (before!==JSON.stringify([movie.collection_ids,movie.franchise_id])) changed++;
+    }
+    localStorage.setItem('movie-test-tables',JSON.stringify(movieTestTables));
+    return {data:changed,error:null};
+  },
   from(table) {
     let rows = [...movieTestTables[table]], head = false, range = null, single = false, mode = 'read', payload;
     const orders = [];
