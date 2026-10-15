@@ -8,6 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=movie-missing-data-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="movie-tracker.css?v=mobile-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="movie-tracker">
@@ -136,6 +137,24 @@
           <nav class="movie-pagination movie-pagination-top" data-movie-pagination aria-label="Movie list pagination"></nav>
         </header>
         <section class="movie-list-card">
+          <div class="movie-mobile-controls">
+            <label class="movie-filter-field">
+              <span>Sort movies</span>
+              <select data-movie-sort>
+                <option value="title-asc">Title: A–Z</option>
+                <option value="title-desc">Title: Z–A</option>
+                <option value="year-desc">Year: newest first</option>
+                <option value="year-asc">Year: oldest first</option>
+                <option value="director-asc">Director: A–Z</option>
+                <option value="director-desc">Director: Z–A</option>
+                <option value="writers-asc">Writers: A–Z</option>
+                <option value="writers-desc">Writers: Z–A</option>
+                <option value="actors-asc">Actors: A–Z</option>
+                <option value="actors-desc">Actors: Z–A</option>
+              </select>
+            </label>
+            <label class="movie-select-page"><input type="checkbox" data-select-all-movies> Select page</label>
+          </div>
           <div class="movie-table-shell">
             <table class="movie-table">
               <thead>
@@ -154,6 +173,7 @@
               <tbody data-movie-rows></tbody>
             </table>
           </div>
+          <nav class="movie-pagination movie-pagination-bottom" data-movie-pagination aria-label="Movie list pagination at bottom"></nav>
         </section>
       </section>
 
@@ -203,20 +223,22 @@
             <span><ph-magnifying-glass weight="bold"></ph-magnifying-glass>Search</span>
             <input type="search" data-search-movies placeholder="Title, director, actors, writers...">
           </label>
-          <hr class="movie-sidebar-separator">
-          <h3><ph-funnel weight="bold"></ph-funnel>Filters</h3>
-          <label class="movie-filter-field">
-            <span>Franchise</span>
-            <select data-filter-franchise></select>
-          </label>
-          <label class="movie-filter-field">
-            <span>Collection</span>
-            <select data-filter-collection></select>
-          </label>
-        </section>
-        <hr>
-        <section class="movie-statistics">
-          <dl id="movie-statistics-content" data-movie-stats></dl>
+          <details class="movie-filters" data-movie-filters open>
+            <summary>Filters &amp; statistics</summary>
+            <div class="movie-filter-options">
+              <label class="movie-filter-field">
+                <span>Franchise</span>
+                <select data-filter-franchise></select>
+              </label>
+              <label class="movie-filter-field">
+                <span>Collection</span>
+                <select data-filter-collection></select>
+              </label>
+            </div>
+            <section class="movie-statistics">
+              <dl id="movie-statistics-content" data-movie-stats></dl>
+            </section>
+          </details>
         </section>
       </aside>
     </main>
@@ -355,7 +377,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="movie-tracker.js?v=movie-bulk-add-1"></script>
+  <script src="movie-tracker.js?v=mobile-1"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {

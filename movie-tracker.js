@@ -60,7 +60,8 @@ const els = {
   count: document.querySelector("[data-movie-count]"),
   status: document.querySelector("[data-movie-status]"),
   stats: document.querySelector("[data-movie-stats]"),
-  selectAll: document.querySelector("[data-select-all-movies]"),
+  selectAll: Array.from(document.querySelectorAll("[data-select-all-movies]")),
+  sort: document.querySelector("[data-movie-sort]"),
   pagination: Array.from(document.querySelectorAll("[data-movie-pagination]")),
   search: document.querySelector("[data-search-movies]"),
   franchiseFilter: document.querySelector("[data-filter-franchise]"),
@@ -419,15 +420,15 @@ function renderMovies() {
   } else {
     els.rows.innerHTML = movieState.movies.map((movie) => `
       <tr class="movie-clickable-row" data-movie-id="${movie.id}" tabindex="0" aria-label="View ${escapeHtml(movie.title)}">
-        <td><input type="checkbox" data-select-movie="${movie.id}" ${movieState.selectedIds.has(movie.id) ? "checked" : ""} aria-label="Select ${escapeHtml(movie.title)}"></td>
-        <td>${posterMarkup(movie)}</td>
+        <td class="movie-selection-cell"><label class="movie-select-target"><input type="checkbox" data-select-movie="${movie.id}" ${movieState.selectedIds.has(movie.id) ? "checked" : ""} aria-label="Select ${escapeHtml(movie.title)}"></label></td>
+        <td class="movie-poster-cell">${posterMarkup(movie)}</td>
         <td class="movie-title-cell">${escapeHtml(movie.title)}</td>
-        <td>${escapeHtml(movie.year_released)}</td>
-        <td>${escapeHtml(movie.director || "")}</td>
-        <td class="movie-muted movie-people-cell" title="${escapeHtml(movie.writers || "")}">${escapeHtml(compactMoviePeople(movie.writers))}</td>
-        <td class="movie-muted movie-people-cell" title="${escapeHtml(movie.actors || "")}">${escapeHtml(compactMoviePeople(movie.actors))}</td>
-        <td class="movie-muted">${escapeHtml(movie.franchise?.name || "None")}</td>
-        <td class="movie-muted">${escapeHtml(movie.collection?.name || "None")}</td>
+        <td class="movie-year-cell">${escapeHtml(movie.year_released)}</td>
+        <td class="movie-director-cell" data-label="Director">${escapeHtml(movie.director || "Not set")}</td>
+        <td class="movie-muted movie-people-cell movie-writers-cell" title="${escapeHtml(movie.writers || "")}">${escapeHtml(compactMoviePeople(movie.writers))}</td>
+        <td class="movie-muted movie-people-cell movie-actors-cell" title="${escapeHtml(movie.actors || "")}">${escapeHtml(compactMoviePeople(movie.actors))}</td>
+        <td class="movie-muted movie-franchise-cell" data-label="Franchise">${escapeHtml(movie.franchise?.name || "None")}</td>
+        <td class="movie-muted movie-collection-cell" data-label="Collection">${escapeHtml(movie.collection?.name || "None")}</td>
       </tr>
     `).join("");
   }
@@ -436,10 +437,11 @@ function renderMovies() {
   const end = Math.min(movieState.page * movieState.pageSize, movieState.total);
   if (els.count) els.count.textContent = `${start}-${end} of ${movieState.total} movies`;
   renderMoviePagination();
-  if (els.selectAll) {
-    els.selectAll.checked = movieState.movies.length > 0 && movieState.movies.every((movie) => movieState.selectedIds.has(movie.id));
-    els.selectAll.indeterminate = movieState.movies.some((movie) => movieState.selectedIds.has(movie.id)) && !els.selectAll.checked;
-  }
+  els.selectAll.forEach((checkbox) => {
+    checkbox.checked = movieState.movies.length > 0 && movieState.movies.every((movie) => movieState.selectedIds.has(movie.id));
+    checkbox.indeterminate = movieState.movies.some((movie) => movieState.selectedIds.has(movie.id)) && !checkbox.checked;
+    checkbox.disabled = movieState.movies.length === 0;
+  });
   renderActionsState();
   renderSortHeaders();
   renderStats();
@@ -452,6 +454,7 @@ function getActiveSortField() {
 }
 
 function renderSortHeaders() {
+  if (els.sort) els.sort.value = movieState.filters.sort;
   const active = getActiveSortField();
   const activeField = active?.[0] || "";
   const activeDirection = active?.[1]?.desc === movieState.filters.sort ? "desc" : "asc";
@@ -522,6 +525,7 @@ function renderMoviePagination() {
       return `<button class="secondary-action movie-page-number ${isCurrent ? "is-current" : ""}" type="button" data-page-number="${item}" ${isCurrent ? 'aria-current="page"' : ""}>${item}</button>`;
     }),
     `</span>`,
+    `<span class="movie-page-summary">${currentPage} / ${totalPages}</span>`,
     `<button class="secondary-action movie-pagination-edge" type="button" data-page-action="next" aria-label="Next page" title="Next page" ${atEnd ? "disabled" : ""}><ph-arrow-right weight="bold" aria-hidden="true"></ph-arrow-right></button>`,
     `<button class="secondary-action movie-pagination-edge" type="button" data-page-action="last" aria-label="Last page" title="Last page" ${atEnd ? "disabled" : ""}><ph-arrow-line-right weight="bold" aria-hidden="true"></ph-arrow-line-right></button>`,
   ].join("");
@@ -1832,6 +1836,7 @@ els.addForm?.addEventListener("submit", async (event) => {
 });
 
 els.rows?.addEventListener("click", async (event) => {
+  if (event.target.closest(".movie-select-target") && !event.target.matches("[data-select-movie]")) return;
   const checkbox = event.target.closest("[data-select-movie]");
   if (checkbox) {
     const id = Number(checkbox.dataset.selectMovie);
@@ -1860,13 +1865,27 @@ els.stats?.addEventListener("click", (event) => {
   }
 });
 
-els.selectAll?.addEventListener("change", () => {
+els.selectAll.forEach((checkbox) => checkbox.addEventListener("change", () => {
   movieState.movies.forEach((movie) => {
-    if (els.selectAll.checked) movieState.selectedIds.add(movie.id);
+    if (checkbox.checked) movieState.selectedIds.add(movie.id);
     else movieState.selectedIds.delete(movie.id);
   });
   renderMovies();
+}));
+
+els.sort?.addEventListener("change", () => {
+  movieState.filters.sort = els.sort.value;
+  movieState.page = 1;
+  refreshMovieTracker();
 });
+
+const movieMobileLayout = window.matchMedia("(max-width: 1000px)");
+function syncMovieFilterDisclosure() {
+  const filters = document.querySelector("[data-movie-filters]");
+  if (filters) filters.open = !movieMobileLayout.matches;
+}
+movieMobileLayout.addEventListener("change", syncMovieFilterDisclosure);
+syncMovieFilterDisclosure();
 
 [els.search, els.franchiseFilter, els.collectionFilter].forEach((input) => {
   input?.addEventListener(input === els.search ? "input" : "change", () => {
@@ -1896,7 +1915,10 @@ els.pagination.forEach((pagination) => pagination.addEventListener("click", (eve
     movieState.page = totalPages;
   }
 
-  refreshMovieTracker();
+  refreshMovieTracker().then(() => {
+    if (movieMobileLayout.matches) document.querySelector(".movie-list-card")?.scrollIntoView({ block: "start" });
+    else document.querySelector(".movie-table-shell")?.scrollTo(0, 0);
+  });
 }));
 
 document.querySelector("[data-refresh-movies]")?.addEventListener("click", () => refreshMovieTracker());

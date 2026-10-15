@@ -221,6 +221,11 @@ Movie Tracker files:
 
 - `movie-tracker.html`
 - `movie-tracker.js`
+- `movie-tracker.css`
+
+Phones and tablets use movie cards, tools above the list, collapsible filters, touch-friendly selection and sorting, and scrollable dialogs. Desktop retains the table and resizable sidebar.
+
+With the local server running and Playwright available, run `node tests/movie-tracker-browser.cjs` for responsive interaction checks with local fixture data. Set `PLAYWRIGHT_MODULE` to a bundled Playwright path if needed, and `MOVIE_TEST_BASE_URL` to override the default `http://127.0.0.1:4173`.
 
 ### Stellar Architect
 

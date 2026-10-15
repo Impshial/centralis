@@ -1,0 +1,261 @@
+/* Movie Tracker responsive layout, loaded after the shared module styles. */
+.movie-mobile-controls,
+.movie-pagination-bottom,
+.movie-page-summary {
+  display: none;
+}
+
+.movie-filter-options {
+  display: grid;
+  gap: 16px;
+  margin-block: 16px;
+}
+
+.movie-filters summary {
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.movie-select-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Keep wide tables readable on smaller laptops. Phones use cards below. */
+@media (min-width: 1001px) and (max-width: 1400px) {
+  .movie-table { min-width: 920px; }
+  .movie-pagination-top { grid-column: 1 / -1; }
+}
+
+@media (max-width: 1000px) {
+  body[data-page="movie-tracker"],
+  body[data-page="movie-tracker"] .app-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  body[data-page="movie-tracker"] .movie-page {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100dvh - var(--header-height));
+    overflow: visible;
+    padding: 0 12px max(16px, env(safe-area-inset-bottom));
+  }
+
+  body[data-page="movie-tracker"]:has(> .modal-backdrop:not([hidden])) {
+    overflow: hidden;
+  }
+
+  .movie-main { display: contents; }
+
+  .movie-tracker-header {
+    position: static;
+    order: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 18px 0 12px;
+    background: transparent;
+  }
+
+  .movie-tracker-title-group { gap: 6px; }
+
+  .movie-tracker-header .movie-status {
+    justify-self: start;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .movie-sidebar-resizer,
+  .movie-side-panel-header,
+  .movie-side-panel > hr { display: none; }
+
+  body[data-page="movie-tracker"] .movie-page .movie-side-panel {
+    order: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    width: 100%;
+    height: auto;
+    gap: 12px;
+    overflow: visible;
+    padding: 14px 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .movie-page.is-sidebar-collapsed .movie-side-panel > :not(.movie-side-panel-header) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .movie-tool-section { grid-column: 1 / -1; gap: 12px; }
+  .movie-filters { min-width: 0; }
+  .movie-filters summary { padding-block: 12px; min-height: 44px; }
+  .movie-filter-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 0; }
+  .movie-filter-field { min-width: 0; }
+  .movie-filter-field :is(input, select) { min-width: 0; max-width: 100%; }
+  .movie-statistics { padding-bottom: 8px; }
+
+  .movie-add-split { grid-template-columns: minmax(0, 1fr) 44px; }
+  .movie-add-main { padding-inline: 8px; white-space: nowrap; gap: 6px; }
+  .movie-add-menu { left: 0; right: auto; }
+  .movie-actions-wrap > .movie-actions-menu { left: auto; right: 0; }
+  .movie-actions-menu { max-width: calc(100vw - 24px); }
+
+  .movie-list-card {
+    order: 2;
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    scroll-margin-top: calc(var(--header-height) + 12px);
+  }
+
+  .movie-mobile-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .movie-select-page {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    color: var(--ink);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .movie-select-page input { width: 22px; height: 22px; accent-color: var(--accent); }
+
+  body[data-page="movie-tracker"] .movie-table-shell {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .movie-table,
+  .movie-table tbody { display: block; width: 100%; }
+  .movie-table thead { display: none; }
+
+  .movie-table .movie-clickable-row {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr) 44px;
+    gap: 4px 12px;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  body[data-page="movie-tracker"] .movie-table td {
+    display: block;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    background: transparent;
+  }
+
+  .movie-table .movie-selection-cell { grid-column: 3; grid-row: 1 / span 2; }
+  .movie-select-target { width: 44px; height: 44px; }
+  .movie-table .movie-poster-cell { grid-column: 1; grid-row: 1 / span 3; }
+  .movie-poster-thumb { display: block; width: 60px; height: 90px; }
+  .movie-poster-thumb.is-empty { display: grid; }
+  .movie-table .movie-title-cell { grid-column: 2; grid-row: 1; font-size: 16px; line-height: 1.4; }
+  .movie-table .movie-year-cell { grid-column: 2; grid-row: 2; font-size: 14px; }
+  .movie-table .movie-director-cell { grid-column: 2 / -1; grid-row: 3; font-size: 13px; }
+  body[data-page="movie-tracker"] .movie-table :is(.movie-writers-cell, .movie-actors-cell) { display: none; }
+  .movie-table .movie-franchise-cell { grid-column: 1 / -1; grid-row: 4; margin-top: 8px; }
+  .movie-table .movie-collection-cell { grid-column: 1 / -1; grid-row: 5; }
+  .movie-table td[data-label] { font-size: 13px; line-height: 1.5; }
+  .movie-table td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); }
+  .movie-table .movie-empty-row { padding: 24px 12px; text-align: center; }
+
+  .movie-pagination { justify-content: center; flex-wrap: nowrap; gap: 8px; }
+  .movie-pagination-top { grid-column: 1 / -1; justify-self: stretch; }
+  .movie-pagination-bottom { display: flex; }
+  .movie-page-number-group { display: none; }
+  .movie-page-summary { display: block; color: var(--ink); text-align: center; min-width: 52px; }
+  .movie-pagination .movie-pagination-edge { width: 44px; min-width: 44px; padding: 0; }
+
+  /* Comfortable touch targets and 16px fields prevent focus zoom on phones. */
+  body[data-page="movie-tracker"] :is(.movie-page, .modal-backdrop) :is(.primary-action, .secondary-action, .danger-action, .movie-actions-menu button, .movie-manager-row button, .movie-stat-link) {
+    min-height: 44px;
+  }
+
+  body[data-page="movie-tracker"] :is(.movie-page, .modal-backdrop) :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  /* Scroll whole dialogs so posters and action bars cannot crowd out forms. */
+  body[data-page="movie-tracker"] .modal-backdrop {
+    inset: 0;
+    z-index: 3100;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  body[data-page="movie-tracker"] .modal-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 18px;
+    overflow-wrap: anywhere;
+  }
+
+  body[data-page="movie-tracker"] :is(.movie-view-dialog, .movie-edit-dialog, .movie-bulk-add-dialog) { padding: 0; }
+  .movie-view-dialog [data-movie-view-content],
+  .movie-edit-dialog form,
+  .movie-bulk-add-form { height: auto; }
+  .movie-dialog-layout { display: block; height: auto; }
+  .movie-dialog-header { position: relative; padding: 20px 60px 16px 18px; }
+  .movie-dialog-header h2 { font-size: 1.35rem; }
+  .movie-dialog-poster-panel { grid-template-columns: 80px minmax(0, 1fr); align-items: center; padding: 16px 18px 0; border: 0; }
+  .movie-dialog-poster-panel .movie-poster-large { width: 80px; height: 120px; }
+  .movie-dialog-scroll,
+  .movie-bulk-add-scroll { overflow: visible; padding: 18px; }
+  .movie-detail-list { grid-template-columns: minmax(0, 1fr); }
+  .movie-bulk-add-form { display: block; }
+  .movie-bulk-add-entry,
+  .movie-bulk-add-row,
+  .movie-missing-data-row { grid-template-columns: minmax(0, 1fr); }
+  .movie-dialog-footer,
+  .movie-dialog-footer-split { display: flex; flex-wrap: wrap; padding: 14px 18px 18px; gap: 10px; }
+  .movie-dialog-footer > span:empty { display: none; }
+  .movie-dialog-footer > button { flex: 1 1 130px; }
+  .movie-dialog-footer .danger-action { flex-basis: 100%; }
+  body[data-page="movie-tracker"] .dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  body[data-page="movie-tracker"] .dialog-actions > button { flex: 1 1 120px; }
+  body[data-page="movie-tracker"] .modal-close { width: 44px; height: 44px; flex-shrink: 0; }
+  .movie-floating-close { top: 8px; right: 8px; z-index: 2; background: var(--surface); }
+  .movie-bulk-add-dialog .modal-close { position: absolute; top: 8px; right: 8px; }
+  body[data-page="movie-tracker"] .modal-dialog > h2,
+  :is([data-manager-content], [data-process-content], [data-bulk-form]) > h2 { padding-right: 40px; }
+  .movie-manager-row { gap: 8px; }
+  .movie-manager-row > div { min-width: 0; }
+  .movie-manager-list { max-height: none; overflow: visible; }
+}
+
+@media (max-width: 380px) {
+  .movie-filter-options { grid-template-columns: minmax(0, 1fr); }
+}
