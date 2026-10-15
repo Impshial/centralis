@@ -1,6 +1,7 @@
 const movieSupabase = window.centralisSupabase;
 
 const movieState = {
+  refreshVersion: 0,
   appUser: null,
   movies: [],
   franchises: [],
@@ -20,7 +21,7 @@ const movieState = {
     search: "",
     sort: "title-asc",
     franchise: "all",
-    collection: "all",
+    collection: [],
   },
   importFile: null,
   activeMovie: null,
@@ -161,6 +162,66 @@ function normalizeId(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function normalizeCollectionIds(values) {
+  return [...new Set(values.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+}
+
+function movieCollectionIds(movie) {
+  return normalizeCollectionIds(Array.isArray(movie.collection_ids) ? movie.collection_ids : [movie.collection_id]);
+}
+
+function movieCollectionNames(movie) {
+  return movieCollectionIds(movie).map((id) => movieState.collections.find((item) => item.id === id)?.name)
+    .filter(Boolean);
+}
+
+function selectedCollectionValues(container) {
+  return Array.from(container?.querySelectorAll('[data-collection-choice]:checked') || [])
+    .map((input) => input.value).filter((value) => value !== "all");
+}
+
+function collectionPickerMarkup(name, selected = [], filter = false) {
+  const values = selected.map(String);
+  const choice = (value, label, checked) => `<label class="movie-collection-option"><input type="checkbox" name="${name}" value="${escapeHtml(value)}" data-collection-choice ${checked ? "checked" : ""}><span>${escapeHtml(label)}</span></label>`;
+  return `<details class="movie-collection-picker" data-collection-picker ${filter ? "data-collection-filter" : ""}>
+    <summary aria-label="${filter ? "Filter by collections" : "Choose collections"}"><span data-collection-summary>${filter ? "All collections" : "No collections"}</span></summary>
+    <div class="movie-collection-options" role="group" aria-label="${filter ? "Collection filters" : "Movie collections"}">
+      ${filter ? choice("all", "All collections", !values.length) + choice(MOVIE_EMPTY_LOOKUP_FILTER, "No collections", values.includes(MOVIE_EMPTY_LOOKUP_FILTER)) : '<button type="button" data-clear-collections>Clear selection</button>'}
+      ${movieState.collections.map((item) => choice(item.id, item.name, values.includes(String(item.id)))).join("")}
+      ${movieState.collections.length ? "" : '<p class="movie-collection-help">No collections yet. Create one in Manage Collections.</p>'}
+      ${filter ? '<p class="movie-collection-help">Matches any checked collection.</p>' : ""}
+    </div>
+  </details>`;
+}
+
+function updateCollectionPicker(picker) {
+  if (!picker) return;
+  const filter = picker.hasAttribute("data-collection-filter");
+  const values = selectedCollectionValues(picker);
+  const names = values.map((value) => value === MOVIE_EMPTY_LOOKUP_FILTER ? "No collections"
+    : movieState.collections.find((item) => String(item.id) === value)?.name).filter(Boolean);
+  const summary = picker.querySelector("[data-collection-summary]");
+  summary.textContent = names.length ? names.join(", ") : filter ? "All collections" : "No collections";
+  summary.title = summary.textContent;
+  const all = picker.querySelector('[data-collection-choice][value="all"]');
+  if (all) all.checked = !values.length;
+}
+
+function renderCollectionPicker(container, name, selected = [], filter = false) {
+  if (!container) return;
+  const signature = JSON.stringify(movieState.collections.map(({id, name}) => [id, name]));
+  // Keep the open dropdown, focused checkbox, and scroll position while filtering.
+  if (container.dataset.collectionOptions !== signature) {
+    container.innerHTML = collectionPickerMarkup(name, selected, filter);
+    container.dataset.collectionOptions = signature;
+  }
+  const values = selected.map(String);
+  container.querySelectorAll("[data-collection-choice]").forEach((input) => {
+    input.checked = input.value === "all" ? !values.length : values.includes(input.value);
+  });
+  updateCollectionPicker(container.querySelector("[data-collection-picker]"));
+}
+
 function normalizeMovieTitleForSort(title) {
   const text = String(title || "").trim().replace(/\s+/g, " ");
   if (!/^the\s+\S/i.test(text) || /,\s*the$/i.test(text)) {
@@ -182,7 +243,10 @@ function openModal(id) {
 
 function closeModal(id) {
   const modal = document.getElementById(id);
-  if (modal) modal.hidden = true;
+  if (modal) {
+    modal.hidden = true;
+    modal.querySelectorAll("[data-collection-picker]").forEach((picker) => { picker.open = false; });
+  }
 }
 
 function statusBadge(movie) {
@@ -253,6 +317,8 @@ async function fetchLookups() {
   if (collectionResponse.error) throw collectionResponse.error;
   movieState.franchises = franchiseResponse.data || [];
   movieState.collections = collectionResponse.data || [];
+  const available = new Set(movieState.collections.map((item) => String(item.id)));
+  movieState.filters.collection = movieState.filters.collection.filter((id) => id === MOVIE_EMPTY_LOOKUP_FILTER || available.has(id));
 }
 
 function getMovieSearchTerms(search) {
@@ -285,10 +351,14 @@ function applyMovieQueryFilters(query) {
   } else if (movieState.filters.franchise !== "all") {
     query = query.eq("franchise_id", normalizeId(movieState.filters.franchise));
   }
-  if (movieState.filters.collection === MOVIE_EMPTY_LOOKUP_FILTER) {
-    query = query.is("collection_id", null);
-  } else if (movieState.filters.collection !== "all") {
-    query = query.eq("collection_id", normalizeId(movieState.filters.collection));
+  const collections = normalizeCollectionIds(movieState.filters.collection);
+  const unassigned = movieState.filters.collection.includes(MOVIE_EMPTY_LOOKUP_FILTER);
+  if (collections.length && unassigned) {
+    query = query.or(`collection_ids.ov.{${collections.join(",")}},collection_ids.eq.{}`);
+  } else if (collections.length) {
+    query = query.overlaps("collection_ids", collections);
+  } else if (unassigned) {
+    query = query.eq("collection_ids", "{}");
   }
   return query;
 }
@@ -319,14 +389,15 @@ function applyMovieSort(query) {
   }
 }
 
-async function fetchMovies() {
+async function fetchMovies(refreshVersion = movieState.refreshVersion) {
   const from = (movieState.page - 1) * movieState.pageSize;
   const to = from + movieState.pageSize - 1;
   let query = movieSupabase
     .from("movies")
-    .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)", { count: "exact" });
+    .select("*, franchise:franchise_id(id,name)", { count: "exact" });
   query = applyMovieSort(applyMovieQueryFilters(query));
   const { data, error, count } = await query.range(from, to);
+  if (refreshVersion !== movieState.refreshVersion) return;
   if (error) throw error;
   movieState.movies = data || [];
   movieState.total = Number(count || 0);
@@ -406,11 +477,11 @@ function noneOptionMarkup(items, label, selected = "") {
 
 function renderLookups() {
   if (els.franchiseFilter) els.franchiseFilter.innerHTML = optionMarkup(movieState.franchises, "All Franchises", movieState.filters.franchise, "No Franchise");
-  if (els.collectionFilter) els.collectionFilter.innerHTML = optionMarkup(movieState.collections, "All Collections", movieState.filters.collection, "No Collection");
+  renderCollectionPicker(els.collectionFilter, "filter_collections", movieState.filters.collection, true);
   if (els.addFranchise) els.addFranchise.innerHTML = noneOptionMarkup(movieState.franchises, "No Franchise");
-  if (els.addCollection) els.addCollection.innerHTML = noneOptionMarkup(movieState.collections, "No Collection");
+  renderCollectionPicker(els.addCollection, "collection_ids", selectedCollectionValues(els.addCollection));
   if (els.bulkAddFranchise) els.bulkAddFranchise.innerHTML = noneOptionMarkup(movieState.franchises, "No Franchise", els.bulkAddFranchise.value);
-  if (els.bulkAddCollection) els.bulkAddCollection.innerHTML = noneOptionMarkup(movieState.collections, "No Collection", els.bulkAddCollection.value);
+  renderCollectionPicker(els.bulkAddCollection, "bulk_collection_ids", selectedCollectionValues(els.bulkAddCollection));
 }
 
 function renderMovies() {
@@ -428,7 +499,7 @@ function renderMovies() {
         <td class="movie-muted movie-people-cell movie-writers-cell" title="${escapeHtml(movie.writers || "")}">${escapeHtml(compactMoviePeople(movie.writers))}</td>
         <td class="movie-muted movie-people-cell movie-actors-cell" title="${escapeHtml(movie.actors || "")}">${escapeHtml(compactMoviePeople(movie.actors))}</td>
         <td class="movie-muted movie-franchise-cell" data-label="Franchise">${escapeHtml(movie.franchise?.name || "None")}</td>
-        <td class="movie-muted movie-collection-cell" data-label="Collection">${escapeHtml(movie.collection?.name || "None")}</td>
+        <td class="movie-muted movie-collection-cell" data-label="Collections">${escapeHtml(movieCollectionNames(movie).join(", ") || "None")}</td>
       </tr>
     `).join("");
   }
@@ -540,7 +611,7 @@ function renderActionsState() {
   const downloaded = document.querySelector("[data-bulk-downloaded]");
   const franchise = document.querySelector("[data-bulk-franchise]");
   const collection = document.querySelector("[data-bulk-collection]");
-  [[downloaded, "Mark Downloaded"], [franchise, "Set Franchise"], [collection, "Set Collection"]].forEach(([button, label]) => {
+  [[downloaded, "Mark Downloaded"], [franchise, "Set Franchise"], [collection, "Set Collections"]].forEach(([button, label]) => {
     if (!button) return;
     button.disabled = count === 0;
     button.innerHTML = `${button.querySelector("ph-download-simple,ph-film-slate")?.outerHTML || ""}${label} (${count})`;
@@ -558,15 +629,20 @@ function renderStats() {
 }
 
 async function refreshMovieTracker(message = "", type = "") {
+  const version = ++movieState.refreshVersion;
   setStatus(message || "Loading movies...");
   try {
     await fetchLookups();
+    if (version !== movieState.refreshVersion) return;
     await fetchMovieStats();
-    await fetchMovies();
+    if (version !== movieState.refreshVersion) return;
+    await fetchMovies(version);
+    if (version !== movieState.refreshVersion) return;
     renderLookups();
     renderMovies();
     setStatus(message ? message : "", type);
   } catch (error) {
+    if (version !== movieState.refreshVersion) return;
     console.error(error);
     setStatus(`Could not load movies: ${getReadableError(error)}`, "error");
   }
@@ -602,8 +678,8 @@ function renderMovieView(movie) {
     ["Downloaded", movie.downloaded],
     ["Franchise", movie.franchise?.name || null, "None"],
     ["Franchise ID", movie.franchise_id],
-    ["Collection", movie.collection?.name || null, "None"],
-    ["Collection ID", movie.collection_id],
+    ["Collections", movieCollectionNames(movie).join(", ") || null, "None"],
+    ["Collection IDs", movieCollectionIds(movie).join(", ") || null],
     ["Poster URL", movie.poster_url],
     ["Rating", movie.rated],
     ["Director", movie.director],
@@ -661,7 +737,7 @@ function renderMovieEdit(movie) {
         <label class="form-field"><span>Title</span><input name="title" required value="${escapeHtml(movie.title)}"></label>
         <label class="form-field"><span>Year</span><input name="year_released" type="number" required value="${escapeHtml(movie.year_released)}"></label>
         <label class="form-field"><span>Franchise</span><select name="franchise_id">${noneOptionMarkup(movieState.franchises, "No Franchise", movie.franchise_id)}</select></label>
-        <label class="form-field"><span>Collection</span><select name="collection_id">${noneOptionMarkup(movieState.collections, "No Collection", movie.collection_id)}</select></label>
+        <div class="form-field"><span>Collections</span>${collectionPickerMarkup("collection_ids", movieCollectionIds(movie))}</div>
         <label class="form-field"><span>Poster URL</span><input name="poster_url" value="${escapeHtml(movie.poster_url || "")}"></label>
         <label class="form-field"><span>Rating</span><input name="rated" value="${escapeHtml(movie.rated || "")}"></label>
         <label class="form-field"><span>Director</span><input name="director" value="${escapeHtml(movie.director || "")}"></label>
@@ -683,6 +759,7 @@ function renderMovieEdit(movie) {
       </footer>
     </div>
   `;
+  updateCollectionPicker(els.editForm.querySelector("[data-collection-picker]"));
   openModal("movie-edit-modal");
 }
 
@@ -695,7 +772,7 @@ async function createMovie(formData) {
     title,
     year_released: year,
     franchise_id: normalizeId(formData.get("franchise_id")),
-    collection_id: normalizeId(formData.get("collection_id")),
+    collection_ids: normalizeCollectionIds(formData.getAll("collection_ids")),
   }).select("*").single();
   if (error) throw error;
   return data;
@@ -720,6 +797,7 @@ function openAddMovieModal() {
   setDialogStatus(els.addStatus, "");
   els.addForm?.reset();
   renderLookups();
+  renderCollectionPicker(els.addCollection, "collection_ids");
   openModal("add-movie-modal");
 }
 
@@ -747,7 +825,7 @@ function renderBulkAddRows() {
           <span>${escapeHtml(row.year)}</span>
         </div>
         <div>${escapeHtml(lookupName(movieState.franchises, row.franchise_id, "No Franchise"))}</div>
-        <div>${escapeHtml(lookupName(movieState.collections, row.collection_id, "No Collection"))}</div>
+        <div>${escapeHtml(movieCollectionNames(row).join(", ") || "No collections")}</div>
         <div class="movie-bulk-add-row-status ${row.statusType ? `is-${row.statusType}` : ""}">${escapeHtml(row.status || "Queued")}</div>
         <button class="secondary-action" type="button" data-remove-bulk-add-row="${row.clientId}" ${movieState.bulkAddProcessing ? "disabled" : ""}>Remove</button>
       </article>
@@ -767,6 +845,7 @@ function resetBulkAddModal() {
   const yearInput = els.bulkAddForm?.elements.bulk_year;
   if (yearInput) yearInput.value = "2026";
   renderLookups();
+  renderCollectionPicker(els.bulkAddCollection, "bulk_collection_ids");
   setBulkAddProcessing(false);
   renderBulkAddRows();
 }
@@ -803,7 +882,7 @@ function queueBulkAddMovie() {
     title,
     year,
     franchise_id: normalizeId(formData.get("bulk_franchise_id")),
-    collection_id: normalizeId(formData.get("bulk_collection_id")),
+    collection_ids: normalizeCollectionIds(formData.getAll("bulk_collection_ids")),
     status: "Queued",
     statusType: "",
   });
@@ -829,7 +908,7 @@ async function insertBulkAddMovie(row) {
     title: row.title,
     year_released: row.year,
     franchise_id: row.franchise_id,
-    collection_id: row.collection_id,
+    collection_ids: row.collection_ids,
   }).select("*").single();
   if (error) throw error;
   return data;
@@ -891,7 +970,7 @@ async function saveMovie(formData) {
     title: normalizeMovieTitleForSort(formData.get("title")),
     year_released: Number(formData.get("year_released")),
     franchise_id: normalizeId(formData.get("franchise_id")),
-    collection_id: normalizeId(formData.get("collection_id")),
+    collection_ids: normalizeCollectionIds(formData.getAll("collection_ids")),
     poster_url: String(formData.get("poster_url") || "").trim() || null,
     rated: String(formData.get("rated") || "").trim() || null,
     director: String(formData.get("director") || "").trim() || null,
@@ -992,7 +1071,7 @@ function openManager(type) {
     </form>
     <div class="movie-manager-list">
       ${items.map((item) => {
-        const count = movieState.movies.filter((movie) => isFranchise ? movie.franchise_id === item.id : movie.collection_id === item.id).length;
+        const count = movieState.movies.filter((movie) => isFranchise ? movie.franchise_id === item.id : movieCollectionIds(movie).includes(item.id)).length;
         return `
           <div class="movie-manager-row" data-manager-id="${item.id}">
             <div>
@@ -1112,6 +1191,31 @@ function getImportItems(records) {
   return items;
 }
 
+function getImportCollectionNames(item) {
+  // Prefer the new array even when empty; singular legacy names stay literal.
+  const key = Object.keys(item || {}).find((key) => normalizeImportKey(key) === "collections");
+  if (!key) {
+    const legacy = getImportLookupName(item, ["collection", "set"]);
+    return legacy ? [legacy] : [];
+  }
+  let values = item[key];
+  if (typeof values === "string") {
+    const text = values.trim();
+    values = text.startsWith("[") ? JSON.parse(text) : text.split(";");
+  }
+  if (!Array.isArray(values)) throw new Error("Collections must be an array of names or semicolon-separated names.");
+  return [...new Map(values.map((value) => {
+    const name = String(typeof value === "object" ? value?.name || "" : value || "").trim();
+    return [name.toLowerCase(), name];
+  }).filter(([, name]) => name)).values()];
+}
+
+async function importCollectionIds(item) {
+  const ids = [];
+  for (const name of getImportCollectionNames(item)) ids.push(await ensureLookup("collection", name));
+  return normalizeCollectionIds(ids);
+}
+
 async function buildBareMovieImportRow(item) {
   const title = normalizeMovieTitleForSort(getImportValue(item, ["title", "movie title", "name"]));
   const year = Number(getImportValue(item, ["yearReleased", "year released", "year_released", "year", "release year"]));
@@ -1122,7 +1226,7 @@ async function buildBareMovieImportRow(item) {
     year_released: year,
     downloaded: parseImportBoolean(getImportValue(item, ["downloaded", "already downloaded", "is downloaded"])),
     franchise_id: await ensureLookup("franchise", getImportLookupName(item, ["franchise", "series"])),
-    collection_id: await ensureLookup("collection", getImportLookupName(item, ["collection", "set"])),
+    collection_ids: await importCollectionIds(item),
   };
 }
 
@@ -1191,7 +1295,7 @@ function downloadImportSchema(format) {
           year_released: 1999,
           downloaded: true,
           franchise: "The Matrix",
-          collection: "Cyberpunk Favorites",
+          collections: ["Cyberpunk Favorites", "Watch Again"],
           rated: "R",
           director: "The Wachowskis",
           date_released: "1999-03-31",
@@ -1208,7 +1312,7 @@ function downloadImportSchema(format) {
         yearReleased: "Required. Release year. Also accepts: year released, year_released, year, release year.",
         downloaded: "Optional boolean. Accepts true/false, 1/0, yes/no, y/n, downloaded.",
         franchise: "Optional franchise or series name. Created if it does not already exist.",
-        collection: "Optional collection or set name. Created if it does not already exist.",
+        collections: "Optional array of collection names. CSV also accepts semicolon-separated names. Missing collections are created. Legacy collection/set fields still accept one name.",
         fullDataFields: "Optional for full-data imports: rated, director, date_released, runtime, genre, writers, actors, plot, poster_url."
       }
     });
@@ -1216,8 +1320,8 @@ function downloadImportSchema(format) {
   }
   if (normalizedFormat === "csv") {
     const rows = [
-      ["title", "yearReleased", "downloaded", "franchise", "collection"],
-      ["The Matrix", "1999", "true", "The Matrix", "Cyberpunk Favorites"]
+      ["title", "yearReleased", "downloaded", "franchise", "collections"],
+      ["The Matrix", "1999", "true", "The Matrix", JSON.stringify(["Cyberpunk Favorites", "Watch Again"])]
     ];
     const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
     downloadBlob(`centralis-movie-import-schema-${filenameDate}.csv`, new Blob([csv], { type: "text/csv" }));
@@ -1244,7 +1348,7 @@ async function exportMovies() {
     if (missingSelectedIds.length) {
       const { data, error } = await movieSupabase
         .from("movies")
-        .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")
+        .select("*, franchise:franchise_id(id,name)")
         .in("id", missingSelectedIds)
         .eq("user_id", movieState.appUser.id)
         .eq("deleted", false);
@@ -1255,19 +1359,19 @@ async function exportMovies() {
   if (!movieState.selectedIds.size) {
     const { data, error } = await applyMovieSort(applyMovieQueryFilters(movieSupabase
       .from("movies")
-      .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")));
+      .select("*, franchise:franchise_id(id,name)")));
     if (error) throw error;
     movies = data || [];
   }
   downloadJson(`centralis-movies-${new Date().toISOString().slice(0, 10)}.json`, {
-    format: "centralis.movie-export.v1",
+    format: "centralis.movie-export.v2",
     exported_at: new Date().toISOString(),
     movies: movies.map((movie) => ({
       title: movie.title,
       year_released: movie.year_released,
       downloaded: movie.downloaded,
       franchise: movie.franchise?.name || null,
-      collection: movie.collection?.name || null,
+      collections: movieCollectionNames(movie),
       rated: movie.rated,
       director: movie.director,
       date_released: movie.date_released,
@@ -1393,7 +1497,7 @@ function getProcessMovieReasons(movie) {
 async function fetchMissingDataMovies() {
   const { data, error } = await movieSupabase
     .from("movies")
-    .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")
+    .select("*, franchise:franchise_id(id,name)")
     .eq("user_id", movieState.appUser.id)
     .eq("deleted", false)
     .or(MOVIE_MISSING_DATA_FILTER)
@@ -1414,7 +1518,7 @@ function renderMissingDataDialog(movies) {
             <small>${escapeHtml(movie.year_released || "No year")}</small>
           </span>
           <span>${escapeHtml(getProcessMovieReasons(movie).join(" + ") || "Unknown missing data")}</span>
-          <span>${escapeHtml(movie.franchise?.name || "No Franchise")} / ${escapeHtml(movie.collection?.name || "No Collection")}</span>
+          <span>${escapeHtml(movie.franchise?.name || "No Franchise")} / ${escapeHtml(movieCollectionNames(movie).join(", ") || "No collections")}</span>
         </button>
       `).join("") : '<p class="movie-process-empty">No movies are missing data.</p>'}
     </div>
@@ -1703,14 +1807,14 @@ async function processMissingMovieDetails() {
 function openBulkDialog(kind) {
   const count = movieState.selectedIds.size;
   if (!count) return;
-  const label = kind === "franchise" ? "Franchise" : "Collection";
-  const options = kind === "franchise"
-    ? noneOptionMarkup(movieState.franchises, "No Franchise")
-    : noneOptionMarkup(movieState.collections, "No Collection");
+  const label = kind === "franchise" ? "Franchise" : "Collections";
+  const field = kind === "franchise"
+    ? `<label class="form-field"><span>Franchise</span><select name="lookup_id">${noneOptionMarkup(movieState.franchises, "No Franchise")}</select></label>`
+    : `<div class="form-field"><span>Collections</span>${collectionPickerMarkup("collection_ids")}</div><p class="movie-collection-help">These selections replace the current collections on all selected movies. Leave all unchecked to remove their collections.</p>`;
   els.bulkForm.innerHTML = `
     <h2 id="movie-bulk-title">Set ${label}</h2>
     <p class="modal-subtitle">Update ${count} selected movies.</p>
-    <label class="form-field"><span>${label}</span><select name="lookup_id">${options}</select></label>
+    ${field}
     <p class="dialog-status" data-bulk-status role="status"></p>
     <div class="dialog-actions">
       <button class="secondary-action" type="button" data-close-modal-target="movie-bulk-modal">Cancel</button>
@@ -1765,6 +1869,13 @@ document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    const picker = document.querySelector("[data-collection-picker][open]");
+    if (picker) {
+      picker.open = false;
+      picker.querySelector("summary").focus();
+      event.preventDefault();
+      return;
+    }
     document.querySelectorAll(".modal-backdrop").forEach((modal) => {
       if (modal.dataset.strictModal === undefined) {
         modal.hidden = true;
@@ -1781,6 +1892,16 @@ els.actionsToggle?.addEventListener("click", () => {
 });
 
 document.addEventListener("click", (event) => {
+  document.querySelectorAll("[data-collection-picker][open]").forEach((picker) => {
+    if (!picker.contains(event.target)) picker.open = false;
+  });
+  const clearCollections = event.target.closest("[data-clear-collections]");
+  if (clearCollections) {
+    const picker = clearCollections.closest("[data-collection-picker]");
+    picker.querySelectorAll("[data-collection-choice]").forEach((input) => { input.checked = false; });
+    updateCollectionPicker(picker);
+    return;
+  }
   const addToggle = event.target.closest("[data-add-movie-menu-toggle]");
   if (addToggle) {
     event.preventDefault();
@@ -1887,14 +2008,28 @@ function syncMovieFilterDisclosure() {
 movieMobileLayout.addEventListener("change", syncMovieFilterDisclosure);
 syncMovieFilterDisclosure();
 
-[els.search, els.franchiseFilter, els.collectionFilter].forEach((input) => {
+[els.search, els.franchiseFilter].forEach((input) => {
   input?.addEventListener(input === els.search ? "input" : "change", () => {
     movieState.filters.search = els.search?.value || "";
     movieState.filters.franchise = els.franchiseFilter?.value || "all";
-    movieState.filters.collection = els.collectionFilter?.value || "all";
     movieState.page = 1;
     refreshMovieTracker();
   });
+});
+
+document.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-collection-choice]");
+  if (!input) return;
+  const picker = input.closest("[data-collection-picker]");
+  if (input.value === "all") {
+    picker.querySelectorAll('[data-collection-choice]:not([value="all"])').forEach((checkbox) => { checkbox.checked = false; });
+  }
+  updateCollectionPicker(picker);
+  if (picker.hasAttribute("data-collection-filter")) {
+    movieState.filters.collection = selectedCollectionValues(picker);
+    movieState.page = 1;
+    refreshMovieTracker();
+  }
 });
 
 els.pagination.forEach((pagination) => pagination.addEventListener("click", (event) => {
@@ -2146,7 +2281,7 @@ els.processContent?.addEventListener("click", async (event) => {
     try {
       const { data, error } = await movieSupabase
         .from("movies")
-        .select("*, franchise:franchise_id(id,name), collection:collection_id(id,name)")
+        .select("*, franchise:franchise_id(id,name)")
         .eq("id", movieId)
         .eq("user_id", movieState.appUser.id)
         .eq("deleted", false)
@@ -2190,7 +2325,7 @@ els.bulkAddForm?.addEventListener("click", (event) => {
 });
 
 els.bulkAddForm?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && event.target.closest(".movie-bulk-add-entry")) {
+  if (event.key === "Enter" && event.target.matches('input[name="bulk_title"], input[name="bulk_year"]')) {
     event.preventDefault();
     queueBulkAddMovie();
   }
@@ -2217,12 +2352,15 @@ els.bulkForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const submit = event.submitter;
   const kind = submit?.dataset.bulkKind;
-  const column = kind === "franchise" ? "franchise_id" : "collection_id";
+  const formData = new FormData(els.bulkForm);
+  const membership = kind === "franchise"
+    ? { franchise_id: normalizeId(formData.get("lookup_id")) }
+    : { collection_ids: normalizeCollectionIds(formData.getAll("collection_ids")) };
   const ids = Array.from(movieState.selectedIds);
   try {
     const { error } = await movieSupabase
       .from("movies")
-      .update({ [column]: normalizeId(new FormData(els.bulkForm).get("lookup_id")), updated_at: new Date().toISOString() })
+      .update({ ...membership, updated_at: new Date().toISOString() })
       .in("id", ids)
       .eq("user_id", movieState.appUser.id)
       .eq("deleted", false);

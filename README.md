@@ -227,6 +227,14 @@ Phones and tablets use movie cards, tools above the list, collapsible filters, t
 
 With the local server running and Playwright available, run `node tests/movie-tracker-browser.cjs` for responsive interaction checks with local fixture data. Set `PLAYWRIGHT_MODULE` to a bundled Playwright path if needed, and `MOVIE_TEST_BASE_URL` to override the default `http://127.0.0.1:4173`.
 
+Movies can belong to multiple collections. Add, edit, batch add, and bulk assignment use checkbox dropdowns. The collection filter matches any checked collection; “No collections” can be combined with named collections, while “All collections” clears the filter. Bulk assignment replaces memberships on selected movies.
+
+`202610150001_movie_multiple_collections.sql` backfills `movies.collection_ids` from existing assignments, validates collection ownership, and removes memberships when a collection is deleted. The legacy `collection_id` remains synchronized with the first membership for older clients. Apply this migration before deploying the updated frontend.
+
+Exports use `centralis.movie-export.v2` with a `collections` array of names. Imports also accept legacy `collection`/`set` names, and CSV accepts either JSON arrays or semicolon-separated names in the `collections` column. Use JSON arrays when a collection name contains a semicolon.
+
+Run `node tests/movie-collections-browser.cjs` for collection persistence and filter workflows. Run `node tests/movie-collections-database.cjs` with PGlite available (or `PGLITE_MODULE` set to its path) for migration, integrity, compatibility, and deletion checks.
+
 ### Stellar Architect
 
 Stellar Architect files:

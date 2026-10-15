@@ -6,50 +6,7 @@ const base = process.env.MOVIE_TEST_BASE_URL || 'http://127.0.0.1:4173';
 const output = 'node_modules/.cache/movie-tracker/screenshots';
 fs.mkdirSync(output, { recursive: true });
 
-// Keep the real shared header and movie code. All account/data calls stay local.
-const mock = `
-window.centralisCurrentAppUser = { id: 42 };
-window.centralisGetCurrentAppUser = async () => window.centralisCurrentAppUser;
-const movieFixtures = Array.from({length: 125}, (_, i) => ({
-  id: i + 1, user_id: 42, deleted: false,
-  title: i === 0 ? 'A Very Long Movie Title That Should Wrap Without Pushing Controls Off Screen' : 'Movie ' + String(i + 1).padStart(3, '0'),
-  year_released: 1900 + i, director: 'A Director With A Long Name',
-  writers: 'Writer One, Writer Two', actors: 'Actor One, Actor Two',
-  plot: 'A long plot description. '.repeat(50),
-  franchise_id: i % 2 ? 1 : null, collection_id: 1,
-  franchise: i % 2 ? {id: 1, name: 'A long franchise name that wraps on phones'} : null,
-  collection: {id: 1, name: 'Favorites'}, poster_url: null
-}));
-window.centralisSupabase = {
-  from(table) {
-    let rows = table === 'movies' ? [...movieFixtures] : [{id: 1, name: table === 'franchise' ? 'A long franchise name that wraps on phones' : 'Favorites'}];
-    let head = false, range = null;
-    const orders = [];
-    const q = {
-      select(_, options) { head = options?.head; return q; },
-      eq(key, value) { if (!['user_id', 'deleted'].includes(key)) rows = rows.filter(row => row[key] === value); return q; },
-      is(key, value) { rows = rows.filter(row => row[key] === value); return q; },
-      or(value) {
-        const term = value.match(/title\\.ilike\\.%([^%]*)%/);
-        if (term) rows = rows.filter(row => row.title.toLowerCase().includes(term[1].toLowerCase()));
-        return q;
-      },
-      order(key, options) { orders.push([key, options]); return q; },
-      range(from, to) { range = [from, to]; return q; },
-      then(resolve) {
-        rows.sort((a,b) => {
-          for (const [key, options] of orders) {
-            const result = String(a[key]).localeCompare(String(b[key]), undefined, {numeric:true}) * (options.ascending ? 1 : -1);
-            if (result) return result;
-          }
-          return 0;
-        });
-        return Promise.resolve({data: head ? null : range ? rows.slice(range[0], range[1]+1) : rows, count: rows.length, error: null}).then(resolve);
-      }
-    }; return q;
-  }
-};
-`;
+const { isolateMoviePage } = require('./movie-tracker-fixture.cjs');
 
 async function noHorizontalOverflow(page, selector) {
   const failures = await page.locator(selector).evaluateAll(elements => elements
@@ -76,15 +33,7 @@ async function reachable(locator) {
     const context = await browser.newContext({ isMobile: true, hasTouch: true, viewport: {width: 390, height: 844} });
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
-    await page.route('**/*', async route => {
-      const url = new URL(route.request().url());
-      if (url.origin !== base || url.pathname === '/supabase-config.js') return route.fulfill({body: ''});
-      if (url.pathname === '/movie-tracker.js') {
-        const response = await route.fetch();
-        return route.fulfill({response, body: mock + '\n' + await response.text()});
-      }
-      return route.continue();
-    });
+    await isolateMoviePage(page, base);
     const ready = () => page.waitForFunction(() => document.querySelector('[data-movie-status]').textContent === '');
 
     for (const [width, height] of [[320,568], [390,844], [768,1024], [844,390], [1000,800]]) {
@@ -125,14 +74,16 @@ async function reachable(locator) {
       assert.equal(await page.locator('.movie-mobile-controls [data-select-all-movies]').isDisabled(), true);
       await page.locator('[data-search-movies]').fill('');
       await ready();
-      await page.locator('.movie-filters summary').tap();
+      await page.locator('.movie-filters > summary').tap();
       await page.locator('[data-filter-franchise]').selectOption('1');
       await ready();
       assert.match(await page.locator('[data-movie-count]').textContent(), /of 62 movies/);
       await page.locator('[data-filter-franchise]').selectOption('all');
-      await page.locator('[data-filter-collection]').selectOption('1');
+      await page.locator('[data-filter-collection] summary').tap();
+      await page.locator('[data-filter-collection] input[value="1"]').check();
+      await page.locator('[data-filter-collection] summary').tap();
       await ready();
-      await page.locator('.movie-filters summary').tap();
+      await page.locator('.movie-filters > summary').tap();
       await page.locator('[data-movie-sort]').selectOption('title-asc');
       await ready();
 

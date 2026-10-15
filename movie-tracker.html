@@ -8,7 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=movie-missing-data-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="movie-tracker.css?v=mobile-1">
+  <link rel="stylesheet" href="movie-tracker.css?v=collections-2">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="movie-tracker">
@@ -167,7 +167,7 @@
                   <th><button class="movie-sort-header" type="button" data-sort-header="writers">Writers <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
                   <th><button class="movie-sort-header" type="button" data-sort-header="actors">Actors <ph-caret-up-down weight="bold" aria-hidden="true"></ph-caret-up-down></button></th>
                   <th>Franchise</th>
-                  <th>Collection</th>
+                  <th>Collections</th>
                 </tr>
               </thead>
               <tbody data-movie-rows></tbody>
@@ -208,7 +208,7 @@
             <button type="button" data-open-import><ph-upload-simple weight="bold"></ph-upload-simple>Import Movies</button>
             <button type="button" data-bulk-downloaded disabled><ph-download-simple weight="bold"></ph-download-simple>Mark Downloaded (0)</button>
             <button type="button" data-bulk-franchise disabled><ph-film-slate weight="bold"></ph-film-slate>Set Franchise (0)</button>
-            <button type="button" data-bulk-collection disabled><ph-film-slate weight="bold"></ph-film-slate>Set Collection (0)</button>
+            <button type="button" data-bulk-collection disabled><ph-film-slate weight="bold"></ph-film-slate>Set Collections (0)</button>
             <hr>
             <button type="button" data-refresh-movies><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Refresh Movies</button>
             <button type="button" data-open-missing-details><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Get Missing Details</button>
@@ -230,10 +230,10 @@
                 <span>Franchise</span>
                 <select data-filter-franchise></select>
               </label>
-              <label class="movie-filter-field">
-                <span>Collection</span>
-                <select data-filter-collection></select>
-              </label>
+              <div class="movie-filter-field">
+                <span>Collections</span>
+                <div data-filter-collection></div>
+              </div>
             </div>
             <section class="movie-statistics">
               <dl id="movie-statistics-content" data-movie-stats></dl>
@@ -257,7 +257,7 @@
         <label class="form-field"><span>Title *</span><input name="title" placeholder="Movie title" required></label>
         <label class="form-field"><span>Year Released *</span><input name="year_released" type="number" min="1888" max="3000" required></label>
         <label class="form-field"><span>Franchise (Optional)</span><select name="franchise_id" data-add-franchise></select></label>
-        <label class="form-field"><span>Collection (Optional)</span><select name="collection_id" data-add-collection></select></label>
+        <div class="form-field"><span>Collections (Optional)</span><div data-add-collection></div></div>
         <p class="dialog-status" data-add-movie-status role="status"></p>
         <div class="dialog-actions">
           <button class="secondary-action" type="button" data-close-modal-target="add-movie-modal">Cancel</button>
@@ -312,7 +312,7 @@
         </label>
         <div class="movie-format-help">
           <strong>Expected format:</strong>
-          <p>Full data accepts Centralis movie exports. Bare bones accepts title, yearReleased, downloaded, franchise, collection.</p>
+          <p>Full data accepts Centralis movie exports. Bare bones accepts title, yearReleased, downloaded, franchise, and collections (a JSON array of names, or names separated by semicolons in CSV). Older single-collection files still work.</p>
         </div>
         <p class="dialog-status" data-import-status role="status"></p>
         <div data-import-failures hidden></div>
@@ -357,7 +357,7 @@
             <label class="form-field movie-bulk-title-field"><span>Movie Title</span><input name="bulk_title" placeholder="Movie title" autocomplete="off"></label>
             <label class="form-field movie-bulk-year-field"><span>Year Released</span><input name="bulk_year" type="number" min="1888" max="3000" value="2026"></label>
             <label class="form-field"><span>Franchise</span><select name="bulk_franchise_id" data-bulk-add-franchise></select></label>
-            <label class="form-field"><span>Collection</span><select name="bulk_collection_id" data-bulk-add-collection></select></label>
+            <div class="form-field"><span>Collections</span><div data-bulk-add-collection></div></div>
             <button class="primary-action movie-bulk-add-row-button" type="button" data-bulk-add-row>
               <ph-plus weight="bold" aria-hidden="true"></ph-plus>
               Add
@@ -377,7 +377,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="movie-tracker.js?v=mobile-1"></script>
+  <script src="movie-tracker.js?v=collections-2"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {
