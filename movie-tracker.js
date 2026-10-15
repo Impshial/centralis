@@ -184,8 +184,8 @@ function collectionPickerMarkup(name, selected = [], filter = false) {
   const values = selected.map(String);
   const choice = (value, label, checked) => `<label class="movie-collection-option"><input type="checkbox" name="${name}" value="${escapeHtml(value)}" data-collection-choice ${checked ? "checked" : ""}><span>${escapeHtml(label)}</span></label>`;
   return `<details class="movie-collection-picker" data-collection-picker ${filter ? "data-collection-filter" : ""}>
-    <summary aria-label="${filter ? "Filter by collections" : "Choose collections"}"><span data-collection-summary>${filter ? "All collections" : "No collections"}</span></summary>
-    <div class="movie-collection-options" role="group" aria-label="${filter ? "Collection filters" : "Movie collections"}">
+    <summary aria-label="${filter ? "Filter by collections" : "Choose collections"}"><span data-collection-summary>${filter ? "All collections" : "No collections"}</span><ph-caret-down class="movie-collection-caret" weight="bold" aria-hidden="true"></ph-caret-down></summary>
+    <div class="movie-collection-options" popover="manual" role="group" aria-label="${filter ? "Collection filters" : "Movie collections"}">
       ${filter ? choice("all", "All collections", !values.length) + choice(MOVIE_EMPTY_LOOKUP_FILTER, "No collections", values.includes(MOVIE_EMPTY_LOOKUP_FILTER)) : '<button type="button" data-clear-collections>Clear selection</button>'}
       ${movieState.collections.map((item) => choice(item.id, item.name, values.includes(String(item.id)))).join("")}
       ${movieState.collections.length ? "" : '<p class="movie-collection-help">No collections yet. Create one in Manage Collections.</p>'}
@@ -222,6 +222,73 @@ function renderCollectionPicker(container, name, selected = [], filter = false) 
   updateCollectionPicker(container.querySelector("[data-collection-picker]"));
 }
 
+function closeCollectionPicker(picker) {
+  const options = picker.querySelector(".movie-collection-options");
+  if (options?.matches(":popover-open")) options.hidePopover();
+  picker.open = false;
+}
+
+function positionCollectionPicker(picker) {
+  const anchor = picker.querySelector("summary").getBoundingClientRect();
+  const options = picker.querySelector(".movie-collection-options");
+  const viewport = window.visualViewport;
+  const left = viewport?.offsetLeft || 0;
+  const top = viewport?.offsetTop || 0;
+  const width = viewport?.width || window.innerWidth;
+  const height = viewport?.height || window.innerHeight;
+  if (anchor.bottom <= top || anchor.top >= top + height) {
+    closeCollectionPicker(picker);
+    return;
+  }
+  const below = Math.max(0, top + height - anchor.bottom - 12);
+  const above = Math.max(0, anchor.top - top - 12);
+  const openBelow = below >= Math.min(320, options.scrollHeight) || below >= above;
+  const popupWidth = Math.min(anchor.width, width - 16);
+  options.style.width = `${popupWidth}px`;
+  options.style.left = `${Math.max(left + 8, Math.min(anchor.left, left + width - popupWidth - 8))}px`;
+  options.style.maxHeight = `${Math.min(320, openBelow ? below : above)}px`;
+  options.style.top = `${openBelow ? anchor.bottom + 4 : anchor.top - options.getBoundingClientRect().height - 4}px`;
+}
+
+// The top layer escapes dialog/sidebar overflow without moving form inputs.
+document.addEventListener("toggle", (event) => {
+  const picker = event.target;
+  if (!picker.matches("[data-collection-picker]")) return;
+  const options = picker.querySelector(".movie-collection-options");
+  if (!picker.open) {
+    if (options.matches(":popover-open")) options.hidePopover();
+    return;
+  }
+  document.querySelectorAll("[data-collection-picker][open]").forEach((other) => {
+    if (other !== picker) closeCollectionPicker(other);
+  });
+  if (!options.matches(":popover-open")) options.showPopover();
+  positionCollectionPicker(picker);
+}, true);
+
+document.addEventListener("scroll", (event) => {
+  // Keep the menu anchored when the page or dialog scrolls, including focus scrolls.
+  if (event.target.closest?.(".movie-collection-options")) return;
+  document.querySelectorAll("[data-collection-picker][open]").forEach((picker) => {
+    if (event.target.contains?.(picker) && event.target !== document) {
+      const container = event.target.getBoundingClientRect();
+      const anchor = picker.querySelector("summary").getBoundingClientRect();
+      if (anchor.bottom <= container.top || anchor.top >= container.bottom) {
+        closeCollectionPicker(picker);
+        return;
+      }
+    }
+    positionCollectionPicker(picker);
+  });
+}, true);
+
+function repositionCollectionPickers() {
+  document.querySelectorAll("[data-collection-picker][open]").forEach(positionCollectionPicker);
+}
+window.addEventListener("resize", repositionCollectionPickers);
+window.visualViewport?.addEventListener("resize", repositionCollectionPickers);
+window.visualViewport?.addEventListener("scroll", repositionCollectionPickers);
+
 function normalizeMovieTitleForSort(title) {
   const text = String(title || "").trim().replace(/\s+/g, " ");
   if (!/^the\s+\S/i.test(text) || /,\s*the$/i.test(text)) {
@@ -245,7 +312,7 @@ function closeModal(id) {
   const modal = document.getElementById(id);
   if (modal) {
     modal.hidden = true;
-    modal.querySelectorAll("[data-collection-picker]").forEach((picker) => { picker.open = false; });
+    modal.querySelectorAll("[data-collection-picker]").forEach(closeCollectionPicker);
   }
 }
 
@@ -1871,7 +1938,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     const picker = document.querySelector("[data-collection-picker][open]");
     if (picker) {
-      picker.open = false;
+      closeCollectionPicker(picker);
       picker.querySelector("summary").focus();
       event.preventDefault();
       return;
@@ -1893,7 +1960,7 @@ els.actionsToggle?.addEventListener("click", () => {
 
 document.addEventListener("click", (event) => {
   document.querySelectorAll("[data-collection-picker][open]").forEach((picker) => {
-    if (!picker.contains(event.target)) picker.open = false;
+    if (!picker.contains(event.target)) closeCollectionPicker(picker);
   });
   const clearCollections = event.target.closest("[data-clear-collections]");
   if (clearCollections) {

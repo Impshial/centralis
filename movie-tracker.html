@@ -8,7 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=movie-missing-data-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="movie-tracker.css?v=collections-2">
+  <link rel="stylesheet" href="movie-tracker.css?v=collections-popover-3">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="movie-tracker">
@@ -228,7 +228,10 @@
             <div class="movie-filter-options">
               <label class="movie-filter-field">
                 <span>Franchise</span>
-                <select data-filter-franchise></select>
+                <span class="movie-filter-select">
+                  <select data-filter-franchise></select>
+                  <ph-caret-down class="movie-filter-caret" weight="bold" aria-hidden="true"></ph-caret-down>
+                </span>
               </label>
               <div class="movie-filter-field">
                 <span>Collections</span>
@@ -377,7 +380,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="movie-tracker.js?v=collections-2"></script>
+  <script src="movie-tracker.js?v=collections-popover-3"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {
