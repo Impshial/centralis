@@ -27,6 +27,18 @@ const fieldValue = (row,key) => {
 };
 window.centralisSupabase = {
   async rpc(name, args) {
+    if(name==='save_movie_custom_records') {
+      if(window.movieTestFailNextSave) {window.movieTestFailNextSave=false;return {error:{message:'Test save failed'}};}
+      const data=[];
+      for(const item of args.p_records) {
+        let row;
+        if(args.p_insert) {row={id:Math.max(0,...movieTestTables.movies.map(x=>x.id))+1,user_id:42,deleted:false,collection_ids:[],...item};movieTestTables.movies.push(row);}
+        else {row=movieTestTables.movies.find(x=>x.id===item.id);Object.assign(row,item);}
+        data.push(row);
+      }
+      window.movieTestWrites.push({rpc:name,args,table:'movies',mode:args.p_insert?'insert':'update',payload:args.p_insert?args.p_records:args.p_records[0]});
+      localStorage.setItem('movie-test-tables',JSON.stringify(movieTestTables));return {data,error:null};
+    }
     if(name==='manage_movie_custom_field') {
       if(window.movieTestFailNextSave) {window.movieTestFailNextSave=false;return {error:{message:'Test save failed'}};}
       const f=args.p_field, table=movieTestTables.movie_custom_fields; let row;
@@ -56,6 +68,7 @@ window.centralisSupabase = {
     return {data:changed,error:null};
   },
   from(table) {
+    if(table==='movie_custom_records') table='movies';
     let rows = [...movieTestTables[table]], head = false, range = null, single = false, mode = 'read', payload;
     const orders = [];
     const execute = () => {

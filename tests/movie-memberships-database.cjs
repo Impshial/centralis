@@ -37,6 +37,7 @@ const assert = require('node:assert/strict');
     await db.exec(fs.readFileSync('supabase/migrations/202610150002_movie_membership_actions.sql','utf8'));
     await db.exec(fs.readFileSync('supabase/migrations/202610150003_restrict_movie_membership_rpc.sql','utf8'));
     await db.exec(fs.readFileSync('supabase/migrations/202610200001_movie_custom_fields.sql','utf8'));
+    await db.exec(fs.readFileSync('supabase/migrations/202610200002_separate_movie_custom_values.sql','utf8'));
     const rpc = async (ids,kind,op,targets) => (await db.query('select public.update_movie_memberships($1,$2,$3,$4) as changed',[ids,kind,op,targets])).rows[0].changed;
     const rows = async () => (await db.query('select id,collection_ids,collection_id,franchise_id,downloaded from movies where not deleted order by id')).rows;
     await db.exec("set request.jwt.claim.sub='owner'; set role authenticated");

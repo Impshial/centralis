@@ -475,7 +475,7 @@ async function fetchMovies(refreshVersion = movieState.refreshVersion) {
   const from = (movieState.page - 1) * movieState.pageSize;
   const to = from + movieState.pageSize - 1;
   let query = movieSupabase
-    .from("movies")
+    .from("movie_custom_records")
     .select("*, franchise:franchise_id(id,name)", { count: "exact" });
   query = applyMovieSort(applyMovieQueryFilters(query));
   const { data, error, count } = await query.range(from, to);
@@ -1052,12 +1052,9 @@ async function saveMovie(formData) {
     plot: String(formData.get("plot") || "").trim() || null,
     updated_at: new Date().toISOString(),
   };
-  const { error } = await movieSupabase
-    .from("movies")
-    .update(payload)
-    .eq("id", id)
-    .eq("user_id", movieState.appUser.id)
-    .eq("deleted", false);
+  const { error } = await movieSupabase.rpc("save_movie_custom_records", {
+    p_records: [{ ...payload, id }], p_insert: false,
+  });
   if (error) throw error;
 }
 
@@ -1329,7 +1326,7 @@ async function importMovies(file, mode = "full") {
     if (row) rows.push(row);
   }
   if (!rows.length) throw new Error("No valid movies were found.");
-  const { data, error } = await movieSupabase.from("movies").insert(rows).select("*");
+  const { data, error } = await movieSupabase.rpc("save_movie_custom_records", { p_records: rows, p_insert: true });
   if (error) throw error;
   return data || [];
 }
@@ -1421,7 +1418,7 @@ async function exportMovies() {
     if (missingSelectedIds.length) {
       for (let offset = 0; offset < missingSelectedIds.length; offset += 500) {
         const { data, error } = await movieSupabase
-          .from("movies")
+          .from("movie_custom_records")
           .select("*, franchise:franchise_id(id,name)")
           .in("id", missingSelectedIds.slice(offset, offset + 500))
           .eq("user_id", movieState.appUser.id)
@@ -1435,7 +1432,7 @@ async function exportMovies() {
     movies = [];
     for (let from = 0; ; from += 500) {
       const { data, error } = await applyMovieSort(applyMovieQueryFilters(movieSupabase
-        .from("movies")
+        .from("movie_custom_records")
         .select("*, franchise:franchise_id(id,name)"))).order("id", { ascending: true }).range(from, from + 499);
       if (error) throw error;
       movies.push(...(data || []));
@@ -1577,7 +1574,7 @@ function getProcessMovieReasons(movie) {
 
 async function fetchMissingDataMovies() {
   const { data, error } = await movieSupabase
-    .from("movies")
+    .from("movie_custom_records")
     .select("*, franchise:franchise_id(id,name)")
     .eq("user_id", movieState.appUser.id)
     .eq("deleted", false)
@@ -2364,7 +2361,7 @@ els.processContent?.addEventListener("click", async (event) => {
     }
     try {
       const { data, error } = await movieSupabase
-        .from("movies")
+        .from("movie_custom_records")
         .select("*, franchise:franchise_id(id,name)")
         .eq("id", movieId)
         .eq("user_id", movieState.appUser.id)
