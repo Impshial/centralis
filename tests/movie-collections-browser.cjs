@@ -77,7 +77,7 @@ fs.mkdirSync(output, {recursive:true});
       await openAction('[data-export-movies]');
       const download=await downloadPromise;
       const exported=JSON.parse(fs.readFileSync(await download.path(),'utf8'));
-      assert.equal(exported.format,'centralis.movie-export.v2');
+      assert.equal(exported.format,'centralis.movie-export.v3');
       assert.deepEqual(exported.movies[0].collections,['Favorites','Watch Again']);
       exported.movies[0].title='Imported from export';
       await openAction('[data-open-import]');

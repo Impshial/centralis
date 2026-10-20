@@ -8,7 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=movie-missing-data-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="movie-tracker.css?v=membership-actions-4">
+  <link rel="stylesheet" href="movie-tracker.css?v=custom-fields-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="movie-tracker">
@@ -215,6 +215,7 @@
             <button type="button" data-open-missing-details><ph-arrows-clockwise weight="bold"></ph-arrows-clockwise>Get Missing Details</button>
             <button type="button" data-open-franchises><ph-gear weight="bold"></ph-gear>Manage Franchises</button>
             <button type="button" data-open-collections><ph-gear weight="bold"></ph-gear>Manage Collections</button>
+            <button type="button" data-manage-movie-fields><ph-columns weight="bold"></ph-columns>Manage Fields</button>
             <button type="button" data-export-movies><ph-download-simple weight="bold"></ph-download-simple>Export Movies</button>
           </div>
         </div>
@@ -239,6 +240,8 @@
                 <div data-filter-collection></div>
               </div>
             </div>
+            <details data-custom-field-filters class="movie-custom-filters" hidden></details>
+            <label class="movie-filter-field" data-custom-sort-label hidden><span>Sort by custom field</span><select data-custom-field-sort></select></label>
             <section class="movie-statistics">
               <dl id="movie-statistics-content" data-movie-stats></dl>
             </section>
@@ -316,7 +319,7 @@
         </label>
         <div class="movie-format-help">
           <strong>Expected format:</strong>
-          <p>Full data accepts Centralis movie exports. Bare bones accepts title, yearReleased, downloaded, franchise, and collections (a JSON array of names, or names separated by semicolons in CSV). Older single-collection files still work.</p>
+          <p>Full data accepts Centralis movie exports, including custom field definitions and values. Bare bones accepts title, yearReleased, downloaded, franchise, collections, and custom values. Collections can be a JSON array or semicolon-separated CSV names. For CSV custom values, create fields in Manage Fields first, then use columns named custom:Field Name. Older exports still work.</p>
         </div>
         <p class="dialog-status" data-import-status role="status"></p>
         <div data-import-failures hidden></div>
@@ -381,7 +384,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="movie-tracker.js?v=membership-actions-4"></script>
+  <script src="movie-custom-fields.js?v=custom-fields-1"></script>
+  <script src="movie-tracker.js?v=custom-fields-1"></script>
   <script>
     window.setTimeout(() => {
       if (!window.centralisMovieTrackerLoaded) {

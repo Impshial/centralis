@@ -97,6 +97,18 @@ const els = {
   bulkAddSubmit: document.querySelector("[data-bulk-add-submit]"),
 };
 
+const movieCustom = createMovieCustomFields({
+  supabase: movieSupabase,
+  getUser: () => movieState.appUser,
+  getSort: () => movieState.filters.sort,
+  setSort: (sort, reload = true) => {
+    movieState.filters.sort = sort;
+    movieState.page = 1;
+    if (reload) refreshMovieTracker();
+  },
+  refresh: () => refreshMovieTracker(),
+});
+
 function ensureSidebarAddMovieButton() {
   const panel = document.querySelector(".movie-side-panel");
   const actionsWrap = document.querySelector(".movie-actions-wrap");
@@ -309,6 +321,7 @@ function openModal(id) {
 }
 
 function closeModal(id) {
+  if (id === "movie-fields-modal" && movieCustom.isBusy()) return;
   if (id === "movie-bulk-modal" && els.bulkForm?.dataset.saving === "true") return;
   const modal = document.getElementById(id);
   if (modal) {
@@ -428,10 +441,11 @@ function applyMovieQueryFilters(query) {
   } else if (unassigned) {
     query = query.eq("collection_ids", "{}");
   }
-  return query;
+  return movieCustom.applyFilters(query);
 }
 
 function applyMovieSort(query) {
+  if (movieState.filters.sort.startsWith("custom:")) return movieCustom.applySort(query, movieState.filters.sort);
   switch (movieState.filters.sort) {
     case "title-desc":
       return query.order("title", { ascending: false });
@@ -544,6 +558,7 @@ function noneOptionMarkup(items, label, selected = "") {
 }
 
 function renderLookups() {
+  movieCustom.renderControls();
   if (els.franchiseFilter) els.franchiseFilter.innerHTML = optionMarkup(movieState.franchises, "All Franchises", movieState.filters.franchise, "No Franchise");
   renderCollectionPicker(els.collectionFilter, "filter_collections", movieState.filters.collection, true);
   if (els.addFranchise) els.addFranchise.innerHTML = noneOptionMarkup(movieState.franchises, "No Franchise");
@@ -555,7 +570,7 @@ function renderLookups() {
 function renderMovies() {
   if (!els.rows) return;
   if (!movieState.movies.length) {
-    els.rows.innerHTML = '<tr><td colspan="9" class="movie-empty-row">No movies found.</td></tr>';
+    els.rows.innerHTML = `<tr><td colspan="${9 + movieCustom.visibleCount()}" class="movie-empty-row">No movies found.</td></tr>`;
   } else {
     els.rows.innerHTML = movieState.movies.map((movie) => `
       <tr class="movie-clickable-row" data-movie-id="${movie.id}" tabindex="0" aria-label="View ${escapeHtml(movie.title)}">
@@ -568,6 +583,7 @@ function renderMovies() {
         <td class="movie-muted movie-people-cell movie-actors-cell" title="${escapeHtml(movie.actors || "")}">${escapeHtml(compactMoviePeople(movie.actors))}</td>
         <td class="movie-muted movie-franchise-cell" data-label="Franchise">${escapeHtml(movie.franchise?.name || "None")}</td>
         <td class="movie-muted movie-collection-cell" data-label="Collections">${escapeHtml(movieCollectionNames(movie).join(", ") || "None")}</td>
+        ${movieCustom.cells(movie)}
       </tr>
     `).join("");
   }
@@ -697,6 +713,8 @@ async function refreshMovieTracker(message = "", type = "") {
   const version = ++movieState.refreshVersion;
   setStatus(message || "Loading movies...");
   try {
+    await movieCustom.load();
+    if (version !== movieState.refreshVersion) return;
     await fetchLookups();
     if (version !== movieState.refreshVersion) return;
     await fetchMovieStats();
@@ -744,6 +762,7 @@ function renderMovieView(movie) {
     ["Writers", movie.writers],
     ["Actors", movie.actors],
     ["Plot", movie.plot, "Not set", "movie-detail-wide"],
+    ...movieCustom.details(movie),
   ];
   els.viewContent.innerHTML = `
     <div class="movie-dialog-layout">
@@ -797,6 +816,7 @@ function renderMovieEdit(movie) {
         <label class="form-field"><span>Writers</span><input name="writers" value="${escapeHtml(movie.writers || "")}"></label>
         <label class="form-field"><span>Actors</span><input name="actors" value="${escapeHtml(movie.actors || "")}"></label>
         <label class="form-field movie-span"><span>Plot</span><textarea name="plot">${escapeHtml(movie.plot || "")}</textarea></label>
+        ${movieCustom.editMarkup(movie)}
         </div>
         <p class="dialog-status" data-edit-movie-status role="status"></p>
       </div>
@@ -1016,6 +1036,7 @@ async function processBulkAddMovies() {
 async function saveMovie(formData) {
   const id = Number(formData.get("id"));
   const payload = {
+    custom_values: movieCustom.readValues(formData),
     title: normalizeMovieTitleForSort(formData.get("title")),
     year_released: Number(formData.get("year_released")),
     franchise_id: normalizeId(formData.get("franchise_id")),
@@ -1275,6 +1296,7 @@ async function buildBareMovieImportRow(item) {
     downloaded: parseImportBoolean(getImportValue(item, ["downloaded", "already downloaded", "is downloaded"])),
     franchise_id: await ensureLookup("franchise", getImportLookupName(item, ["franchise", "series"])),
     collection_ids: await importCollectionIds(item),
+    custom_values: movieCustom.importValues(item),
   };
 }
 
@@ -1299,6 +1321,7 @@ async function importMovies(file, mode = "full") {
   const text = await file.text();
   const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsv(text);
   const items = getImportItems(records);
+  await movieCustom.importDefinitions(records, items);
   const fullData = mode !== "bare";
   const rows = [];
   for (const item of items) {
@@ -1337,6 +1360,7 @@ function downloadImportSchema(format) {
   const filenameDate = new Date().toISOString().slice(0, 10);
   if (normalizedFormat === "json") {
     downloadJson(`centralis-movie-import-schema-${filenameDate}.json`, {
+      custom_fields: movieCustom.exportDefinitions(),
       movies: [
         {
           title: "The Matrix",
@@ -1361,7 +1385,8 @@ function downloadImportSchema(format) {
         downloaded: "Optional boolean. Accepts true/false, 1/0, yes/no, y/n, downloaded.",
         franchise: "Optional franchise or series name. Created if it does not already exist.",
         collections: "Optional array of collection names. CSV also accepts semicolon-separated names. Missing collections are created. Legacy collection/set fields still accept one name.",
-        fullDataFields: "Optional for full-data imports: rated, director, date_released, runtime, genre, writers, actors, plot, poster_url."
+        fullDataFields: "Optional for full-data imports: rated, director, date_released, runtime, genre, writers, actors, plot, poster_url.",
+        custom_fields: "JSON exports include custom_fields definitions and a custom_fields object on each movie keyed by field ID. CSV: use custom:Field Name columns for fields already created in Manage Fields. Checkboxes accept true/false, yes/no, 1/0; dates use YYYY-MM-DD."
       }
     });
     return true;
@@ -1394,25 +1419,32 @@ async function exportMovies() {
     const missingSelectedIds = Array.from(movieState.selectedIds)
       .filter((id) => !movies.some((movie) => movie.id === id));
     if (missingSelectedIds.length) {
-      const { data, error } = await movieSupabase
-        .from("movies")
-        .select("*, franchise:franchise_id(id,name)")
-        .in("id", missingSelectedIds)
-        .eq("user_id", movieState.appUser.id)
-        .eq("deleted", false);
-      if (error) throw error;
-      movies = [...movies, ...(data || [])];
+      for (let offset = 0; offset < missingSelectedIds.length; offset += 500) {
+        const { data, error } = await movieSupabase
+          .from("movies")
+          .select("*, franchise:franchise_id(id,name)")
+          .in("id", missingSelectedIds.slice(offset, offset + 500))
+          .eq("user_id", movieState.appUser.id)
+          .eq("deleted", false);
+        if (error) throw error;
+        movies = [...movies, ...(data || [])];
+      }
     }
   }
   if (!movieState.selectedIds.size) {
-    const { data, error } = await applyMovieSort(applyMovieQueryFilters(movieSupabase
-      .from("movies")
-      .select("*, franchise:franchise_id(id,name)")));
-    if (error) throw error;
-    movies = data || [];
+    movies = [];
+    for (let from = 0; ; from += 500) {
+      const { data, error } = await applyMovieSort(applyMovieQueryFilters(movieSupabase
+        .from("movies")
+        .select("*, franchise:franchise_id(id,name)"))).order("id", { ascending: true }).range(from, from + 499);
+      if (error) throw error;
+      movies.push(...(data || []));
+      if (!data || data.length < 500) break;
+    }
   }
   downloadJson(`centralis-movies-${new Date().toISOString().slice(0, 10)}.json`, {
-    format: "centralis.movie-export.v2",
+    format: "centralis.movie-export.v3",
+    custom_fields: movieCustom.exportDefinitions(),
     exported_at: new Date().toISOString(),
     movies: movies.map((movie) => ({
       title: movie.title,
@@ -1420,6 +1452,7 @@ async function exportMovies() {
       downloaded: movie.downloaded,
       franchise: movie.franchise?.name || null,
       collections: movieCollectionNames(movie),
+      custom_fields: movie.custom_values || {},
       rated: movie.rated,
       director: movie.director,
       date_released: movie.date_released,

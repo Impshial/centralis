@@ -222,16 +222,27 @@ Movie Tracker files:
 - `movie-tracker.html`
 - `movie-tracker.js`
 - `movie-tracker.css`
+- `movie-custom-fields.js`
 
 Phones and tablets use movie cards, tools above the list, collapsible filters, touch-friendly selection and sorting, and scrollable dialogs. Desktop retains the table and resizable sidebar.
 
 With the local server running and Playwright available, run `node tests/movie-tracker-browser.cjs` for responsive interaction checks with local fixture data. Set `PLAYWRIGHT_MODULE` to a bundled Playwright path if needed, and `MOVIE_TEST_BASE_URL` to override the default `http://127.0.0.1:4173`.
 
-Movies can belong to multiple collections. Add, edit, batch add, and bulk assignment use checkbox dropdowns. The collection filter matches any checked collection; “No collections” can be combined with named collections, while “All collections” clears the filter. Bulk assignment replaces memberships on selected movies.
+Movies can belong to multiple collections. Add, edit, batch add, and bulk actions use checkbox dropdowns. The collection filter matches any checked collection; “No collections” can be combined with named collections, while “All collections” clears the filter. Bulk Add/Remove actions change only the requested memberships. Adding to a franchise moves movies to that franchise; removing clears matching assignments only.
 
 `202610150001_movie_multiple_collections.sql` backfills `movies.collection_ids` from existing assignments, validates collection ownership, and removes memberships when a collection is deleted. The legacy `collection_id` remains synchronized with the first membership for older clients. Apply this migration before deploying the updated frontend.
 
-Exports use `centralis.movie-export.v2` with a `collections` array of names. Imports also accept legacy `collection`/`set` names, and CSV accepts either JSON arrays or semicolon-separated names in the `collections` column. Use JSON arrays when a collection name contains a semicolon.
+Exports use `centralis.movie-export.v3` with a `collections` array of names plus custom field definitions and typed per-movie values. Imports also accept v1/v2 exports and legacy `collection`/`set` names. CSV accepts either JSON arrays or semicolon-separated names in the `collections` column. Use JSON arrays when a collection name contains a semicolon.
+
+**Actions → Manage Fields** creates library-wide checkbox, short text, long text, number, date, and dropdown fields for the signed-in user. Names, order, choices, and column visibility are editable. Field types are fixed after creation; removing a dropdown choice that is still used is rejected. Hiding a column keeps its values, while deleting a field permanently removes its values after confirmation. Optional Watched, Downloaded, Hated, and Review presets are available; copying legacy Downloaded values is explicitly opt-in and does not stay synchronized with that legacy flag.
+
+Values are edited in **Edit Movie** and displayed in Movie View and optional read-only columns/mobile cards. The sidebar provides typed custom filters and sorting across the entire library. Unset checkboxes behave as No; other unset values display “Not set” and sort last. Numeric/date ranges are inclusive. Custom filters combine with standard search, franchise, and collection filters.
+
+Apply `202610200001_movie_custom_fields.sql` before deploying the frontend. It adds owner-scoped definitions, validated `movies.custom_values`, and authenticated field management. It also enables movie row ownership policies to protect personal values; normal signed-in movie access remains scoped to the same user as before.
+
+JSON imports match definitions by name/type and remap IDs when moving between libraries. Compatible dropdown choices are merged; incompatible types are rejected before movie insertion. CSV custom values use `custom:Field Name` headers and require those fields to exist first. Checkboxes accept true/false, yes/no, or 1/0; dates use YYYY-MM-DD. Export batches queries to include libraries and selections larger than the API row limit.
+
+Run `node tests/movie-custom-fields-browser.cjs` for field management, edit/retry, full-library queries, responsive columns, large exports, and portable imports. Run `node tests/movie-custom-fields-database.cjs` with `PGLITE_MODULE` configured for validation, ownership, legacy copying, and deletion checks.
 
 Run `node tests/movie-collections-browser.cjs` for collection persistence and filter workflows. Run `node tests/movie-collections-database.cjs` with PGlite available (or `PGLITE_MODULE` set to its path) for migration, integrity, compatibility, and deletion checks.
 

@@ -1,0 +1,63 @@
+const {PGlite}=require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
+const fs=require('node:fs'),assert=require('node:assert/strict');
+(async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec(`create role authenticated; create role anon; create schema auth;
+    create function auth.uid() returns text language sql stable as $$select current_setting('request.jwt.claim.sub',true)$$;
+    create table users(id integer primary key,clerk_user_id text);insert into users values(1,'owner'),(2,'other');
+    grant usage on schema auth to authenticated;grant select on users to authenticated;
+    alter default privileges in schema public grant execute on functions to anon;`);
+  await db.exec(fs.readFileSync('supabase/migrations/202605080001_add_movie_tracker.sql','utf8'));
+  await db.exec(`alter table movies add column deleted boolean not null default false;
+    alter table collections add column deleted boolean not null default false;
+    insert into movies(id,user_id,title,year_released,downloaded) values(1,1,'One',2000,true),(2,1,'Two',2001,false),(3,2,'Other',2000,true);
+    grant select,insert,update,delete on movies to authenticated;`);
+  await db.exec(fs.readFileSync('supabase/migrations/202610150001_movie_multiple_collections.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/202610200001_movie_custom_fields.sql','utf8'));
+  const manage=async(action,field)=>(await db.query('select public.manage_movie_custom_field($1,$2) as field',[action,JSON.stringify(field)])).rows[0].field;
+  const create=(name,field_type,extra={})=>manage('create',{name,field_type,options:[],visible:true,...extra});
+  const values=async id=>(await db.query('select custom_values from movies where id=$1',[id])).rows[0].custom_values;
+  const save=(id,value)=>db.query('update movies set custom_values=$2 where id=$1 returning id',[id,JSON.stringify(value)]);
+  await db.exec("set request.jwt.claim.sub='owner';set role authenticated;");
+  const check=await create('Watched','checkbox'),score=await create('My score','number'),date=await create('Watched on','date');
+  const review=await create('Review','long_text',{visible:false}),short=await create('Recommended by','text');
+  const choice=await create('Opinion','dropdown',{options:['Loved','Hated']});
+  const downloaded=await create('Downloaded','checkbox',{copy_downloaded:true});
+  assert.equal((await values(1))[downloaded.id],true);assert.equal((await values(2))[downloaded.id],false);
+  assert.equal((await db.query('select id from movies where id=3')).rows.length,0,'Other accounts cannot read private values');
+  const data={[check.id]:true,[score.id]:10,[date.id]:'2026-10-20',[review.id]:'First line\nSecond line',[short.id]:'A friend',[choice.id]:'Loved',[downloaded.id]:true};
+  await save(1,data);await save(2,{[score.id]:2});
+  assert.deepEqual(await values(1),data);
+  assert.deepEqual((await db.query(`select id from movies where user_id=1 order by custom_values->$1 asc nulls last`,[score.id])).rows.map(r=>r.id),[2,1],'Numbers sort numerically');
+  assert.equal((await db.query(`select count(*)::integer as n from movies where user_id=1 and custom_values->$1 >= '5'::jsonb`,[score.id])).rows[0].n,1);
+  for(const [key,value] of [[score.id,'10'],[check.id,'true'],[date.id,'2026-02-30'],[choice.id,'Unknown'],[short.id,'x'.repeat(501)],[review.id,'x'.repeat(20001)],['f_'+'0'.repeat(32),true]]) {
+    await assert.rejects(save(1,{...data,[key]:value}));assert.deepEqual(await values(1),data);
+  }
+  await assert.rejects(save(1,[]));
+  await manage('update',{...review,name:'My review',visible:true});assert.equal((await values(1))[review.id],data[review.id]);
+  await assert.rejects(manage('update',{...choice,options:['Hated']}),/still used/);
+  await assert.rejects(create(' watched ','checkbox'),/unique/);
+  await assert.rejects(db.query("update movie_custom_fields set field_type='text' where id=$1",[score.id]),/cannot be changed/);
+  await assert.rejects(manage('reorder',{ids:[score.id]}),/changed/);
+  const ids=[downloaded,choice,short,review,date,score,check].map(f=>f.id);
+  await manage('reorder',{ids});assert.deepEqual((await db.query('select id from movie_custom_fields order by sort_order')).rows.map(r=>r.id),ids);
+  await assert.rejects(create('Invalid copy','text',{copy_downloaded:true}),/checkbox/);
+  assert.equal((await db.query("select count(*)::integer n from movie_custom_fields where name='Invalid copy'")).rows[0].n,0,'Failed copy rolls back new definition');
+  await db.exec("set request.jwt.claim.sub='other'");
+  assert.equal((await db.query('select * from movie_custom_fields')).rows.length,0);
+  await assert.rejects(manage('delete',{id:review.id}),/unavailable/);
+  assert.equal((await save(1,{})).rows.length,0,'Other accounts cannot clear values');
+  await assert.rejects(save(3,{[score.id]:5}),/unavailable/);
+  const other=await create('Private','text');await save(3,{[other.id]:'private'});
+  await db.exec("set request.jwt.claim.sub='owner'");
+  await manage('delete',{id:review.id});assert.equal((await values(1))[review.id],undefined);assert.equal((await values(1))[score.id],10);
+  await db.exec("set request.jwt.claim.sub='other'");assert.equal((await values(3))[other.id],'private');
+  await db.exec("set request.jwt.claim.sub='owner'");
+  await save(2,{[score.id]:null});assert.deepEqual(await values(2),{});
+  await db.exec('reset role;set role anon');await assert.rejects(manage('create',{name:'Bad',field_type:'text'}),/permission denied/);
+  await db.exec('reset role;delete from users where id=1');
+  assert.equal((await db.query('select count(*)::integer n from movies')).rows[0].n,1);
+  console.log('Custom field database checks passed: types, values, numeric sorting/ranges, rename/hide/reorder, safe choice updates, legacy copy, delete cleanup, ownership, anonymous denial and account cascades.');
+ } finally {await db.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

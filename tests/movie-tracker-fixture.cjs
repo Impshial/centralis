@@ -19,8 +19,25 @@ const movieTestTables = JSON.parse(localStorage.getItem('movie-test-tables') || 
   collections: [{id:1,user_id:42,deleted:false,name:'Favorites'}, {id:2,user_id:42,deleted:false,name:'Watch Again'}]
 };
 window.movieTestWrites = [];
+movieTestTables.movie_custom_fields ||= [];
+const fieldValue = (row,key) => {
+  if(!key.includes('->')) return row[key];
+  const value=row.custom_values?.[key.split(/->>?/)[1]];
+  return value==null ? null : key.includes('->>') ? String(value) : value;
+};
 window.centralisSupabase = {
   async rpc(name, args) {
+    if(name==='manage_movie_custom_field') {
+      if(window.movieTestFailNextSave) {window.movieTestFailNextSave=false;return {error:{message:'Test save failed'}};}
+      const f=args.p_field, table=movieTestTables.movie_custom_fields; let row;
+      if(args.p_action==='create') {
+        row={id:'f_'+crypto.randomUUID().replaceAll('-',''),user_id:42,name:f.name,field_type:f.field_type,options:f.options,visible:f.visible,sort_order:table.length};table.push(row);
+        if(f.copy_downloaded) movieTestTables.movies.forEach(m=>{m.custom_values={...m.custom_values,[row.id]:!!m.downloaded};});
+      } else if(args.p_action==='update') {row=table.find(x=>x.id===f.id);Object.assign(row,{name:f.name,visible:f.visible,options:f.options});}
+      else if(args.p_action==='delete') {movieTestTables.movie_custom_fields=table.filter(x=>x.id!==f.id);movieTestTables.movies.forEach(m=>{if(m.custom_values) delete m.custom_values[f.id];});}
+      else f.ids.forEach((id,i)=>{table.find(x=>x.id===id).sort_order=i;});
+      localStorage.setItem('movie-test-tables',JSON.stringify(movieTestTables));return {data:row || {},error:null};
+    }
     if (name !== 'update_movie_memberships') throw new Error('Unexpected RPC');
     window.movieTestWrites.push({rpc:name,args});
     if (window.movieTestFailNextSave) { window.movieTestFailNextSave=false; return {error:{message:'Test save failed'},data:null}; }
@@ -58,7 +75,9 @@ window.centralisSupabase = {
       }
       rows.sort((a,b) => {
         for (const [key, options] of orders) {
-          const result = String(a[key]).localeCompare(String(b[key]), undefined, {numeric:true}) * (options.ascending ? 1 : -1);
+          const av=fieldValue(a,key),bv=fieldValue(b,key);
+          if(options.nullsFirst===false && (av==null || bv==null)) {if(av==null && bv!=null) return 1;if(bv==null && av!=null) return -1;}
+          const result = String(av).localeCompare(String(bv), undefined, {numeric:true}) * (options.ascending ? 1 : -1);
           if (result) return result;
         }
         return 0;
@@ -68,11 +87,15 @@ window.centralisSupabase = {
     };
     const q = {
       select(_, options) { head = options?.head; return q; },
-      eq(key, value) { rows = rows.filter(row => value === '{}' ? Array.isArray(row[key]) && !row[key].length : row[key] === value); return q; },
+      eq(key, value) { rows = rows.filter(row => value === '{}' ? Array.isArray(row[key]) && !row[key].length : fieldValue(row,key) === value); return q; },
+      gte(key,value) {rows=rows.filter(row=>fieldValue(row,key)!=null && fieldValue(row,key)>=value);return q;},
+      lte(key,value) {rows=rows.filter(row=>fieldValue(row,key)!=null && fieldValue(row,key)<=value);return q;},
+      ilike(key,value) {rows=rows.filter(row=>String(fieldValue(row,key)||'').toLowerCase().includes(value.slice(1,-1).toLowerCase()));return q;},
       is(key, value) { rows = rows.filter(row => row[key] === value); return q; },
       in(key, values) { rows = rows.filter(row => values.includes(row[key])); return q; },
       overlaps(key, values) { rows = rows.filter(row => row[key]?.some(value => values.includes(value))); return q; },
       or(value) {
+        if(value.startsWith('custom_values->>')) {const key=value.split('.')[0];rows=rows.filter(row=>fieldValue(row,key)==='false' || fieldValue(row,key)==null);return q;}
         const term = value.match(/title\\.ilike\\.%([^%]*)%/);
         if (term) rows = rows.filter(row => row.title.toLowerCase().includes(term[1].toLowerCase()));
         const ids = value.match(/collection_ids\\.ov\\.\\{([\\d,]+)\\}/);
