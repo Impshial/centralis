@@ -244,6 +244,24 @@ JSON imports match definitions by name/type and remap IDs when moving between li
 
 Run `node tests/movie-custom-fields-browser.cjs` for field management, edit/retry, full-library queries, responsive columns, large exports, and portable imports. Run `node tests/movie-custom-fields-database.cjs` with `PGLITE_MODULE` configured for validation, ownership, legacy copying, and deletion checks.
 
+### Centralis backups
+
+Administrators can use **Settings → Backups** to manage daily backups, retention,
+and manual requests. The separate backup tables do not alter existing application
+tables. A GitHub Actions worker captures the PostgreSQL database, application
+source, configured iDrive buckets, and Supabase Storage files into the private
+`centralis-backups` bucket. The default schedule is approximately 3 AM Eastern
+with 30-day retention.
+
+Deploy `202610200003_centralis_backups.sql` and the updated storage browsing
+functions before the frontend. Complete the credential setup and restore
+rehearsal in [the backup guide](scripts/backups/README.md). Until the worker is
+configured and checks in, the app explicitly shows **Setup needed**; deploying
+the UI alone does not mean backups are running.
+
+Tests: `tests/backups-database.cjs`, `tests/backups-api.cjs`,
+`tests/backups-browser.cjs`, and `tests/backups-worker.py`.
+
 Run `node tests/movie-collections-browser.cjs` for collection persistence and filter workflows. Run `node tests/movie-collections-database.cjs` with PGlite available (or `PGLITE_MODULE` set to its path) for migration, integrity, compatibility, and deletion checks.
 
 ### Stellar Architect

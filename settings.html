@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=elements-import-1">
+  <link rel="stylesheet" href="backups.css?v=backups-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=database-modules-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -74,6 +75,11 @@
           >
             <ph-database weight="fill" aria-hidden="true"></ph-database>
             <span>Database</span>
+          </button>
+          <button class="settings-tab" type="button" role="tab" id="settings-tab-backups"
+            aria-selected="false" aria-controls="settings-panel-backups" data-settings-tab="backups" data-admin-only hidden>
+            <ph-cloud-arrow-up weight="fill" aria-hidden="true"></ph-cloud-arrow-up>
+            <span>Backups</span>
           </button>
         </nav>
 
@@ -213,6 +219,51 @@
             </button>
           </div>
           <p class="form-status settings-elements-status" data-settings-elements-status role="status" aria-live="polite"></p>
+        </section>
+
+        <section
+          class="settings-tab-panel"
+          role="tabpanel"
+          id="settings-panel-backups"
+          aria-labelledby="settings-tab-backups"
+          data-settings-panel="backups"
+          data-admin-only
+          hidden
+        >
+          <header class="settings-panel-header">
+            <div>
+              <p class="settings-panel-eyebrow">Admin</p>
+              <h2>Backups</h2>
+              <p>Daily copies of all Centralis database records and uploaded files, stored privately in iDrive.</p>
+            </div>
+          </header>
+          <div class="backup-health" data-backup-health role="status">Loading backup status…</div>
+          <form data-backup-settings class="backup-settings">
+            <label class="backup-checkbox"><input type="checkbox" name="enabled" checked> Enable daily backups</label>
+            <p>Daily at approximately 3 AM Eastern. Backups run even when Centralis is closed.</p>
+            <label>Keep backups for
+              <select name="retention_days">
+                <option value="7">7 days</option><option value="14">14 days</option>
+                <option value="30" selected>30 days</option><option value="60">60 days</option>
+                <option value="90">90 days</option><option value="365">1 year</option>
+              </select>
+            </label>
+            <p>Older copies are removed only after a new backup completes. Original data and files are never removed.</p>
+            <div class="backup-actions">
+              <button type="submit" class="secondary-action" disabled>Save settings</button>
+              <button type="button" class="primary-action" data-backup-now disabled>Back up now</button>
+              <button type="button" class="secondary-action" data-backup-refresh>Refresh</button>
+            </div>
+          </form>
+          <p class="form-status" data-backup-status role="status" aria-live="polite"></p>
+          <details data-backup-setup>
+            <summary>Setup and recovery</summary>
+            <p>Destination: <strong>centralis-backups</strong>, a private iDrive bucket. The worker needs secure credentials before the first backup can run.</p>
+            <p><a href="https://github.com/Impshial/centralis/blob/master/scripts/backups/README.md" target="_blank" rel="noopener">Open setup and recovery instructions</a></p>
+            <p>Backups include database schema/data, application source, iDrive files, and Supabase Storage files. Hosting secrets, external provider settings, and remote poster URLs require separate recovery records.</p>
+          </details>
+          <h3>Recent backups</h3>
+          <div data-backup-history class="backup-history"><p>No backup history loaded.</p></div>
         </section>
 
         <section
@@ -371,5 +422,6 @@
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
   <script src="settings.js?v=elements-import-1"></script>
+  <script src="backups.js?v=backups-1"></script>
 </body>
 </html>

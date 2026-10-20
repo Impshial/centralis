@@ -1,0 +1,49 @@
+name: Centralis backup
+on:
+  workflow_dispatch:
+  schedule:
+    # One of these is 3 AM Eastern; the worker skips the second completed run.
+    # GitHub may delay scheduled starts. The browser does not need to be open.
+    - cron: '0 7,8 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: centralis-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: centralis-backups
+    env:
+      BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      IDRIVE_E2_ENDPOINT: ${{ secrets.IDRIVE_E2_ENDPOINT }}
+      IDRIVE_E2_REGION: ${{ secrets.IDRIVE_E2_REGION }}
+      IDRIVE_E2_ACCESS_KEY_ID: ${{ secrets.IDRIVE_E2_ACCESS_KEY_ID }}
+      IDRIVE_E2_SECRET_ACCESS_KEY: ${{ secrets.IDRIVE_E2_SECRET_ACCESS_KEY }}
+      IDRIVE_SOURCE_BUCKETS: ${{ vars.IDRIVE_SOURCE_BUCKETS || 'centralis' }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://lztmpbxmntcktijcdcda.supabase.co' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check setup without displaying credentials
+        id: setup
+        run: |
+          python - <<'PY'
+          import os
+          required = ["BACKUP_DATABASE_URL", "IDRIVE_E2_ENDPOINT", "IDRIVE_E2_ACCESS_KEY_ID",
+                      "IDRIVE_E2_SECRET_ACCESS_KEY", "SUPABASE_SERVICE_ROLE_KEY"]
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              print("Setup needed. Missing secrets: " + ", ".join(missing))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("ready=" + ("false" if missing else "true") + "\n")
+          PY
+      - if: steps.setup.outputs.ready == 'true'
+        run: python -m pip install -r scripts/backups/requirements.txt
+      - name: Back up database and files to private iDrive storage
+        if: steps.setup.outputs.ready == 'true'
+        run: python scripts/backups/worker.py

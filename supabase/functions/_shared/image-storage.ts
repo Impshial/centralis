@@ -248,14 +248,19 @@ export async function deleteImageObject(imageUrl: string) {
 }
 
 export async function deleteStorageObject(bucket: string, key: string) {
+  assertApplicationBucket(bucket);
   await createS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+function assertApplicationBucket(bucket: string) {
+  if (bucket === "centralis-backups") throw new Error("Backup archives are not available through application storage.");
 }
 
 export async function listStorageBuckets() {
   const response = await createS3Client().send(new ListBucketsCommand({}));
   return (response.Buckets || [])
     .map((bucket) => bucket.Name)
-    .filter((bucket): bucket is string => Boolean(bucket))
+    .filter((bucket): bucket is string => Boolean(bucket) && bucket !== "centralis-backups")
     .sort((left, right) => left.localeCompare(right));
 }
 
@@ -265,6 +270,7 @@ export async function listStorageObjects(options: {
   continuationToken?: string;
   maxKeys?: number;
 }) {
+  assertApplicationBucket(options.bucket);
   const response = await createS3Client().send(new ListObjectsV2Command({
     Bucket: options.bucket,
     Prefix: options.prefix || "",
@@ -295,6 +301,7 @@ export async function createSignedStorageUrl(options: {
   download?: boolean;
   expiresIn?: number;
 }) {
+  assertApplicationBucket(options.bucket);
   return getSignedUrl(createS3Client(), new GetObjectCommand({
     Bucket: options.bucket,
     Key: options.key,
@@ -305,6 +312,7 @@ export async function createSignedStorageUrl(options: {
 }
 
 export async function getStorageObjectMetadata(bucket: string, key: string) {
+  assertApplicationBucket(bucket);
   const response = await createS3Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
   return {
     size: Number(response.ContentLength || 0),
