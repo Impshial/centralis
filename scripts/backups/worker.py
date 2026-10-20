@@ -53,10 +53,25 @@ def check_private_bucket(s3):
         if str(error.response["Error"]["Code"]) not in ("404", "NoSuchBucket", "NotFound"):
             raise
         s3.create_bucket(Bucket=DESTINATION, ACL="private")
-    acl = s3.get_bucket_acl(Bucket=DESTINATION)
-    if any("acs.amazonaws.com/groups/" in item.get("Grantee", {}).get("URI", "")
-           for item in acl.get("Grants", [])):
-        raise RuntimeError("The backup bucket must be private.")
+    def has_public_grant(acl):
+        public_groups = {
+            f"{scheme}://acs.amazonaws.com/groups/global/{group}"
+            for scheme in ("http", "https")
+            for group in ("AllUsers", "AuthenticatedUsers")
+        }
+        return any(item.get("Grantee", {}).get("URI") in public_groups
+                   for item in acl.get("Grants", []))
+
+    if has_public_grant(s3.get_bucket_acl(Bucket=DESTINATION)):
+        try:
+            s3.put_bucket_acl(Bucket=DESTINATION, ACL="private")
+        except ClientError as error:
+            raise RuntimeError(
+                "Cannot make centralis-backups private. Allow this backup key to "
+                "update the destination bucket ACL, or set that bucket's ACL to private."
+            ) from error
+        if has_public_grant(s3.get_bucket_acl(Bucket=DESTINATION)):
+            raise RuntimeError("centralis-backups still grants public access after setting its ACL to private.")
     try:
         policy = json.loads(s3.get_bucket_policy(Bucket=DESTINATION)["Policy"])
         for statement in policy.get("Statement", []):

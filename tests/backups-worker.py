@@ -30,14 +30,43 @@ class BackupTests(unittest.TestCase):
             w.apply_retention(db, s3, 30, "current")
         s3.delete_objects.assert_not_called()
 
-    def test_public_bucket_rejected(self):
+    def test_public_bucket_repaired_and_verified(self):
+        for group in ("AllUsers", "AuthenticatedUsers"):
+            with self.subTest(group=group):
+                s3 = Mock()
+                s3.get_bucket_acl.side_effect = [
+                    {"Grants": [{"Grantee": {"URI": f"http://acs.amazonaws.com/groups/global/{group}"}}]},
+                    {"Grants": []},
+                ]
+                s3.get_bucket_policy.return_value = {"Policy": '{"Statement":[]}'}
+                w.check_private_bucket(s3)
+                s3.put_bucket_acl.assert_called_once_with(Bucket="centralis-backups", ACL="private")
+                self.assertEqual(s3.get_bucket_acl.call_count, 2)
+                for call in s3.get_bucket_acl.call_args_list:
+                    self.assertEqual(call.kwargs, {"Bucket": "centralis-backups"})
+
+    def test_public_bucket_repair_must_succeed(self):
         s3 = Mock()
         s3.get_bucket_acl.return_value = {"Grants": [{"Grantee": {"URI": "http://acs.amazonaws.com/groups/global/AllUsers"}}]}
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "still grants public access"):
             w.check_private_bucket(s3)
+        s3.get_bucket_policy.assert_not_called()
+        s3.put_bucket_acl.side_effect = w.ClientError({"Error": {"Code": "AccessDenied"}}, "PutBucketAcl")
+        with self.assertRaisesRegex(RuntimeError, "Cannot make centralis-backups private"):
+            w.check_private_bucket(s3)
+
+    def test_logging_grant_is_not_public(self):
+        s3 = Mock()
+        s3.get_bucket_acl.return_value = {"Grants": [{"Grantee": {"URI": "http://acs.amazonaws.com/groups/s3/LogDelivery"}}]}
+        s3.get_bucket_policy.return_value = {"Policy": '{"Statement":[]}'}
+        w.check_private_bucket(s3)
+        s3.put_bucket_acl.assert_not_called()
+
+    def test_public_policy_rejected(self):
+        s3 = Mock()
         s3.get_bucket_acl.return_value = {"Grants": []}
         s3.get_bucket_policy.return_value = {"Policy": '{"Statement":[{"Effect":"Allow","Principal":"*"}]}'}
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "policy must not grant public access"):
             w.check_private_bucket(s3)
 
     def test_incomplete_copy_rejected(self):

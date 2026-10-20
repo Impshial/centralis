@@ -66,7 +66,11 @@ before relying on the backup for production recovery.
    settings. Redeploy Vercel after changing environment variables.
 5. Merge the workflow to the default branch, enable GitHub Actions, and run
    **Centralis backup** once manually from the Actions page. The worker creates
-   the destination with a private ACL if absent and rejects public ACLs/policies.
+   the destination with a private ACL if absent. If its ACL grants access to
+   AllUsers or AuthenticatedUsers, the worker sets only the destination ACL to
+   private and reads it back to verify the change. The backup key needs permission
+   to update that ACL, or an administrator must make it private first. Public
+   bucket policies still stop the worker; they are never automatically changed.
    At or after 3 AM Eastern, it also performs the first daily backup. Before
    that time it checks in; use Back up now after the check-in to request a copy.
 6. Confirm a `completed` run in Settings → Backups, a matching `_complete.json`
