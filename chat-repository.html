@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.min.css">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=chat-entire-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -206,6 +206,10 @@
           <h2 id="chat-raw-import-title">Paste Raw Chat HTML</h2>
         </div>
         <div class="chat-editor-header-actions">
+          <label class="chat-upload-option">
+            <input type="checkbox" data-chat-raw-parse-entire>
+            <span>Parse Entire Chat</span>
+          </label>
           <button class="secondary-action chat-reader-close" type="button" data-chat-raw-import-parse>
             <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
             Parse/Generate
@@ -414,6 +418,6 @@
   <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
-  <script src="chat-repository.js?v=chat-deeplink-1"></script>
+  <script src="chat-repository.js?v=chat-entire-1"></script>
 </body>
 </html>

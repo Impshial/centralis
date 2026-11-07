@@ -67,6 +67,7 @@ const chatEls = {
   rawImportHtml: document.querySelector("[data-chat-raw-html]"),
   rawImportInstructions: document.querySelector("[data-chat-raw-instructions]"),
   rawImportGenerateImage: document.querySelector("[data-chat-raw-generate-image]"),
+  rawImportParseEntire: document.querySelector("[data-chat-raw-parse-entire]"),
   rawImportParse: document.querySelector("[data-chat-raw-import-parse]"),
   rawImportSave: document.querySelector("[data-chat-raw-import-save]"),
   rawImportStatus: document.querySelector("[data-chat-raw-status]"),
@@ -1303,12 +1304,12 @@ async function handleRawImportFileChange() {
   }
 }
 
-function buildRawChatMetadataText(parsed) {
+function buildRawChatMetadataText(parsed, parseEntireChat = false) {
   return truncateChatPromptText(
     parsed.entries
       .map((entry, index) => `${String(index + 1).padStart(3, "0")} ${entry.speaker}: ${entry.text}`)
       .join("\n"),
-    CHAT_RAW_METADATA_TEXT_MAX_LENGTH
+    parseEntireChat ? Infinity : CHAT_RAW_METADATA_TEXT_MAX_LENGTH
   );
 }
 
@@ -1319,12 +1320,13 @@ function createFallbackRawMetadata(parsed) {
   };
 }
 
-async function generateRawChatMetadata(parsed, instructions) {
+async function generateRawChatMetadata(parsed, instructions, parseEntireChat = false) {
   const response = await getFunctionResponse("generate-chat-log-metadata", {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       instructions,
-      chatText: buildRawChatMetadataText(parsed),
+      chatText: buildRawChatMetadataText(parsed, parseEntireChat),
+      parseEntireChat,
       totalEntryCount: parsed.totalCount,
       userEntryCount: parsed.userCount,
       othersEntryCount: parsed.othersCount,
@@ -1341,7 +1343,7 @@ async function generateRawChatMetadata(parsed, instructions) {
   };
 }
 
-async function analyzeRawChatLayoutWithAi(rawHtml) {
+async function analyzeRawChatLayoutWithAi(rawHtml, parseEntireChat = false) {
   const source = stripBase64ImageData(String(rawHtml || "").trim()).trim();
   if (!source) {
     throw new Error("Paste raw chat HTML before asking OpenAI to analyze the layout.");
@@ -1349,7 +1351,7 @@ async function analyzeRawChatLayoutWithAi(rawHtml) {
 
   const response = await getFunctionResponse("analyze-chat-log-layout", {
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ html: source }),
+    body: JSON.stringify({ html: source, parseEntireChat }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1379,7 +1381,7 @@ async function analyzeRawChatLayoutWithAi(rawHtml) {
   return config;
 }
 
-async function analyzeRawChatJsonWithAi(rawJson) {
+async function analyzeRawChatJsonWithAi(rawJson, parseEntireChat = false) {
   const source = String(rawJson || "").trim();
   if (!source) {
     throw new Error("Paste raw JSON before asking OpenAI to analyze the structure.");
@@ -1387,7 +1389,7 @@ async function analyzeRawChatJsonWithAi(rawJson) {
 
   const response = await getFunctionResponse("analyze-chat-log-layout", {
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceType: "json", json: source }),
+    body: JSON.stringify({ sourceType: "json", json: source, parseEntireChat }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1414,7 +1416,7 @@ async function analyzeRawChatJsonWithAi(rawJson) {
   return config;
 }
 
-async function analyzeRawChatTextWithAi(rawText) {
+async function analyzeRawChatTextWithAi(rawText, parseEntireChat = false) {
   const source = String(rawText || "").trim();
   if (!source) {
     throw new Error("Paste text or Markdown before asking OpenAI to extract chat entries.");
@@ -1422,7 +1424,7 @@ async function analyzeRawChatTextWithAi(rawText) {
 
   const response = await getFunctionResponse("analyze-chat-log-layout", {
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceType: "text", text: source }),
+    body: JSON.stringify({ sourceType: "text", text: source, parseEntireChat }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -2415,12 +2417,15 @@ function createRawImportFilename(title) {
 async function parseRawChatImport() {
   if (chatRepositoryState.rawImporting) return;
 
+  const parseEntireChat = chatEls.rawImportParseEntire?.checked === true;
+  if (parseEntireChat) chatRepositoryState.rawImportLayoutConfig = null;
   resetRawImportReview();
   const rawHtml = chatEls.rawImportHtml?.value || "";
   const instructions = chatEls.rawImportInstructions?.value.trim() || DEFAULT_RAW_IMPORT_INSTRUCTIONS;
   localStorage.setItem(CHAT_RAW_IMPORT_INSTRUCTIONS_KEY, instructions);
 
   chatRepositoryState.rawImporting = true;
+  if (chatEls.rawImportParseEntire) chatEls.rawImportParseEntire.disabled = true;
   if (chatEls.rawImportParse) chatEls.rawImportParse.disabled = true;
   if (chatEls.rawImportSave) chatEls.rawImportSave.disabled = true;
   setRawImportStatus("Parsing raw conversation source...");
@@ -2433,19 +2438,19 @@ async function parseRawChatImport() {
     } catch (error) {
       if (error?.needsAiJsonLayout) {
         setRawImportStatus("JSON detected. Asking OpenAI to identify the message structure...");
-        layoutAnalysis = await analyzeRawChatJsonWithAi(rawHtml);
+        layoutAnalysis = await analyzeRawChatJsonWithAi(rawHtml, parseEntireChat);
         chatRepositoryState.rawImportLayoutConfig = layoutAnalysis;
         setRawImportStatus("OpenAI identified the JSON structure. Building the Centralis HTML preview...");
         parsed = parseRawChatSource(rawHtml, layoutAnalysis, chatRepositoryState.rawImportSourceType, instructions);
       } else if (error?.needsAiLayout) {
         setRawImportStatus("Unknown chat layout. Asking OpenAI to identify the message structure...");
-        layoutAnalysis = await analyzeRawChatLayoutWithAi(rawHtml);
+        layoutAnalysis = await analyzeRawChatLayoutWithAi(rawHtml, parseEntireChat);
         chatRepositoryState.rawImportLayoutConfig = layoutAnalysis;
         setRawImportStatus("OpenAI identified the layout. Building the Centralis HTML preview...");
         parsed = parseRawChatSource(rawHtml, layoutAnalysis, chatRepositoryState.rawImportSourceType, instructions);
       } else if (error?.needsAiTextLayout) {
         setRawImportStatus("Text or Markdown detected. Asking OpenAI to extract chat entries...");
-        layoutAnalysis = await analyzeRawChatTextWithAi(rawHtml);
+        layoutAnalysis = await analyzeRawChatTextWithAi(rawHtml, parseEntireChat);
         chatRepositoryState.rawImportLayoutConfig = layoutAnalysis;
         setRawImportStatus("OpenAI extracted the text entries. Building the Centralis HTML preview...");
         parsed = parseRawChatSource(rawHtml, layoutAnalysis, chatRepositoryState.rawImportSourceType, instructions);
@@ -2458,7 +2463,7 @@ async function parseRawChatImport() {
     let metadataError = null;
     setRawImportStatus("Generating title and summary...");
     try {
-      const generated = await generateRawChatMetadata(parsed, instructions);
+      const generated = await generateRawChatMetadata(parsed, instructions, parseEntireChat);
       if (generated.title && generated.summary) {
         metadata = generated;
       }
@@ -2482,6 +2487,7 @@ async function parseRawChatImport() {
     setRawImportStatus(getChatError(error), "error");
   } finally {
     chatRepositoryState.rawImporting = false;
+    if (chatEls.rawImportParseEntire) chatEls.rawImportParseEntire.disabled = false;
     if (chatEls.rawImportParse) chatEls.rawImportParse.disabled = false;
   }
 }
@@ -2519,6 +2525,7 @@ async function saveRawChatImport() {
   }
 
   chatRepositoryState.rawImporting = true;
+  if (chatEls.rawImportParseEntire) chatEls.rawImportParseEntire.disabled = true;
   if (chatEls.rawImportParse) chatEls.rawImportParse.disabled = true;
   if (chatEls.rawImportSave) chatEls.rawImportSave.disabled = true;
   chatEls.rawImportClosers.forEach((button) => { button.disabled = true; });
@@ -2547,6 +2554,7 @@ async function saveRawChatImport() {
     setRawImportStatus(getChatError(error), "error");
   } finally {
     chatRepositoryState.rawImporting = false;
+    if (chatEls.rawImportParseEntire) chatEls.rawImportParseEntire.disabled = false;
     if (chatEls.rawImportParse) chatEls.rawImportParse.disabled = false;
     if (chatEls.rawImportSave) chatEls.rawImportSave.disabled = !chatRepositoryState.rawImportParsed;
     chatEls.rawImportClosers.forEach((button) => { button.disabled = false; });
@@ -2936,6 +2944,10 @@ chatEls.uploadOpen?.addEventListener("click", (event) => {
 });
 chatEls.rawImportOpen?.addEventListener("click", (event) => {
   openRawImportModal(event.currentTarget);
+});
+chatEls.rawImportParseEntire?.addEventListener("change", () => {
+  chatRepositoryState.rawImportLayoutConfig = null;
+  resetRawImportReview();
 });
 chatEls.rawImportParse?.addEventListener("click", parseRawChatImport);
 chatEls.rawImportSave?.addEventListener("click", saveRawChatImport);

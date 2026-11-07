@@ -43,6 +43,7 @@ function cleanSummary(value: unknown) {
 }
 
 function buildPrompt(input: {
+  parseEntireChat: boolean;
   instructions: string;
   chatText: string;
   totalEntryCount: number;
@@ -60,7 +61,7 @@ function buildPrompt(input: {
     "Do not include markdown, HTML, comments, or prose outside JSON.",
     `Entry counts: ${input.totalEntryCount} chronological entries, ${input.userEntryCount} Adam/user entries, ${input.othersEntryCount} others entries.`,
     input.instructions ? `User import instructions:\n${input.instructions}` : "",
-    `Chat transcript excerpt:\n${input.chatText}`,
+    `${input.parseEntireChat ? "Entire chat transcript (consider every entry from beginning to end)" : "Chat transcript excerpt"}:\n${input.chatText}`,
   ].filter(Boolean).join("\n\n");
 }
 
@@ -75,7 +76,8 @@ Deno.serve(async (req) => {
   try {
     await getAuthUser(req);
     const body = await req.json().catch(() => ({}));
-    const chatText = truncate(body.chatText, 14000);
+    const parseEntireChat = body.parseEntireChat === true;
+    const chatText = parseEntireChat ? String(body.chatText || "").trim() : truncate(body.chatText, 14000);
     if (!chatText) {
       return jsonResponse({ error: "chatText is required." }, 400);
     }
@@ -88,6 +90,7 @@ Deno.serve(async (req) => {
     const generatedText = await generateJsonText(openai, {
       system: "You create safe, concise metadata for private story-like chat logs. Respond only with valid JSON.",
       prompt: buildPrompt({
+        parseEntireChat,
         instructions,
         chatText,
         totalEntryCount,
