@@ -413,6 +413,7 @@ const CENTRALIS_HEADER_MARKUP = `
         <a href="universe-builder.html" role="menuitem"><ph-planet weight="duotone" aria-hidden="true"></ph-planet><span>Universe Builder</span></a>
         <a href="arc-studio.html" role="menuitem"><ph-git-branch weight="duotone" aria-hidden="true"></ph-git-branch><span>Arc Studio</span></a>
         <a href="chronicle.html" role="menuitem"><ph-file-text weight="duotone" aria-hidden="true"></ph-file-text><span>Chronicle</span></a>
+        <a href="lexicon.html" role="menuitem"><ph-book-open weight="duotone" aria-hidden="true"></ph-book-open><span>Lexicon</span></a>
         <a href="stellar-architect.html#systems" role="menuitem"><ph-sparkle weight="duotone" aria-hidden="true"></ph-sparkle><span>Stellar Architect</span></a>
       </div>
     </div>
@@ -515,6 +516,16 @@ const CENTRALIS_HEADER_MARKUP = `
 function renderCentralisHeader() {
   document.querySelectorAll(".site-header").forEach((header) => {
     header.innerHTML = CENTRALIS_HEADER_MARKUP;
+    const collectionPage = document.querySelector(".universe-builder-page");
+    if (collectionPage) {
+      // Collection pages must clear both rows of the responsive shared header.
+      const syncHeaderOffset = () => {
+        const height = header.getBoundingClientRect().height;
+        if (height) collectionPage.style.setProperty("--collection-header-height", `${height}px`);
+      };
+      syncHeaderOffset();
+      new ResizeObserver(syncHeaderOffset).observe(header);
+    }
   });
 }
 
@@ -4093,7 +4104,9 @@ async function prepareSignedInUser(authUser) {
     currentAppUser = await ensureUserProfile(authUser);
     publishCurrentAppUserChange();
     currentUserSettings = await ensureUserSettings(currentAppUser.id);
-    startElementTypeLibrarySeed(currentAppUser.id);
+    if (!document.body.dataset.page?.startsWith("lexicon")) {
+      startElementTypeLibrarySeed(currentAppUser.id);
+    }
     applyUserSettings(currentUserSettings);
     await loadThemeLibrary({ refresh: true });
     applyUserSettings(currentUserSettings);

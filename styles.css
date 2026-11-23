@@ -5779,7 +5779,7 @@ body[data-page="episode-roulette"].is-episode-loading {
 
 .universe-builder-page {
   position: fixed;
-  top: var(--header-height);
+  top: var(--collection-header-height, var(--header-height));
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
@@ -5792,7 +5792,8 @@ body[data-page="episode-roulette"].is-episode-loading {
   overflow: hidden;
 }
 
-body[data-page="universe-builder"] {
+body[data-page="universe-builder"],
+body[data-page="lexicon"] {
   overflow: hidden;
 }
 
@@ -5857,7 +5858,14 @@ body[data-page="universe-builder"] {
 .universe-builder-control-actions {
   display: flex;
   align-items: center;
+  width: 100%;
   gap: 12px;
+}
+
+.universe-builder-control-actions .chat-view-switcher {
+  flex: 0 0 auto;
+  width: auto;
+  margin-left: auto;
 }
 
 body[data-page="universe-canvas"] #universe-source-documents-modal .modal-dialog.universe-source-documents-dialog,
@@ -24787,6 +24795,7 @@ body.todo-modal-open {
 /* Standard module corner radius */
 body:is(
   [data-page="universe-builder"],
+  [data-page="lexicon"],
   [data-page="universe-canvas"],
   [data-page="stellar-architect"],
   [data-page="chronicle"],
@@ -24805,6 +24814,7 @@ body:is(
 
 body:is(
   [data-page="universe-builder"],
+  [data-page="lexicon"],
   [data-page="universe-canvas"],
   [data-page="stellar-architect"],
   [data-page="chronicle"],
@@ -24843,6 +24853,7 @@ body:is(
 
 body:is(
   [data-page="universe-builder"],
+  [data-page="lexicon"],
   [data-page="universe-canvas"],
   [data-page="stellar-architect"],
   [data-page="chronicle"],
@@ -24891,6 +24902,7 @@ body[data-page="useful-things"] :where(
   .storage-preview-splitter
 ),
 body[data-page="universe-builder"] .universe-builder-search,
+body[data-page="lexicon"] .universe-builder-search,
 body[data-page="chat-repository"] .chat-repository-search,
 body[data-page="image-generation"] :where(
   .image-generation-message.is-user

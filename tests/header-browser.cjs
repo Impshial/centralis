@@ -2,7 +2,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const base = 'http://127.0.0.1:4187';
+const base = process.env.CENTRALIS_BASE_URL || 'http://127.0.0.1:4187';
 const output = 'node_modules/.cache/header/screenshots';
 fs.mkdirSync(output, { recursive: true });
 
@@ -48,10 +48,10 @@ async function assertReachable(link) {
     await isolate(page, errors);
     for (const width of [320, 390, 760]) {
       await page.setViewportSize({ width, height: 844 });
-      for (const file of ['nfl.html', 'index.html', 'universe-builder.html', 'image-generation.html', 'arc-studio.html']) {
+      for (const file of ['nfl.html', 'index.html', 'universe-builder.html', 'image-generation.html', 'arc-studio.html', 'lexicon.html']) {
         await page.goto(`${base}/${file}`);
         await page.locator('.site-header .category-button').first().waitFor();
-        for (const [name, destination] of [['World building', 'Universe Builder'], ['AI tools', 'Image Generation'], ['Entertainment', 'NFL'], ['Utilities', 'SecureIt']]) {
+        for (const [name, destination] of [['World building', 'Lexicon'], ['AI tools', 'Image Generation'], ['Entertainment', 'NFL'], ['Utilities', 'SecureIt']]) {
           const trigger = page.getByRole('button', { name, exact: true });
           const menu = trigger.locator('..').locator('.dropdown-menu');
           await trigger.tap();
@@ -103,6 +103,6 @@ async function assertReachable(link) {
     await mouse.keyboard.press('ArrowDown');
     await assertReachable(menu.getByRole('menuitem', { name: 'NFL', exact: true }));
     assert.deepEqual(errors, []);
-    console.log('Shared header browser checks passed: touch menus on five modules at 320/390/760px, navigation, outside taps, desktop hover/click, and keyboard controls.');
+    console.log('Shared header browser checks passed: touch menus on six modules at 320/390/760px, Lexicon menu visibility, navigation, outside taps, desktop hover/click, and keyboard controls.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

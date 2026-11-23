@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lexicon | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=lexicon-1">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="lexicon.css?v=wiki-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="lexicon">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+
+    <main class="universe-builder-page" aria-labelledby="lexicon-title">
+      <section class="universe-builder-toolbar">
+        <div>
+          <p class="universe-builder-eyebrow">World Building</p>
+          <h1 id="lexicon-title">Lexicon</h1>
+        </div>
+        <div class="universe-builder-toolbar-actions">
+          <button class="primary-action" type="button" data-lexicon-create disabled>Create</button>
+        </div>
+      </section>
+
+      <section class="universe-builder-controls" aria-label="Wiki display options">
+        <div class="universe-builder-control-actions">
+          <label class="universe-builder-search">
+            <span class="sr-only">Search wikis</span>
+            <ph-magnifying-glass weight="bold" aria-hidden="true"></ph-magnifying-glass>
+            <input type="search" placeholder="Search wikis..." autocomplete="off" data-lexicon-search>
+          </label>
+          <div class="chat-view-switcher" role="group" aria-label="Wiki view mode">
+            <button type="button" data-lexicon-view="card" aria-pressed="true" title="Card view">
+              <ph-squares-four weight="bold" aria-hidden="true"></ph-squares-four>
+              <span>Card</span>
+            </button>
+            <button type="button" data-lexicon-view="list" aria-pressed="false" title="List view">
+              <ph-list weight="bold" aria-hidden="true"></ph-list>
+              <span>List</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <p class="universe-builder-status" data-lexicon-status role="status">Loading wikis...</p>
+      <section class="universe-grid is-card-view" data-lexicon-grid aria-label="Wikis">
+        <p class="empty-state">Loading wikis...</p>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="lexicon-dialog" aria-labelledby="lexicon-create-title" data-lexicon-create-dialog>
+    <form data-lexicon-create-form>
+      <h2 id="lexicon-create-title">Create Wiki</h2>
+      <label class="form-field"><span>Wiki type</span><select name="kind">
+        <option value="universe">Create a wiki from an existing universe</option>
+        <option value="standalone">Create an empty wiki</option>
+      </select></label>
+      <label class="form-field" data-lexicon-universe-field><span>Universe</span><select name="universe_id"></select></label>
+      <label class="form-field"><span>Wiki name</span><input name="name" required maxlength="240" autocomplete="off"></label>
+      <p class="form-status" role="status" data-lexicon-create-status></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-lexicon-cancel>Cancel</button>
+        <button class="primary-action" type="submit">Create Wiki</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=lexicon-1"></script>
+  <script src="lexicon-data.js?v=wiki-2"></script>
+  <script src="lexicon.js?v=wiki-1"></script>
+</body>
+</html>

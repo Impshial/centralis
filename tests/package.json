@@ -1,0 +1,8 @@
+{
+  "name": "centralis-browser-tests",
+  "private": true,
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.17",
+    "playwright": "1.62.1"
+  }
+}
