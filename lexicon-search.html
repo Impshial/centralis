@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lexicon | Centralis</title>
+  <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
+  <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
+  <link rel="stylesheet" href="styles.css?v=lexicon-2">
+  <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
+  <link rel="stylesheet" href="lexicon.css?v=wiki-followups-1">
+  <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
+</head>
+<body data-auth-required="true" data-page="lexicon-wiki">
+  <div class="app-shell">
+    <header class="site-header" aria-label="Centralis main header"></header>
+    <main class="lexicon-workspace" aria-labelledby="wiki-title">
+      <header class="lexicon-heading">
+        <div><a href="lexicon.html">Lexicon</a><p id="wiki-title">Wiki</p></div>
+        <div class="lexicon-actions" data-wiki-actions></div>
+      </header>
+      <p class="form-status" role="status" data-wiki-status></p>
+      <div class="lexicon-layout">
+        <nav class="lexicon-navigation" aria-label="Wiki navigation" data-wiki-navigation><a href="lexicon.html">All wikis</a></nav>
+        <div data-wiki-content aria-busy="true"><section class="lexicon-article lexicon-opening" aria-label="Opening wiki"><h1>Opening wiki</h1><p role="status">Fetching articles…</p><div class="lexicon-skeleton" aria-hidden="true"></div><div class="lexicon-skeleton" aria-hidden="true"></div></section></div>
+      </div>
+    </main>
+  </div>
+  <dialog class="lexicon-dialog" data-wiki-dialog aria-labelledby="wiki-dialog-title"></dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js?v=lexicon-2"></script>
+  <script src="lexicon-core.js?v=wiki-followups-1"></script>
+  <script src="lexicon-data.js?v=wiki-followups-1"></script>
+  <script type="module" src="lexicon-wiki.js?v=wiki-followups-1"></script>
+</body>
+</html>

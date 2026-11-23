@@ -8,6 +8,7 @@
   const ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE = "element_type_template_fields";
   const ELEMENT_TEMPLATE_FIELD_VALUES_TABLE = "element_template_field_values";
   const ELEMENT_CUSTOM_FIELDS_TABLE = "element_custom_fields";
+  const UNIVERSE_CUSTOM_FIELDS_TABLE = "universe_custom_fields";
   const TEMPLATE_SECTION_MODULE_TYPE = "template_section";
   const MAX_IMAGE_PROMPT_LENGTH = 3900;
   const IS_CHRONICLE_EDITOR_PAGE = document.body?.dataset.page === "chronicle-editor";
@@ -45,19 +46,77 @@
   };
 
   const dom = {};
+  let savedDraft=null,allowLeave=false,leaveDialog=null,currentEditorUrl=location.href;
+  let routeIndex=Number(history.state?.chronicleIndex)||0,restoringHistory=false,routeDecision=false;
+  if(IS_CHRONICLE_EDITOR_PAGE)history.replaceState({...history.state,chronicleIndex:routeIndex},'',location.href);
 
   document.addEventListener("DOMContentLoaded", initChronicle);
-  window.addEventListener("hashchange", async () => {
+  async function onEditorRouteChange() {
     if (state.pageMode !== "editor") {
       return;
     }
+    if(restoringHistory){if(location.href===currentEditorUrl)restoringHistory=false;return;}
+    if(routeDecision||location.href===currentEditorUrl)return;
+    const nextUrl=location.href,nextIndex=Number.isFinite(history.state?.chronicleIndex)?history.state.chronicleIndex:routeIndex+1;
+    if(isWorkspaceDirty()&&!allowLeave){
+      routeDecision=true;const delta=nextIndex-routeIndex;
+      if(delta){restoringHistory=true;history.go(-delta);}else history.replaceState({...history.state,chronicleIndex:routeIndex},'',currentEditorUrl);
+      const leave=await confirmDiscard();routeDecision=false;
+      if(leave){allowLeave=true;if(delta)history.go(delta);else{history.replaceState({...history.state,chronicleIndex:nextIndex},'',nextUrl);onEditorRouteChange();}}
+      return;
+    }
+    currentEditorUrl=nextUrl;routeIndex=nextIndex;allowLeave=false;
+    history.replaceState({...history.state,chronicleIndex:routeIndex},'',location.href);
     scrollEditorToTop({ stubborn: true });
     state.routeContext = parseRouteContext();
     await loadRouteWorkspace();
     renderRouteNotice();
     renderWorkspace();
     scrollEditorToTop({ stubborn: true });
-  });
+  }
+  window.addEventListener('hashchange',onEditorRouteChange);
+  window.addEventListener('popstate',onEditorRouteChange);
+
+  function draftSnapshot() {
+    const w=state.workspace,form=dom.workspace?.querySelector('[data-chronicle-workspace-form]');
+    if(!w.element||!form||w.isLoading||w.error)return null;
+    syncAllInlineMarkdownEditors();
+    const value=(name,fallback='')=>String(form.elements.namedItem(name)?.value??fallback).trim();
+    const section=id=>getModuleSectionId(w.modules.find(m=>m.id===id)||{})||null;
+    const fields=getAssignedSectionModules(w).flatMap(m=>m.fields).map(f=>[f.id,readTemplateFieldValue(form,f)]).filter(([,v])=>hasMeaningfulValue(v)).sort((a,b)=>a[0].localeCompare(b[0]));
+    const custom=[...form.querySelectorAll('[data-custom-field-row]')].map(row=>[row.dataset.customFieldId,row.querySelector('[name="custom-name"]').value.trim(),row.querySelector('[name="custom-value"]').value,Number(row.querySelector('[name="custom-order"]').value),section(row.dataset.customModuleId)]).sort((a,b)=>a[0].localeCompare(b[0]));
+    return JSON.stringify({id:w.element.id,name:value('workspace-name'),description:value('workspace-description'),body:value('workspace-body'),type:value('workspace-element-type'),template:value('workspace-template'),modules:[...w.modules].sort(sortModules).map(m=>[getModuleSectionId(m),getModuleTemplateId(m)]),fields,custom});
+  }
+  function isWorkspaceDirty(){
+    if(savedDraft===null)return false;
+    const dialogDraft=state.activeTextEditorDialog;
+    if(dialogDraft){const text=dialogDraft.editor?dialogDraft.editor.getMarkdown():String(dom.textEditorFallback?.value||'');if(text!==dialogDraft.textarea.value)return true;}
+    if([...document.querySelectorAll('dialog[open]')].some(d=>d.chronicleDraftChanged?.()))return true;
+    return draftSnapshot()!==savedDraft;
+  }
+  function updateDirtyStatus(){const label=dom.workspace?.querySelector('[data-chronicle-dirty]');if(label)label.textContent=isWorkspaceDirty()?'Unsaved changes':'';}
+  function markWorkspaceSaved(){savedDraft=draftSnapshot();updateDirtyStatus();}
+  function confirmDiscard() {
+    if(leaveDialog)return Promise.resolve(false);
+    return new Promise(resolve=>{
+      const active=document.activeElement,modal=document.createElement('dialog');leaveDialog=modal;modal.className='chronicle-field-dialog';modal.setAttribute('aria-labelledby','chronicle-leave-title');modal.setAttribute('aria-describedby','chronicle-leave-description');
+      modal.innerHTML='<h2 id="chronicle-leave-title">Discard unsaved changes?</h2><p id="chronicle-leave-description">Changes on this Chronicle page have not been saved.</p><div class="modal-actions"><button type="button" class="secondary-action" data-stay>Keep editing</button><button type="button" class="primary-action" data-discard>Discard and leave</button></div>';
+      let leave=false;document.body.append(modal);modal.querySelector('[data-stay]').onclick=()=>modal.close();modal.querySelector('[data-discard]').onclick=()=>{leave=true;modal.close();};
+      modal.addEventListener('close',()=>{modal.remove();leaveDialog=null;if(!leave)active?.focus({preventScroll:true});resolve(leave);},{once:true});modal.showModal();modal.querySelector('[data-stay]').focus();
+    });
+  }
+  async function navigateFromEditor(href) {
+    if(isWorkspaceDirty()&&!await confirmDiscard())return;
+    allowLeave=true;location.href=href;
+  }
+  document.addEventListener('click',event=>{
+    const link=event.target.closest('a[href]');
+    if(state.pageMode!=='editor'||!link||link.closest('[data-chronicle-lexicon-dialog]')||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||link.hasAttribute('download')||link.target&&link.target!=='_self')return;
+    const target=new URL(link.href,location.href);if(!['http:','https:'].includes(target.protocol)||target.href===location.href)return;
+    if(isWorkspaceDirty()){event.preventDefault();event.stopImmediatePropagation();navigateFromEditor(target.href);}
+  },true);
+  window.addEventListener('beforeunload',event=>{if(!allowLeave&&isWorkspaceDirty()){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('pageshow',event=>{if(event.persisted&&IS_CHRONICLE_EDITOR_PAGE){allowLeave=true;location.reload();}});
 
   async function initChronicle() {
     bindDom();
@@ -138,6 +197,8 @@
     dom.aiModuleInstructions = document.querySelector("[data-chronicle-ai-module-instructions]");
     dom.aiModuleGenerateStatus = document.querySelector("[data-chronicle-ai-module-generate-status]");
     dom.aiModuleGenerateSubmit = document.querySelector("[data-chronicle-ai-module-generate-submit]");
+    dom.aiModuleGenerationOverlay = document.querySelector("[data-chronicle-ai-generation-overlay]");
+    dom.aiModuleProgressStage = document.querySelector("[data-chronicle-ai-progress-stage]");
     dom.aiModuleReviewModal = document.getElementById("chronicle-ai-module-review-modal");
     dom.aiModuleReviewForm = document.querySelector("[data-chronicle-ai-module-review-form]");
     dom.aiModuleReviewContent = document.querySelector("[data-chronicle-ai-module-review-content]");
@@ -188,6 +249,12 @@
     dom.workspace?.addEventListener("click", handleWorkspaceClick);
     dom.workspace?.addEventListener("change", handleWorkspaceChange);
     dom.workspace?.addEventListener("submit", handleWorkspaceSubmit);
+    dom.workspace?.addEventListener('input',updateDirtyStatus);
+    dom.workspace?.addEventListener('change',updateDirtyStatus);
+    dom.workspace?.addEventListener("focusin",event=>{
+      const module = event.target.closest('[data-module-id]');
+      if (module) state.workspace.activeModuleId = module.dataset.moduleId;
+    });
     document.querySelector("[data-chronicle-text-editor-close]")?.addEventListener("click", closeTextEditorDialog);
     document.querySelector("[data-chronicle-text-editor-cancel]")?.addEventListener("click", closeTextEditorDialog);
     document.querySelector("[data-chronicle-text-editor-apply]")?.addEventListener("click", applyTextEditorDialog);
@@ -316,8 +383,9 @@
   }
 
   async function loadRouteWorkspace() {
+    savedDraft=null;
     const context = state.routeContext;
-    if (!context || !["standalone-element", "universe-element"].includes(context.type)) {
+    if (!context || !["standalone-element", "universe-element", "universe"].includes(context.type)) {
       state.workspace = createEmptyWorkspace();
       return;
     }
@@ -326,11 +394,25 @@
     renderWorkspace();
 
     try {
+      if (context.type === "universe") {
+        const response = await window.centralisSupabase.from(UNIVERSES_TABLE).select("*")
+          .eq("id",context.universeId).eq("user_id",state.user.id).eq("deleted",false).single();
+        throwIfError(response);
+        const [custom, images] = await Promise.all([
+          window.centralisSupabase.from(UNIVERSE_CUSTOM_FIELDS_TABLE).select("*").eq("universe_id",context.universeId).eq("deleted",false).order("sort_order"),
+          fetchObjectImages([context.universeId])
+        ]);
+        throwIfError(custom);
+        state.workspace = {...createEmptyWorkspace(),isOpen:true,mode:"edit",isUniverse:true,
+          element:response.data,universe:response.data,customFields:custom.data || [],images:normalizeImages(images.images || [])};
+        return;
+      }
       const elementResponse = await window.centralisSupabase
         .from(ELEMENTS_TABLE)
-        .select("id,name,description,element_type_id,universe_id,rich_template_id,updated_at,created_at")
+        .select("id,name,description,body,element_type_id,universe_id,rich_template_id,updated_at,created_at")
         .eq("user_id", state.user.id)
         .eq("id", context.elementId)
+        .eq("deleted", false)
         .maybeSingle();
 
       throwIfError(elementResponse);
@@ -356,14 +438,17 @@
           .eq("user_id", state.user.id)
           .eq("element_id", element.id)
           .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE)
+          .eq("deleted", false)
           .order("sort_order", { ascending: true }),
         window.centralisSupabase
           .from(ELEMENT_TEMPLATE_FIELD_VALUES_TABLE)
           .select("*")
+          .eq("deleted", false)
           .eq("element_id", element.id),
         window.centralisSupabase
           .from(ELEMENT_CUSTOM_FIELDS_TABLE)
           .select("*")
+          .eq("deleted", false)
           .eq("element_id", element.id)
           .order("sort_order", { ascending: true }),
         fetchObjectImages([element.id])
@@ -575,6 +660,7 @@
     }
 
     dom.workspace.hidden = false;
+    dom.workspace.classList.toggle('is-universe',Boolean(workspace.isUniverse));
 
     if (workspace.isLoading) {
       dom.workspace.innerHTML = `<div class="chronicle-workspace is-loading">Loading element workspace...</div>`;
@@ -621,13 +707,16 @@
               <div>
                 <p class="chronicle-eyebrow">${escapeHtml(workspace.universe?.name || "Standalone Element")}</p>
                 <h2 data-chronicle-workspace-title>${escapeHtml(element.name)}</h2>
-                <p data-chronicle-workspace-type>${escapeHtml(type?.name || "No element type")}</p>
+                ${workspace.isUniverse ? '' : `<p data-chronicle-workspace-type>${escapeHtml(type?.name || "No element type")}</p>`}
               </div>
             </div>
           </div>
           <div class="chronicle-workspace-actions">
             ${renderBackToCanvasLink()}
-            <button class="primary-action" type="submit" data-chronicle-workspace-save>Save Element</button>
+            ${workspace.universe?.id?'<button class="secondary-action" type="button" data-chronicle-view-lexicon>View in Lexicon</button>':''}
+            <span data-chronicle-dirty role="status" aria-live="polite"></span>
+            <button class="secondary-action" type="button" data-chronicle-add-custom-field>Add field</button>
+            <button class="primary-action" type="submit" data-chronicle-workspace-save>${workspace.isUniverse ? 'Save Universe' : 'Save Element'}</button>
           </div>
         </div>
         ${renderWorkspaceImagePanel(images, element.name)}
@@ -638,7 +727,7 @@
               <span>Name</span>
               <input type="text" name="workspace-name" value="${escapeHtml(element.name)}" required autocomplete="off">
             </label>
-            <label class="form-field">
+            ${workspace.isUniverse ? '' : `<label class="form-field">
               <span>Element Type</span>
               <select name="workspace-element-type" data-chronicle-element-type-select>
                 <option value="">No type</option>
@@ -651,15 +740,17 @@
                 <option value="">No template</option>
                 ${workspace.templates.map((item) => `<option value="${escapeHtml(item.id)}"${workspace.template?.id === item.id ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
               </select>
-            </label>
+            </label>`}
           </div>
           <label class="form-field">
             <span>Description</span>
             <textarea name="workspace-description" rows="6">${escapeHtml(element.description || "")}</textarea>
           </label>
-          ${renderTemplateChoiceHint(workspace)}
+          ${workspace.isUniverse ? '' : `<label class="form-field"><span>Body</span><textarea name="workspace-body" rows="8">${escapeHtml(element.body || '')}</textarea></label>`}
+          ${workspace.isUniverse ? '' : renderTemplateChoiceHint(workspace)}
         </section>
-        <div class="chronicle-workspace-grid">
+        <section class="chronicle-editor-section" data-chronicle-custom-fields><h3>Details</h3>${renderWorkspaceCustomFields(workspace.customFields.filter(f=>!f.chronicle_module_id))}</section>
+        ${workspace.isUniverse ? '' : `<div class="chronicle-workspace-grid">
           <aside class="chronicle-module-sidebar">
             <section class="chronicle-editor-section">
               <div class="chronicle-section-title-row chronicle-module-title-row">
@@ -679,10 +770,11 @@
                   <p>Add a section module from the sidebar to start editing this element's extra descriptors.</p>
                 </div>`}
           </section>
-        </div>
+        </div>`}
       </form>
     `;
     initializeInlineMarkdownEditors();
+    if(savedDraft===null)markWorkspaceSaved();else updateDirtyStatus();
   }
 
   function renderBackToCanvasLink() {
@@ -693,9 +785,34 @@
 
     return `
       <a class="secondary-action compact-action chronicle-nav-button" href="universe-canvas.html?universe_id=${encodeURIComponent(universeId)}">
-        Back to the Builder
+        Back to Builder
       </a>
     `;
+  }
+
+  async function viewInLexicon() {
+    const w=state.workspace,universeId=w.universe?.id,articleId=w.element?.id;
+    if(!universeId||!articleId)return;
+    const modal=document.createElement('dialog');modal.className='chronicle-field-dialog';modal.dataset.chronicleLexiconDialog='';modal.setAttribute('aria-labelledby','chronicle-lexicon-title');
+    modal.innerHTML='<h2 id="chronicle-lexicon-title">View in Lexicon</h2><div data-lexicon-choices><p role="status">Finding visible articles…</p></div><div class="modal-actions"><button type="button" class="secondary-action" data-close>Cancel</button></div>';
+    document.body.append(modal);modal.querySelector('[data-close]').onclick=()=>modal.close();modal.addEventListener('close',()=>modal.remove(),{once:true});modal.showModal();
+    try {
+      const store=new LexiconData.Store(window.centralisSupabase,state.user);
+      const [wikis,source,universes]=await Promise.all([
+        store.rows('lexicon_wikis',{user_id:state.user.id,kind:'universe',universe_id:universeId}),
+        store.rows(w.isUniverse?UNIVERSES_TABLE:ELEMENTS_TABLE,{id:articleId,user_id:state.user.id,deleted:false,...(w.isUniverse?{}:{universe_id:universeId})},'id'),
+        store.rows(UNIVERSES_TABLE,{id:universeId,user_id:state.user.id,deleted:false},'id')
+      ]);
+      const overrides=await store.forIds('lexicon_overrides','wiki_id',wikis.map(w=>w.id),{subject_type:'article',article_id:articleId,subject_id:articleId,property:'hidden'});
+      if(!modal.open||state.workspace.element?.id!==articleId)return;
+      const available=source.length&&universes.length;
+      const visible=available?wikis.filter(w=>!overrides.some(o=>o.wiki_id===w.id&&o.value===true)):[];
+      const href=w=>`lexicon-wiki.html?wiki=${encodeURIComponent(w.id)}${state.workspace.isUniverse?'':'&article='+encodeURIComponent(articleId)}`;
+      if(visible.length===1){modal.close();await navigateFromEditor(href(visible[0]));return;}
+      const choices=modal.querySelector('[data-lexicon-choices]');
+      choices.innerHTML=visible.length?'<p>Choose a wiki.</p>'+visible.map(w=>`<p><a class="secondary-action" href="${href(w)}">${escapeHtml(w.name)}</a></p>`).join(''):`<p>${!available?'This source record is unavailable.':wikis.length?'This article is hidden in every linked wiki.':'No wiki is linked to this universe.'}</p><a href="lexicon.html">Open Lexicon</a>`;
+      choices.addEventListener('click',event=>{const a=event.target.closest('a');if(!a||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();modal.close();navigateFromEditor(a.href);});
+    }catch(error){if(modal.open)modal.querySelector('[data-lexicon-choices]').textContent=error.message;}
   }
 
   function renderWorkspaceImageHeader(image, elementName) {
@@ -881,6 +998,7 @@
           ${fields.length
             ? fields.map((field) => renderWorkspaceField(field, valuesByFieldId.get(field.id)?.value || "")).join("")
             : '<p class="chronicle-muted">This section does not have fields yet.</p>'}
+          ${renderWorkspaceCustomFields(state.workspace.customFields.filter(f=>f.chronicle_module_id===module.id))}
         </div>
       </article>
     `;
@@ -1010,15 +1128,17 @@
   }
 
   function renderWorkspaceCustomFields(customFields) {
-    const rows = customFields.length ? customFields : [{ id: "", name: "", value: "" }];
+    const rows = [...customFields].sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
     return rows.map((field) => renderWorkspaceCustomField(field)).join("");
   }
 
   function renderWorkspaceCustomField(field) {
     return `
-      <div class="chronicle-custom-field-row" data-custom-field-row data-custom-field-id="${escapeHtml(field.id || "")}">
+      <div class="chronicle-custom-field-row" data-custom-field-row data-custom-field-id="${escapeHtml(field.id)}" data-custom-module-id="${escapeHtml(field.chronicle_module_id || '')}">
         <input type="text" name="custom-name" value="${escapeHtml(field.name || "")}" placeholder="Field name">
         <textarea name="custom-value" rows="3" placeholder="Value">${escapeHtml(field.value || "")}</textarea>
+        <button class="secondary-action" type="button" data-custom-edit="${escapeHtml(field.id)}">Move or rename</button>
+        <label>Order<input type="number" name="custom-order" value="${Number(field.sort_order||0)}" step="1"></label>
         <button class="icon-button" type="button" data-chronicle-remove-custom-field aria-label="Remove custom field">
           <ph-trash aria-hidden="true"></ph-trash>
         </button>
@@ -1223,6 +1343,7 @@
   }
 
   async function handleWorkspaceClick(event) {
+    if(event.target.closest('[data-chronicle-view-lexicon]')){await viewInLexicon();return;}
     const aiModuleButton = event.target.closest("[data-chronicle-ai-open]");
     if (aiModuleButton) {
       openAiModuleGenerateDialog();
@@ -1266,25 +1387,65 @@
     }
 
     const addButton = event.target.closest("[data-chronicle-add-custom-field]");
-    if (addButton) {
-      const list = dom.workspace?.querySelector("[data-chronicle-custom-fields]");
-      list?.insertAdjacentHTML("beforeend", renderWorkspaceCustomField({ id: "", name: "", value: "" }));
+    const editCustom = event.target.closest('[data-custom-edit]');
+    if (addButton || editCustom) {
+      openCustomFieldDialog(editCustom?.dataset.customEdit);
       return;
     }
 
     const removeButton = event.target.closest("[data-chronicle-remove-custom-field]");
     if (removeButton) {
-      const row = removeButton.closest("[data-custom-field-row]");
-      const id = row?.dataset.customFieldId;
-      if (id) {
-        const marker = document.createElement("input");
-        marker.type = "hidden";
-        marker.name = "deleted-custom-field-id";
-        marker.value = id;
-        dom.workspace?.querySelector("[data-chronicle-workspace-form]")?.appendChild(marker);
-      }
-      row?.remove();
+      captureWorkspaceDraft();
+      const id = removeButton.closest('[data-custom-field-row]').dataset.customFieldId;
+      state.workspace.deletedCustomFieldIds.push(id);
+      state.workspace.customFields = state.workspace.customFields.filter(f=>f.id!==id);
+      renderWorkspace();
     }
+  }
+
+  function openCustomFieldDialog(id) {
+    captureWorkspaceDraft();
+    const sections = getAssignedSectionModules(state.workspace);
+    const existing = state.workspace.customFields.find(f=>f.id===id);
+    const field = existing || {id:crypto.randomUUID(),name:'',value:'',sort_order:state.workspace.customFields.length,chronicle_module_id:state.workspace.activeModuleId || null};
+    const modal = document.createElement('dialog'); modal.className='chronicle-field-dialog';
+    modal.setAttribute('aria-label',existing ? 'Edit custom field' : 'Add field');
+    modal.innerHTML = `<form><h2>${existing ? 'Edit custom field' : 'Add field'}</h2>
+      <label class="form-field"><span>Name</span><input name="name" required value="${escapeHtml(field.name)}"></label>
+      <label class="form-field"><span>Value</span><textarea name="value" rows="5">${escapeHtml(field.value ?? '')}</textarea></label>
+      ${sections.length ? `<label class="form-field"><span>Location</span><select name="location" aria-label="Location"><option value="">Top-level details</option>${sections.map(({module,section})=>`<option value="${escapeHtml(module.id)}"${module.id===field.chronicle_module_id?' selected':''}>${escapeHtml(section.name)}</option>`).join('')}</select></label>` : ''}
+      <div class="modal-actions"><button type="button" class="secondary-action" data-cancel>Cancel</button><button type="submit" class="primary-action">Apply</button></div></form>`;
+    document.body.append(modal);
+    const initialValues=JSON.stringify([...new FormData(modal.querySelector('form'))]);
+    modal.chronicleDraftChanged=()=>JSON.stringify([...new FormData(modal.querySelector('form'))])!==initialValues;
+    modal.querySelector('[data-cancel]').onclick=()=>modal.close();
+    modal.addEventListener('close',()=>modal.remove());
+    modal.querySelector('form').onsubmit=event=>{
+      event.preventDefault();const form=event.currentTarget;
+      const value={...field,name:form.elements.name.value.trim(),value:form.elements.value.value,chronicle_module_id:form.elements.location?.value || null};
+      if(!value.name)return;
+      state.workspace.customFields=existing ? state.workspace.customFields.map(f=>f.id===id?value:f) : [...state.workspace.customFields,value];
+      modal.close();renderWorkspace();
+    };
+    modal.showModal();
+  }
+
+  function normalizeCustomPlacement() {
+    const assigned = new Set(state.workspace.modules.map(m=>m.id));
+    state.workspace.customFields = state.workspace.customFields.map(f=>({...f,chronicle_module_id:assigned.has(f.chronicle_module_id)?f.chronicle_module_id:null}));
+  }
+
+  async function persistCustomFields() {
+    const w=state.workspace, table=w.isUniverse?UNIVERSE_CUSTOM_FIELDS_TABLE:ELEMENT_CUSTOM_FIELDS_TABLE;
+    const owner=w.isUniverse?'universe_id':'element_id';
+    normalizeCustomPlacement();
+    for(const field of w.customFields) {
+      const row={id:field.id,[owner]:w.element.id,name:field.name || 'Field',value:field.value ?? '',sort_order:Number(field.sort_order||0),deleted:false};
+      if(!w.isUniverse)row.chronicle_module_id=field.chronicle_module_id || null;
+      throwIfError(await window.centralisSupabase.from(table).upsert(row,{onConflict:'id'}));
+    }
+    if(w.deletedCustomFieldIds.length)throwIfError(await window.centralisSupabase.from(table).delete().in('id',w.deletedCustomFieldIds).eq(owner,w.element.id));
+    w.deletedCustomFieldIds=[];
   }
 
   function captureWorkspaceDraft() {
@@ -1318,9 +1479,15 @@
       ...workspace,
       element: {
         ...workspace.element,
-        name: String(form.elements.namedItem("workspace-name")?.value || "").trim() || workspace.element.name,
-        description: String(form.elements.namedItem("workspace-description")?.value || "").trim() || null
+        name: String(form.elements.namedItem("workspace-name")?.value || "").trim(),
+        description: String(form.elements.namedItem("workspace-description")?.value || "").trim() || null,
+        ...(!workspace.isUniverse ? {body:String(form.elements.namedItem('workspace-body')?.value || '')} : {})
       },
+      customFields: [...form.querySelectorAll('[data-custom-field-row]')].map(row=>({
+        id:row.dataset.customFieldId, name:row.querySelector('[name="custom-name"]').value,
+        value:row.querySelector('[name="custom-value"]').value, sort_order:Number(row.querySelector('[name="custom-order"]').value),
+        chronicle_module_id:row.dataset.customModuleId || null
+      })),
       values: [...valuesByFieldId.values()]
     };
   }
@@ -1368,6 +1535,7 @@
 
     captureWorkspaceDraft();
     state.aiModuleGeneration = { isGenerating: false, proposal: null };
+    setAiModuleGenerateBusy(false);
     dom.aiModuleGenerateForm?.reset();
     renderAiModuleChecklist();
     setAiModuleGenerateStatus("");
@@ -1393,19 +1561,32 @@
     dom.aiModuleGenerateStatus.textContent = message;
     dom.aiModuleGenerateStatus.classList.toggle("is-error", tone === "error");
     dom.aiModuleGenerateStatus.classList.toggle("is-success", tone === "success");
+    if (dom.aiModuleProgressStage) dom.aiModuleProgressStage.textContent = message;
   }
 
   function setAiModuleGenerateBusy(isBusy) {
+    const wasBusy = state.aiModuleGeneration.isGenerating;
     state.aiModuleGeneration = {
       ...state.aiModuleGeneration,
       isGenerating: isBusy
     };
     dom.aiModuleGenerateModal?.classList.toggle("is-generating", isBusy);
+    if (dom.aiModuleGenerateForm) {
+      dom.aiModuleGenerateForm.inert = isBusy;
+      dom.aiModuleGenerateForm.setAttribute("aria-busy", String(isBusy));
+    }
+    if (dom.aiModuleGenerationOverlay) {
+      dom.aiModuleGenerationOverlay.hidden = !isBusy;
+      if (isBusy) dom.aiModuleGenerationOverlay.focus({ preventScroll: true });
+    }
     if (dom.aiModuleGenerateSubmit) {
       dom.aiModuleGenerateSubmit.disabled = isBusy;
       dom.aiModuleGenerateSubmit.innerHTML = isBusy
-        ? '<ph-spinner gap="none" aria-hidden="true"></ph-spinner> Generating...'
+        ? '<span class="chronicle-ai-loading-icon" aria-hidden="true"></span> Generating…'
         : '<ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle> Generate';
+    }
+    if (!isBusy && wasBusy && dom.aiModuleGenerateModal?.hidden === false) {
+      dom.aiModuleGenerateSubmit?.focus({ preventScroll: true });
     }
   }
 
@@ -1432,7 +1613,9 @@
     }
 
     setAiModuleGenerateBusy(true);
-    setAiModuleGenerateStatus("Preparing universe knowledge...");
+    // These are actual request boundaries. Neither endpoint emits streaming
+    // progress or a known total, so the bar remains indeterminate throughout.
+    setAiModuleGenerateStatus("Preparing universe knowledge…");
     try {
       const universeId = workspace.universe?.id || workspace.element.universe_id;
       const syncResponse = await window.centralisSupabase.functions.invoke("sync-universe-ai-source", {
@@ -1443,7 +1626,7 @@
         throw new Error(syncResponse.data.error);
       }
 
-      setAiModuleGenerateStatus("Generating Chronicle details...");
+      setAiModuleGenerateStatus("Generating suggestions…");
       const response = await window.centralisSupabase.functions.invoke("generate-chronicle-details", {
         body: {
           elementId: workspace.element.id,
@@ -1471,13 +1654,12 @@
       state.aiModuleGeneration = { isGenerating: false, proposal };
       dom.aiModuleGenerateModal.hidden = true;
       openAiModuleReviewDialog();
+      dom.aiModuleReviewForm?.querySelector("input, textarea, select, button")?.focus({ preventScroll: true });
     } catch (error) {
       console.error("Could not generate Chronicle details.", error);
       setAiModuleGenerateStatus(`Could not generate Chronicle details: ${getReadableError(error)}`, "error");
     } finally {
-      if (dom.aiModuleGenerateModal?.hidden === false) {
-        setAiModuleGenerateBusy(false);
-      }
+      setAiModuleGenerateBusy(false);
     }
   }
 
@@ -2098,7 +2280,7 @@
         body: {
           objectId: element.id,
           storageModule: "chronicle",
-          objectKind: "element",
+          objectKind: state.workspace.isUniverse ? "universe" : "element",
           elementType: type?.name || "",
           name: element.name || "",
           description: element.description || "",
@@ -2152,6 +2334,7 @@
       });
       editor.on("change", () => {
         textarea.value = editor.getMarkdown();
+        updateDirtyStatus();
       });
       state.markdownEditors.set(field, editor);
     });
@@ -2207,6 +2390,7 @@
 
     syncTextareaFromToastEditor(field);
     closeTextEditorDialog();
+    updateDirtyStatus();
 
     const label = wrapper?.querySelector(".chronicle-textarea-field-header > span")?.textContent?.trim()
       || field.closest(".chronicle-template-field")?.querySelector(":scope > span")?.textContent?.trim()
@@ -2292,6 +2476,7 @@
     active.textarea.value = markdown;
     syncToastEditorFromTextarea(active.field);
     closeTextEditorDialog();
+    updateDirtyStatus();
   }
 
   function getToastEditorConstructor() {
@@ -2310,6 +2495,7 @@
 
   async function handleWorkspaceChange(event) {
     const target = event.target;
+    if(target.name?.startsWith('workspace-field:'))target.dataset.touched='true';
     if (target.matches("[data-chronicle-image-upload]")) {
       const file = target.files?.[0];
       target.value = "";
@@ -2330,6 +2516,8 @@
   }
 
   async function updateWorkspaceElementType(elementTypeId) {
+    captureWorkspaceDraft();
+    state.workspace.removedModuleIds.push(...state.workspace.modules.map(m=>m.id));
     const nextTemplates = elementTypeId ? await fetchTemplatesForType(elementTypeId) : [];
     const nextTemplate = nextTemplates.length === 1 ? nextTemplates[0] : null;
     const templateDetails = nextTemplate ? await fetchTemplateDetails(nextTemplate.id) : { sections: [], fields: [] };
@@ -2347,10 +2535,12 @@
       modules: [],
       modulesResetPending: true
     };
-    renderWorkspace();
+    normalizeCustomPlacement(); renderWorkspace();
   }
 
   async function updateWorkspaceTemplate(templateId) {
+    captureWorkspaceDraft();
+    state.workspace.removedModuleIds.push(...state.workspace.modules.filter(m=>getModuleTemplateId(m)!==templateId).map(m=>m.id));
     const nextTemplate = templateId
       ? state.workspace.templates.find((template) => template.id === templateId) || null
       : null;
@@ -2367,61 +2557,19 @@
       modules: state.workspace.modules.filter((module) => getModuleTemplateId(module) === nextTemplate?.id),
       modulesResetPending: true
     };
-    renderWorkspace();
+    normalizeCustomPlacement(); renderWorkspace();
   }
 
   async function addSectionModule(sectionId) {
-    if (!state.workspace?.element?.id || !state.workspace.template?.id || !sectionId) {
-      return;
-    }
-
-    const section = state.workspace.sections.find((item) => item.id === sectionId);
-    if (!section) {
-      return;
-    }
-
-    const existingResponse = await window.centralisSupabase
-      .from(CHRONICLE_MODULES_TABLE)
-      .select("*")
-      .eq("user_id", state.user.id)
-      .eq("element_id", state.workspace.element.id)
-      .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE)
-      .eq("data->>section_id", sectionId)
-      .maybeSingle();
-
-    throwIfError(existingResponse);
-    let nextModule = existingResponse.data || null;
-    if (!nextModule) {
-      const insertResponse = await window.centralisSupabase
-        .from(CHRONICLE_MODULES_TABLE)
-        .insert({
-          element_id: state.workspace.element.id,
-          user_id: state.user.id,
-          module_type: TEMPLATE_SECTION_MODULE_TYPE,
-          source: "manual",
-          title: section.name || "Untitled Section",
-          sort_order: getNextModuleSortOrder(state.workspace.modules),
-          data: {
-            section_id: section.id,
-            template_id: state.workspace.template.id
-          }
-        })
-        .select("*")
-        .single();
-      throwIfError(insertResponse);
-      nextModule = insertResponse.data;
-    }
-
-    if (nextModule && !state.workspace.modules.some((module) => module.id === nextModule.id)) {
-      state.workspace = {
-        ...state.workspace,
-        modules: [...state.workspace.modules, nextModule].sort(sortModules)
-      };
-      renderWorkspace();
-    }
+    captureWorkspaceDraft();
+    const w=state.workspace, section=w.sections.find(s=>s.id===sectionId);
+    if(!section || w.modules.some(m=>getModuleSectionId(m)===sectionId))return;
+    w.modules.push({id:crypto.randomUUID(),element_id:w.element.id,user_id:state.user.id,module_type:TEMPLATE_SECTION_MODULE_TYPE,source:'manual',title:section.name,sort_order:getNextModuleSortOrder(w.modules),data:{section_id:section.id,template_id:w.template.id,ai_draft:true}});
+    renderWorkspace();
   }
 
   async function toggleSectionModule(moduleId) {
+    captureWorkspaceDraft();
     if (!state.workspace?.element?.id || !moduleId) {
       return;
     }
@@ -2435,27 +2583,6 @@
       ...(module.data || {}),
       collapsed: !isModuleCollapsed(module)
     };
-    if (isDraftSectionModule(module)) {
-      state.workspace = {
-        ...state.workspace,
-        modules: state.workspace.modules.map((item) => item.id === module.id ? { ...item, data: nextData } : item)
-      };
-      renderWorkspace();
-      return;
-    }
-
-    const updateResponse = await window.centralisSupabase
-      .from(CHRONICLE_MODULES_TABLE)
-      .update({
-        data: nextData,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", module.id)
-      .eq("user_id", state.user.id)
-      .eq("element_id", state.workspace.element.id);
-
-    throwIfError(updateResponse);
-
     state.workspace = {
       ...state.workspace,
       modules: state.workspace.modules.map((item) => item.id === module.id ? { ...item, data: nextData } : item)
@@ -2464,36 +2591,11 @@
   }
 
   async function removeSectionModule(sectionId) {
-    if (!state.workspace?.element?.id || !sectionId) {
-      return;
-    }
-
-    const draftModule = state.workspace.modules.find((module) => getModuleSectionId(module) === sectionId && isDraftSectionModule(module));
-    if (draftModule) {
-      const sectionFieldIds = new Set((groupFieldsBySection(state.workspace.fields).get(sectionId) || []).map((field) => field.id));
-      state.workspace = {
-        ...state.workspace,
-        modules: state.workspace.modules.filter((module) => module.id !== draftModule.id),
-        values: state.workspace.values.filter((value) => !sectionFieldIds.has(value.template_field_id))
-      };
-      renderWorkspace();
-      return;
-    }
-
-    const deleteResponse = await window.centralisSupabase
-      .from(CHRONICLE_MODULES_TABLE)
-      .delete()
-      .eq("user_id", state.user.id)
-      .eq("element_id", state.workspace.element.id)
-      .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE)
-      .eq("data->>section_id", sectionId);
-    throwIfError(deleteResponse);
-
-    state.workspace = {
-      ...state.workspace,
-      modules: state.workspace.modules.filter((module) => getModuleSectionId(module) !== sectionId)
-    };
-    renderWorkspace();
+    captureWorkspaceDraft();
+    const w=state.workspace;
+    w.removedModuleIds.push(...w.modules.filter(m=>getModuleSectionId(m)===sectionId).map(m=>m.id));
+    w.modules=w.modules.filter(m=>getModuleSectionId(m)!==sectionId);
+    normalizeCustomPlacement();renderWorkspace();
   }
 
   async function handleWorkspaceSubmit(event) {
@@ -2535,19 +2637,29 @@
     if (saveButton) {
       saveButton.disabled = true;
     }
+    form.inert=true;form.setAttribute('aria-busy','true');
 
     try {
       const element = state.workspace.element;
-      const hasPendingModuleReset = Boolean(state.workspace.modulesResetPending);
-      const typeChanged = hasPendingModuleReset && elementTypeId !== (state.workspace.originalElementTypeId || "");
-      const templateChanged = hasPendingModuleReset && templateId !== (state.workspace.originalTemplateId || "");
-      const shouldResetModules = typeChanged || templateChanged;
-      const nextTemplateId = typeChanged ? "" : templateId;
+      const shouldResetModules = false;
+      const nextTemplateId = templateId;
+      if(state.workspace.isUniverse) {
+        throwIfError(await window.centralisSupabase.from(UNIVERSES_TABLE).update({name,description:description || null,updated_at:new Date().toISOString()}).eq('id',element.id).eq('user_id',state.user.id));
+        captureWorkspaceDraft();await persistCustomFields();
+        state.workspace.universe={...state.workspace.universe,name,description};
+        markWorkspaceSaved();setWorkspaceStatus('Universe saved.','success');return;
+      }
+      if(state.workspace.removedModuleIds.length) {
+        throwIfError(await window.centralisSupabase.from(CHRONICLE_MODULES_TABLE).delete().in('id',state.workspace.removedModuleIds).eq('element_id',element.id).eq('user_id',state.user.id));
+        state.workspace.removedModuleIds=[];
+      }
+
       const elementResponse = await window.centralisSupabase
         .from(ELEMENTS_TABLE)
         .update({
           name,
           description: description || null,
+          body: String(formData.get('workspace-body') || '') || null,
           element_type_id: elementTypeId || null,
           rich_template_id: nextTemplateId || null,
           updated_at: new Date().toISOString()
@@ -2569,17 +2681,18 @@
 
       let persistedDraftModules = [];
       if (!shouldResetModules) {
-        const draftModules = state.workspace.modules.filter(isDraftSectionModule);
+        const draftModules = state.workspace.modules;
         if (draftModules.length) {
           const draftModuleResponse = await window.centralisSupabase
             .from(CHRONICLE_MODULES_TABLE)
-            .insert(draftModules.map((module) => ({
+            .upsert(draftModules.map((module) => ({
+              id: module.id,
               element_id: element.id,
               user_id: state.user.id,
               module_type: TEMPLATE_SECTION_MODULE_TYPE,
-              source: "ai",
+              source: module.source || "manual",
               title: module.title || "Untitled Module",
-              sort_order: module.sort_order || getNextModuleSortOrder(state.workspace.modules),
+              sort_order: module.sort_order ?? getNextModuleSortOrder(state.workspace.modules),
               data: {
                 ...(module.data || {}),
                 ai_draft: false
@@ -2616,45 +2729,10 @@
       }));
       throwFirstSupabaseError(valueResponses);
 
-      const deletedCustomFieldIdsFromRows = [];
-      const customRows = [...form.querySelectorAll("[data-custom-field-row]")];
-      const customResponses = await Promise.all(customRows.map((row, index) => {
-        const id = row.dataset.customFieldId;
-        const customName = String(row.querySelector('[name="custom-name"]')?.value || "").trim();
-        const customValue = String(row.querySelector('[name="custom-value"]')?.value || "").trim();
-        if (!hasMeaningfulValue(customName) && !hasMeaningfulValue(customValue)) {
-          if (id) {
-            deletedCustomFieldIdsFromRows.push(id);
-          }
-          return id
-            ? window.centralisSupabase.from(ELEMENT_CUSTOM_FIELDS_TABLE).delete().eq("id", id)
-            : Promise.resolve();
-        }
-        if (id) {
-          return window.centralisSupabase
-            .from(ELEMENT_CUSTOM_FIELDS_TABLE)
-            .update({ name: customName || "Untitled Field", value: customValue || null, sort_order: index })
-            .eq("id", id);
-        }
-        return window.centralisSupabase
-          .from(ELEMENT_CUSTOM_FIELDS_TABLE)
-          .insert({ element_id: element.id, name: customName || "Untitled Field", value: customValue || null, sort_order: index })
-          .select("*")
-          .single();
-      }));
-      throwFirstSupabaseError(customResponses);
-
-      const deletedCustomFieldIds = [...form.querySelectorAll('[name="deleted-custom-field-id"]')]
-        .map((input) => input.value)
-        .filter(Boolean);
-      const allDeletedCustomFieldIds = [...new Set([...deletedCustomFieldIds, ...deletedCustomFieldIdsFromRows])];
-      if (deletedCustomFieldIds.length) {
-        const deleteResponse = await window.centralisSupabase
-          .from(ELEMENT_CUSTOM_FIELDS_TABLE)
-          .delete()
-          .in("id", deletedCustomFieldIds);
-        throwIfError(deleteResponse);
-      }
+      captureWorkspaceDraft();
+      await persistCustomFields();
+      const customRows = [...form.querySelectorAll('[data-custom-field-row]')];
+      const customResponses = [], allDeletedCustomFieldIds = [];
 
       syncWorkspaceAfterSave({
         name,
@@ -2668,12 +2746,13 @@
         clearAssignedModules: shouldResetModules,
         persistedDraftModules
       });
-      setWorkspaceStatus("Element saved.", "success");
+      markWorkspaceSaved();setWorkspaceStatus("Element saved.", "success");
       syncUniverseAiKnowledgeAfterChronicleSave(state.workspace.universe?.id);
     } catch (error) {
       console.error("Could not save Chronicle workspace.", error);
       setWorkspaceStatus(`Could not save element: ${getReadableError(error)}`, "error");
     } finally {
+      form.inert=false;form.setAttribute('aria-busy','false');
       if (saveButton) {
         saveButton.disabled = false;
       }
@@ -2805,6 +2884,7 @@
         elementId: parts[1]
       };
     }
+    if (parts[0] === 'universe' && parts[1] && parts.length === 2) return {type:'universe',universeId:decodeURIComponent(parts[1]),elementId:''};
     return null;
   }
 
@@ -2913,6 +2993,8 @@
       fields: [],
       values: [],
       customFields: [],
+      deletedCustomFieldIds: [],
+      removedModuleIds: [],
       images: []
     };
   }
@@ -2988,7 +3070,7 @@
     const fieldType = getTemplateFieldType(field);
     const control = form.elements.namedItem(`workspace-field:${field.id}`);
     if (fieldType === "checkbox") {
-      return control?.checked ? "true" : "";
+      return control?.checked ? "true" : control?.dataset.touched || state.workspace?.values.some(v=>v.template_field_id===field.id && hasMeaningfulValue(v.value)) ? "false" : "";
     }
     if (fieldType === "multi_select") {
       return control ? [...control.selectedOptions].map((option) => option.value).join("\n") : "";
@@ -3039,35 +3121,9 @@
       }
     });
 
-    const insertedCustomFields = (customResponses || [])
-      .map((response) => response?.data)
-      .filter(Boolean);
-    const insertedBySignature = new Map(insertedCustomFields.map((field) => [
-      `${field.sort_order}:${field.name || ""}:${field.value || ""}`,
-      field
-    ]));
-    const deletedIds = new Set(deletedCustomFieldIds || []);
     const persistedDraftsBySectionId = new Map((persistedDraftModules || [])
       .map((module) => [getModuleSectionId(module), module])
       .filter(([sectionId]) => Boolean(sectionId)));
-    const nextCustomFields = (customRows || []).map((row, index) => {
-      const id = row.dataset.customFieldId;
-      const customName = String(row.querySelector('[name="custom-name"]')?.value || "").trim();
-      const customValue = String(row.querySelector('[name="custom-value"]')?.value || "").trim();
-      if (!hasMeaningfulValue(customName) && !hasMeaningfulValue(customValue)) {
-        return null;
-      }
-      if (id) {
-        return {
-          id,
-          element_id: state.workspace.element.id,
-          name: customName || "Untitled Field",
-          value: customValue || null,
-          sort_order: index
-        };
-      }
-      return insertedBySignature.get(`${index}:${customName || "Untitled Field"}:${customValue || ""}`) || null;
-    }).filter((field) => field && !deletedIds.has(field.id));
 
     state.workspace = {
       ...state.workspace,
@@ -3088,7 +3144,7 @@
         updated_at: updatedAt
       },
       values: nextValues,
-      customFields: nextCustomFields
+      customFields: state.workspace.customFields
     };
 
     const title = dom.workspace?.querySelector("[data-chronicle-workspace-title]");

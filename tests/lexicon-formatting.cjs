@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict');const {setup}=require('./lexicon-browser-harness.cjs');
+(async()=>{const h=await setup(),{f,store,page,open}=h;try{
+ const w=await store.createWiki({id:f.uuid(),kind:'standalone',name:'Formatting'}),id=f.uuid(),target=f.uuid();
+ await store.save('lexicon_articles',{id,wiki_id:w.id,title:'Formatted article',introduction:'## Heading\n\nA **bold** and *italic* paragraph.\n\n3. Third\n4. Fourth\n\n| Name | Value |\n| --- | --- |\n| Row | 0 |'});
+ await store.save('lexicon_articles',{id:target,wiki_id:w.id,title:'Target'});await open(w.id,id,true);
+ await page.getByRole('button',{name:'Edit Introduction',exact:true}).click();const editor=page.getByRole('textbox',{name:'Introduction',exact:true});await editor.waitFor();
+ assert.equal(await editor.locator('table tr').count(),2);assert.equal(await editor.locator('strong').innerText(),'bold');assert.equal(await editor.locator('ol').getAttribute('start'),'3');
+ await editor.press('Control+End');await editor.press('ArrowDown');await editor.press('Control+End');await editor.pressSequentially(' amended');await page.getByRole('button',{name:'Save page',exact:true}).click();await page.locator('[data-wiki-status]').getByText('Saved.',{exact:true}).waitFor();
+ assert.equal(await page.locator('.lexicon-article table tr').count(),2);assert.equal(await page.locator('.lexicon-article strong').innerText(),'bold');assert.equal(await page.locator('.lexicon-article em').innerText(),'italic');assert.equal(await page.locator('.lexicon-article ol').getAttribute('start'),'3');
+ const checks=await page.evaluate(async()=>{const p=await import('/lexicon-prose.js');return {ambiguous:p.locate('same words then same words',{quote:'same words',prefix:'',suffix:''}),relocated:p.locate('New text. A chosen phrase ends.',{quote:'chosen phrase',prefix:'A ',suffix:' ends.'}),safe:p.html({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Safe',marks:[{type:'link',attrs:{href:'javascript:alert(1)'}}]}]}]})};});
+ assert.equal(checks.ambiguous,null);assert.equal(checks.relocated.start,12);assert.ok(!checks.safe.includes('javascript:'));
+ const note={id:f.uuid(),wiki_id:w.id,article_id:id,subject_type:'standalone_article',subject_id:id,property:'introduction',kind:'link',target_id:target,anchor:{quote:'Old missing passage',prefix:'',suffix:''}};await store.save('lexicon_annotations',note);await open(w.id,id,true);
+ await page.locator('.lexicon-article > [data-prose] strong').evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(range);});await page.locator('[data-repairs]').getByRole('button',{name:'Repair',exact:true}).click();await page.locator('.lexicon-article a[data-annotation-id]').waitFor();
+ assert.equal((await f.db.query('select anchor from lexicon_annotations where id=$1',[note.id])).rows[0].anchor.quote,'bold');assert.equal(await page.locator('.lexicon-article strong a[data-annotation-id]').innerText(),'bold');
+ assert.deepEqual(h.errors,[]);console.log('Final formatting/repair checks passed: Tiptap table/bold/italic/ordered-list preservation, safe rendering, ambiguous-anchor rejection, relocation and successful UI repair retaining formatting.');
+}finally{await h.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

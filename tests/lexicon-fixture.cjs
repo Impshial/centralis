@@ -4,11 +4,11 @@ const crypto = require('node:crypto');
 const sourceTables = ['universes','elements','element_links','element_groups','element_types','element_type_templates','element_template_sections','element_type_template_fields','element_template_field_values','element_custom_fields','universe_custom_fields','chronicle_modules'];
 async function fixture() {
  const db = new PGlite();
- await db.exec(`create role authenticated; create role anon; create schema auth;
+ await db.exec(`create role authenticated; create role anon; create role service_role; create schema auth;
  create function auth.uid() returns text language sql stable as $$select current_setting('request.jwt.claim.sub',true)$$;
  grant usage on schema auth to authenticated;
  create table users(id integer primary key, clerk_user_id text); insert into users values(1,'owner'),(2,'other');
- create table universes(id varchar primary key,user_id integer,name text,description text,deleted boolean default false);
+ create table universes(id varchar primary key,user_id integer,name text,description text,deleted boolean default false,updated_at timestamptz default now());
  create table elements(id varchar primary key,user_id integer,universe_id varchar,name text,description text,element_type_id varchar,rich_template_id varchar,group_id varchar,updated_at timestamptz default now(),created_at timestamptz default now(),deleted boolean default false);
  create table element_groups(id varchar primary key,universe_id varchar,name text,parent_group_id varchar,deleted boolean default false);
  create table element_links(id varchar primary key,universe_id varchar,source_element_id varchar,target_element_id varchar,label text,created_at timestamptz default now(),deleted boolean default false);
@@ -20,7 +20,7 @@ async function fixture() {
  create table element_custom_fields(id varchar primary key default gen_random_uuid()::text,element_id varchar,name text,value text,sort_order integer,deleted boolean default false);
  create table universe_custom_fields(id varchar primary key,universe_id varchar,name text,value text,sort_order integer,deleted boolean default false);
  create table chronicle_modules(id varchar primary key default gen_random_uuid()::text,element_id varchar,user_id integer,module_type text,data jsonb,sort_order integer,title text,source text,updated_at timestamptz default now(),deleted boolean default false);
- insert into universes values('u1',1,'Aesterra','A world reference.',false),('u2',2,'Private','Other account',false);
+ insert into universes(id,user_id,name,description,deleted) values('u1',1,'Aesterra','A world reference.',false),('u2',2,'Private','Other account',false);
  insert into element_types(id,user_id,name) values('type1',1,'Place');
  insert into element_type_templates(id,element_type_id,name) values('template1','type1','Place template');
  insert into element_groups(id,universe_id,name,parent_group_id) values('g1','u1','Regions',null),('g2','u1','Coast','g1');
@@ -43,6 +43,8 @@ async function fixture() {
  grant select,insert,update,delete on all tables in schema public to authenticated;
  `);
  await db.exec(fs.readFileSync('supabase/migrations/20261123001138_add_lexicon_wikis.sql','utf8'));
+ await db.exec(`create table image_table(id varchar primary key,object_id varchar,image_url text,is_primary boolean default false,sort_order integer default 0,user_id varchar,created_at timestamptz default now(),deleted boolean default false);alter table elements add column body text;grant select,insert,update,delete on image_table to authenticated;`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261123041951_complete_lexicon_chronicle.sql','utf8'));
  await db.exec("set request.jwt.claim.sub='owner';set role authenticated");
  const writes = [];
  const safe = name => { if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error('Invalid SQL identifier'); return '"'+name+'"'; };
@@ -68,7 +70,7 @@ async function fixture() {
    }
    if(op.method!=='select') writes.push(op);
    // JSONB primitive values must be encoded, too.
-   if(['lexicon_overrides','lexicon_fields'].includes(op.table) && op.payload && !Array.isArray(op.payload)) {
+   if(['lexicon_overrides','lexicon_fields','lexicon_facts'].includes(op.table) && op.payload && !Array.isArray(op.payload)) {
     const value=op.payload.value;
     if(value !== undefined && (typeof value !== 'object' || value === null)) {
      const index=op.method==='update' ? Object.keys(op.payload).indexOf('value') + (op.filters?.filter(f=>f[2]!==null).length || 0) : Object.keys(op.payload).indexOf('value');

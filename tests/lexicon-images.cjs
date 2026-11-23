@@ -9,7 +9,6 @@ const { Store } = require('../lexicon-data.js');
     const store = new Store(f.client(), { id: 1 });
     const wiki = await store.createWiki({ id: f.uuid(), name: 'Images', kind: 'universe', universe_id: 'u1' });
     await f.db.exec(`reset role;
-      create table image_table(id text primary key,object_id text,image_url text,is_primary boolean,sort_order integer,created_at timestamptz default now(),deleted boolean default false);
       insert into image_table(id,object_id,image_url,is_primary,sort_order) values
         ('one','a','https://example.invalid/one',false,0),('primary','a','https://example.invalid/primary',true,1),
         ('universe','u1','https://example.invalid/universe',false,0),('private','private','https://example.invalid/private',true,0);

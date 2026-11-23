@@ -3,6 +3,9 @@ project_id = "lztmpbxmntcktijcdcda"
 [functions.lexicon-images]
 verify_jwt = true
 
+[functions.lexicon-media]
+verify_jwt = true
+
 [functions.upload-object-image]
 verify_jwt = true
 

@@ -934,6 +934,7 @@
       return "chronicle.html";
     }
     const elementSegment = encodeURIComponent(elementId);
+    if (node.data.kind === 'universe') return `chronicle-editor.html#universe/${elementSegment}`;
     const nodeUniverseId = node?.data?.universeId || universeId || "";
     if (nodeUniverseId) {
       return `chronicle-editor.html#universe/${encodeURIComponent(nodeUniverseId)}/element/${elementSegment}`;
@@ -3004,9 +3005,10 @@
       return map;
     }, new Map());
 
-    if (!modules.length) {
-      return '<p class="details-empty">No Chronicle modules assigned.</p>';
-    }
+    const customMarkup = fields => fields.length ? `<dl class="chronicle-wiki-facts">${fields.map(f=>`<div><dt>${escapeHtml(f.name)}</dt><dd>${renderMarkdownDescription(f.value || '')}</dd></div>`).join('')}</dl>` : '';
+    const topLevel = (data.customFields || []).filter(f=>!f.chronicle_module_id || !modules.some(m=>m.id===f.chronicle_module_id));
+    const details = topLevel.length ? `<section class="rich-template-section"><h3>Details</h3>${customMarkup(topLevel)}</section>` : '';
+    if (!modules.length) return details;
 
     const moduleMarkup = modules.map((module) => {
       const sectionId = getChronicleModuleSectionId(module);
@@ -3015,7 +3017,8 @@
       const visibleFields = hideEmptyFields
         ? fields.filter((field) => hasMeaningfulValue(getFieldStoredValue(valuesByFieldId, field)))
         : fields;
-      if (hideEmptyFields && !visibleFields.length) {
+      const customFields = (data.customFields || []).filter(f=>f.chronicle_module_id===module.id && (!hideEmptyFields || hasMeaningfulValue(f.value)));
+      if (hideEmptyFields && !visibleFields.length && !customFields.length) {
         return "";
       }
       return `
@@ -3025,11 +3028,12 @@
             ${section?.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
           </div>
           ${renderChronicleWikiFields(visibleFields, valuesByFieldId)}
+          ${customMarkup(customFields)}
         </section>
       `;
     }).filter(Boolean).join("");
 
-    return moduleMarkup || '<p class="details-empty">No populated Chronicle fields yet.</p>';
+    return details + moduleMarkup;
   }
 
   function renderCustomFields(customFields = [], mode = "edit") {
@@ -3110,7 +3114,7 @@
       controls.actionBar?.prepend(controls.richButton);
     }
     if ((node.data?.kind === "universe" || isElementNode) && controls.closeButton) {
-      if (isElementNode && controls.richButton) {
+      if (controls.richButton) {
         controls.headerActions?.append(controls.richButton);
       }
       const aiExpertButton = document.createElement("button");
@@ -3128,7 +3132,8 @@
       }
     }
     if (controls.richButton) {
-      controls.richButton.hidden = mode === "edit" || node.data?.kind !== "element";
+      controls.richButton.hidden = mode === "edit" || !['element','universe'].includes(node.data?.kind);
+      controls.richButton.disabled = false;
     }
 
     if (mode === "edit") {
@@ -3943,6 +3948,7 @@
       .from("chronicle_modules")
       .select("id")
       .eq("element_id", elementId)
+      .eq("deleted", false)
       .eq("module_type", CHRONICLE_TEMPLATE_SECTION_MODULE_TYPE)
       .limit(1);
 
@@ -3967,16 +3973,23 @@
       return { modules: [], sections: [], fields: [], values: [] };
     }
 
+    const isUniverse = node.data.kind === 'universe';
+    const customResponse = await window.centralisSupabase.from(isUniverse?'universe_custom_fields':'element_custom_fields').select('*').eq(isUniverse?'universe_id':'element_id',node.data.recordId).eq('deleted',false).order('sort_order');
+    if(customResponse.error)throw customResponse.error;
+    const customFields=customResponse.data || [];
+    if(isUniverse)return {modules:[],sections:[],fields:[],values:[],customFields};
     const [moduleResponse, valueResponse] = await Promise.all([
       window.centralisSupabase
         .from("chronicle_modules")
         .select("*")
         .eq("element_id", node.data.recordId)
         .eq("module_type", CHRONICLE_TEMPLATE_SECTION_MODULE_TYPE)
+        .eq("deleted", false)
         .order("sort_order", { ascending: true }),
       window.centralisSupabase
         .from("element_template_field_values")
         .select("*")
+        .eq("deleted", false)
         .eq("element_id", node.data.recordId)
     ]);
 
@@ -3994,7 +4007,7 @@
     const templateIds = [...new Set(modules.map(getChronicleModuleTemplateId).filter(Boolean))];
 
     if (!sectionIds.length || !templateIds.length) {
-      return { modules, sections: [], fields: [], values: valueResponse.data || [] };
+      return { modules, sections: [], fields: [], values: valueResponse.data || [], customFields };
     }
 
     const [sectionResponse, fieldResponse] = await Promise.all([
@@ -4018,13 +4031,14 @@
     }
 
     const visibleSectionIds = new Set((sectionResponse.data || [])
-      .filter((section) => !section.is_hidden)
+      .filter((section) => !section.is_hidden && !section.deleted)
       .map((section) => section.id));
     const fields = dedupeTemplateFields(fieldResponse.data || [])
-      .filter((field) => !field.is_hidden && visibleSectionIds.has(field.section_id));
+      .filter((field) => !field.is_hidden && !field.deleted && visibleSectionIds.has(field.section_id));
 
     return {
       modules: modules.filter((module) => visibleSectionIds.has(getChronicleModuleSectionId(module))),
+      customFields,
       sections: sectionResponse.data || [],
       fields,
       values: valueResponse.data || []
@@ -5566,7 +5580,7 @@
 
     const openChroniclePreview = React.useCallback(async (nodeId) => {
       const node = nodesRef.current.find((currentNode) => currentNode.id === nodeId);
-      if (!node || node.data?.kind !== "element") {
+      if (!node || !['element','universe'].includes(node.data?.kind)) {
         return;
       }
 
@@ -7869,7 +7883,10 @@
         }
 
         async function routeDetailsOpen() {
-          if (node.data?.kind === "element" && await elementHasChronicleModules(node.data.recordId)) {
+          const isRecord = ['element','universe'].includes(node.data?.kind);
+          const hasModules = node.data?.kind === 'element' && await elementHasChronicleModules(node.data.recordId);
+          const custom = isRecord ? await window.centralisSupabase.from(node.data.kind==='universe'?'universe_custom_fields':'element_custom_fields').select('id').eq(node.data.kind==='universe'?'universe_id':'element_id',node.data.recordId).eq('deleted',false).limit(1) : null;
+          if (isRecord && (hasModules || custom?.data?.length)) {
             openChroniclePreview(nodeId);
             return;
           }
@@ -8009,7 +8026,7 @@
                 ` : ""}
               </dl>
             </section>
-            <section class="rich-details-section">
+            ${node.data.kind === 'universe' ? '' : `<section class="rich-details-section">
               <h3>Element Type</h3>
               <div class="rich-type-template-stack">
                 <span class="details-type-badge" style="--detail-color: ${escapeHtml(meta.color)}">
@@ -8019,7 +8036,7 @@
                   ${escapeHtml(meta.label)}
                 </span>
               </div>
-            </section>
+            </section>`}
             ${templateMarkup}
           </div>
         `;
@@ -8719,10 +8736,8 @@
       function handleOpenInChronicle() {
         if (detailsNodeId) {
           const node = nodes.find((currentNode) => currentNode.id === detailsNodeId);
-          if (node?.data?.kind === "element" && node.data.recordId) {
-            const universeSegment = encodeURIComponent(universeId || "");
-            const elementSegment = encodeURIComponent(node.data.recordId);
-            window.location.href = `chronicle-editor.html#universe/${universeSegment}/element/${elementSegment}`;
+          if (['element','universe'].includes(node?.data?.kind) && node.data.recordId) {
+            window.location.href = getChronicleEditorUrl(node);
           }
         }
       }

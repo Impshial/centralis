@@ -1,0 +1,26 @@
+const {fixture}=require('./lexicon-fixture.cjs');const {Store}=require('../lexicon-data.js');const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');const {transformSync}=require('../scripts/lexicon-editor/node_modules/esbuild');
+(async()=>{const f=await fixture();try{
+ const store=new Store(f.client(),{id:1}),wiki=await store.createWiki({id:f.uuid(),kind:'universe',universe_id:'u1',name:'Media'}),otherWiki=await store.createWiki({id:f.uuid(),kind:'standalone',name:'Other wiki'});
+ await f.db.exec("reset role;insert into image_table(id,object_id,user_id,image_url,is_primary) values('image1','a',null,'https://storage.invalid/one.png',true),('private-image','private','other','https://storage.invalid/private.png',true);");
+ const source=await f.snapshot(),images=(await f.db.query('select * from image_table order by id')).rows;let handler,uploadCount=0;
+ const sandbox={console:{error(){}},File,FormData,Uint8Array,Deno:{serve(fn){handler=fn;}},handleCors:()=>null,getAuthUser:async req=>{const id=req.headers.get('Authorization');if(!id)throw Error('missing');return {id};},createAdminClient:()=>f.client(),createSignedImageUrl:async url=>url+'?signed',uploadImageBytes:async({key})=>{uploadCount++;return 'https://storage.invalid/'+key;},createCentralisStorageMetadata:x=>x,jsonResponse:(body,status=200)=>({body,status})};
+ vm.runInNewContext(transformSync(fs.readFileSync('supabase/functions/lexicon-media/index.ts','utf8').replace(/^import[^\n]+\n/,''),{loader:'ts',format:'cjs'}).code,sandbox);
+ const invoke=(body,user='owner')=>handler({headers:new Headers({'Authorization':user,'Content-Type':'application/json'}),json:async()=>body});
+ const library=await invoke({wikiId:wiki.id,action:'library'});assert.equal(library.status,200);assert.deepEqual(Array.from(library.body.images,x=>x.id),['image1']);
+ assert.equal((await invoke({wikiId:wiki.id,action:'register',id:f.uuid(),sourceImageId:'private-image'})).status,404);
+ assert.equal((await invoke({wikiId:wiki.id,action:'library'},'other')).status,404);assert.equal((await invoke({wikiId:wiki.id,action:'library'},'')).status,401);
+ const id=f.uuid(),first=await invoke({wikiId:wiki.id,action:'register',id,sourceImageId:'image1'});assert.equal(first.status,200);
+ assert.equal((await invoke({wikiId:wiki.id,action:'register',id,sourceImageId:'image1'})).status,200);assert.equal((await f.db.query('select count(*)::int n from lexicon_media')).rows[0].n,1);
+ assert.equal((await invoke({wikiId:otherWiki.id,action:'register',id,sourceImageId:'image1'})).status,500);assert.equal((await f.db.query('select wiki_id from lexicon_media where id=$1',[id])).rows[0].wiki_id,wiki.id,'Cross-wiki ID collision cannot reassign media');
+ assert.equal((await invoke({wikiId:otherWiki.id,action:'resolve',ids:[id]})).body.media.length,0);
+ const uploadId=f.uuid(),form=new FormData();form.set('wikiId',wiki.id);form.set('id',uploadId);form.set('file',new File([new Uint8Array([1,2,3])],'test.png',{type:'image/png'}));
+ const upload=()=>handler({headers:new Headers({'Authorization':'owner','Content-Type':'multipart/form-data'}),formData:async()=>form});assert.equal((await upload()).status,200);assert.equal((await upload()).status,200);assert.equal(uploadCount,1);
+ assert.deepEqual(await f.snapshot(),source);assert.deepEqual((await f.db.query('select * from image_table order by id')).rows,images);
+ await f.db.exec("set request.jwt.claim.sub='owner';set role authenticated;");
+ await assert.rejects(f.db.query('insert into lexicon_media(wiki_id,storage_key) values($1,$2)',[wiki.id,'untrusted']),/permission denied/);
+ const annotation={id:f.uuid(),wiki_id:wiki.id,article_id:'a',subject_type:'article',subject_id:'a',property:'introduction',kind:'image',anchor:{quote:'',prefix:'',suffix:''},media_id:id};await store.save('lexicon_annotations',annotation);await store.save('lexicon_annotations',annotation);
+ await assert.rejects(store.save('lexicon_annotations',{...annotation,id:f.uuid(),wiki_id:otherWiki.id}),/Article unavailable|foreign key/);
+ await assert.rejects(store.save('lexicon_annotations',{...annotation,id:f.uuid(),kind:'link',target_id:'private'}),/target unavailable/);
+ await f.db.exec("set request.jwt.claim.sub='other'");assert.equal((await f.db.query('select * from lexicon_annotations')).rows.length,0);assert.equal((await f.db.query('select * from lexicon_media')).rows.length,0);
+ console.log('Media endpoint/database: authenticated ownership, accessible legacy assets, foreign-wiki denial, ID collision safety, idempotent upload/register, scoped resolve, source gallery immutability, protected storage keys and annotation RLS passed.');
+}finally{await f.db.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

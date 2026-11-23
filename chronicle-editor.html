@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/theme/toastui-editor-dark.min.css">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=generation-activity-1">
+  <link rel="stylesheet" href="styles.css?v=chronicle-followups-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="chronicle-editor">
@@ -257,19 +257,23 @@
           <div class="chronicle-ai-module-picker-list" data-chronicle-ai-module-checklist></div>
         </section>
 
-        <p class="form-status" data-chronicle-ai-module-generate-status role="status"></p>
+        <p class="form-status" id="chronicle-ai-module-generate-status" data-chronicle-ai-module-generate-status role="status"></p>
         <div class="modal-actions">
           <button class="secondary-action" type="button" data-chronicle-ai-module-generate-cancel>Cancel</button>
-          <button class="primary-action" type="submit" data-chronicle-ai-module-generate-submit>
+          <button class="primary-action" type="submit" data-chronicle-ai-module-generate-submit aria-describedby="chronicle-ai-module-generate-status">
             <ph-sparkle weight="bold" aria-hidden="true"></ph-sparkle>
             Generate
           </button>
         </div>
       </form>
 
-      <div class="chronicle-ai-generation-overlay" aria-live="assertive">
-        <ph-spinner gap="none" aria-hidden="true"></ph-spinner>
-        <strong>Generating Chronicle Details…</strong>
+      <div class="chronicle-ai-generation-overlay" data-chronicle-ai-generation-overlay role="group" aria-labelledby="chronicle-ai-progress-title" tabindex="-1" hidden>
+        <span class="chronicle-ai-loading-icon" aria-hidden="true"></span>
+        <strong id="chronicle-ai-progress-title">Generating Chronicle details</strong>
+        <div class="chronicle-ai-progress-bar" role="progressbar" aria-label="Chronicle details generation" aria-describedby="chronicle-ai-progress-stage">
+          <span aria-hidden="true"></span>
+        </div>
+        <p id="chronicle-ai-progress-stage" data-chronicle-ai-progress-stage role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
     </section>
   </div>
@@ -299,6 +303,7 @@
   <script src="supabase-config.js"></script>
   <script src="script.js?v=roleplayer-1"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
-  <script src="chronicle.js?v=chronicle-viewer-upload-1"></script>
+  <script src="lexicon-data.js?v=wiki-followups-1"></script>
+  <script src="chronicle.js?v=chronicle-followups-1"></script>
 </body>
 </html>

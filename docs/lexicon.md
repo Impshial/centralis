@@ -1,157 +1,209 @@
-# Lexicon
+# Lexicon and Chronicle
 
-Lexicon has two screens: `lexicon.html` lists saved wikis and opens the creation
-dialog; `lexicon-wiki.html?wiki=<id>&article=<id>` reads articles. Add `&edit=1`
-to open the Wiki Editor. Article routes use saved IDs and survive title changes.
-Both universe-backed and standalone wikis use this reader and editor.
+`lexicon.html` lists saved wikis and creates universe-backed or standalone wikis.
+`lexicon-wiki.html?wiki=<id>&article=<id>` reads an article; `&edit=1` enables
+author controls. `&view=index` opens All articles.
+`lexicon-search.html?wiki=<id>&q=<query>` opens bookmarkable search results; older
+`&view=search` links normalize to that route. Routes use saved IDs, independent of names.
+
+## Chronicle and Builder
+
+`chronicle-editor.html#universe/<id>` opens the actual universe, including a root
+with zero children, templates or wikis. Its shell includes the existing gallery,
+name, description, Details, Add field, Back to Builder and Save Universe. Element
+routes retain type/template/module controls and expose their existing Builder Body.
+
+Builder double-clicks open Chronicle previews when a root or element has an active
+custom detail or assigned module. Otherwise the details pane has an enabled Open
+in Chronicle action. Group and note interactions remain unchanged.
+
+Custom fields receive IDs when added to the draft. Their dialog edits name,
+multiline value and assigned-section placement; records without sections omit the
+location selector. Move, rename, order, remove and cancel preserve other drafts.
+Save upserts the same IDs on retries. Removing an assignment or changing templates
+moves its custom fields to top-level Details without modifying shared templates.
+
+View in Lexicon checks the saved source and wiki visibility. One visible match
+opens directly; several matches offer a wiki chooser. Missing/hidden records do
+not create wikis or source rows. Root routes open the corresponding wiki home.
+
+Meaningful draft differences show Unsaved changes. Name, description, body,
+type/template, module assignments, predefined/custom fields and applied AI
+suggestions are compared with the last successful save. Reverting clears dirty
+status; viewing/collapsing modules does not change it. Navigation links and
+same-document Back/Forward offer Keep editing or Discard and leave. Refresh,
+tab close and external history use the browser's beforeunload warning (subject
+to browser interaction requirements). Failed saves retain drafts and dirty
+status. Gallery operations already save immediately and do not mark a draft.
 
 ## Storage and authorization
 
-Migration `20261123001138_add_lexicon_wikis.sql` adds seven Lexicon-owned tables:
+The original `20261123001138_add_lexicon_wikis.sql` migration adds wikis, standalone
+articles/navigation/sections/fields, property overrides and wiki-only connections.
+Its existing production-history version is `20261123003328`.
 
-| Table | Purpose |
+The new **`20261123041951_complete_lexicon_chronicle.sql`** migration is applied to
+Centralis project `lztmpbxmntcktijcdcda`, matching its repository filename.
+
+| Change | Purpose |
 | --- | --- |
-| `lexicon_wikis` | Owner, name, kind, optional source universe |
-| `lexicon_articles` | Standalone titles, introductions, visibility |
-| `lexicon_navigation` | Standalone labels, ordering, nesting, article references |
-| `lexicon_sections` | Standalone sections and ordering |
-| `lexicon_fields` | Standalone typed values, placement, visibility |
-| `lexicon_overrides` | One property per wiki and stable source subject |
-| `lexicon_links` | Wiki-only connections, endpoints, direction, label |
+| `element_custom_fields.chronicle_module_id` | Nullable FK to the same record's assigned module; validation and relocation triggers preserve custom fields |
+| `lexicon_sections.body` and article `body` overrides | Standalone section prose and wiki-local Builder Body edits |
+| `lexicon_annotations` | Field-scoped links, unlink/automatic-link suppressions and illustrations |
+| `lexicon_facts` | Wiki-only facts, anchored excerpts and pinned explicit relationships |
+| `lexicon_aliases` | Explicit article aliases |
+| `lexicon_media` | Wiki uploads or read-only references to accessible existing images |
 
-All seven tables use RLS through the current app user's `users.clerk_user_id`
-mapping. Child policies resolve through the owned wiki. Composite foreign keys
-prevent cross-wiki standalone references. An invoker validation trigger checks
-source membership, override property types, link endpoints, and navigation
-cycles. Parent edits lock the wiki row to serialize concurrent moves.
+All new Lexicon tables use owner RLS through the app user's `users.clerk_user_id`
+mapping and owned wiki. Invoker validation checks source membership and stable
+subject IDs; composite FKs prevent cross-wiki image placements. Direct client
+writes to media storage keys are revoked. `lexicon-media` version 1 is active with
+JWT verification. It validates wiki/asset ownership before signing, uploading or
+registering images, reuses IDs for retries and rejects cross-wiki ID collisions.
 
-The override primary key is `(wiki_id, subject_type, article_id, subject_id,
-property)`. Template fields are identified by both element and field IDs;
-sections use the assigned Chronicle module ID. Source links use their link row
-ID. Missing rows inherit; an explicit empty string remains intentionally blank.
-Saving or resetting one property cannot overwrite another property's row.
-Wiki-wide link settings use an empty article ID; page visibility uses the current
-endpoint ID. Deleted source identities never match replacement rows by name.
+Overrides remain sparse rows keyed by wiki, subject type, article ID, subject ID
+and property. Explicit blanks differ from inheritance. Reset removes only the
+selected property's row. Renames and same-named replacements cannot transfer an
+override. Lexicon writes only Lexicon tables; intentional source-editor saves
+write source data. Movie Tracker schema and access rules are unchanged.
 
-`lexicon-data.js` reads current source records on every load. It follows assigned
-template sections and joins values by both element and field ID. Its writes are
-limited to Lexicon tables. `lexicon-core.js` resolves overrides, visibility,
-placement and destination grouping. The reader omits empty fields and sections,
-retains zero/false, and uses explicit connections and typed references only.
+Live metadata confirms new RLS policies and the intended placement column and
+triggers. Movie, universe, element and universe-custom-field column signatures,
+RLS flags and policy/trigger counts match their pre-migration values. Advisors
+reported no security findings for the new objects or missing FK indexes. New
+indexes are reported as unused until production usage.
 
-The `lexicon-images` Edge Function authenticates the caller and checks wiki,
-universe and element ownership before signing primary/fallback image URLs. It
-does not repair or update source images. Shared authentication skips automatic
-element-type library seeding on Lexicon pages. Source editing is available only
-through the existing Chronicle editor and Universe Builder links.
+## Reader and authoring
 
-No columns, policies, triggers, or data are changed on Movie Tracker, Builder,
-Chronicle, or their source tables by this migration or Lexicon customization.
+`lexicon-data.js` loads current owned source records. Chronicle assignment joins
+use `chronicle_modules.data.section_id`; values join by element and template field
+ID. Section custom fields default to the body, top-level fields to the infobox.
+Empty content is omitted while zero/false remain visible. Roots receive no inferred
+type or facts extracted from children.
 
-## Verification
+`lexicon-core.js` resolves presentation overrides, relationships, aliases, search
+and breadcrumbs. Breadcrumbs prefer group ancestry or authored standalone
+navigation. Otherwise directed Contains/Includes/Parent of relationships can
+provide containment. Stable IDs resolve multiple parents with cycle guards.
+Ordinary graph edges do not imply ancestry.
 
-From the repository root, install the pinned test dependencies and start the app:
+The reader has one title, breadcrumbs, local search, current-page contents and
+All articles. Contents use actual visible headings with distinct anchors for
+duplicate names. Search ranks titles/aliases before descriptions, headings and
+body/field text, groups by article, and excludes hidden/out-of-wiki content. Enter
+opens full results; arrows activate suggestions and Escape dismisses them. Search
+has Wiki home > Search results breadcrumbs and search-appropriate actions.
+Back restores the previous article and scroll position; Forward restores results
+and query. Selecting a suggestion preserves the previous article's history entry.
+The Connections list is absent from reading mode.
+
+Customize wiki page exposes Edit controls beside prose fields. The local Tiptap
+bundle loads on the first text edit. Save writes only changed fields; cancel
+restores the reader in place. Choose details exposes field/section labels, values,
+order, placement, visibility and individual resets, including empty source fields
+and their source-edit action. It adds wiki-only facts, aliases and pinned explicit
+relationships, and retains connection label/direction/visibility controls.
+
+`lexicon-prose.js` renders sanitized Markdown or saved Tiptap JSON without loading
+the editor. Paragraphs, headings, formatting, lists, tables and field boundaries
+are preserved. Explicit links retain stable targets and exact phrases. Automatic
+links use a cached index of all loaded visible articles and unambiguous whole
+names/aliases. A destination can repeat once per introduction, body/section and
+infobox. Explicit links take priority; self/hidden/ambiguous/substring matches
+are skipped. No per-mention database requests are made.
+
+Selection is captured before dialogs focus. Manual links can target unconnected
+articles. Confirmed unlink keeps words/formatting. Automatic suppression applies
+to the destination across the page, so removal never shifts to a later mention.
+Normal reading mode exposes a Text actions button beside selected text, an
+always-available toolbar action, right-click on prose and Shift+F10/Context Menu.
+Ctrl/Cmd+K opens linking for a reader selection. Actions use explicit Save/Cancel
+dialogs and do not write on opening or canceling. Ordinary unselected links keep
+native browser actions; Shift+right-click bypasses the article menu. Image
+context actions capture the actual right-click point independently
+of the previous caret. Keyboard actions use the current selection/caret. Existing
+assets and uploads support alt/caption; successful placements split paragraphs
+without changing source galleries. Cancellation/failure leaves prose intact.
+
+Annotations/excerpts store a stable field identity plus quote/prefix/suffix
+context. Unique passages relocate after source edits. Missing or ambiguous
+passages show clean prose and author repair/removal controls. Adding a link/image
+does not copy inherited prose into an override.
+
+Same-wiki routing uses the loaded model and real URLs/history. Delayed fixture
+checks still measure zero document/database/auth/image requests for internal
+article clicks (about 50–115 ms including test-driver overhead). Actual loads and
+Reload source fetch current data. Images do not block text or replace editor
+drafts; account changes invalidate pending responses and clear the model.
+Cold entry immediately has a navigation/content shell. Independent source and
+wiki reads run together; fresh article introductions/body appear after ownership,
+source availability and visibility overrides are checked, while module details
+finish loading. No private article content is cached in browser storage. Images
+remain nonblocking and Reload source performs a fresh authoritative read.
+
+## Build and verification
+
+Editor sources/lockfile are in `scripts/lexicon-editor`. Run
+`pnpm --dir scripts/lexicon-editor install --ignore-scripts`, then
+`node scripts/lexicon-editor/build.mjs` to rebuild local assets and license notices.
+References: [Tiptap JavaScript integration](https://tiptap.dev/docs/editor/getting-started/install/vanilla-javascript),
+[links](https://tiptap.dev/docs/editor/extensions/marks/link),
+[TableKit](https://tiptap.dev/docs/editor/extensions/functionality/table-kit).
+
+Install test dependencies with `npm install --prefix tests --ignore-scripts`, start
+`npm run dev`, and use Google Chrome. Set `CENTRALIS_BASE_URL` to
+`http://127.0.0.1:4173`; `PGLITE_MODULE` and `PLAYWRIGHT_MODULE` can select preinstalled
+modules. Run from the repository root:
 
 ```powershell
-npm install --prefix tests --ignore-scripts
-npm run dev
-```
-
-With Google Chrome installed, run these in another terminal:
-
-```powershell
-$env:CENTRALIS_BASE_URL = 'http://127.0.0.1:4173'
 node tests/lexicon-database.cjs
 node tests/lexicon-images.cjs
+node tests/lexicon-media.cjs
 node tests/lexicon-browser.cjs
 node tests/lexicon-navigation.cjs
+node tests/lexicon-complete-browser.cjs
+node tests/lexicon-reader-cases.cjs
+node tests/lexicon-annotations-browser.cjs
+node tests/lexicon-formatting.cjs
+node tests/chronicle-placement-browser.cjs
+node tests/chronicle-builder-browser.cjs
+node tests/chronicle-generation-browser.cjs
+node tests/chronicle-dirty-browser.cjs
+node tests/lexicon-followups-browser.cjs
 node tests/header-browser.cjs
 ```
 
-`PGLITE_MODULE` and `PLAYWRIGHT_MODULE` can point to preinstalled modules instead.
-Run from the repository root; fixtures read the migration and application files
-there. Browser screenshots are written under ignored
-`node_modules/.cache/lexicon/screenshots`.
+The Builder test caches the app's pinned React 18.3.1, ReactDOM 18.3.1, React Flow
+11.11.4 and ELK 0.9.3 browser libraries from the same jsDelivr URLs used by the app
+under ignored `node_modules/.cache/lexicon/canvas-vendor`.
 
-The database fixture runs the actual migration in PGlite PostgreSQL, with two
-owners and representative Builder/Chronicle records. Browser tests use the real
-HTML, shared header, reader, editor, creation dialogs and Chronicle editor; a
-Supabase-shaped test adapter sends their queries to that database. Source writes
-are rejected unless the browser is on the Chronicle editor route. Source rows
-are compared before and after wiki actions.
+| Requested scenario | Checks exercised |
+| --- | --- |
+| 1. Root editing | Real React Flow double-click, enabled Chronicle action, first detail, direct reload, Back to Builder and preview; no placeholder/child/wiki |
+| 2. Section fields | History add/move, section removal, template switch, draft cancel and injected save failure/retry; stable field/value and unchanged other city |
+| 3. Two wikis | Actual Chronicle edits, isolated label/value/placement, live inheritance and value-only reset; source snapshots |
+| 4. Standalone | Homepage create/reopen, two articles, named section, zero-valued infobox fact, links/navigation; Tiptap save/cancel/scroll |
+| 5. Reader structure | One title, nested groups, deterministic/cycle-safe containment, direct/search visits, Builder/Chronicle headings and distinct anchors |
+| 6. Search | Dropdown/Enter/arrows/Back, full URL, no results, section/description/alias-only matches, hidden/foreign exclusion |
+| 7. Links | Exact manual phrase/cancel, first automatic mention, ambiguity, persistent suppression, connection editor and unchanged source edges |
+| 8. Images/anchors | Second-paragraph right-click with first caret, split/alt/caption/reload, upload failure/cancel, source-prefix relocation and missing-passage repair |
+| 9. Root semantics | Prose-only concept, city with zero fact, multi-planet story with explicitly pinned relationship/excerpt; desktop/760/390/320px layouts |
 
-Verified flows:
+Tests run actual migrations in PGlite PostgreSQL through a Supabase-shaped adapter
+and use real app screens. They inspect stored rows, RLS and source snapshots.
+Media handler tests use isolated storage/signing adapters. Screenshots are under
+ignored `node_modules/.cache/lexicon/screenshots`.
 
-- Two independently customized wikis from one universe, persisted across reloads.
-- Real Chronicle editor changes, live inherited values, pinned values and
-  independent resets; unsaved editor drafts survive other property saves.
-- Multiple relationships to one destination, direction and labels, page-only and
-  wiki-wide hiding, wiki-only link creation/deletion, hidden article restoration.
-- Nested groups, converging/cyclic connections, unconnected elements and renamed
-  source elements resolving through stable IDs.
-- Standalone wiki, two linked articles, sections, zero-valued infobox fields,
-  nested/reordered navigation and reopening from the homepage.
-- Ownership denial, retries, concurrent independent properties, cross-wiki
-  constraints, navigation cycle rejection, blank/false/zero values, source
-  visibility and deleted/replaced identities.
-- Image endpoint authentication, ownership, primary selection and zero image
-  writes; reader/editor and homepage toolbars at 1440/760/390/320px; shared header
-  touch, pointer and keyboard controls.
+The follow-up suites cover the six reported issues, including held-detail fetches
+during first entry, search route/history/scroll/direct reload without extra
+internal navigation requests, section link repetition/aliases/ambiguity, reader
+selection/right-click/keyboard/mobile actions, clicked image placement, source
+isolation, dirty-state revert/failure/save/history, and visible/multiple/hidden/
+missing View in Lexicon targets. Generation tests use held fixture responses;
+no paid live AI request is made. These follow-ups need no migration or Edge
+Function deployment; frontend assets and the new search HTML route must be served.
 
-## Deployment checked
-
-The migration was applied to the linked Centralis Supabase project
-`lztmpbxmntcktijcdcda`; `lexicon-images` version 1 is active with JWT verification.
-Live metadata confirms RLS and ownership policies on all seven tables. Compared
-source column definitions, RLS flags, policy counts and custom-trigger counts
-were unchanged, including `movies`.
-
-Supabase advisors reported no Lexicon security findings or missing foreign-key
-indexes. Newly created indexes are listed as
-[unused indexes](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)
-before production usage; they are retained for scoped reads and foreign keys.
-Existing findings elsewhere in the project were left unchanged.
-
-No signed-in production browser session was available. Full UI persistence
-tests used the isolated PostgreSQL fixture, not production user records. Live
-OAuth, signed storage URLs and production-account editing were not exercised.
-The frontend remains in this checkout; no Vercel deployment was performed.
-
-## Article navigation performance
-
-Previously, every article link loaded another HTML document and repeated shared
-initialization, authentication lookup, 14 database reads in the representative
-universe fixture, and image signing. The reader waited for all of that work
-before replacing the `Loading wiki...` heading.
-
-Same-wiki article links, wiki-home links and reader/editor switches now use the
-current document's model and update the real URL through browser history.
-Back/forward navigation renders the corresponding article without refetching.
-Navigation branches retain their expanded state when the view mode is unchanged.
-Modified clicks, downloads, other targets, external/source-editor links and
-different wikis keep normal browser navigation. No wiki data is stored in a
-cross-page cache. An account-change event clears the model and invalidates pending
-responses; restored browser documents reload to obtain current authorized data.
-
-Actual wiki loads and `Reload source` still fetch current records. Independent
-override/link reads run alongside universe validation. Text renders before image
-signing completes; image responses update only the reader infobox, preserving
-editor drafts and the active article. Failed image requests do not block reading.
-Source text and prose-link behavior are unchanged.
-
-Local Playwright/PGlite measurements used an explicit 80 ms delay per database
-request and 400 ms per image request, with fixture authentication:
-
-| Article click | Before | After |
-| --- | ---: | ---: |
-| Click to target heading, including test-driver overhead | 1,497 ms | approximately 100 ms |
-| Document requests | 1 | 0 |
-| Database reads | 14 | 0 |
-| Authentication lookups | 1 | 0 |
-| Image-signing requests | 1 | 0 |
-
-The navigation test additionally holds image responses pending until after text
-and editor forms render. It verifies history, real new-tab clicks, direct URLs,
-fresh source reads on reload, hidden articles, cross-wiki/account isolation,
-late-image response handling, retained drafts and unchanged source rows. These
-measurements describe the isolated fixture, not a signed-in production session.
+No signed-in production browser session was available. Live OAuth, real storage
+uploads/signed URLs and production-account editing were not exercised. Schema,
+RLS and endpoint deployment were checked live. This phase did not commit, push or
+deploy the frontend; the checkout remains available on the local server.

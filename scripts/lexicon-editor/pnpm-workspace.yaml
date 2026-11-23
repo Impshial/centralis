@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - dompurify@3.5.0
