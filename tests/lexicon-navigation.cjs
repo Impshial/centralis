@@ -69,7 +69,7 @@ fs.mkdirSync(output,{recursive:true});
   await page.getByRole('link',{name:'All articles',exact:true}).click();await page.locator('[data-wiki-content] a[href*="article=c"]').last().click();await heading('Island').waitFor();
   assert.equal(calls.length,countBefore);
   // The editor shares routing but keeps its own forms and can return through history.
-  await page.getByRole('link',{name:'Customize wiki page',exact:true}).click();
+  await page.getByRole('link',{name:'Edit wiki page',exact:true}).click();
   await heading('Island').waitFor();
   await page.getByRole('link',{name:'View wiki page',exact:true}).click();await heading('Island').waitFor();
   await page.goBack();await heading('Island').waitFor();
@@ -116,7 +116,7 @@ fs.mkdirSync(output,{recursive:true});
   const beforePending=calls.filter(c=>c.kind==='query').length;
   await page.locator('.lexicon-article a[data-article-id="b"]').click();await heading('Harbor').waitFor();
   assert.equal(calls.filter(c=>c.kind==='query').length,beforePending);
-  await page.getByRole('link',{name:'Customize wiki page',exact:true}).click();await heading('Harbor').waitFor();
+  await page.getByRole('link',{name:'Edit wiki page',exact:true}).click();await heading('Harbor').waitFor();
   await page.locator('.lexicon-settings > summary').click();
   const draft=page.getByRole('form',{name:'Introduction',exact:true}).locator('textarea');await draft.fill('Keep this draft');
   const completedBefore=await page.evaluate(()=>window.navigationImageCompletions||0);
@@ -131,7 +131,7 @@ fs.mkdirSync(output,{recursive:true});
   await s.override(wiki.id,{subjectType:'article',articleId:'b',id:'b'},'hidden',true);
   await page.getByRole('button',{name:'Reload source',exact:true}).click();await page.getByText('This article is hidden in this wiki.',{exact:true}).waitFor();
   assert.equal(await page.locator('.lexicon-article a[data-article-id="b"]').count(),0);
-  await page.getByRole('link',{name:'Customize wiki page',exact:true}).click();await heading('Harbor').waitFor();
+  await page.getByRole('link',{name:'Edit wiki page',exact:true}).click();await heading('Harbor').waitFor();
   // An account change immediately discards data, even with a late image response.
   let releaseLate;imageGate=new Promise(resolve=>releaseLate=resolve);
   await page.goto(route());await heading('Stormhaven').waitFor();await page.locator('[data-wiki-content][aria-busy="false"]').waitFor();

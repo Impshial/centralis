@@ -4230,6 +4230,7 @@
     controls.input.value = type?.id || "";
     controls.trigger.setAttribute("aria-expanded", "false");
     if (controls.list) {
+      if (controls.list.matches(':popover-open')) controls.list.hidePopover();
       controls.list.hidden = true;
       controls.list.querySelectorAll("[data-type-option]").forEach((option) => {
         option.setAttribute("aria-selected", option.dataset.value === controls.input.value ? "true" : "false");
@@ -4257,6 +4258,7 @@
       return;
     }
 
+    if (controls.list.matches(':popover-open')) controls.list.hidePopover();
     controls.list.hidden = true;
     controls.trigger.setAttribute("aria-expanded", "false");
   }
@@ -4297,12 +4299,32 @@
       label.textContent = type.name;
 
       option.append(swatch, icon, label);
-      option.addEventListener("click", () => setElementTypePickerValue(type.id || ""));
+      option.tabIndex = -1;
+      option.addEventListener("click", () => {setElementTypePickerValue(type.id || "");controls.trigger.focus({preventScroll:true});});
       controls.list.appendChild(option);
     });
 
     let typeaheadBuffer = "";
     let typeaheadTimer = null;
+    const typeOptions = () => [...controls.list.querySelectorAll('[data-type-option]')];
+    const focusOption = option => {
+      if (!option) return;
+      option.focus({preventScroll:true});
+      const top=option.offsetTop,bottom=top+option.offsetHeight;
+      if(top<controls.list.scrollTop)controls.list.scrollTop=top;
+      else if(bottom>controls.list.scrollTop+controls.list.clientHeight)controls.list.scrollTop=bottom-controls.list.clientHeight;
+    };
+    const positionList = () => {
+      if(controls.list.hidden)return;
+      const rect=controls.trigger.getBoundingClientRect(),gap=6,edge=8;
+      const below=innerHeight-rect.bottom-gap-edge,above=rect.top-gap-edge;
+      const upward=below<230&&above>below,height=Math.max(0,Math.min(230,upward?above:below));
+      Object.assign(controls.list.style,{left:Math.max(edge,Math.min(rect.left,innerWidth-rect.width-edge))+'px',top:(upward?rect.top-gap-height:rect.bottom+gap)+'px',width:Math.min(rect.width,innerWidth-edge*2)+'px',maxHeight:height+'px'});
+    };
+    const openList = () => {
+      controls.list.hidden=false;positionList();controls.list.showPopover();controls.trigger.setAttribute('aria-expanded','true');
+      focusOption(typeOptions().find(option=>option.dataset.value===controls.input.value)||typeOptions()[0]);
+    };
 
     const getSortedTypeaheadTypes = () => elementTypes
       .slice()
@@ -4320,18 +4342,16 @@
         matchingType = matches[(currentIndex + 1) % matches.length];
       }
       if (!matchingType) return false;
-      setElementTypePickerValue(matchingType.id || "");
       const selectedOption = [...(controls.list?.querySelectorAll("[data-type-option]") || [])]
         .find((option) => option.dataset.value === String(matchingType.id || ""));
-      selectedOption?.scrollIntoView({ block: "nearest" });
+      if(controls.list.hidden)setElementTypePickerValue(matchingType.id || "");
+      else focusOption(selectedOption);
       return true;
     };
 
     const handleTriggerClick = (event) => {
       event.stopPropagation();
-      const willOpen = controls.list.hidden;
-      controls.list.hidden = !willOpen;
-      controls.trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if(controls.list.hidden)openList();else closeElementTypePicker();
     };
 
     const handleOutsidePointerDown = (event) => {
@@ -4341,13 +4361,25 @@
     };
 
     const handleEscape = (event) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape"&&!controls.list.hidden) {
+        event.preventDefault();event.stopPropagation();
         closeElementTypePicker();
+        controls.trigger.focus({preventScroll:true});
       }
+    };
+    const handleNavigation = event => {
+      if(!controls.picker.contains(event.target))return;
+      if(event.key==='Tab'){closeElementTypePicker();controls.trigger.focus({preventScroll:true});return;}
+      if(!['ArrowDown','ArrowUp','Home','End','PageDown','PageUp'].includes(event.key))return;
+      event.preventDefault();event.stopPropagation();
+      if(controls.list.hidden){openList();if(event.key==='End')focusOption(typeOptions().at(-1));return;}
+      const options=typeOptions(),index=options.indexOf(document.activeElement);
+      const step=event.key==='PageDown'?5:event.key==='PageUp'?-5:event.key==='ArrowUp'?-1:1;
+      focusOption(options[event.key==='Home'?0:event.key==='End'?options.length-1:Math.max(0,Math.min(options.length-1,index+step))]);
     };
 
     const handleTypeaheadKeyDown = (event) => {
-      if (event.altKey || event.ctrlKey || event.metaKey || event.key.length !== 1) {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.key===' ' || event.key.length !== 1) {
         return;
       }
       const targetTag = event.target?.tagName;
@@ -4360,6 +4392,7 @@
         return;
       }
       event.preventDefault();
+      event.stopPropagation();
       const key = event.key.toLowerCase();
       typeaheadBuffer += key;
       const isRepeatedSingleCharacter = typeaheadBuffer.length > 1
@@ -4378,17 +4411,28 @@
     };
 
     controls.trigger.addEventListener("click", handleTriggerClick);
+    controls.picker.addEventListener('keydown',handleNavigation);
+    controls.picker.addEventListener('keydown',handleTypeaheadKeyDown);
+    controls.picker.addEventListener('keydown',handleEscape);
     document.addEventListener("pointerdown", handleOutsidePointerDown);
-    document.addEventListener("keydown", handleTypeaheadKeyDown);
-    document.addEventListener("keydown", handleEscape);
+    window.addEventListener('resize',positionList);
+    const handleScroll=event=>{if(!controls.list.contains(event.target))positionList();};
+    document.addEventListener('scroll',handleScroll,true);
+    const modal=document.getElementById('add-element-modal');
+    const observer=new MutationObserver(()=>{if(modal.hidden)closeElementTypePicker();});
+    observer.observe(modal,{attributes:true,attributeFilter:['hidden']});
     setElementTypePickerValue("");
 
     return () => {
       window.clearTimeout(typeaheadTimer);
       controls.trigger.removeEventListener("click", handleTriggerClick);
+      controls.picker.removeEventListener('keydown',handleNavigation);
+      controls.picker.removeEventListener('keydown',handleTypeaheadKeyDown);
+      controls.picker.removeEventListener('keydown',handleEscape);
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
-      document.removeEventListener("keydown", handleTypeaheadKeyDown);
-      document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener('resize',positionList);
+      document.removeEventListener('scroll',handleScroll,true);
+      observer.disconnect();closeElementTypePicker();
     };
   }
 
@@ -4822,7 +4866,6 @@
           }
         };
       }));
-      populateElementTypeSelect();
     }, []);
 
     function getElementContainerKey(node) {
@@ -5141,7 +5184,7 @@
       if (!targetElementId || !reactFlowInstance.current) return false;
 
       const targetNode = nodesRef.current.find((node) => (
-        node.data?.kind === "element"
+        ["element", "universe"].includes(node.data?.kind)
         && String(node.data?.recordId || toRecordId(node.id)) === String(targetElementId)
       ));
       if (!targetNode) return false;

@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict');const {fixture}=require('./lexicon-fixture.cjs');const {Store}=require('../lexicon-data.js');const C=require('../lexicon-core.js');
+(async()=>{const f=await fixture(),store=new Store(f.client(),{id:1});try{
+ const wiki=await store.createWiki({id:f.uuid(),name:'World',kind:'universe',universe_id:'u1'}),other=await store.createWiki({id:f.uuid(),name:'Other wiki',kind:'universe',universe_id:'u1'});
+ const before=await f.snapshot();
+ const request={wikiId:wiki.id,pageId:f.uuid(),title:'Elira Varrin',elementType:'type1',introduction:'A shipwright.',annotation:{id:f.uuid(),article_id:'a',subject_type:'article',subject_id:'a',property:'introduction',anchor:{quote:'coastal city',start:2,end:14,prefix:'A ',suffix:'.'}}};
+ const id=await store.createLinkedPage(request);assert.equal(id,request.pageId);
+ const row=(await f.db.query('select * from elements where id=$1',[id])).rows[0];assert.equal(row.user_id,1);assert.equal(row.universe_id,'u1');assert.equal(row.name,'Elira Varrin');assert.equal(row.element_type_id,'type1');assert.equal(row.description,'A shipwright.');assert.ok(row.position_x>0);
+ await store.createLinkedPage({...request,title:'Retry must not rename it'});assert.equal((await f.db.query('select count(*)::int n from elements where id=$1',[id])).rows[0].n,1);assert.equal((await f.db.query('select name from elements where id=$1',[id])).rows[0].name,'Elira Varrin');
+ assert.equal((await store.load(other.id)).annotations.length,0);assert.ok(C.build(await store.load(other.id)).articles.has(id),'Source page appears in other wikis of the same universe');
+ const fresh=()=>({...request,pageId:f.uuid(),annotation:{...request.annotation,id:f.uuid()}});
+ await assert.rejects(store.createLinkedPage({...fresh(),elementType:'missing'}),/type/);
+ const invalid=fresh();invalid.annotation.anchor={...invalid.annotation.anchor,suffix:'x'.repeat(65000)};await assert.rejects(store.createLinkedPage(invalid),/check constraint/);assert.equal((await f.db.query('select * from elements where id=$1',[invalid.pageId])).rows.length,0,'Link failure rolls back the element');
+ const cross=fresh();cross.annotation={...cross.annotation,article_id:'private',subject_id:'private'};await assert.rejects(store.createLinkedPage(cross),/unavailable/);
+ const collision=fresh();collision.pageId=id;await assert.rejects(store.createLinkedPage(collision),/duplicate key/);
+ const mismatch=fresh();mismatch.annotation.id=request.annotation.id;mismatch.annotation.anchor={quote:'different'};await assert.rejects(store.createLinkedPage(mismatch),/another passage/);
+ const after=await f.snapshot();after.elements=after.elements.filter(e=>e.id!==id);assert.deepEqual(after,before,'Existing source rows are untouched');
+ const standalone=await store.createWiki({id:f.uuid(),name:'Standalone',kind:'standalone'}),source=f.uuid();await store.save('lexicon_articles',{id:source,wiki_id:standalone.id,title:'Start',introduction:'A new page'});
+ const local={...fresh(),wikiId:standalone.id,elementType:null,annotation:{...request.annotation,id:f.uuid(),article_id:source,subject_type:'standalone_article',subject_id:source,anchor:{quote:'new page',start:2,end:10}}};
+ await store.createLinkedPage(local);const model=C.build(await store.load(standalone.id));assert.ok(model.articles.has(local.pageId));assert.ok(model.navigation.some(n=>n.article_id===local.pageId));
+ await f.db.exec("set request.jwt.claim.sub='other'");await assert.rejects(store.createLinkedPage(fresh()),/access denied/);
+ await f.db.exec('reset role;set role anon');await assert.rejects(store.createLinkedPage(fresh()),/permission denied/);
+ console.log('Create linked page SQL: atomic source/standalone creation, retries, ownership, endpoint/type validation, collision rejection and source preservation passed.');
+}finally{await f.db.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

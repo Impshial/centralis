@@ -28,7 +28,7 @@ fs.mkdirSync(output,{recursive:true});
   const page=await context.newPage();page.setDefaultTimeout(10000);
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const status=page.locator('[data-wiki-status]');
-  async function ready(){await page.locator('#wiki-title').filter({hasNotText:'Loading'}).waitFor();await page.locator('[data-wiki-content] > *').first().waitFor();}
+  async function ready(){await page.locator('[data-wiki-content][aria-busy="false"]').waitFor();await page.locator('[data-wiki-content] > *').first().waitFor();}
   async function createWiki(name,kind='universe'){
     await page.goto(base+'/lexicon.html');await page.getByRole('button',{name:'Create',exact:true}).click();
     const dialog=page.getByRole('dialog');await dialog.getByRole('combobox',{name:'Wiki type',exact:true}).selectOption(kind);
@@ -38,7 +38,7 @@ fs.mkdirSync(output,{recursive:true});
   }
   async function open(wiki,article='',edit=false){await page.goto(`${base}/lexicon-wiki.html?wiki=${wiki}${article?'&article='+article:''}${edit?'&edit=1':''}`);await ready();if(edit)await settings();}
   async function settings(){const el=page.locator('.lexicon-settings');if(await el.count()&&await el.getAttribute('open')===null)await el.locator(':scope > summary').click();}
-  async function customize(){await page.getByRole('link',{name:'Customize wiki page',exact:true}).click();await ready();await settings();}
+  async function customize(){await page.getByRole('link',{name:'Edit wiki page',exact:true}).click();await ready();await settings();}
   async function fieldPanel(id='f1'){const panel=page.locator(`[data-edit-field="${id}"]`);await settings();if((await panel.getAttribute('open'))===null)await panel.locator('summary').click();return panel;}
   async function property(scope,label,value,reset=false){
     const form=scope.getByRole('form',{name:label,exact:true});
@@ -63,7 +63,7 @@ fs.mkdirSync(output,{recursive:true});
   assert.deepEqual(await f.snapshot(),initial,'Wiki creation, loads and customizations do not write source tables');
   console.log('UI flow 1: two wikis, scoped title/label/placement, reload and source snapshot passed.');
   async function sourceEdit(value,name){
-    await page.getByRole('link',{name:'Edit source',exact:true}).click();
+    await page.getByRole('link',{name:'Edit in Chronicle',exact:true}).click();
     await page.locator('[name="workspace-field:f1"]').fill(String(value));
     if(name)await page.locator('[name="workspace-name"]').fill(name);
     await page.getByRole('button',{name:'Save Element',exact:true}).click();await page.getByText('Element saved.',{exact:true}).waitFor();

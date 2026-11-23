@@ -45,6 +45,9 @@ async function fixture() {
  await db.exec(fs.readFileSync('supabase/migrations/20261123001138_add_lexicon_wikis.sql','utf8'));
  await db.exec(`create table image_table(id varchar primary key,object_id varchar,image_url text,is_primary boolean default false,sort_order integer default 0,user_id varchar,created_at timestamptz default now(),deleted boolean default false);alter table elements add column body text;grant select,insert,update,delete on image_table to authenticated;`);
  await db.exec(fs.readFileSync('supabase/migrations/20261123041951_complete_lexicon_chronicle.sql','utf8'));
+ await db.exec('alter table elements add column position_x real not null default 0;alter table elements add column position_y real not null default 0;');
+ await db.exec(fs.readFileSync('supabase/migrations/20261123182642_lexicon_create_linked_page.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261123184930_lexicon_article_detail_groups.sql','utf8'));
  await db.exec("set request.jwt.claim.sub='owner';set role authenticated");
  const writes = [];
  const safe = name => { if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error('Invalid SQL identifier'); return '"'+name+'"'; };
@@ -82,13 +85,25 @@ async function fixture() {
    return {data:op.single ? rows[0]||null:rows,error:null};
   } catch(error) {return {data:null,error:{message:error.message,code:error.code}};}
  }
+ async function rpc(name,args) {
+  if(name==='lexicon_save_detail'){
+   writes.push({method:'rpc',table:name,payload:args});
+   try{const result=await db.query('select public.lexicon_save_detail($1,$2) as detail',[JSON.stringify(args.p_detail),args.p_group_id]);return {data:result.rows[0].detail,error:null};}
+   catch(error){return {data:null,error:{message:error.message,code:error.code}};}
+  }
+  if(name!=='lexicon_create_linked_page')throw new Error('Unexpected RPC');
+  const keys=['p_wiki_id','p_page_id','p_annotation_id','p_source_article','p_subject_type','p_subject_id','p_property','p_anchor','p_title','p_element_type','p_introduction'];
+  writes.push({method:'rpc',table:name,payload:args});
+  try{const result=await db.query('select public.lexicon_create_linked_page('+keys.map((_,i)=>'$'+(i+1)).join(',')+') as id',keys.map(k=>k==='p_anchor'?JSON.stringify(args[k]):args[k]??null));return {data:result.rows[0].id,error:null};}
+  catch(error){return {data:null,error:{message:error.message,code:error.code}};}
+ }
  function client() {
   return { from(table) {
    const op={table,method:'select',filters:[],orders:[]};
    const q={select(columns='*'){op.columns=columns;return q;},eq(k,v){op.filters.push(['eq',k,v]);return q;},in(k,v){op.filters.push(['in',k,v]);return q;},is(k,v){op.filters.push(['eq',k,v]);return q;},order(k,o={}){op.orders.push([k,o.ascending]);return q;},range(a,b){op.range=[a,b];return q;},limit(n){op.limit=n;return q;},insert(p){op.method='insert';op.payload=p;return q;},upsert(p,o={}){op.method='upsert';op.payload=p;op.conflict=o.onConflict;return q;},update(p){op.method='update';op.payload=p;return q;},delete(){op.method='delete';return q;},single(){op.single=true;return q;},maybeSingle(){op.single='maybe';return q;},then(resolve,reject){return request(op).then(resolve,reject);}};return q;
-  },functions:{invoke:async()=>({data:{images:[]},error:null})}};
+  },rpc,functions:{invoke:async()=>({data:{images:[]},error:null})}};
  }
  async function snapshot() {const result={};for(const t of sourceTables)result[t]=(await db.query(`select * from ${t} order by id`)).rows;return result;}
- return {db,request,client,writes,snapshot,uuid:crypto.randomUUID};
+ return {db,request,rpc,client,writes,snapshot,uuid:crypto.randomUUID};
 }
 module.exports={fixture,sourceTables};

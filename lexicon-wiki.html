@@ -6,19 +6,27 @@
   <title>Lexicon | Centralis</title>
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=lexicon-2">
+  <link rel="stylesheet" href="styles.css?v=article-groups-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="lexicon.css?v=wiki-followups-1">
+  <link rel="stylesheet" href="lexicon.css?v=article-groups-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="lexicon-wiki">
   <div class="app-shell">
     <header class="site-header" aria-label="Centralis main header"></header>
-    <main class="lexicon-workspace" aria-labelledby="wiki-title">
-      <header class="lexicon-heading">
-        <div><a href="lexicon.html">Lexicon</a><p id="wiki-title">Wiki</p></div>
-        <div class="lexicon-actions" data-wiki-actions></div>
+    <main class="lexicon-workspace lexicon-reader-workspace" aria-label="Wiki">
+      <header class="lexicon-utility-row">
+        <nav class="lexicon-breadcrumbs" aria-label="Breadcrumb" data-wiki-breadcrumbs><a href="lexicon.html">Lexicon</a></nav>
+        <form class="lexicon-search" role="search" data-wiki-search>
+          <div class="lexicon-search-field">
+            <span class="lexicon-search-icon"><ph-magnifying-glass aria-hidden="true"></ph-magnifying-glass></span>
+            <input id="wiki-search" type="search" aria-label="Search this wiki" placeholder="Search this wiki" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="wiki-suggestions">
+            <div id="wiki-suggestions" role="listbox" aria-label="Search suggestions" hidden></div>
+          </div>
+          <button class="primary-action" type="submit">Search</button>
+        </form>
       </header>
+      <div class="lexicon-actions" data-wiki-actions></div>
       <p class="form-status" role="status" data-wiki-status></p>
       <div class="lexicon-layout">
         <nav class="lexicon-navigation" aria-label="Wiki navigation" data-wiki-navigation><a href="lexicon.html">All wikis</a></nav>
@@ -30,8 +38,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=lexicon-2"></script>
-  <script src="lexicon-core.js?v=wiki-followups-1"></script>
-  <script src="lexicon-data.js?v=wiki-followups-1"></script>
-  <script type="module" src="lexicon-wiki.js?v=wiki-copy-1"></script>
+  <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
+  <script src="lexicon-core.js?v=article-groups-1"></script>
+  <script src="lexicon-data.js?v=article-groups-1"></script>
+  <script type="module" src="lexicon-wiki.js?v=article-groups-1"></script>
 </body>
 </html>

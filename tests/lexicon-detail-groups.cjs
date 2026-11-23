@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict');const {fixture}=require('./lexicon-fixture.cjs');const {Store}=require('../lexicon-data.js');
+(async()=>{const f=await fixture(),store=new Store(f.client(),{id:1});try{
+ const wiki=await store.createWiki({id:f.uuid(),name:'Groups',kind:'universe',universe_id:'u1'}),other=await store.createWiki({id:f.uuid(),name:'Other',kind:'universe',universe_id:'u1'}),snapshot=await f.snapshot();
+ const g=await store.save('lexicon_detail_groups',{id:f.uuid(),wiki_id:wiki.id,article_id:'a',label:'Population'}),foreign=await store.save('lexicon_detail_groups',{id:f.uuid(),wiki_id:other.id,article_id:'a',label:'Foreign group'});
+ const row={id:f.uuid(),wiki_id:wiki.id,article_id:'a',label:'Settlements',kind:'links',reference:{links:[{article_id:'b'},{article_id:'c',label:'The island'}]}};
+ await store.saveDetail(row,g.id);await store.saveDetail(row,g.id);assert.equal((await f.db.query('select count(*)::int n from lexicon_detail_group_items')).rows[0].n,1);
+ await store.setDetailGroup(wiki.id,'a',{type:'custom_field',id:'custom1'},g.id);assert.equal((await f.db.query('select count(*)::int n from lexicon_detail_group_items')).rows[0].n,2);
+ await assert.rejects(store.setDetailGroup(wiki.id,'b',{type:'custom_field',id:'custom1'},g.id),/unavailable|foreign key/i);
+ await assert.rejects(store.setDetailGroup(wiki.id,'a',{type:'custom_field',id:'custom1'},foreign.id),/foreign key/i);
+ await assert.rejects(store.saveDetail({...row,id:f.uuid(),reference:{links:[{article_id:'private'}]}},g.id),/unavailable/i);
+ await assert.rejects(store.saveDetail({...row,id:f.uuid(),reference:{links:[]}},g.id),/between 1 and 100/i);
+ const failedId=f.uuid();await assert.rejects(store.saveDetail({...row,id:failedId},foreign.id),/foreign key/i);assert.equal((await f.db.query('select count(*)::int n from lexicon_facts where id=$1',[failedId])).rows[0].n,0,'Invalid grouping rolls back the new detail');
+ await assert.rejects(store.saveDetail({...row,wiki_id:other.id},null),/Cannot move/i);
+ const detail=(await store.articleDetails('u1','a')).find(f=>f.wikiDetail.id===row.id);assert.equal(detail.wikiDetail.groupName,'Population');assert.equal(detail.value,'Harbor\nThe island');await store.saveArticleDetail({...detail,name:'Ports'});assert.equal((await f.db.query('select kind from lexicon_facts where id=$1',[row.id])).rows[0].kind,'links');
+ await store.remove('lexicon_detail_groups',wiki.id,g.id);assert.equal((await f.db.query('select count(*)::int n from lexicon_detail_group_items')).rows[0].n,0);assert.equal((await f.db.query('select count(*)::int n from lexicon_facts where id=$1',[row.id])).rows[0].n,1);
+ await store.setDetailGroup(other.id,'a',{type:'wiki_fact',id:row.id},foreign.id).then(()=>assert.fail('Cross-wiki item accepted'),()=>{});
+ await f.db.exec("set request.jwt.claim.sub='other'");assert.equal((await f.db.query('select count(*)::int n from lexicon_detail_groups')).rows[0].n,0);await assert.rejects(store.save('lexicon_detail_groups',{id:f.uuid(),wiki_id:wiki.id,article_id:'a',label:'Blocked'}));
+ await f.db.exec("reset role;set role anon");await assert.rejects(f.db.query('select public.lexicon_save_detail($1,null)',[JSON.stringify(row)]),/permission denied/);
+ await f.db.exec("reset role;set request.jwt.claim.sub='owner';set role authenticated");assert.deepEqual(await f.snapshot(),snapshot);
+ console.log('Article Details groups database: scoped groups/members, ordered link lists, retries, rollback, deletion keeps items, Chronicle references, RLS and source isolation passed.');
+}finally{await f.db.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -23,6 +23,24 @@ location selector. Move, rename, order, remove and cancel preserve other drafts.
 Save upserts the same IDs on retries. Removing an assignment or changing templates
 moves its custom fields to top-level Details without modifying shared templates.
 
+Article Details items from connected wikis also appear as Chronicle custom fields,
+with their wiki named beside each item. These edit the same `lexicon_facts` rows;
+they do not create duplicate source fields. Save applies edits and removals, while
+canceling navigation retains the draft. Renaming or reordering a pinned excerpt
+or relationship preserves its reference; changing its value converts it to a plain
+fact. Each wiki keeps its own items, including hidden ones available for editing.
+Named groups organize these items within Article Details. Authors can rename,
+order and remove groups, move existing details (including inherited fields), and
+add labeled rows containing ordered article links with optional custom link text.
+Removing a group keeps its items ungrouped. Chronicle identifies each wiki and
+group and preserves link lists when only their label/order changes.
+
+Toast UI editors disable automatic focus during loading and workspace rebuilds.
+Explicit editor focus uses `preventScroll`; saves and field/module changes do not
+scroll to the bottom. Initial route navigation still starts at the top. Builder's
+Add Element Type list uses a viewport-positioned top-layer popover, independent of
+the modal's scroll area, with arrow, Home/End, Page Up/Down, Enter and Escape support.
+
 View in Lexicon checks the saved source and wiki visibility. One visible match
 opens directly; several matches offer a wiki chooser. Missing/hidden records do
 not create wikis or source rows. Root routes open the corresponding wiki home.
@@ -65,7 +83,24 @@ Overrides remain sparse rows keyed by wiki, subject type, article ID, subject ID
 and property. Explicit blanks differ from inheritance. Reset removes only the
 selected property's row. Renames and same-named replacements cannot transfer an
 override. Lexicon writes only Lexicon tables; intentional source-editor saves
-write source data. Movie Tracker schema and access rules are unchanged.
+write source data, with one explicit exception: creating a page from selected text
+in a universe wiki creates its Universe Builder element too. Movie Tracker schema
+and access rules are unchanged.
+
+`20261123182642_lexicon_create_linked_page.sql` is applied to Centralis. Its invoker
+RPC creates the page and exact-text link atomically. It checks wiki/source/type
+ownership and uses stable request IDs so retries cannot duplicate the page. A
+standalone wiki creates an article and navigation entry; a universe wiki creates
+an element using the selected type, title and optional introduction. A failed link
+write rolls back page creation. Anonymous execution is disabled.
+
+`20261123184930_lexicon_article_detail_groups.sql` is also applied to Centralis.
+It adds owner-scoped `lexicon_detail_groups` and `lexicon_detail_group_items`, plus
+the `links` fact kind. Composite foreign keys restrict membership to the same
+wiki/article; source fields retain their original records. `lexicon_save_detail`
+saves a detail and group membership atomically, with invoker permissions. New
+tables have RLS and no anonymous access. Live advisors found no security or
+missing-FK-index issues for these objects (new indexes can initially be unused).
 
 Live metadata confirms new RLS policies and the intended placement column and
 triggers. Movie, universe, element and universe-custom-field column signatures,
@@ -77,7 +112,7 @@ indexes are reported as unused until production usage.
 
 `lexicon-data.js` loads current owned source records. Chronicle assignment joins
 use `chronicle_modules.data.section_id`; values join by element and template field
-ID. Section custom fields default to the body, top-level fields to the infobox.
+ID. Section custom fields default to the body, top-level fields to Article Details.
 Empty content is omitted while zero/false remain visible. Roots receive no inferred
 type or facts extracted from children.
 
@@ -89,13 +124,20 @@ Ordinary graph edges do not imply ancestry.
 
 The reader has one title, breadcrumbs, local search, current-page contents and
 All articles. Contents use actual visible headings with distinct anchors for
-duplicate names. Search ranks titles/aliases before descriptions, headings and
+duplicate names. Nested branches start collapsed on every article entry. Scrolling
+into a heading expands its branch and ancestors; each branch can also be toggled
+manually. The reader uses left contents, central article prose and right Article
+Details/source tools. Search ranks titles/aliases before descriptions, headings and
 body/field text, groups by article, and excludes hidden/out-of-wiki content. Enter
 opens full results; arrows activate suggestions and Escape dismisses them. Search
 has Wiki home > Search results breadcrumbs and search-appropriate actions.
 Back restores the previous article and scroll position; Forward restores results
 and query. Selecting a suggestion preserves the previous article's history entry.
 The Connections list is absent from reading mode.
+The Article Details sidebar sticks below the header on desktop, with independent
+overflow for long contents. On phones it returns to normal flow. Back to top
+appears after scrolling 300 pixels, supports keyboard activation and reduced
+motion, and returns focus to the article heading.
 
 Customize wiki page exposes Edit controls beside prose fields. The local Tiptap
 bundle loads on the first text edit. Save writes only changed fields; cancel
@@ -103,27 +145,38 @@ restores the reader in place. Choose details exposes field/section labels, value
 order, placement, visibility and individual resets, including empty source fields
 and their source-edit action. It adds wiki-only facts, aliases and pinned explicit
 relationships, and retains connection label/direction/visibility controls.
+Article Details has a Remove button beside each item in edit mode. Wiki-created
+items are deleted; source-derived fields are hidden only in that wiki, preserving
+their Chronicle values and reset controls. Removal preserves other editor drafts.
 
 `lexicon-prose.js` renders sanitized Markdown or saved Tiptap JSON without loading
 the editor. Paragraphs, headings, formatting, lists, tables and field boundaries
 are preserved. Explicit links retain stable targets and exact phrases. Automatic
 links use a cached index of all loaded visible articles and unambiguous whole
 names/aliases. A destination can repeat once per introduction, body/section and
-infobox. Explicit links take priority; self/hidden/ambiguous/substring matches
+Article Details. Explicit links take priority; self/hidden/ambiguous/substring matches
 are skipped. No per-mention database requests are made.
+Automatic links are generated at render time, not saved into source prose. Manual
+links persist their destination ID and field-scoped quote anchor.
 
 Selection is captured before dialogs focus. Manual links can target unconnected
 articles. Confirmed unlink keeps words/formatting. Automatic suppression applies
 to the destination across the page, so removal never shifts to a later mention.
-Normal reading mode exposes a Text actions button beside selected text, an
-always-available toolbar action, right-click on prose and Shift+F10/Context Menu.
+Reading and editing modes expose a solid Text actions button beside selected text,
+right-click on prose and Shift+F10/Context Menu. The bottom editor toolbar contains
+only Save page and Cancel edits; the left navigation has no Text actions button. Both the selection
+menu and link dialog offer Create new page, without writes until confirmation.
 Ctrl/Cmd+K opens linking for a reader selection. Actions use explicit Save/Cancel
-dialogs and do not write on opening or canceling. Ordinary unselected links keep
-native browser actions; Shift+right-click bypasses the article menu. Image
+dialogs and do not write on opening or canceling. Right-clicking an article link
+opens Replace link and Remove link, capturing the clicked text even if an unrelated
+selection exists. Shift+right-click bypasses the article menu. Link pickers show
+the article title, type and location without internal ID fragments. Image
 context actions capture the actual right-click point independently
 of the previous caret. Keyboard actions use the current selection/caret. Existing
 assets and uploads support alt/caption; successful placements split paragraphs
 without changing source galleries. Cancellation/failure leaves prose intact.
+Article Details images and inline illustrations open the site's shared image
+viewer, including keyboard activation, captions and focus return on closing.
 
 Annotations/excerpts store a stable field identity plus quote/prefix/suffix
 context. Unique passages relocate after source edits. Missing or ambiguous
@@ -170,12 +223,24 @@ node tests/chronicle-builder-browser.cjs
 node tests/chronicle-generation-browser.cjs
 node tests/chronicle-dirty-browser.cjs
 node tests/lexicon-followups-browser.cjs
+node tests/lexicon-layout-browser.cjs
+node tests/lexicon-outline-browser.cjs
+node tests/lexicon-image-viewer-browser.cjs
+node tests/lexicon-create-page.cjs
+node tests/lexicon-create-page-browser.cjs
+node tests/lexicon-article-details-browser.cjs
+node tests/lexicon-link-context-browser.cjs
+node tests/lexicon-detail-groups.cjs
+node tests/lexicon-detail-groups-browser.cjs
+node tests/chronicle-scroll-browser.cjs
 node tests/header-browser.cjs
 ```
 
 The Builder test caches the app's pinned React 18.3.1, ReactDOM 18.3.1, React Flow
 11.11.4 and ELK 0.9.3 browser libraries from the same jsDelivr URLs used by the app
 under ignored `node_modules/.cache/lexicon/canvas-vendor`.
+The scrolling regression test uses the real Toast UI editor from the app's CDN,
+cached under ignored `node_modules/.cache/chronicle/toast`.
 
 | Requested scenario | Checks exercised |
 | --- | --- |

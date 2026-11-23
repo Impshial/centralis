@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=lexicon-complete-1">
+  <link rel="stylesheet" href="styles.css?v=article-groups-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -501,7 +501,7 @@
           <span>Type</span>
           <div class="type-picker" data-element-type-picker>
             <input type="hidden" name="element-type" data-element-type-input value="">
-            <button class="type-picker-trigger" type="button" data-element-type-trigger aria-expanded="false" aria-haspopup="listbox">
+            <button class="type-picker-trigger" type="button" data-element-type-trigger aria-expanded="false" aria-haspopup="listbox" aria-controls="element-type-options" aria-label="Type">
               <span class="type-picker-current">
                 <span class="type-picker-swatch" data-element-type-swatch style="--type-color: #64748b"></span>
                 <span class="type-picker-icon" data-element-type-icon aria-hidden="true">
@@ -511,7 +511,7 @@
               </span>
               <ph-caret-down weight="bold" aria-hidden="true"></ph-caret-down>
             </button>
-            <div class="type-picker-list" data-element-type-list role="listbox" hidden></div>
+            <div class="type-picker-list" id="element-type-options" data-element-type-list role="listbox" aria-label="Element type" popover="manual" hidden></div>
           </div>
         </label>
 
@@ -1079,6 +1079,6 @@
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
-  <script src="flow-canvas.js?v=lexicon-complete-1"></script>
+  <script src="flow-canvas.js?v=article-groups-1"></script>
 </body>
 </html>

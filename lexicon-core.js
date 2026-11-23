@@ -84,6 +84,12 @@
       if (a) a.fields.push({...fact,articleId:a.id,sectionId:null,table:'lexicon_facts',field_type:'text',base:{},overridden:{}});
     }
     for (const a of articles.values()) {
+      a.detailGroups=(data.detailGroups||[]).filter(g=>g.article_id===a.id).sort(order);
+      for(const f of a.fields){
+        const type=f.subjectType||(f.table==='lexicon_facts'?'wiki_fact':'standalone_field');
+        const member=(data.detailGroupItems||[]).find(m=>m.article_id===a.id&&m.subject_type===type&&m.subject_id===f.id);
+        f.group_id=a.detailGroups.some(g=>g.id===member?.group_id)?member.group_id:'';
+      }
       a.aliases = (data.aliases || []).filter(x => x.article_id === a.id).map(x => x.alias);
       a.sections.sort(order); a.fields.sort(order);
       a.image = (data.images || []).find(image => String(image.object_id) === a.id)?.image_url || '';

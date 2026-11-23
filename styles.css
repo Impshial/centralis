@@ -5188,6 +5188,7 @@ body[data-page="episode-roulette"].is-episode-loading {
 .chronicle-field-dialog input,.chronicle-field-dialog textarea,.chronicle-field-dialog select { width:100%; padding:10px; border:1px solid var(--line); background:var(--field); color:var(--ink); font:inherit; border-radius:6px; }
 [data-chronicle-workspace].is-universe .chronicle-basics-fields { grid-template-columns:minmax(0,1fr); }
 .chronicle-module-card .chronicle-custom-field-row { grid-column:1 / -1; }
+.chronicle-wiki-detail-source { grid-column:1 / -1; color:var(--muted); }
 
 .chronicle-custom-field-row input,
 .chronicle-custom-field-row textarea,
@@ -23536,6 +23537,14 @@ body[data-page="useful-things"] {
 
 .type-picker-list[hidden] {
   display: none;
+}
+
+.type-picker-list[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
 }
 
 .type-picker-option {

@@ -12,7 +12,6 @@
   const TEMPLATE_SECTION_MODULE_TYPE = "template_section";
   const MAX_IMAGE_PROMPT_LENGTH = 3900;
   const IS_CHRONICLE_EDITOR_PAGE = document.body?.dataset.page === "chronicle-editor";
-  const EDITOR_TOP_SCROLL_DELAYS = [0, 16, 50, 140, 320, 700, 1200];
 
   if (IS_CHRONICLE_EDITOR_PAGE && "scrollRestoration" in window.history) {
     window.history.scrollRestoration = "manual";
@@ -41,8 +40,7 @@
     },
     isLoading: true,
     markdownEditors: new Map(),
-    activeTextEditorDialog: null,
-    topScrollGeneration: 0
+    activeTextEditorDialog: null
   };
 
   const dom = {};
@@ -67,12 +65,12 @@
     }
     currentEditorUrl=nextUrl;routeIndex=nextIndex;allowLeave=false;
     history.replaceState({...history.state,chronicleIndex:routeIndex},'',location.href);
-    scrollEditorToTop({ stubborn: true });
+    scrollEditorToTop();
     state.routeContext = parseRouteContext();
     await loadRouteWorkspace();
     renderRouteNotice();
     renderWorkspace();
-    scrollEditorToTop({ stubborn: true });
+    scrollEditorToTop();
   }
   window.addEventListener('hashchange',onEditorRouteChange);
   window.addEventListener('popstate',onEditorRouteChange);
@@ -102,7 +100,7 @@
       const active=document.activeElement,modal=document.createElement('dialog');leaveDialog=modal;modal.className='chronicle-field-dialog';modal.setAttribute('aria-labelledby','chronicle-leave-title');modal.setAttribute('aria-describedby','chronicle-leave-description');
       modal.innerHTML='<h2 id="chronicle-leave-title">Discard unsaved changes?</h2><p id="chronicle-leave-description">Changes on this Chronicle page have not been saved.</p><div class="modal-actions"><button type="button" class="secondary-action" data-stay>Keep editing</button><button type="button" class="primary-action" data-discard>Discard and leave</button></div>';
       let leave=false;document.body.append(modal);modal.querySelector('[data-stay]').onclick=()=>modal.close();modal.querySelector('[data-discard]').onclick=()=>{leave=true;modal.close();};
-      modal.addEventListener('close',()=>{modal.remove();leaveDialog=null;if(!leave)active?.focus({preventScroll:true});resolve(leave);},{once:true});modal.showModal();modal.querySelector('[data-stay]').focus();
+      modal.addEventListener('close',()=>{modal.remove();leaveDialog=null;if(!leave)active?.focus({preventScroll:true});resolve(leave);},{once:true});modal.showModal();modal.querySelector('[data-stay]').focus({preventScroll:true});
     });
   }
   async function navigateFromEditor(href) {
@@ -125,7 +123,7 @@
       window.history.scrollRestoration = "manual";
     }
     if (state.pageMode === "editor") {
-      scrollEditorToTop({ stubborn: true });
+      scrollEditorToTop();
     }
     if (state.pageMode === "home") {
       applyHomepageQueryState();
@@ -147,7 +145,7 @@
       state.isLoading = false;
       renderAll();
       if (state.pageMode === "editor") {
-        scrollEditorToTop({ stubborn: true });
+        scrollEditorToTop();
       }
     } catch (error) {
       console.error("Could not load Chronicle.", error);
@@ -398,13 +396,15 @@
         const response = await window.centralisSupabase.from(UNIVERSES_TABLE).select("*")
           .eq("id",context.universeId).eq("user_id",state.user.id).eq("deleted",false).single();
         throwIfError(response);
-        const [custom, images] = await Promise.all([
+        const [custom, images, wikiDetails] = await Promise.all([
           window.centralisSupabase.from(UNIVERSE_CUSTOM_FIELDS_TABLE).select("*").eq("universe_id",context.universeId).eq("deleted",false).order("sort_order"),
-          fetchObjectImages([context.universeId])
+          fetchObjectImages([context.universeId]),
+          new window.LexiconData.Store(window.centralisSupabase,state.user).articleDetails(context.universeId,context.universeId)
         ]);
         throwIfError(custom);
         state.workspace = {...createEmptyWorkspace(),isOpen:true,mode:"edit",isUniverse:true,
-          element:response.data,universe:response.data,customFields:custom.data || [],images:normalizeImages(images.images || [])};
+          element:response.data,universe:response.data,customFields:[...(custom.data || []),...wikiDetails],
+          wikiDetailsById:Object.fromEntries(wikiDetails.map(f=>[f.id,f.wikiDetail])),images:normalizeImages(images.images || [])};
         return;
       }
       const elementResponse = await window.centralisSupabase
@@ -424,7 +424,7 @@
         throw new Error("That element does not belong to the linked Universe.");
       }
 
-      const [universeResponse, moduleResponse, valueResponse, customResponse, imageResponse] = await Promise.all([
+      const [universeResponse, moduleResponse, valueResponse, customResponse, imageResponse, wikiDetails] = await Promise.all([
         element.universe_id
           ? window.centralisSupabase
             .from(UNIVERSES_TABLE)
@@ -451,7 +451,8 @@
           .eq("deleted", false)
           .eq("element_id", element.id)
           .order("sort_order", { ascending: true }),
-        fetchObjectImages([element.id])
+        fetchObjectImages([element.id]),
+        new window.LexiconData.Store(window.centralisSupabase,state.user).articleDetails(element.universe_id,element.id)
       ]);
 
       throwIfError(universeResponse);
@@ -478,7 +479,8 @@
         sections: templateDetails.sections,
         fields: templateDetails.fields,
         values: valueResponse.data || [],
-        customFields: customResponse.data || [],
+        customFields: [...(customResponse.data || []),...wikiDetails],
+        wikiDetailsById:Object.fromEntries(wikiDetails.map(f=>[f.id,f.wikiDetail])),
         images: normalizeImages(imageResponse.images || [])
       };
     } catch (error) {
@@ -586,22 +588,12 @@
     document.querySelector(".chronicle-editor-page")?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
   }
 
-  function scrollEditorToTop(options = {}) {
+  function scrollEditorToTop() {
     if (state.pageMode !== "editor") {
       return;
     }
 
-    const generation = state.topScrollGeneration + 1;
-    state.topScrollGeneration = generation;
-    const delays = options.stubborn ? EDITOR_TOP_SCROLL_DELAYS : [0, 16];
-    delays.forEach((delay) => {
-      window.setTimeout(() => {
-        if (state.topScrollGeneration !== generation) {
-          return;
-        }
-        forceEditorScrollTop();
-      }, delay);
-    });
+    forceEditorScrollTop();
   }
 
   function renderTabs() {
@@ -1137,11 +1129,12 @@
       <div class="chronicle-custom-field-row" data-custom-field-row data-custom-field-id="${escapeHtml(field.id)}" data-custom-module-id="${escapeHtml(field.chronicle_module_id || '')}">
         <input type="text" name="custom-name" value="${escapeHtml(field.name || "")}" placeholder="Field name">
         <textarea name="custom-value" rows="3" placeholder="Value">${escapeHtml(field.value || "")}</textarea>
-        <button class="secondary-action" type="button" data-custom-edit="${escapeHtml(field.id)}">Move or rename</button>
+        <button class="secondary-action" type="button" data-custom-edit="${escapeHtml(field.id)}">${field.wikiDetail ? 'Edit detail' : 'Move or rename'}</button>
         <label>Order<input type="number" name="custom-order" value="${Number(field.sort_order||0)}" step="1"></label>
         <button class="icon-button" type="button" data-chronicle-remove-custom-field aria-label="Remove custom field">
           <ph-trash aria-hidden="true"></ph-trash>
         </button>
+        ${field.wikiDetail ? `<small class="chronicle-wiki-detail-source">Article Details · <a href="lexicon-wiki.html?wiki=${encodeURIComponent(field.wikiDetail.wiki_id)}&article=${encodeURIComponent(field.wikiDetail.article_id)}">${escapeHtml(field.wikiDetail.wikiName)}</a>${field.wikiDetail.groupName?' · '+escapeHtml(field.wikiDetail.groupName):''}${field.wikiDetail.hidden?' · Hidden in wiki':''}${field.wikiDetail.kind!=='fact'?' · Changing the value replaces the pinned '+(field.wikiDetail.kind==='excerpt'?'excerpt':field.wikiDetail.kind==='links'?'links':'relationship')+'.':''}</small>` : ''}
       </div>
     `;
   }
@@ -1413,7 +1406,7 @@
     modal.innerHTML = `<form><h2>${existing ? 'Edit custom field' : 'Add field'}</h2>
       <label class="form-field"><span>Name</span><input name="name" required value="${escapeHtml(field.name)}"></label>
       <label class="form-field"><span>Value</span><textarea name="value" rows="5">${escapeHtml(field.value ?? '')}</textarea></label>
-      ${sections.length ? `<label class="form-field"><span>Location</span><select name="location" aria-label="Location"><option value="">Top-level details</option>${sections.map(({module,section})=>`<option value="${escapeHtml(module.id)}"${module.id===field.chronicle_module_id?' selected':''}>${escapeHtml(section.name)}</option>`).join('')}</select></label>` : ''}
+      ${field.wikiDetail ? `<p>Article Details · ${escapeHtml(field.wikiDetail.wikiName)}${field.wikiDetail.kind!=='fact'?'. Changing the value replaces the pinned '+(field.wikiDetail.kind==='excerpt'?'excerpt':field.wikiDetail.kind==='links'?'links':'relationship')+'.':''}</p>` : sections.length ? `<label class="form-field"><span>Location</span><select name="location" aria-label="Location"><option value="">Top-level details</option>${sections.map(({module,section})=>`<option value="${escapeHtml(module.id)}"${module.id===field.chronicle_module_id?' selected':''}>${escapeHtml(section.name)}</option>`).join('')}</select></label>` : ''}
       <div class="modal-actions"><button type="button" class="secondary-action" data-cancel>Cancel</button><button type="submit" class="primary-action">Apply</button></div></form>`;
     document.body.append(modal);
     const initialValues=JSON.stringify([...new FormData(modal.querySelector('form'))]);
@@ -1439,12 +1432,16 @@
     const w=state.workspace, table=w.isUniverse?UNIVERSE_CUSTOM_FIELDS_TABLE:ELEMENT_CUSTOM_FIELDS_TABLE;
     const owner=w.isUniverse?'universe_id':'element_id';
     normalizeCustomPlacement();
+    const wikiStore=new window.LexiconData.Store(window.centralisSupabase,state.user);
     for(const field of w.customFields) {
+      if(field.wikiDetail){field.wikiDetail=await wikiStore.saveArticleDetail(field);w.wikiDetailsById[field.id]=field.wikiDetail;continue;}
       const row={id:field.id,[owner]:w.element.id,name:field.name || 'Field',value:field.value ?? '',sort_order:Number(field.sort_order||0),deleted:false};
       if(!w.isUniverse)row.chronicle_module_id=field.chronicle_module_id || null;
       throwIfError(await window.centralisSupabase.from(table).upsert(row,{onConflict:'id'}));
     }
-    if(w.deletedCustomFieldIds.length)throwIfError(await window.centralisSupabase.from(table).delete().in('id',w.deletedCustomFieldIds).eq(owner,w.element.id));
+    const sourceIds=w.deletedCustomFieldIds.filter(id=>!w.wikiDetailsById[id]);
+    if(sourceIds.length)throwIfError(await window.centralisSupabase.from(table).delete().in('id',sourceIds).eq(owner,w.element.id));
+    for(const id of w.deletedCustomFieldIds){const detail=w.wikiDetailsById[id];if(detail)await wikiStore.remove('lexicon_facts',detail.wiki_id,detail.id);}
     w.deletedCustomFieldIds=[];
   }
 
@@ -1484,6 +1481,7 @@
         ...(!workspace.isUniverse ? {body:String(form.elements.namedItem('workspace-body')?.value || '')} : {})
       },
       customFields: [...form.querySelectorAll('[data-custom-field-row]')].map(row=>({
+        ...workspace.customFields.find(f=>f.id===row.dataset.customFieldId),
         id:row.dataset.customFieldId, name:row.querySelector('[name="custom-name"]').value,
         value:row.querySelector('[name="custom-value"]').value, sort_order:Number(row.querySelector('[name="custom-order"]').value),
         chronicle_module_id:row.dataset.customModuleId || null
@@ -1541,7 +1539,7 @@
     setAiModuleGenerateStatus("");
     dom.aiModuleGenerateModal.hidden = false;
     document.body.classList.add("centralis-modal-open");
-    requestAnimationFrame(() => dom.aiModuleInstructions?.focus());
+    requestAnimationFrame(() => dom.aiModuleInstructions?.focus({preventScroll:true}));
   }
 
   function closeAiModuleGenerateDialog() {
@@ -1912,7 +1910,7 @@
     setGenerateImageStatus("");
     setGenerateImageBusy(false);
     dom.generateImageModal.hidden = false;
-    dom.generateImagePrompt.focus();
+    dom.generateImagePrompt.focus({preventScroll:true});
   }
 
   function closeGenerateImageDialog() {
@@ -2329,6 +2327,7 @@
         placeholder: textarea.placeholder || "",
         theme: "dark",
         usageStatistics: false,
+        autofocus: false,
         hideModeSwitch: true,
         toolbarItems: []
       });
@@ -2426,17 +2425,18 @@
         placeholder: textarea.placeholder || "",
         theme: "dark",
         usageStatistics: false,
+        autofocus: false,
         toolbarItems: getMarkdownToolbarItems()
       });
       state.activeTextEditorDialog.editor = editor;
-      requestAnimationFrame(() => editor.focus());
+      [...dom.textEditorHost.querySelectorAll('[contenteditable="true"]')].find(el=>el.getClientRects().length)?.focus({preventScroll:true});
       return;
     }
 
     if (dom.textEditorFallback) {
       dom.textEditorFallback.hidden = false;
       dom.textEditorFallback.value = textarea.value || "";
-      requestAnimationFrame(() => dom.textEditorFallback?.focus());
+      dom.textEditorFallback.focus({preventScroll:true});
     }
   }
 
@@ -2624,7 +2624,7 @@
 
     if (!name) {
       setWorkspaceStatus("Name is required.", "error");
-      form.querySelector('[name="workspace-name"]')?.focus();
+      form.querySelector('[name="workspace-name"]')?.focus({preventScroll:true});
       return;
     }
 
@@ -2804,7 +2804,7 @@
     clearCreateError();
     dom.createForm?.reset();
     dom.createModal.hidden = false;
-    requestAnimationFrame(() => dom.createName?.focus());
+    requestAnimationFrame(() => dom.createName?.focus({preventScroll:true}));
   }
 
   function closeCreateDialog() {
@@ -2993,6 +2993,7 @@
       fields: [],
       values: [],
       customFields: [],
+      wikiDetailsById: {},
       deletedCustomFieldIds: [],
       removedModuleIds: [],
       images: []
@@ -3084,11 +3085,11 @@
     if (wrapper) {
       const editor = state.markdownEditors.get(wrapper);
       if (editor) {
-        editor.focus();
+        [...wrapper.querySelectorAll('[contenteditable="true"]')].find(el=>el.getClientRects().length)?.focus({preventScroll:true});
         return;
       }
     }
-    control?.focus?.();
+    control?.focus?.({preventScroll:true});
   }
 
   function hasMeaningfulValue(value) {
