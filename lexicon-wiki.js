@@ -146,14 +146,27 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
   }
   let selectionPoint=null,contextMenu,selectionButton;
   function captureSelection(range) {
-    const selection=getSelection();range=range|| (selection?.rangeCount?selection.getRangeAt(0):null);if(!range)return null;
+    const selection=getSelection(),text=range?range.toString():selection?.toString()||'';range=range|| (selection?.rangeCount?selection.getRangeAt(0):null);if(!range)return null;
     const start=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement,root=start.closest?.('[data-prose]');
     if(!root||!root.contains(range.endContainer))return null;
     const p=proseItems.get(root.dataset.prose);if(!p)return null;
-    return {root,range:range.cloneRange(),anchor:Prose.anchor(root,range),...subject(p.item,p.property)};
+    return {root,range:range.cloneRange(),text,anchor:Prose.anchor(root,range),...subject(p.item,p.property)};
   }
   function restoreSelection(point=selectionPoint) {if(point?.root.isConnected){const s=getSelection();s.removeAllRanges();s.addRange(point.range);}}
   function closeContext(){contextMenu?.remove();contextMenu=null;}
+  async function copySelection(point,text) {
+    if(!text)return;
+    point.root.focus({preventScroll:true});restoreSelection(point);
+    try {
+      if(!navigator.clipboard?.writeText)throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      if(point.root.isConnected)status.textContent='Copied.';
+    }catch {
+      if(!point.root.isConnected)return;
+      point.root.focus({preventScroll:true});restoreSelection(point);
+      status.textContent='Could not copy. Use your browser’s Copy command.';
+    }
+  }
   function caretPoint(event) {
     let r;
     if(event.clientX||event.clientY){r=document.caretRangeFromPoint?.(event.clientX,event.clientY);if(!r&&document.caretPositionFromPoint){const p=document.caretPositionFromPoint(event.clientX,event.clientY);if(p){r=document.createRange();r.setStart(p.offsetNode,p.offset);r.collapse(true);}}}
@@ -162,13 +175,14 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
   function showContext(selected,insertion,x,y) {
     if(overviewPending||!current()||current().hidden)return;
     closeContext();const point=selected||insertion;if(!point){status.textContent='Select text or place the caret in the article first.';return;}
+    const copyText=selected?.text||'';
     const node=point.range.startContainer.nodeType===1?point.range.startContainer:point.range.startContainer.parentElement;
     const linked=node.closest('a')||point.root.querySelector('a')&&[...point.root.querySelectorAll('a')].find(a=>point.range.intersectsNode(a));
     contextMenu=document.createElement('div');contextMenu.className='lexicon-context-menu';contextMenu.setAttribute('role','menu');contextMenu.setAttribute('aria-label','Text actions');
-    contextMenu.innerHTML=button('context-link','Link selected text…',selected?.anchor.quote?'':'disabled')+button('context-unlink','Remove link…',linked?'':'disabled')+button('context-image','Insert image here…')+button('context-excerpt','Pin excerpt to infobox',selected?.anchor.quote?'':'disabled')+'<small>Shift + right-click: browser menu</small>';
+    contextMenu.innerHTML=button('context-copy','Copy',copyText?'':'disabled')+button('context-link','Link selected text…',selected?.anchor.quote?'':'disabled')+button('context-unlink','Remove link…',linked?'':'disabled')+button('context-image','Insert image here…')+button('context-excerpt','Pin excerpt to infobox',selected?.anchor.quote?'':'disabled')+'<small>Shift + right-click: browser menu</small>';
     contextMenu.querySelectorAll('button').forEach(b=>b.setAttribute('role','menuitem'));
-    const rect=point.range.getBoundingClientRect();contextMenu.style.left=Math.max(8,Math.min(x??rect.left,innerWidth-248))+'px';contextMenu.style.top=Math.max(8,Math.min(y??rect.bottom,innerHeight-260))+'px';document.body.append(contextMenu);
-    contextMenu.addEventListener('click',e=>{const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;e.stopPropagation();selectionPoint=action==='context-image'?insertion||point:point;if(action==='context-unlink'&&linked){const r=document.createRange();r.selectNodeContents(linked);selectionPoint=captureSelection(r);}closeContext();inlineAction(action.replace('context-',''));});
+    const rect=point.range.getBoundingClientRect();document.body.append(contextMenu);const bounds=contextMenu.getBoundingClientRect();contextMenu.style.left=Math.max(8,Math.min(x??rect.left,innerWidth-bounds.width-8))+'px';contextMenu.style.top=Math.max(8,Math.min(y??rect.bottom,innerHeight-bounds.height-8))+'px';
+    contextMenu.addEventListener('click',e=>{const control=e.target.closest('[data-action]'),action=control?.dataset.action;if(!action||control.disabled)return;e.stopPropagation();selectionPoint=action==='context-image'?insertion||point:point;if(action==='context-unlink'&&linked){const r=document.createRange();r.selectNodeContents(linked);selectionPoint=captureSelection(r);}closeContext();if(action==='context-copy'){copySelection(point,copyText);return;}inlineAction(action.replace('context-',''));});
     contextMenu.addEventListener('keydown',e=>{const options=[...contextMenu.querySelectorAll('button:not(:disabled)')],i=options.indexOf(document.activeElement);if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();options[e.key==='Home'?0:e.key==='End'?options.length-1:(i+(e.key==='ArrowUp'?-1:1)+options.length)%options.length]?.focus();}if(e.key==='Tab')closeContext();});
     contextMenu.querySelector('button:not(:disabled)')?.focus({preventScroll:true});
   }
