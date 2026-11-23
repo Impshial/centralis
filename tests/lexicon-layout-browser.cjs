@@ -5,6 +5,7 @@ const {setup}=require('./lexicon-browser-harness.cjs');
  const h=await setup(),{f,store,page,open,context}=h;
  const shots='node_modules/.cache/lexicon/screenshots';fs.mkdirSync(shots,{recursive:true});
  try{
+  await page.setViewportSize({width:1440,height:780});
   await f.db.exec("update elements set description='Stormhaven stands along the coast. Harbor connects the city to Island. Ships arrive throughout the year.',body='## Terrain\n\nThe roads cross the coastal plain.\n\n## Climate\n\nRain reaches the city from the sea.' where id='a';update element_type_template_fields set field_type='textarea' where id='f3';insert into element_template_field_values(element_id,template_field_id,value) values('a','f3','The southern coast connects the city to nearby settlements.');");
   const wiki=await store.createWiki({id:f.uuid(),name:'Aesterra',kind:'universe',universe_id:'u1'});
   const second=await store.createWiki({id:f.uuid(),name:'Second wiki',kind:'universe',universe_id:'u1'});
@@ -68,11 +69,29 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   assert.equal(await sourceCard.count(),0);assert.equal(await page.getByRole('button',{name:'Reload wiki',exact:true}).count(),1);
   await page.screenshot({path:shots+'/layout-standalone.png',fullPage:true});
   const long=f.uuid();await store.save('lexicon_facts',{id:long,wiki_id:wiki.id,article_id:'a',label:'Long reference value',value:'LongValue'.repeat(70),placement:'infobox',sort_order:9});
+  // Long panels must fit from their initial position below search, not just after
+  // scrolling far enough to reach the sticky header offset.
+  await f.db.query("update elements set body=$1 where id='a'",[Array.from({length:30},(_,i)=>`## Section ${i+1}\n\nThe coastal settlements trade with Harbor throughout the year.\n\n### History ${i+1}\n\nShips connect the region to Island.`).join('\n\n')]);
+  const panelsFit=()=>page.waitForFunction(()=>[...document.querySelectorAll('.lexicon-navigation,.lexicon-sidebar')].every(el=>{const rect=el.getBoundingClientRect();return rect.top>=document.querySelector('.site-header').getBoundingClientRect().bottom&&rect.bottom<=innerHeight-8;}));
+  for(const viewport of [{width:1920,height:958},{width:1366,height:648},{width:1280,height:600}]){
+   await page.setViewportSize(viewport);await open(wiki.id,'a');await panelsFit();
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow at '+viewport.width);
+   assert.equal(await page.locator('[data-outline-list] [aria-expanded="true"]').count(),0);
+   await page.getByRole('button',{name:'Expand Body',exact:true}).click();await panelsFit();
+   assert.ok(await page.locator('.lexicon-navigation').evaluate(el=>el.scrollHeight>el.clientHeight),'Expanded long contents scroll inside the left panel');
+   await page.screenshot({path:shots+'/layout-fit-'+viewport.width+'.png'});
+   await page.evaluate(()=>scrollTo(0,500));await page.waitForFunction(()=>scrollY===500);await panelsFit();
+   await page.getByRole('link',{name:'Edit in Chronicle',exact:true}).focus();
+   assert.ok(await page.getByRole('link',{name:'Edit in Chronicle',exact:true}).evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),'Source tools remain reachable within the panel');
+   await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Back to top',exact:true}).click();await page.waitForFunction(()=>scrollY===0);await panelsFit();
+  }
+  await open(wiki.id,'a',true);await panelsFit();
+  await page.locator('[data-wiki-status]').evaluate(el=>el.textContent='The source has changed. Review the article details before saving.');await panelsFit();
   for(const width of [1024,768,390,320]){
    await page.setViewportSize({width,height:900});await open(wiki.id,'a');assert.equal(await page.locator('[data-outline]').getAttribute('open'),null);
    await page.locator('[data-outline] > summary').click();assert.ok(await page.locator('[data-outline-list]').getByRole('link',{name:'Overview',exact:true}).isVisible());await page.locator('[data-outline] > summary').click();
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No page overflow at '+width);
-   if(width===1024||width===390)await page.screenshot({path:shots+'/layout-'+width+'.png',fullPage:true});
+   if(width===1024||width===390)await page.screenshot({path:shots+'/layout-'+width+'.png'});
   }
   // Existing access rules are owner-only: an inaccessible wiki exposes no source/edit actions.
   const foreign=f.uuid();await f.db.exec('reset role');await f.db.query("insert into lexicon_wikis(id,user_id,kind,name) values($1,2,'standalone','Private wiki')",[foreign]);await f.db.exec('set role authenticated');

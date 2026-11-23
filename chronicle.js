@@ -40,7 +40,8 @@
     },
     isLoading: true,
     markdownEditors: new Map(),
-    activeTextEditorDialog: null
+    activeTextEditorDialog: null,
+    moduleExchange: null
   };
 
   const dom = {};
@@ -749,6 +750,7 @@
                 <h3>Modules</h3>
                 ${renderAiModuleGenerationControl(workspace)}
               </div>
+              <button class="secondary-action" type="button" data-chronicle-exchange>Import / Export</button>
               ${canManageModules
                 ? renderModuleChecklist(workspace, assignedModuleSectionIds)
                 : '<p class="chronicle-muted">Choose a template before adding section modules.</p>'}
@@ -1078,7 +1080,7 @@
       `;
     } else {
       const inputType = type === "number" || type === "date" || type === "url" ? type : "text";
-      control = `<input type="${inputType}" name="${escapeHtml(name)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}"${required}>`;
+      control = `<input type="${inputType}" name="${escapeHtml(name)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}"${inputType==='number'?' step="any"':''}${required}>`;
     }
 
     if (isTextareaType) {
@@ -1336,6 +1338,7 @@
   }
 
   async function handleWorkspaceClick(event) {
+    if(event.target.closest('[data-chronicle-exchange]')){openModuleExchange();return;}
     if(event.target.closest('[data-chronicle-view-lexicon]')){await viewInLexicon();return;}
     const aiModuleButton = event.target.closest("[data-chronicle-ai-open]");
     if (aiModuleButton) {
@@ -1488,6 +1491,174 @@
       })),
       values: [...valuesByFieldId.values()]
     };
+  }
+
+  function exchangeWorkspace() {
+    captureWorkspaceDraft();
+    const w=state.workspace, values=new Map(w.values.map(v=>[v.template_field_id,v.value]));
+    const form=dom.workspace.querySelector('[data-chronicle-workspace-form]');
+    if(w.isLoading||w.error||!w.element||!form)throw new Error('Wait for the element to finish loading.');
+    if(form.elements.namedItem('workspace-template')?.value!==(w.template?.id||'')||form.elements.namedItem('workspace-element-type')?.value!==(w.element.element_type_id||''))throw new Error('The template is changing. Wait for it to finish loading.');
+    return {
+      element:{id:w.element?.id,name:w.element?.name},templateId:w.template?.id || '',
+      modules:getAssignedSectionModules(w).map(({module,section,fields})=>({
+        sectionId:section.id,assignmentId:module.id,label:section.name,
+        fields:[
+          ...fields.map(f=>({kind:'template',id:f.id,label:getTemplateFieldLabel(f),type:getTemplateFieldType(f),hint:f.hint_text||f.description||'',...(['select','multi_select'].includes(getTemplateFieldType(f))?{choices:getTemplateFieldOptions(f)}:{}),value:values.get(f.id)??''})),
+          ...w.customFields.filter(f=>f.chronicle_module_id===module.id&&!f.wikiDetail&&!w.wikiDetailsById[f.id]).sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0)).map(f=>({kind:'custom',id:f.id,label:f.name,type:'textarea',hint:'',value:f.value??''}))
+        ]
+      }))
+    };
+  }
+
+  function openModuleExchange() {
+    if(state.moduleExchange||!state.workspace.element||state.workspace.isLoading)return;
+    let snapshot;try{snapshot=exchangeWorkspace();}catch(error){setWorkspaceStatus(error.message,'error');return;}
+    const modal=document.createElement('dialog');modal.className='chronicle-exchange-dialog';modal.setAttribute('aria-labelledby','chronicle-exchange-title');
+    modal.innerHTML=`<header><h2 id="chronicle-exchange-title">Import / Export</h2><p>Transfer selected module values. Imports stay in the draft until you save the element.</p></header>
+      <div class="chronicle-exchange-tabs" role="group" aria-label="Import or export"><button type="button" class="secondary-action" data-exchange-tab="export" aria-pressed="true">Export</button><button type="button" class="secondary-action" data-exchange-tab="import" aria-pressed="false">Import</button></div>
+      <div class="chronicle-exchange-content" data-exchange-content></div><p class="form-status" role="status" data-exchange-status></p>
+      <footer class="modal-actions"><button type="button" class="secondary-action" data-exchange-cancel>Cancel</button><button type="button" class="primary-action" data-exchange-apply hidden>Apply to draft</button></footer>`;
+    const x=state.moduleExchange={modal,workspace:snapshot,selected:new Set(snapshot.modules.map(m=>m.sectionId)),includeValues:false,text:'',fileRevision:0,review:null,tab:'export',opener:document.activeElement};
+    document.body.append(modal);
+    modal.addEventListener('close',()=>{if(state.moduleExchange===x)state.moduleExchange=null;modal.remove();x.opener?.isConnected&&x.opener.focus({preventScroll:true});},{once:true});
+    modal.querySelector('[data-exchange-cancel]').onclick=()=>modal.close();
+    modal.querySelectorAll('[data-exchange-tab]').forEach(button=>button.onclick=()=>{x.tab=button.dataset.exchangeTab;x.review=null;renderModuleExchange();});
+    modal.querySelector('[data-exchange-apply]').onclick=applyModuleExchange;
+    renderModuleExchange();modal.showModal();
+  }
+
+  function exchangeStatus(message,error=false) {
+    const node=state.moduleExchange?.modal.querySelector('[data-exchange-status]');if(!node)return;
+    node.textContent=message;node.classList.toggle('is-error',error);
+  }
+
+  function renderModuleExchange() {
+    const x=state.moduleExchange;if(!x)return;
+    const box=x.modal.querySelector('[data-exchange-content]');exchangeStatus('');
+    x.modal.querySelectorAll('[data-exchange-tab]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.exchangeTab===x.tab)));
+    x.modal.querySelector('[data-exchange-apply]').hidden=!x.review;
+    if(x.review){renderExchangeReview();return;}
+    if(x.tab==='export'){
+      x.workspace=exchangeWorkspace();
+      box.innerHTML=`<fieldset><legend>Modules to export</legend>${x.workspace.modules.length?x.workspace.modules.map((m,i)=>`<label class="chronicle-exchange-module-choice"><input type="checkbox" data-exchange-module="${i}" ${x.selected.has(m.sectionId)?'checked':''}><span>${escapeHtml(m.label)}</span><small>${m.fields.length} ${m.fields.length===1?'field':'fields'}</small></label>`).join(''):'<p>No modules assigned. Add a module from the Modules panel in Chronicle.</p>'}</fieldset>
+        <fieldset class="chronicle-exchange-modes"><legend>Values</legend><label><input type="radio" name="exchange-values" value="blank" ${!x.includeValues?'checked':''}> Blank template</label><label><input type="radio" name="exchange-values" value="current" ${x.includeValues?'checked':''}> Include current values</label></fieldset>
+        <label class="form-field"><span>JSON preview</span><textarea data-exchange-preview readonly rows="12" spellcheck="false"></textarea></label>
+        <div class="chronicle-exchange-actions"><button type="button" class="secondary-action" data-exchange-export="download">Download JSON</button><button type="button" class="secondary-action" data-exchange-export="copy">Copy JSON</button><button type="button" class="secondary-action" data-exchange-export="instructions">Copy instructions and template</button></div>`;
+      box.querySelectorAll('[data-exchange-module]').forEach(control=>control.onchange=()=>{const id=x.workspace.modules[Number(control.dataset.exchangeModule)].sectionId;control.checked?x.selected.add(id):x.selected.delete(id);refreshExchangeExport();});
+      box.querySelectorAll('[name="exchange-values"]').forEach(control=>control.onchange=()=>{x.includeValues=control.value==='current';refreshExchangeExport();});
+      box.querySelectorAll('[data-exchange-export]').forEach(button=>button.onclick=()=>exportModuleExchange(button.dataset.exchangeExport));
+      refreshExchangeExport();
+    }else{
+      box.innerHTML=`<label class="form-field"><span>Choose JSON file</span><input type="file" accept=".json,application/json" data-exchange-file></label>
+        <label class="form-field"><span>Paste JSON</span><textarea data-exchange-input rows="14" spellcheck="false">${escapeHtml(x.text)}</textarea></label>
+        <button type="button" class="primary-action" data-exchange-review>Review import</button>`;
+      box.querySelector('[data-exchange-input]').oninput=event=>{x.text=event.target.value;++x.fileRevision;};
+      box.querySelector('[data-exchange-file]').onchange=async event=>{
+        const file=event.target.files?.[0];if(!file)return;
+        const input=box.querySelector('[data-exchange-input]'),revision=++x.fileRevision;
+        try{const text=await file.text();if(state.moduleExchange!==x||!input.isConnected||x.fileRevision!==revision)return;x.text=text;input.value=text;exchangeStatus('File loaded. Choose Review import.');}catch(error){if(state.moduleExchange===x&&input.isConnected)exchangeStatus('Could not read the file: '+error.message,true);}
+      };
+      box.querySelector('[data-exchange-review]').onclick=()=>{
+        try{x.review=ChronicleModuleExchange.review(ChronicleModuleExchange.parse(x.text),exchangeWorkspace());renderModuleExchange();}catch(error){x.review=null;exchangeStatus(error.message,true);}
+      };
+    }
+  }
+
+  function refreshExchangeExport() {
+    const x=state.moduleExchange;if(!x)return null;
+    const preview=x.modal.querySelector('[data-exchange-preview]');
+    try{
+      const payload=ChronicleModuleExchange.exportModules(exchangeWorkspace(),x.selected,x.includeValues);
+      preview.value=JSON.stringify(payload,null,2);x.modal.querySelectorAll('[data-exchange-export]').forEach(b=>b.disabled=false);exchangeStatus('');return payload;
+    }catch(error){preview.value='';x.modal.querySelectorAll('[data-exchange-export]').forEach(b=>b.disabled=true);exchangeStatus(error.message,true);return null;}
+  }
+
+  async function exportModuleExchange(action) {
+    const payload=refreshExchangeExport();if(!payload)return;
+    const text=action==='instructions'?ChronicleModuleExchange.instructions(payload):JSON.stringify(payload,null,2);
+    try{
+      if(action==='download'){
+        const href=URL.createObjectURL(new Blob([text],{type:'application/json'})),link=document.createElement('a');
+        link.href=href;link.download=ChronicleModuleExchange.filename(payload.element.name);document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);exchangeStatus('JSON downloaded.');
+      }else{await navigator.clipboard.writeText(text);exchangeStatus('Copied.');}
+    }catch(error){exchangeStatus('Could not '+(action==='download'?'download':'copy')+'. Select and copy the JSON preview instead.',true);}
+  }
+
+  function exchangeIncomingControl(row) {
+    if(row.structuralError)return '';
+    const f=row.field,value=row.input.value,type=f.type,aria=`aria-label="Incoming ${escapeHtml(row.label)}" data-exchange-value`;
+    if(type==='checkbox')return `<label><input type="checkbox" ${aria} ${value===true?'checked':''}> Enabled</label>`;
+    if(type==='select'||type==='multi_select')return `<select ${aria} ${type==='multi_select'?'multiple':''}>${type==='select'?'<option value="">Select...</option>':''}${f.choices.map(choice=>`<option value="${escapeHtml(choice)}" ${value===choice||Array.isArray(value)&&value.includes(choice)?'selected':''}>${escapeHtml(choice)}</option>`).join('')}</select>`;
+    if(['number','date','url'].includes(type))return `<input type="${type}" ${aria} ${type==='number'?'step="any"':''} value="${escapeHtml(typeof value==='string'||typeof value==='number'?value:'')}">`;
+    if(type==='textarea'||type==='rich_text')return `<textarea rows="5" ${aria}>${escapeHtml(typeof value==='string'?value:'')}</textarea>`;
+    return `<input type="text" ${aria} value="${escapeHtml(typeof value==='string'?value:'')}">`;
+  }
+
+  function renderExchangeReview() {
+    const x=state.moduleExchange,box=x.modal.querySelector('[data-exchange-content]'),api=ChronicleModuleExchange;
+    box.innerHTML=`<div class="chronicle-exchange-review-heading"><h3>Review import</h3><button type="button" class="secondary-action" data-exchange-edit-input>Edit JSON</button></div><p>Select the values to apply. Occupied fields keep their current value unless selected.</p>${x.review.groups.length?'':'<p>No modules supplied.</p>'}`+x.review.groups.map((group,gi)=>`<section class="chronicle-exchange-group" data-exchange-group="${gi}"><h3><label><input type="checkbox" data-exchange-group-toggle aria-label="Use changes in ${escapeHtml(group.label)}"> ${escapeHtml(group.label)}</label></h3>${group.issue?'<p class="form-status is-error">'+escapeHtml(group.issue)+'</p>':''}${group.rows.map(row=>`<div class="chronicle-exchange-row" data-exchange-row="${row.token}">
+      <label class="chronicle-exchange-row-label"><input type="checkbox" data-exchange-use aria-label="Apply ${escapeHtml(row.label)}" ${row.selected?'checked':''}><strong>${escapeHtml(row.label)}</strong>${row.field?'<small>'+escapeHtml(row.field.kind==='custom'?'Custom field':row.field.type)+'</small>':''}</label>
+      <p data-exchange-row-status role="status"></p>${row.field?.hint?'<p class="chronicle-muted">'+escapeHtml(row.field.hint)+'</p>':''}
+      <div class="chronicle-exchange-comparison"><div><h4>Current draft</h4><pre>${escapeHtml(row.field?api.display(api.fromStored(row.field.value,row.field))||'(empty)':'Unavailable')}</pre></div><div><h4>Incoming</h4>${exchangeIncomingControl(row)}<pre data-exchange-invalid-value>${escapeHtml(api.display(row.input?.value))}</pre></div></div></div>`).join('')}</section>`).join('');
+    box.querySelector('[data-exchange-edit-input]').onclick=()=>{x.text=JSON.stringify(x.review.payload,null,2);x.review=null;renderModuleExchange();};
+    for(const group of x.review.groups)for(const row of group.rows){
+      const node=box.querySelector(`[data-exchange-row="${row.token}"]`),check=node.querySelector('[data-exchange-use]'),control=node.querySelector('[data-exchange-value]');
+      check.onchange=()=>{row.selected=check.checked;updateExchangeReviewControls();};
+      if(control)control.oninput=control.onchange=()=>{
+        const before=row.status;
+        row.input.value=row.field.type==='checkbox'?control.checked:row.field.type==='multi_select'?[...control.selectedOptions].map(o=>o.value):row.field.type==='number'?control.value===''?null:Number(control.value):control.value;
+        Object.assign(row,api.assess(row.field,row.input.value));
+        if(!['new','conflict'].includes(row.status))row.selected=false;else if(!['new','conflict'].includes(before))row.selected=row.status==='new';
+        updateExchangeReviewControls();
+      };
+    }
+    box.querySelectorAll('[data-exchange-group-toggle]').forEach(control=>control.onchange=()=>{for(const row of x.review.groups[Number(control.closest('[data-exchange-group]').dataset.exchangeGroup)].rows)if(['new','conflict'].includes(row.status))row.selected=control.checked;updateExchangeReviewControls();});
+    updateExchangeReviewControls();
+  }
+
+  function updateExchangeReviewControls() {
+    const x=state.moduleExchange;
+    for(const [gi,group] of x.review.groups.entries()){
+      const eligible=group.rows.filter(row=>['new','conflict'].includes(row.status)),selected=eligible.filter(row=>row.selected);
+      const toggle=x.modal.querySelector(`[data-exchange-group="${gi}"] [data-exchange-group-toggle]`);
+      toggle.checked=eligible.length>0&&selected.length===eligible.length;toggle.indeterminate=selected.length>0&&selected.length<eligible.length;toggle.disabled=!eligible.length;
+      for(const row of group.rows){
+        const node=x.modal.querySelector(`[data-exchange-row="${row.token}"]`),check=node.querySelector('[data-exchange-use]'),message=node.querySelector('[data-exchange-row-status]');
+        check.disabled=!eligible.includes(row);check.checked=row.selected;message.textContent=row.message;message.classList.toggle('is-error',row.status==='invalid');node.dataset.status=row.status;
+        node.querySelector('[data-exchange-invalid-value]').hidden=row.status!=='invalid';
+      }
+    }
+    x.modal.querySelector('[data-exchange-apply]').disabled=!x.review.groups.some(g=>g.rows.some(r=>r.selected&&['new','conflict'].includes(r.status)));
+  }
+
+  function applyModuleExchange() {
+    const x=state.moduleExchange;if(!x?.review)return;
+    try{
+      const current=exchangeWorkspace();
+      if(ChronicleModuleExchange.fingerprint(current)!==x.review.fingerprint){
+        const payload=x.review.payload;
+        try{x.review=ChronicleModuleExchange.review(payload,current);renderModuleExchange();exchangeStatus('The draft or modules changed. Review the updated comparisons before applying.',true);}
+        catch(error){x.text=JSON.stringify(payload,null,2);x.review=null;renderModuleExchange();exchangeStatus(error.message,true);}
+        return;
+      }
+      const {changes,skipped}=ChronicleModuleExchange.plan(current,x.review);
+      const form=dom.workspace.querySelector('[data-chronicle-workspace-form]'),scroll=window.scrollY;
+      // Update existing controls in place, preserving unrelated drafts and open editors.
+      for(const change of changes){
+        if(change.kind==='custom'){
+          const row=[...form.querySelectorAll('[data-custom-field-row]')].find(el=>el.dataset.customFieldId===change.id);
+          row.querySelector('[name="custom-value"]').value=change.value;
+        }else{
+          const field=state.workspace.fields.find(f=>f.id===change.id),control=form.elements.namedItem('workspace-field:'+change.id),type=getTemplateFieldType(field);
+          if(type==='checkbox'){control.checked=change.value==='true';control.dataset.touched='true';}
+          else if(type==='multi_select'){const values=new Set(change.value.split('\n'));for(const option of control.options)option.selected=values.has(option.value);}
+          else{control.value=change.value;const wrapper=control.closest('[data-markdown-field]');if(wrapper)syncToastEditorFromTextarea(wrapper);}
+        }
+      }
+      captureWorkspaceDraft();x.modal.close();updateDirtyStatus();window.scrollTo(0,scroll);
+      setWorkspaceStatus(`${changes.length} fields applied to draft; ${skipped} skipped. Save the element to keep these changes.`,'success');
+    }catch(error){exchangeStatus(error.message,true);}
   }
 
   function renderAiModuleChecklist() {
@@ -1736,7 +1907,8 @@
     if (fieldType === "multi_select") {
       return control ? [...control.selectedOptions].map((option) => option.value).join("\n") : "";
     }
-    return String(control?.value || "").trim();
+    const value=String(control?.value || "");
+    return ['textarea','rich_text'].includes(fieldType)&&value.trim()?value:value.trim();
   }
 
   function setAiModuleReviewStatus(message, tone = "") {

@@ -12,6 +12,8 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
   let imageViewerOpen=false;
   let articleId = params.get('article') || '';
   const content = document.querySelector('[data-wiki-content]');
+  const workspace = content.closest('main');
+  let panelFrame = 0;
   const nav = document.querySelector('[data-wiki-navigation]');
   const status = document.querySelector('[data-wiki-status]');
   const actions = document.querySelector('[data-wiki-actions]');
@@ -142,6 +144,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     renderOutline(headings,intro);
     const outline=nav.querySelector('[data-outline]');if(outline){outline.open=!compactNavigation.matches;outline.querySelector('summary').textContent=headings.length?'On this page':'Wiki navigation';outline.classList.toggle('has-outline',!!headings.length);}
     outlineHeadings=headings;activeOutlineId='';updateOutline();
+    schedulePanelFit();
     enableImageViewing();
     const repairs=content.querySelector('[data-repairs]');if(repairs)repairs.innerHTML=repairItems.length?'<p>Some annotations need a new passage. Select the passage, then choose Repair.</p>'+repairItems.map(n=>'<div>'+esc(n.kind==='image'?'Image':n.kind==='excerpt'?'Pinned excerpt':'Link')+' '+button('repair','Repair',`data-id="${esc(n.id)}"`)+button('remove-annotation','Remove',`data-id="${esc(n.id)}"`)+'</div>').join(''):'';
   }
@@ -207,7 +210,20 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     }
     for(let parent=activeItem?.parentElement.closest('[data-outline-id]');parent;parent=parent.parentElement.closest('[data-outline-id]'))parent.setAttribute('data-current-within','');
   }
-  window.addEventListener('scroll',()=>{if(!outlineFrame)outlineFrame=requestAnimationFrame(()=>{backTop.hidden=!model||scrollY<300;updateOutline(true);});},{passive:true});
+  function schedulePanelFit() {
+    if(panelFrame)return;
+    panelFrame=requestAnimationFrame(()=>{
+      panelFrame=0;
+      const stickyTop=header.getBoundingClientRect().bottom+8;
+      // At page top the search row also uses viewport space. Once sticky, panels
+      // can grow into that space without extending below the visible screen.
+      const panels=[nav,content.querySelector('.lexicon-sidebar')].filter(Boolean).map(panel=>({panel,top:Math.ceil(Math.max(stickyTop,panel.getBoundingClientRect().top))+'px'}));
+      for(const {panel,top} of panels)if(panel.style.getPropertyValue('--lexicon-panel-top')!==top)panel.style.setProperty('--lexicon-panel-top',top);
+    });
+  }
+  window.addEventListener('resize',schedulePanelFit);
+  nav.addEventListener('toggle',schedulePanelFit,true);
+  window.addEventListener('scroll',()=>{schedulePanelFit();if(!outlineFrame)outlineFrame=requestAnimationFrame(()=>{backTop.hidden=!model||scrollY<300;updateOutline(true);});},{passive:true});
   function enableImageViewing() {
     for(const img of content.querySelectorAll('.lexicon-infobox img,.lexicon-article img')) {
       if(img.closest('[data-wiki-image],[contenteditable="true"]'))continue;
@@ -834,7 +850,11 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     }
   });
   const header = document.querySelector('.site-header');
-  new ResizeObserver(() => document.querySelector('main').style.setProperty('--lexicon-header-height',`${header.getBoundingClientRect().height}px`)).observe(header);
+  const readerResizeObserver=new ResizeObserver(()=>{
+    workspace.style.setProperty('--lexicon-header-height',`${header.getBoundingClientRect().height}px`);
+    schedulePanelFit();
+  });
+  for(const element of [header,workspace.querySelector('.lexicon-utility-row'),status,actions])if(element)readerResizeObserver.observe(element);
   (async () => {
     try {
       if (!wikiId) throw new Error('Select a wiki from Lexicon.');

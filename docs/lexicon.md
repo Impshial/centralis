@@ -35,6 +35,24 @@ add labeled rows containing ordered article links with optional custom link text
 Removing a group keeps its items ungrouped. Chronicle identifies each wiki and
 group and preserves link lists when only their label/order changes.
 
+Chronicle's Modules panel also has a separate **Import / Export** dialog. It
+exchanges `centralis.chronicle.modules` version 1 JSON for selected assigned
+modules, using section/field IDs rather than labels. Blank exports use null;
+current-value exports include unsaved inline Markdown and module-scoped custom
+fields. Top-level details, basic element properties, and wiki-owned Article
+Details are excluded. Download, clipboard JSON, and an instructions/template
+message all work without an AI provider, generation call, or knowledge sync.
+
+Import accepts files, plain JSON, and a single surrounding JSON code fence.
+Target/template mismatches block review; unknown, moved, duplicate, or invalid
+rows remain visible but cannot be applied. Review compares with the current
+draft, preselects empty fields, and keeps occupied fields unless selected.
+Null/blank/omitted values skip rather than clear; zero and false remain values.
+Changes can be edited and selected individually or by module. Apply rechecks
+definitions, module assignments and current draft values, then updates only the
+accepted controls. Successive imports accumulate in the draft; ordinary Save
+persists them. Cancel and export do not change the dirty baseline.
+
 Toast UI editors disable automatic focus during loading and workspace rebuilds.
 Explicit editor focus uses `preventScroll`; saves and field/module changes do not
 scroll to the bottom. Initial route navigation still starts at the top. Builder's
@@ -233,6 +251,8 @@ node tests/lexicon-link-context-browser.cjs
 node tests/lexicon-detail-groups.cjs
 node tests/lexicon-detail-groups-browser.cjs
 node tests/chronicle-scroll-browser.cjs
+node tests/chronicle-module-exchange.cjs
+node tests/chronicle-module-exchange-browser.cjs
 node tests/header-browser.cjs
 ```
 
