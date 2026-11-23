@@ -11649,10 +11649,11 @@ body.is-dragging-ai-popout {
   max-width: 100%;
 }
 
-.rich-details-lexicon-choices { display:flex; flex-wrap:wrap; gap:8px; width:100%; max-height:160px; overflow:auto; }
-.rich-details-lexicon-choices[hidden] { display:none; }
-.rich-details-lexicon-choices p { flex-basis:100%; margin:0; }
-.rich-details-lexicon-choices a { white-space:normal; overflow-wrap:anywhere; }
+.builder-lexicon-choices { display:flex; flex-wrap:wrap; gap:8px; width:100%; max-height:160px; overflow:auto; }
+.builder-lexicon-choices[hidden] { display:none; }
+.builder-lexicon-choices p { flex-basis:100%; margin:0; }
+.builder-lexicon-choices a { white-space:normal; overflow-wrap:anywhere; }
+.details-pane-lexicon-choices { grid-column:1 / -1; }
 
 .rich-details-hide-empty-toggle {
   display: inline-flex;

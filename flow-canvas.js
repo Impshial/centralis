@@ -922,9 +922,9 @@
     return { menuOpen, setMenuOpen, menuRef, toggleMenu };
   }
 
-  function openNodeDetails(nodeId) {
+  function openNodeDetails(nodeId, panel = false) {
     window.dispatchEvent(new CustomEvent("centralis:view-node-details", {
-      detail: { nodeId }
+      detail: { nodeId, panel }
     }));
   }
 
@@ -940,6 +940,38 @@
       return `chronicle-editor.html#universe/${encodeURIComponent(nodeUniverseId)}/element/${elementSegment}`;
     }
     return `chronicle-editor.html#element/${elementSegment}`;
+  }
+
+  async function openNodeInLexicon(node, button, choices, isCurrent) {
+    if (!node?.data?.recordId || !choices || !button || button.disabled) return;
+    const isUniverse = node.data.kind === 'universe';
+    const articleId = node.data.recordId;
+    const sourceUniverseId = isUniverse ? articleId : node.data.universeId || universeId;
+    button.disabled = true;
+    choices.hidden = false;
+    choices.innerHTML = '<p>Finding article…</p>';
+    try {
+      if (!currentAppUser || !window.centralisSupabase) throw new Error('Sign in to open Lexicon.');
+      const store = new LexiconData.Store(window.centralisSupabase, currentAppUser);
+      const [wikis, source, universes] = await Promise.all([
+        store.rows('lexicon_wikis', { user_id: currentAppUser.id, kind: 'universe', universe_id: sourceUniverseId }),
+        store.rows(isUniverse ? 'universes' : 'elements', { id: articleId, user_id: currentAppUser.id, deleted: false, ...(isUniverse ? {} : { universe_id: sourceUniverseId }) }, 'id'),
+        store.rows('universes', { id: sourceUniverseId, user_id: currentAppUser.id, deleted: false }, 'id')
+      ]);
+      const overrides = await store.forIds('lexicon_overrides', 'wiki_id', wikis.map(wiki => wiki.id), { subject_type: 'article', article_id: articleId, subject_id: articleId, property: 'hidden' });
+      if (!isCurrent()) return;
+      const available = source.length && universes.length;
+      const visible = available ? wikis.filter(wiki => !overrides.some(override => override.wiki_id === wiki.id && override.value === true)).sort((a, b) => a.name.localeCompare(b.name)) : [];
+      const href = wiki => `lexicon-wiki.html?wiki=${encodeURIComponent(wiki.id)}${isUniverse ? '' : '&article=' + encodeURIComponent(articleId)}`;
+      if (visible.length === 1) { window.location.href = href(visible[0]); return; }
+      choices.innerHTML = visible.length
+        ? '<p>Choose a wiki.</p>' + visible.map(wiki => `<a class="secondary-action compact-action" href="${href(wiki)}">${escapeHtml(wiki.name)}</a>`).join('')
+        : `<p>${!available ? 'This source record is unavailable.' : wikis.length ? 'This article is hidden in every linked wiki.' : 'No wiki is linked to this universe.'}</p><a class="secondary-action compact-action" href="lexicon.html">Open Lexicon</a>`;
+    } catch (error) {
+      if (isCurrent()) choices.textContent = `Could not open Lexicon: ${getReadableError(error)}`;
+    } finally {
+      if (isCurrent()) button.disabled = false;
+    }
   }
 
   function UniverseNode(props) {
@@ -989,7 +1021,7 @@
               onClick: (event) => {
                 event.stopPropagation();
                 setMenuOpen(false);
-                openNodeDetails(props.id);
+                openNodeDetails(props.id, true);
               }
             },
             "View Details"
@@ -1103,7 +1135,7 @@
               onClick: (event) => {
                 event.stopPropagation();
                 setMenuOpen(false);
-                openNodeDetails(props.id);
+                openNodeDetails(props.id, true);
               }
             },
             "View Details"
@@ -1896,6 +1928,8 @@
       headerActions: pane.querySelector("[data-details-header-actions]"),
       actionBar: pane.querySelector(".details-pane-actions"),
       richButton: pane.querySelector("[data-details-rich]"),
+      lexiconButton: pane.querySelector("[data-details-lexicon]"),
+      lexiconChoices: pane.querySelector("[data-details-lexicon-choices]"),
       editButton: pane.querySelector("[data-details-edit]"),
       saveButton: pane.querySelector("[data-details-save]"),
       cancelButton: pane.querySelector("[data-details-cancel]"),
@@ -2524,9 +2558,10 @@
     setDetailsPaneAiPopoutButton(controls, actions.onPopOut);
     if (controls.kind) controls.kind.textContent = "AI Expert";
     if (controls.title) controls.title.textContent = universe.name || "Universe Expert";
-    [controls.richButton, controls.editButton, controls.cancelButton, controls.saveButton].forEach((button) => {
+    [controls.richButton, controls.lexiconButton, controls.editButton, controls.cancelButton, controls.saveButton].forEach((button) => {
       if (button) button.hidden = true;
     });
+    if (controls.lexiconChoices) controls.lexiconChoices.hidden = true;
 
     renderUniverseAiChatContent(controls.content, state, actions);
   }
@@ -3086,6 +3121,9 @@
     }
     clearDetailsPaneAiState(controls);
 
+    if (controls.lexiconButton) { controls.lexiconButton.hidden = true; controls.lexiconButton.disabled = false; }
+    if (controls.lexiconChoices) { controls.lexiconChoices.hidden = true; controls.lexiconChoices.replaceChildren(); }
+
     const node = currentNodes.find((currentNode) => currentNode.id === nodeId);
     if (!node) {
       hideDetailsPane();
@@ -3117,6 +3155,7 @@
       if (controls.richButton) {
         controls.headerActions?.append(controls.richButton);
       }
+      if (controls.lexiconButton) controls.headerActions?.append(controls.lexiconButton);
       const aiExpertButton = document.createElement("button");
       aiExpertButton.className = "secondary-action compact-action details-pane-ai-expert-button";
       aiExpertButton.type = "button";
@@ -3958,6 +3997,17 @@
     }
 
     return Boolean((response.data || []).length);
+  }
+
+  async function nodeHasChronicleData(node) {
+    if (!window.centralisSupabase || !node?.data?.recordId || !['element', 'universe'].includes(node.data.kind)) return false;
+    const isUniverse = node.data.kind === 'universe';
+    const [hasModules, custom] = await Promise.all([
+      isUniverse ? false : elementHasChronicleModules(node.data.recordId),
+      window.centralisSupabase.from(isUniverse ? 'universe_custom_fields' : 'element_custom_fields').select('id').eq(isUniverse ? 'universe_id' : 'element_id', node.data.recordId).eq('deleted', false).limit(1)
+    ]);
+    if (custom.error) console.error('Could not check Chronicle custom fields:', custom.error);
+    return Boolean(hasModules || custom.data?.length);
   }
 
   function getChronicleModuleSectionId(module) {
@@ -7926,10 +7976,7 @@
         }
 
         async function routeDetailsOpen() {
-          const isRecord = ['element','universe'].includes(node.data?.kind);
-          const hasModules = node.data?.kind === 'element' && await elementHasChronicleModules(node.data.recordId);
-          const custom = isRecord ? await window.centralisSupabase.from(node.data.kind==='universe'?'universe_custom_fields':'element_custom_fields').select('id').eq(node.data.kind==='universe'?'universe_id':'element_id',node.data.recordId).eq('deleted',false).limit(1) : null;
-          if (isRecord && (hasModules || custom?.data?.length)) {
+          if (!event.detail?.panel && await nodeHasChronicleData(node)) {
             openChroniclePreview(nodeId);
             return;
           }
@@ -8441,36 +8488,8 @@
         }
       }
 
-      async function openRichInLexicon() {
-        if (!node?.data?.recordId || !lexiconChoices || lexiconButton.disabled) return;
-        const isUniverse = node.data.kind === 'universe';
-        const articleId = node.data.recordId;
-        const sourceUniverseId = isUniverse ? articleId : node.data.universeId || universeId;
-        lexiconButton.disabled = true;
-        lexiconChoices.hidden = false;
-        lexiconChoices.innerHTML = '<p>Finding article…</p>';
-        try {
-          if (!currentAppUser || !window.centralisSupabase) throw new Error('Sign in to open Lexicon.');
-          const store = new LexiconData.Store(window.centralisSupabase, currentAppUser);
-          const [wikis, source, universes] = await Promise.all([
-            store.rows('lexicon_wikis', { user_id: currentAppUser.id, kind: 'universe', universe_id: sourceUniverseId }),
-            store.rows(isUniverse ? 'universes' : 'elements', { id: articleId, user_id: currentAppUser.id, deleted: false, ...(isUniverse ? {} : { universe_id: sourceUniverseId }) }, 'id'),
-            store.rows('universes', { id: sourceUniverseId, user_id: currentAppUser.id, deleted: false }, 'id')
-          ]);
-          const overrides = await store.forIds('lexicon_overrides', 'wiki_id', wikis.map(wiki => wiki.id), { subject_type: 'article', article_id: articleId, subject_id: articleId, property: 'hidden' });
-          if (!active || modal.hidden) return;
-          const available = source.length && universes.length;
-          const visible = available ? wikis.filter(wiki => !overrides.some(override => override.wiki_id === wiki.id && override.value === true)).sort((a, b) => a.name.localeCompare(b.name)) : [];
-          const href = wiki => `lexicon-wiki.html?wiki=${encodeURIComponent(wiki.id)}${isUniverse ? '' : '&article=' + encodeURIComponent(articleId)}`;
-          if (visible.length === 1) { window.location.href = href(visible[0]); return; }
-          lexiconChoices.innerHTML = visible.length
-            ? '<p>Choose a wiki.</p>' + visible.map(wiki => `<a class="secondary-action compact-action" href="${href(wiki)}">${escapeHtml(wiki.name)}</a>`).join('')
-            : `<p>${!available ? 'This source record is unavailable.' : wikis.length ? 'This article is hidden in every linked wiki.' : 'No wiki is linked to this universe.'}</p><a class="secondary-action compact-action" href="lexicon.html">Open Lexicon</a>`;
-        } catch (error) {
-          if (active && !modal.hidden) lexiconChoices.textContent = `Could not open Lexicon: ${getReadableError(error)}`;
-        } finally {
-          if (active) lexiconButton.disabled = false;
-        }
+      function openRichInLexicon() {
+        return openNodeInLexicon(node, lexiconButton, lexiconChoices, () => active && !modal.hidden);
       }
 
       function cancelRichEditMode() {
@@ -8806,6 +8825,8 @@
         return undefined;
       }
 
+      let active = true;
+
       function handleEdit() {
         if (detailsNodeId) {
           setDetailsMode("edit");
@@ -8823,6 +8844,11 @@
             window.location.href = getChronicleEditorUrl(node);
           }
         }
+      }
+
+      function handleOpenInLexicon() {
+        const node = nodes.find(currentNode => currentNode.id === detailsNodeId);
+        if (!controls.lexiconButton?.hidden) return openNodeInLexicon(node, controls.lexiconButton, controls.lexiconChoices, () => active && !controls.pane.hidden && !controls.lexiconButton.hidden);
       }
 
       async function handleSave() {
@@ -8916,16 +8942,19 @@
       }
 
       controls.richButton?.addEventListener("click", handleOpenInChronicle);
+      controls.lexiconButton?.addEventListener("click", handleOpenInLexicon);
       controls.editButton?.addEventListener("click", handleEdit);
       controls.cancelButton?.addEventListener("click", handleCancel);
       controls.saveButton?.addEventListener("click", handleSave);
       return () => {
+        active = false;
         controls.richButton?.removeEventListener("click", handleOpenInChronicle);
+        controls.lexiconButton?.removeEventListener("click", handleOpenInLexicon);
         controls.editButton?.removeEventListener("click", handleEdit);
         controls.cancelButton?.removeEventListener("click", handleCancel);
         controls.saveButton?.removeEventListener("click", handleSave);
       };
-    }, [detailsNodeId, nodes]);
+    }, [detailsNodeId, detailsMode, aiChatOpen, nodes]);
 
     React.useEffect(() => {
       if (aiChatOpen) {
@@ -8938,6 +8967,12 @@
       }
 
       renderDetailsPane(detailsNodeId, nodes, edges, openLinkedNodeDetails, detailsMode);
+      let active = true;
+      const controls = getDetailsControls(), node = nodes.find(currentNode => currentNode.id === detailsNodeId);
+      if (detailsMode !== 'edit') nodeHasChronicleData(node).then(hasData => {
+        if (active && controls?.lexiconButton) controls.lexiconButton.hidden = !hasData;
+      }).catch(error => console.error('Could not check Chronicle data:', error));
+      return () => { active = false; };
     }, [aiChatOpen, detailsNodeId, detailsMode, nodes, edges, openLinkedNodeDetails]);
 
     React.useEffect(() => {
@@ -14205,7 +14240,7 @@
             onClick: (event) => {
               event.stopPropagation();
               closeContextMenu();
-              openNodeDetails(contextMenuNode.id);
+              openNodeDetails(contextMenuNode.id, true);
             }
           },
           "View Details"
@@ -14231,7 +14266,7 @@
             onClick: (event) => {
               event.stopPropagation();
               closeContextMenu();
-              openNodeDetails(contextMenuNode.id);
+              openNodeDetails(contextMenuNode.id, true);
             }
           },
           "View Details"

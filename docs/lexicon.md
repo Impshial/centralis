@@ -16,6 +16,10 @@ routes retain type/template/module controls and expose their existing Builder Bo
 Builder double-clicks open Chronicle previews when a root or element has an active
 custom detail or assigned module. Otherwise the details pane has an enabled Open
 in Chronicle action. Group and note interactions remain unchanged.
+The node menu's **View Details** opens the right panel. Its **Open in Lexicon**
+button appears for roots or elements with active Chronicle modules or custom
+fields, and is hidden while editing. Double-click still opens the popup for those
+nodes. Both Lexicon buttons use the same article and wiki selection behavior.
 The preview header includes **Open in Lexicon**. It opens the matching root or
 element article directly when one linked wiki contains it, or offers the visible
 wikis when several match. Hidden articles are excluded. With no linked wiki, the

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/centralis-icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
-  <link rel="stylesheet" href="styles.css?v=builder-lexicon-1">
+  <link rel="stylesheet" href="styles.css?v=builder-lexicon-panel-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
@@ -236,10 +236,12 @@
         </button>
         <div class="details-pane-actions">
           <button class="secondary-action compact-action" type="button" data-details-rich hidden>Open in Chronicle</button>
+          <button class="secondary-action compact-action" type="button" data-details-lexicon hidden>Open in Lexicon</button>
           <button class="secondary-action compact-action" type="button" data-details-edit>Edit</button>
           <button class="secondary-action compact-action" type="button" data-details-cancel hidden>Cancel</button>
           <button class="primary-action compact-action" type="button" data-details-save hidden>Save</button>
         </div>
+        <div class="builder-lexicon-choices details-pane-lexicon-choices" data-details-lexicon-choices aria-label="Lexicon articles" role="region" aria-live="polite" hidden></div>
       </header>
       <div class="details-pane-body" data-details-content></div>
     </aside>
@@ -1001,7 +1003,7 @@
             </svg>
           </button>
         </div>
-        <div class="rich-details-lexicon-choices" data-rich-details-lexicon-choices aria-label="Lexicon articles" role="region" aria-live="polite" hidden></div>
+        <div class="builder-lexicon-choices" data-rich-details-lexicon-choices aria-label="Lexicon articles" role="region" aria-live="polite" hidden></div>
       </header>
       <p class="form-status rich-details-status" data-rich-details-status role="status"></p>
       <div class="rich-details-body" data-rich-details-body></div>
@@ -1082,6 +1084,6 @@
   <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
   <script src="centralis-image-viewer.js?v=image-viewer-thumbnails-1"></script>
   <script src="lexicon-data.js?v=details-manager-1"></script>
-  <script src="flow-canvas.js?v=builder-lexicon-1"></script>
+  <script src="flow-canvas.js?v=builder-lexicon-panel-1"></script>
 </body>
 </html>
