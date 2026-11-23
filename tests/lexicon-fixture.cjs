@@ -48,6 +48,7 @@ async function fixture() {
  await db.exec('alter table elements add column position_x real not null default 0;alter table elements add column position_y real not null default 0;');
  await db.exec(fs.readFileSync('supabase/migrations/20261123182642_lexicon_create_linked_page.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261123184930_lexicon_article_detail_groups.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261123222917_lexicon_detail_items.sql','utf8'));
  await db.exec("set request.jwt.claim.sub='owner';set role authenticated");
  const writes = [];
  const safe = name => { if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error('Invalid SQL identifier'); return '"'+name+'"'; };

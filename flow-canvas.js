@@ -7966,6 +7966,8 @@
       const status = document.querySelector("[data-rich-details-status]");
       const saveButton = document.querySelector("[data-rich-details-save]");
       const editButton = document.querySelector("[data-rich-details-edit]");
+      const lexiconButton = document.querySelector("[data-rich-details-lexicon]");
+      const lexiconChoices = document.querySelector("[data-rich-details-lexicon-choices]");
       const hideEmptyFieldsToggle = document.querySelector("[data-rich-details-hide-empty]");
       const cancelButton = document.querySelector("[data-rich-details-cancel]");
       const closeButtons = document.querySelectorAll("[data-rich-details-close]");
@@ -7987,6 +7989,9 @@
       }
 
       const node = nodes.find((currentNode) => currentNode.id === richDetailsNodeId);
+      let active = true;
+      if (lexiconChoices) { lexiconChoices.hidden = true; lexiconChoices.replaceChildren(); }
+      if (lexiconButton) lexiconButton.disabled = Boolean(richDetailsData?.loading);
       let richStatusTimeoutId = 0;
       let hideEmptyFields = hideEmptyFieldsToggle?.checked !== false;
       function closeRichDetails() {
@@ -8436,6 +8441,38 @@
         }
       }
 
+      async function openRichInLexicon() {
+        if (!node?.data?.recordId || !lexiconChoices || lexiconButton.disabled) return;
+        const isUniverse = node.data.kind === 'universe';
+        const articleId = node.data.recordId;
+        const sourceUniverseId = isUniverse ? articleId : node.data.universeId || universeId;
+        lexiconButton.disabled = true;
+        lexiconChoices.hidden = false;
+        lexiconChoices.innerHTML = '<p>Finding article…</p>';
+        try {
+          if (!currentAppUser || !window.centralisSupabase) throw new Error('Sign in to open Lexicon.');
+          const store = new LexiconData.Store(window.centralisSupabase, currentAppUser);
+          const [wikis, source, universes] = await Promise.all([
+            store.rows('lexicon_wikis', { user_id: currentAppUser.id, kind: 'universe', universe_id: sourceUniverseId }),
+            store.rows(isUniverse ? 'universes' : 'elements', { id: articleId, user_id: currentAppUser.id, deleted: false, ...(isUniverse ? {} : { universe_id: sourceUniverseId }) }, 'id'),
+            store.rows('universes', { id: sourceUniverseId, user_id: currentAppUser.id, deleted: false }, 'id')
+          ]);
+          const overrides = await store.forIds('lexicon_overrides', 'wiki_id', wikis.map(wiki => wiki.id), { subject_type: 'article', article_id: articleId, subject_id: articleId, property: 'hidden' });
+          if (!active || modal.hidden) return;
+          const available = source.length && universes.length;
+          const visible = available ? wikis.filter(wiki => !overrides.some(override => override.wiki_id === wiki.id && override.value === true)).sort((a, b) => a.name.localeCompare(b.name)) : [];
+          const href = wiki => `lexicon-wiki.html?wiki=${encodeURIComponent(wiki.id)}${isUniverse ? '' : '&article=' + encodeURIComponent(articleId)}`;
+          if (visible.length === 1) { window.location.href = href(visible[0]); return; }
+          lexiconChoices.innerHTML = visible.length
+            ? '<p>Choose a wiki.</p>' + visible.map(wiki => `<a class="secondary-action compact-action" href="${href(wiki)}">${escapeHtml(wiki.name)}</a>`).join('')
+            : `<p>${!available ? 'This source record is unavailable.' : wikis.length ? 'This article is hidden in every linked wiki.' : 'No wiki is linked to this universe.'}</p><a class="secondary-action compact-action" href="lexicon.html">Open Lexicon</a>`;
+        } catch (error) {
+          if (active && !modal.hidden) lexiconChoices.textContent = `Could not open Lexicon: ${getReadableError(error)}`;
+        } finally {
+          if (active) lexiconButton.disabled = false;
+        }
+      }
+
       function cancelRichEditMode() {
         setRichStatus("");
         setRichDetailsMode("view");
@@ -8576,6 +8613,7 @@
 
       renderRichDetails();
       editButton?.addEventListener("click", showRichEditMode);
+      lexiconButton?.addEventListener("click", openRichInLexicon);
       cancelButton?.addEventListener("click", cancelRichEditMode);
       saveButton?.addEventListener("click", saveRichDetails);
       transferTrigger?.addEventListener("click", toggleRichTransferMenu);
@@ -8586,8 +8624,10 @@
       document.addEventListener("keydown", handleRichTransferKeydown);
       closeButtons.forEach((button) => button.addEventListener("click", closeRichDetails));
       return () => {
+        active = false;
         window.clearTimeout(richStatusTimeoutId);
         editButton?.removeEventListener("click", showRichEditMode);
+        lexiconButton?.removeEventListener("click", openRichInLexicon);
         cancelButton?.removeEventListener("click", cancelRichEditMode);
         saveButton?.removeEventListener("click", saveRichDetails);
         transferTrigger?.removeEventListener("click", toggleRichTransferMenu);

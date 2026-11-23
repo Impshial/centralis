@@ -15,14 +15,15 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   // Removal is available beside the actual item and preserves unrelated drafts on failure/retry.
   await open(wiki.id,'a',true);await page.getByRole('heading',{name:'Article Details',exact:true}).waitFor();
   await settings();const title=page.getByRole('form',{name:'Article title',exact:true});await title.locator('[name="value"]').fill('Draft title');
+  await page.getByRole('button',{name:'Manage Article Details',exact:true}).click();await page.locator(`[data-detail-node="${excerpt}"] > button`).click();
   const remove=page.getByRole('button',{name:'Remove Accidental excerpt from Article Details',exact:true});
   h.failNext('lexicon_facts');await remove.click();await page.locator('[data-wiki-status]').getByText('Fixture save failed',{exact:true}).waitFor();assert.equal(await remove.count(),1);
   await remove.click();await page.locator('[data-wiki-status]').getByText('Detail removed.',{exact:true}).waitFor();assert.equal(await remove.count(),0);
-  await settings();assert.equal(await title.locator('[name="value"]').inputValue(),'Draft title');
+  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();await settings();assert.equal(await title.locator('[name="value"]').inputValue(),'Draft title');
   assert.equal((await f.db.query('select count(*)::int n from lexicon_facts where id=$1',[excerpt])).rows[0].n,0);
   assert.deepEqual(await f.snapshot(),sourceBefore);
   // Source-derived details can be removed from this wiki without deleting the source custom field.
-  await page.getByRole('button',{name:'Remove Founded from Article Details',exact:true}).click();await page.locator('[data-wiki-status]').getByText('Detail removed.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Manage Article Details',exact:true}).click();await page.locator('[data-detail-node="custom1"] > button').click();await page.getByRole('button',{name:'Remove Founded from Article Details',exact:true}).click();await page.locator('[data-wiki-status]').getByText('Detail removed.',{exact:true}).waitFor();
   assert.deepEqual(await f.snapshot(),sourceBefore);
   await open(second.id,'a');assert.equal(await page.locator('.lexicon-infobox [data-field-id="custom1"]').count(),1);
   // Both wiki-owned facts and pinned relationships are editable Chronicle custom fields.

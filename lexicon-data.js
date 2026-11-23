@@ -78,7 +78,7 @@
       ]);
       const names = new Map([...elements,...universes].map(e=>[e.id,e.name]));
       return facts.map(row=>{
-        const value = row.kind==='excerpt' ? row.reference.anchor?.quote||'' : row.kind==='relationship' ? names.get(targets.get(row.id))||'' : row.kind==='links' ? row.reference.links.map(l=>l.label||names.get(l.article_id)||'Unavailable article').join('\n') : row.value;
+        const value = row.kind==='excerpt' ? row.reference.anchor?.quote||'' : row.kind==='relationship' ? names.get(targets.get(row.id))||'' : row.kind==='links' ? row.reference.links.map(l=>l.text??(l.label||names.get(l.article_id)||'Unavailable article')).join('\n') : row.value;
         const displayValue = typeof value==='string' ? value : value==null ? '' : JSON.stringify(value);
         return {id:'wiki-fact:'+row.id,name:row.label,value:displayValue,sort_order:row.sort_order,chronicle_module_id:null,
           wikiDetail:{...row,wikiName:wikis.find(w=>w.id===row.wiki_id).name,displayValue,groupName:groups.find(g=>g.id===members.find(m=>m.wiki_id===row.wiki_id&&m.subject_type==='wiki_fact'&&m.subject_id===row.id)?.group_id)?.label||''}};

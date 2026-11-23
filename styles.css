@@ -11609,6 +11609,7 @@ body.is-dragging-ai-popout {
 
 .rich-details-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -11639,12 +11640,19 @@ body.is-dragging-ai-popout {
 
 .rich-details-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
   flex: 0 0 auto;
   margin-left: auto;
+  max-width: 100%;
 }
+
+.rich-details-lexicon-choices { display:flex; flex-wrap:wrap; gap:8px; width:100%; max-height:160px; overflow:auto; }
+.rich-details-lexicon-choices[hidden] { display:none; }
+.rich-details-lexicon-choices p { flex-basis:100%; margin:0; }
+.rich-details-lexicon-choices a { white-space:normal; overflow-wrap:anywhere; }
 
 .rich-details-hide-empty-toggle {
   display: inline-flex;

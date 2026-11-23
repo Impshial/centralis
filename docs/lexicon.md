@@ -16,6 +16,10 @@ routes retain type/template/module controls and expose their existing Builder Bo
 Builder double-clicks open Chronicle previews when a root or element has an active
 custom detail or assigned module. Otherwise the details pane has an enabled Open
 in Chronicle action. Group and note interactions remain unchanged.
+The preview header includes **Open in Lexicon**. It opens the matching root or
+element article directly when one linked wiki contains it, or offers the visible
+wikis when several match. Hidden articles are excluded. With no linked wiki, the
+preview provides a link to Lexicon without creating a wiki automatically.
 
 Custom fields receive IDs when added to the draft. Their dialog edits name,
 multiline value and assigned-section placement; records without sections omit the
@@ -29,11 +33,28 @@ they do not create duplicate source fields. Save applies edits and removals, whi
 canceling navigation retains the draft. Renaming or reordering a pinned excerpt
 or relationship preserves its reference; changing its value converts it to a plain
 fact. Each wiki keeps its own items, including hidden ones available for editing.
-Named groups organize these items within Article Details. Authors can rename,
-order and remove groups, move existing details (including inherited fields), and
-add labeled rows containing ordered article links with optional custom link text.
-Removing a group keeps its items ungrouped. Chronicle identifies each wiki and
-group and preserves link lists when only their label/order changes.
+Article Details uses Section → Group → Item. Sections are full-width headings;
+groups have a left-hand label and a list of text or linked items on the right.
+Items may also sit directly in a section or outside all sections. One **Manage
+Article Details** button opens the hierarchy editor, with a single Add control
+for sections, groups and items. Selecting an entry opens its editing controls.
+**Add item** combines text and article links; it also accepts selections from the
+wiki context menu and can place them in an existing section/group. Unchanged
+selected text added outside a group retains its pinned excerpt reference.
+Removing a section keeps its groups and items. Chronicle identifies the wiki and
+section and preserves mixed item lists when only their label/order changes.
+The existing `lexicon_detail_groups` table stores sections for compatibility;
+`links` facts store groups or a single linked item using `reference.presentation`.
+
+Overview modules always render before other modules in Chronicle and Lexicon,
+including when added last or assigned a higher sort order. Other modules retain
+their configured order. Lexicon keeps this priority when an Overview heading has
+a wiki-local label override.
+The outline combines the introduction shortcut and any top-level Overview heading
+into one entry, retaining its subsections and existing heading anchors.
+Once the article title scrolls out of view, it appears above Article Details in
+the right panel and stays visible while that panel scrolls. It hides again when
+the main heading returns to view.
 
 Chronicle's Modules panel also has a separate **Import / Export** dialog. It
 exchanges `centralis.chronicle.modules` version 1 JSON for selected assigned
@@ -120,6 +141,12 @@ saves a detail and group membership atomically, with invoker permissions. New
 tables have RLS and no anonymous access. Live advisors found no security or
 missing-FK-index issues for these objects (new indexes can initially be unused).
 
+`20261123222917_lexicon_detail_items.sql` is applied to Centralis. It extends
+the existing details validator to accept mixed text/article items and distinguish
+single linked items from groups. Ownership and target checks remain intact; no
+tables, policies or grants change. Live metadata confirms the validator update,
+and security advisors report no Lexicon findings.
+
 Live metadata confirms new RLS policies and the intended placement column and
 triggers. Movie, universe, element and universe-custom-field column signatures,
 RLS flags and policy/trigger counts match their pre-migration values. Advisors
@@ -163,7 +190,7 @@ restores the reader in place. Choose details exposes field/section labels, value
 order, placement, visibility and individual resets, including empty source fields
 and their source-edit action. It adds wiki-only facts, aliases and pinned explicit
 relationships, and retains connection label/direction/visibility controls.
-Article Details has a Remove button beside each item in edit mode. Wiki-created
+Article Details provides removal in each entry's manager form. Wiki-created
 items are deleted; source-derived fields are hidden only in that wiki, preserving
 their Chronicle values and reset controls. Removal preserves other editor drafts.
 
@@ -250,6 +277,7 @@ node tests/lexicon-article-details-browser.cjs
 node tests/lexicon-link-context-browser.cjs
 node tests/lexicon-detail-groups.cjs
 node tests/lexicon-detail-groups-browser.cjs
+node tests/chronicle-overview-browser.cjs
 node tests/chronicle-scroll-browser.cjs
 node tests/chronicle-module-exchange.cjs
 node tests/chronicle-module-exchange-browser.cjs

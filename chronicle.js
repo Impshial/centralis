@@ -529,7 +529,7 @@
       .map((section) => section.id));
 
     return {
-      sections: (sectionResponse.data || []).filter((section) => !section.is_hidden),
+      sections: (sectionResponse.data || []).filter((section) => !section.is_hidden).sort(sortSections),
       fields: (fieldResponse.data || [])
         .filter((field) => !field.is_hidden && !hiddenSectionIds.has(field.section_id))
         .sort(sortTemplateFields)
@@ -966,7 +966,7 @@
         };
       })
       .filter(Boolean)
-      .sort((left, right) => Number(left.module.sort_order || 0) - Number(right.module.sort_order || 0) || left.section.name.localeCompare(right.section.name));
+      .sort((left, right) => overviewPriority(left.section.name,right.section.name) || Number(left.module.sort_order || 0) - Number(right.module.sort_order || 0) || left.section.name.localeCompare(right.section.name));
   }
 
   function renderModuleCard(module, section, fields, valuesByFieldId) {
@@ -1032,8 +1032,14 @@
   }
 
   function sortModules(left, right) {
-    return Number(left.sort_order || 0) - Number(right.sort_order || 0)
+    return overviewPriority(left.title,right.title) || Number(left.sort_order || 0) - Number(right.sort_order || 0)
       || String(left.title || "").localeCompare(String(right.title || ""));
+  }
+  function overviewPriority(left,right) {
+    return Number(String(right||'').trim().toLowerCase()==='overview')-Number(String(left||'').trim().toLowerCase()==='overview');
+  }
+  function sortSections(left,right) {
+    return overviewPriority(left.name,right.name) || Number(left.sort_order||0)-Number(right.sort_order||0) || String(left.name||'').localeCompare(String(right.name||''));
   }
 
   function renderWorkspaceTemplateFields(sections, fields, valuesByFieldId) {
@@ -3194,7 +3200,7 @@
     return [...sectionMap.values(), unsectioned]
       .filter((section) => section.fields.length)
       .map((section) => ({ ...section, fields: [...section.fields].sort(sortTemplateFields) }))
-      .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || left.name.localeCompare(right.name));
+      .sort(sortSections);
   }
 
   function sortTemplateFields(left, right) {

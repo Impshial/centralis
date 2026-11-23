@@ -5,6 +5,8 @@
 })(typeof globalThis === 'object' ? globalThis : this, () => {
   const active = rows => (rows || []).filter(row => !row.deleted);
   const order = (a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.id).localeCompare(String(b.id));
+  const overview = section => [section.label,section.base?.label].some(label=>String(label||'').trim().toLowerCase()==='overview');
+  const sectionOrder = (a,b) => Number(overview(b))-Number(overview(a)) || order(a,b);
   const key = (type, article, subject, property) => JSON.stringify([type, String(article), String(subject), property]);
   const hasValue = value => richValue(value) && value !== null && value !== undefined &&
     (typeof value !== 'string' || value.trim() !== '') &&
@@ -91,7 +93,7 @@
         f.group_id=a.detailGroups.some(g=>g.id===member?.group_id)?member.group_id:'';
       }
       a.aliases = (data.aliases || []).filter(x => x.article_id === a.id).map(x => x.alias);
-      a.sections.sort(order); a.fields.sort(order);
+      a.sections.sort(sectionOrder); a.fields.sort(order);
       a.image = (data.images || []).find(image => String(image.object_id) === a.id)?.image_url || '';
     }
     const links = [...active(data.sourceLinks).map(l => ({ id: l.id, subjectType: 'source_link', source_id: l.source_element_id, target_id: l.target_element_id, label: l.label || '', direction: 'directed' })),

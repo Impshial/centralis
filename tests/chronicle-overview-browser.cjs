@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict');const {setup}=require('./lexicon-browser-harness.cjs');
+(async()=>{const h=await setup(),{f,store,page,base,open}=h;try{
+ await f.db.exec(`insert into element_template_sections(id,template_id,name,sort_order) values('overview','template1','Overview',9999),('history','template1','History',-500);
+ insert into element_type_template_fields(id,template_id,section_id,label,field_type,sort_order) values('overview-text','template1','overview','Summary','text',0),('history-text','template1','history','Event','text',0);
+ insert into element_template_field_values(element_id,template_field_id,value) values('a','overview-text','Overview content'),('a','history-text','History content');
+ insert into chronicle_modules(id,element_id,user_id,module_type,data,sort_order,title) values('history-module','a',1,'template_section','{"section_id":"history","template_id":"template1"}',-500,'History');`);
+ const wiki=await store.createWiki({id:f.uuid(),name:'Module order',kind:'universe',universe_id:'u1'});
+ const cards=()=>page.locator('.chronicle-module-card h3'),save=async()=>{await page.getByRole('button',{name:'Save Element',exact:true}).click();await page.getByText('Element saved.',{exact:true}).waitFor();};
+ await page.goto(base+'/chronicle-editor.html#universe/u1/element/a');await page.getByRole('button',{name:'Save Element',exact:true}).waitFor();assert.deepEqual(await cards().allTextContents(),['History','Geography']);
+ await page.locator('[data-add-module="overview"]').click();assert.deepEqual(await cards().allTextContents(),['Overview','History','Geography']);await save();
+ let overview=(await f.db.query("select * from chronicle_modules where element_id='a' and data->>'section_id'='overview' and not deleted")).rows[0];assert.ok(overview.sort_order>0,'Overview was added last');
+ await f.db.query('update chronicle_modules set sort_order=99999,title=$2 where id=$1',[overview.id,'Old cached title']);await page.reload();await cards().first().waitFor();assert.deepEqual(await cards().allTextContents(),['Overview','History','Geography']);
+ await open(wiki.id,'a');assert.deepEqual(await page.locator('.lexicon-article [data-section-id] > h2').allTextContents(),['Overview','History','Geography']);
+ assert.equal(await page.locator('[data-outline-list]').getByRole('link',{name:'Overview',exact:true}).count(),1,'Introduction and Overview module share one outline entry');
+ await store.override(wiki.id,{subjectType:'section',articleId:'a',id:overview.id},'label','At a glance');await store.override(wiki.id,{subjectType:'section',articleId:'a',id:overview.id},'sort_order',999999);
+ await open(wiki.id,'a');assert.deepEqual(await page.locator('.lexicon-article [data-section-id] > h2').allTextContents(),['At a glance','History','Geography']);
+ assert.deepEqual(await page.locator('[data-outline-list] > li > .lexicon-outline-row > a').allTextContents(),['Overview','At a glance','History','Geography']);
+ await page.goto(base+'/chronicle-editor.html#universe/u1/element/a');await cards().first().waitFor();await page.locator('[data-remove-module="overview"]').last().click();assert.deepEqual(await cards().allTextContents(),['History','Geography']);await page.locator('[data-add-module="overview"]').click();assert.deepEqual(await cards().allTextContents(),['Overview','History','Geography']);await save();
+ const standalone=await store.createWiki({id:f.uuid(),name:'Reference',kind:'standalone'}),article=f.uuid();await store.save('lexicon_articles',{id:article,wiki_id:standalone.id,title:'Reference article'});
+ for(const [label,sort_order]of [['History',-100],['Overview',9999],['Geography',0]])await store.save('lexicon_sections',{id:f.uuid(),wiki_id:standalone.id,article_id:article,label,sort_order,body:label+' content'});
+ await open(standalone.id,article);assert.deepEqual(await page.locator('.lexicon-article [data-section-id] > h2').allTextContents(),['Overview','History','Geography']);assert.deepEqual(h.errors,[]);
+ console.log('Overview priority: late addition, high/negative sort orders, stale module titles, reload, wiki label/order overrides, remove/re-add and standalone sections passed.');
+}catch(e){console.error((await page.locator('body').innerText()).slice(-5000));throw e;}finally{await h.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
