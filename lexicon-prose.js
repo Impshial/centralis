@@ -1,4 +1,4 @@
-import {markdown} from './assets/vendor/lexicon-reader.js';
+import {markdown} from './assets/vendor/lexicon-reader.js?v=markdown-render-1';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=v=>/^(https?:|mailto:|[?#/]|lexicon-wiki\.html)/i.test(v||'')?v:'';
 const nameIndexes=new WeakMap();
@@ -14,6 +14,28 @@ function nameIndex(model) {
 export function html(value) {
   let doc=value;try{if(typeof doc==='string')doc=JSON.parse(doc);}catch{}
   if(doc?.type!=='doc')return markdown(typeof value==='object'?JSON.stringify(value):value);
+  const parseMarkdown=doc.attrs?.lexiconFormat!=='rich-text';
+  function paragraphs(items) {
+    const fragments=[];let prefix='\uE000lexicon';
+    while(JSON.stringify(items).includes(prefix))prefix+='x';
+    const source=items.map(p=>(p.content||[]).map(n=>{
+      if(n.type==='hardBreak')return '\n';
+      if(n.type==='text'&&!n.marks?.length)return n.text;
+      const token=prefix+fragments.length+'\uE001';
+      fragments.push({token,html:node(n),text:n.text||''});return token;
+    }).join('')).join('\n\n');
+    return markdown(source,fragments);
+  }
+  function children(n) {
+    if(!parseMarkdown||n.type==='codeBlock')return (n.content||[]).map(node).join(n.type==='doc'?'\n':'');
+    const rendered=[],pending=[];
+    const flush=()=>{if(pending.length){rendered.push(paragraphs(pending));pending.length=0;}};
+    for(const child of n.content||[]) {
+      if(child.type==='paragraph')pending.push(child);
+      else {flush();rendered.push(node(child));}
+    }
+    flush();return rendered.join(n.type==='doc'?'\n':'');
+  }
   function node(n) {
     if(n.type==='text') {
       let s=esc(n.text);
@@ -24,9 +46,9 @@ export function html(value) {
       }
       return s;
     }
-    const inner=(n.content||[]).map(node).join(n.type==='doc'?'\n':'');
+    const inner=children(n);
     const tag={paragraph:'p',bulletList:'ul',orderedList:'ol',listItem:'li',blockquote:'blockquote',codeBlock:'pre',table:'table',tableRow:'tr',tableCell:'td',tableHeader:'th',heading:`h${Math.min(6,Math.max(2,n.attrs?.level||2))}`}[n.type];
-    if(tag){const attrs=tag==='ol'?` start="${Math.max(1,Number(n.attrs?.start)||1)}"`:['td','th'].includes(tag)?` colspan="${Math.min(100,Math.max(1,Number(n.attrs?.colspan)||1))}" rowspan="${Math.min(100,Math.max(1,Number(n.attrs?.rowspan)||1))}"`:'';return `<${tag}${attrs}>${inner}</${tag}>`;}
+    if(tag){let attrs=tag==='ol'?` start="${Math.max(1,Number(n.attrs?.start)||1)}"`:['td','th'].includes(tag)?` colspan="${Math.min(100,Math.max(1,Number(n.attrs?.colspan)||1))}" rowspan="${Math.min(100,Math.max(1,Number(n.attrs?.rowspan)||1))}"`:'';if(['td','th'].includes(tag)&&['left','center','right'].includes(n.attrs?.align))attrs+=` align="${n.attrs.align}"`;return `<${tag}${attrs}>${inner}</${tag}>`;}
     if(n.type==='hardBreak')return '<br>';
     if(n.type==='horizontalRule')return '<hr>';
     // Images belong to separately scoped media placements, never arbitrary stored URLs.

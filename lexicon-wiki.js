@@ -1,4 +1,4 @@
-import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
+import * as Prose from './lexicon-prose.js?v=markdown-render-1';
 (() => {
   const C = window.LexiconCore;
   const params = new URLSearchParams(location.search);
@@ -291,7 +291,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
   async function startEditor(key,doc) {
     if(inlineEditors.has(key))return inlineEditors.get(key).editor.commands.focus();
     const root=[...content.querySelectorAll('[data-prose]')].find(el=>el.dataset.prose===key),p=proseItems.get(key),version=inlineVersion;if(!root||!p)return;
-    const {createEditor}=await import('./assets/vendor/lexicon-editor.js');if(version!==inlineVersion)return;
+    const {createEditor}=await import('./assets/vendor/lexicon-editor.js?v=markdown-render-1');if(version!==inlineVersion)return;
     root.replaceChildren();const editor=createEditor(root,Prose.html(p.item[p.property]));const original=JSON.stringify(editor.getJSON());
     if(doc)editor.commands.setContent(doc);inlineEditors.set(key,{editor,original,...p});root.nextElementSibling?.matches('[data-edit-prose]')&&root.nextElementSibling.remove();editor.commands.focus();
   }
