@@ -1413,7 +1413,7 @@
     const modal = document.createElement('dialog'); modal.className='chronicle-field-dialog';
     modal.setAttribute('aria-label',existing ? 'Edit custom field' : 'Add field');
     modal.innerHTML = `<form><h2>${existing ? 'Edit custom field' : 'Add field'}</h2>
-      <label class="form-field"><span>Name</span><input name="name" required value="${escapeHtml(field.name)}"></label>
+      <label class="form-field"><span>Name${field.wikiDetail?' (optional)':''}</span><input name="name" ${field.wikiDetail?'':'required'} value="${escapeHtml(field.name)}"></label>
       <label class="form-field"><span>Value</span><textarea name="value" rows="5">${escapeHtml(field.value ?? '')}</textarea></label>
       ${field.wikiDetail ? `<p>Article Details · ${escapeHtml(field.wikiDetail.wikiName)}${field.wikiDetail.kind!=='fact'?'. Changing the value replaces the pinned '+(field.wikiDetail.kind==='excerpt'?'excerpt':field.wikiDetail.kind==='links'?'links':'relationship')+'.':''}</p>` : sections.length ? `<label class="form-field"><span>Location</span><select name="location" aria-label="Location"><option value="">Top-level details</option>${sections.map(({module,section})=>`<option value="${escapeHtml(module.id)}"${module.id===field.chronicle_module_id?' selected':''}>${escapeHtml(section.name)}</option>`).join('')}</select></label>` : ''}
       <div class="modal-actions"><button type="button" class="secondary-action" data-cancel>Cancel</button><button type="submit" class="primary-action">Apply</button></div></form>`;
@@ -1425,7 +1425,7 @@
     modal.querySelector('form').onsubmit=event=>{
       event.preventDefault();const form=event.currentTarget;
       const value={...field,name:form.elements.name.value.trim(),value:form.elements.value.value,chronicle_module_id:form.elements.location?.value || null};
-      if(!value.name)return;
+      if(!value.name&&!field.wikiDetail)return;
       state.workspace.customFields=existing ? state.workspace.customFields.map(f=>f.id===id?value:f) : [...state.workspace.customFields,value];
       modal.close();renderWorkspace();
     };

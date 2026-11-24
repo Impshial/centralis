@@ -87,7 +87,7 @@
     async saveArticleDetail(field) {
       const original=field.wikiDetail;
       const changedValue=field.value!==original.displayValue;
-      const patch={label:field.name||'Field',sort_order:Number(field.sort_order||0)};
+      const patch={label:field.name??'',sort_order:Number(field.sort_order||0)};
       if(changedValue)Object.assign(patch,{kind:'fact',value:field.value,reference:{}});
       if(!changedValue&&patch.label===original.label&&patch.sort_order===original.sort_order)return original;
       const row=checked(await this.client.from('lexicon_facts').update(patch).eq('wiki_id',original.wiki_id)

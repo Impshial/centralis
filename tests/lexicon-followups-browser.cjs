@@ -65,7 +65,7 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   assert.equal((await f.db.query('select count(*)::int n from lexicon_annotations')).rows[0].n,0);
   await select('Mystery passage');await page.locator('.lexicon-selection-action').click();await menu().getByRole('menuitem',{name:'Link selected text…'}).click();await page.getByRole('dialog').locator('[name="target_id"]').selectOption('c');await save();
   assert.equal(await root().locator('[data-annotation-id]').innerText(),'Mystery passage');assert.ok(!page.url().includes('edit=1'));
-  await select('Mystery passage');await page.keyboard.press('Shift+F10');await menu().getByRole('menuitem',{name:'Pin excerpt to Article Details'}).click();await page.getByRole('dialog').getByLabel('Label',{exact:true}).fill('Excerpt');await save();assert.match(await page.locator('.lexicon-infobox').innerText(),/Excerpt.*Mystery passage/s);
+  await select('Mystery passage');await page.keyboard.press('Shift+F10');await menu().getByRole('menuitem',{name:'Pin excerpt to Article Details'}).click();await page.getByRole('dialog').getByLabel('Label (optional)',{exact:true}).fill('Excerpt');await save();assert.match(await page.locator('.lexicon-infobox').innerText(),/Excerpt.*Mystery passage/s);
   await select('Harbor',true);await page.keyboard.press('Shift+F10');await menu().getByRole('menuitem',{name:'Remove link…'}).click();await save();assert.equal(await page.locator('a[data-auto-link][data-article-id="b"]').count(),0);
   await select('Mystery passage');await page.locator('.lexicon-selection-action').click();await menu().getByRole('menuitem',{name:'Remove link…'}).click();await save();assert.equal(await root().locator('[data-annotation-id]').count(),0);
   await select('Harbor',true);

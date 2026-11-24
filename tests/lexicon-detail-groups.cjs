@@ -11,7 +11,11 @@ const assert=require('node:assert/strict');const {fixture}=require('./lexicon-fi
  await assert.rejects(store.saveDetail({...row,id:f.uuid(),reference:{links:[]}},g.id),/between 1 and 100/i);
  const mixed={...row,id:f.uuid(),label:'Mixed items',reference:{presentation:'group',links:[{text:'Plain text 星'},{article_id:'b',label:'Port'}]}};
  await store.saveDetail(mixed,g.id);assert.equal((await store.articleDetails('u1','a')).find(f=>f.wikiDetail.id===mixed.id).value,'Plain text 星\nPort');
- for(const links of [[{text:''}],[{text:12}],[{text:'x',article_id:'b'}],[{}],[null]])await assert.rejects(store.saveDetail({...row,id:f.uuid(),reference:{links}},g.id),/text|item|article link/i);
+ for(const links of [[{text:'x'.repeat(10001)}],[{text:12}],[{text:'x',article_id:'b'}],[{}],[null]])await assert.rejects(store.saveDetail({...row,id:f.uuid(),reference:{links}},g.id),/text|item|article link/i);
+ const optional={...row,id:f.uuid(),label:'',reference:{presentation:'item',links:[{article_id:'b'}]}};
+ await store.saveDetail(optional,g.id);const optionalField=(await store.articleDetails('u1','a')).find(f=>f.wikiDetail.id===optional.id);await store.saveArticleDetail(optionalField);assert.equal((await f.db.query('select label from lexicon_facts where id=$1',[optional.id])).rows[0].label,'');
+ await store.saveDetail({...optional,reference:{presentation:'item',links:[{text:''}]}},g.id);
+ await store.remove('lexicon_facts',wiki.id,optional.id);
  await assert.rejects(store.saveDetail({...row,id:f.uuid(),reference:{presentation:'item',links:[{text:'One'},{text:'Two'}]}},g.id),/one value/i);
  await store.remove('lexicon_facts',wiki.id,mixed.id);
  const failedId=f.uuid();await assert.rejects(store.saveDetail({...row,id:failedId},foreign.id),/foreign key/i);assert.equal((await f.db.query('select count(*)::int n from lexicon_facts where id=$1',[failedId])).rows[0].n,0,'Invalid grouping rolls back the new detail');

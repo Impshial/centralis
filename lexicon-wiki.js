@@ -65,7 +65,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     return '<section class="lexicon-article"><h1>All articles</h1>'+resultList([...model.articles.values()].filter(visible).sort((a,b)=>a.title.localeCompare(b.title)).map(a=>({article:a,snippet:model.plain(a.introduction).slice(0,150)})))+'</section>';
   }
   function fieldValue(field) {
-    if(field.kind==='links')return '<ul class="lexicon-detail-links">'+field.reference.links.map(link=>{if(!link.article_id)return '<li>'+esc(link.text)+'</li>';const target=model.articles.get(link.article_id);return target&&!target.hidden?'<li>'+articleLink(target,link.label||target.title)+'</li>':'';}).join('')+'</ul>';
+    if(field.kind==='links')return '<ul class="lexicon-detail-links">'+field.reference.links.map(link=>{if(!link.article_id)return link.text?.trim()?'<li>'+esc(link.text)+'</li>':'';const target=model.articles.get(link.article_id);return target&&!target.hidden?'<li>'+articleLink(target,link.label||target.title)+'</li>':'';}).join('')+'</ul>';
     // Only an explicitly typed relationship can resolve a saved ID to an article.
     if (field.field_type === 'relationship') {
       let refs = field.value;
@@ -83,7 +83,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     return prose(field,'value',field.label);
   }
   function fieldsMarkup(fields) {
-    return `<dl>${fields.map(f => `<div class="lexicon-field" data-field-id="${esc(f.id)}"><dt>${esc(f.label)}</dt><dd>${fieldValue(f)}</dd></div>`).join('')}</dl>`;
+    return `<dl>${fields.map(f => `<div class="lexicon-field${f.label?.trim()?'':' is-unlabeled'}" data-field-id="${esc(f.id)}"><dt${f.label?.trim()?'':' hidden'}>${esc(f.label)}</dt><dd>${fieldValue(f)}</dd></div>`).join('')}</dl>`;
   }
   function infobox(a) {
     const info = model.visibleFields(a, 'infobox');
@@ -732,11 +732,12 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
   content.addEventListener('click', event => {
     if (event.target.closest('[data-reset]')) saveProperty(event.target.closest('form'),true);
   });
-  function inputField(name,label,value='',type='text') { return `<label class="form-field"><span>${esc(label)}</span><input name="${name}" type="${type}" value="${esc(value)}"${type === 'text' ? ' required' : ''}></label>`; }
+  function inputField(name,label,value='',type='text',required=type==='text') { return `<label class="form-field"><span>${esc(label)}</span><input name="${name}" type="${type}" value="${esc(value)}"${required ? ' required' : ''}></label>`; }
   function selectField(name,label,items,selected='') { return `<label class="form-field"><span>${esc(label)}</span><select name="${name}" aria-label="${esc(label)}">${items.map(([v,l]) => option(v,l,selected)).join('')}</select></label>`; }
   // Existing detail_groups store full-width sections; links facts store labeled groups.
   function detailGroupField(article,selected='') {return selectField('group_id','Section',[['','No section'],...article.detailGroups.map(g=>[g.id,g.label])],selected);}
   function isDetailGroup(field) {return field.kind==='links'&&field.reference.presentation!=='item';}
+  function detailItemTitle(field) {return field.label?.trim()||(field.kind==='links'?field.reference.links.map(link=>link.text||link.label||model.articles.get(link.article_id)?.title||'').filter(Boolean).join(', '):C.text(field.value)).slice(0,120)||'Empty item';}
   function openDetailsManager(message='') {
     const article=current();if(!article||!edit||!canEdit())return;
     detailsManagerActive=true;
@@ -744,7 +745,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     const row=(action,id,label,kind,extra='')=>`<button type="button" class="lexicon-detail-node" data-action="${action}" data-id="${esc(id)}" ${extra}><span>${esc(label)}</span><small>${kind}</small>${icon('pencil-simple')}</button>`;
     const item=field=>{
       const group=isDetailGroup(field);
-      return `<li data-detail-node="${esc(field.id)}">${row(group?'detail-links':'edit-detail',field.id,field.label,group?'Group':'Item')}${group?'<ul>'+field.reference.links.map((link,index)=>'<li>'+row('detail-links',field.id,link.text||link.label||model.articles.get(link.article_id)?.title||'Unavailable article','Item',`data-link-index="${index}"`)+'</li>').join('')+'</ul>':''}</li>`;
+      return `<li data-detail-node="${esc(field.id)}">${row(group?'detail-links':'edit-detail',field.id,detailItemTitle(field),group?'Group':'Item')}${group?'<ul>'+field.reference.links.map((link,index)=>'<li>'+row('detail-links',field.id,link.text||link.label||model.articles.get(link.article_id)?.title||(link.article_id?'Unavailable article':'Empty item'),'Item',`data-link-index="${index}"`)+'</li>').join('')+'</ul>':''}</li>`;
     };
     dialog.classList.add('lexicon-details-manager');
     dialog.innerHTML=`<div class="lexicon-details-manager-header"><h2 id="wiki-dialog-title">Manage Article Details</h2><button type="button" class="secondary-action" data-manager-close>Close</button></div><div class="lexicon-details-manager-add">${selectField('detail_type','Add',[['item','Item'],['group','Group'],['section','Section']])}<button type="button" class="primary-action" data-manager-add>Add</button></div><p class="lexicon-details-manager-help">Select an entry to edit it. Items can contain text or an article link.</p><ul class="lexicon-details-tree">${fields.filter(f=>!f.group_id).map(item).join('')}${article.detailGroups.map(section=>`<li data-detail-node="${esc(section.id)}" class="lexicon-details-tree-section">${row('detail-section',section.id,section.label,'Section')}<ul>${fields.filter(f=>f.group_id===section.id).map(item).join('')||'<li class="lexicon-details-empty">No groups or items.</li>'}</ul></li>`).join('')}</ul>${!fields.length&&!article.detailGroups.length?'<p>No details added.</p>':''}<p class="form-status" role="status" data-manager-status></p>`;
@@ -772,7 +773,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
       else if(field?.field_type==='number')valueControl=inputField('value','Value',C.text(field.value),'number');
       else valueControl='<label class="form-field"><span>Value</span><textarea name="value" rows="4">'+esc(C.text(field?.value))+'</textarea></label>';
     }
-    openForm(field?'Edit item':'Add item',inputField('label','Label',field?.label||selection.point?.anchor.quote.slice(0,240)||'')+valueControl+detailGroupField(article,field?.group_id||sectionId)+(!field?selectField('item_group_id','Group',[['','No group']]):'')+inputField('sort_order','Order',field?.sort_order??article.fields.length,'number'),async v=>{
+    openForm(field?'Edit item':'Add item',inputField('label','Label (optional)',field?.label||'','text',false)+valueControl+detailGroupField(article,field?.group_id||sectionId)+(!field?selectField('item_group_id','Group',[['','No group']]):'')+inputField('sort_order','Order',field?.sort_order??article.fields.length,'number'),async v=>{
       const patch={label:String(v.label||'').trim(),sort_order:Number(v.sort_order||0)};
       if(wikiItem){
         const item=readDetailItems()[0];
@@ -791,11 +792,11 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
         else await store.patch(field.table,wikiId,field.id,name,value);
       }
       await store.setDetailGroup(wikiId,article.id,subject(field,'value'),v.group_id);
-    },field?button('remove-detail','Remove item',`data-id="${esc(id)}" aria-label="Remove ${esc(field.label)} from Article Details"`):'');
+    },field?button('remove-detail','Remove item',`data-id="${esc(id)}" aria-label="Remove ${esc(detailItemTitle(field))} from Article Details"`):'');
     if(wikiItem)appendDetailItem(dialog.querySelector('[data-detail-link-rows]'),field?.kind==='links'?field.reference.links[0]:selection.articleId?{article_id:selection.articleId,label:selection.point.anchor.quote}:{text:selection.point?.anchor.quote||C.text(field?.value)},false);
     if(!field){
       const section=dialog.querySelector('[name="group_id"]'),group=dialog.querySelector('[name="item_group_id"]'),label=dialog.querySelector('[name="label"]'),order=dialog.querySelector('[name="sort_order"]');
-      const updateLabel=()=>{const grouped=!!group.value;label.required=!grouped;label.disabled=grouped;label.closest('label').hidden=grouped;order.disabled=grouped;order.closest('label').hidden=grouped;};
+      const updateLabel=()=>{const grouped=!!group.value;label.disabled=grouped;label.closest('label').hidden=grouped;order.disabled=grouped;order.closest('label').hidden=grouped;};
       const updateGroups=()=>{group.innerHTML=option('','No group','')+article.fields.filter(f=>isDetailGroup(f)&&!f.hidden&&f.group_id===section.value).map(f=>option(f.id,f.label,'')).join('');updateLabel();};
       section.onchange=updateGroups;group.onchange=updateLabel;updateGroups();
     }
@@ -813,14 +814,14 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
   function readDetailItems() {
     const items=[...dialog.querySelectorAll('[data-detail-link-row]')].map(row=>row.querySelector('[name="item_type"]').value==='article'?{article_id:row.querySelector('[name="link_article"]').value,label:row.querySelector('[name="link_label"]').value.trim()}:{text:row.querySelector('[name="item_text"]').value});
     if(!items.length||items.length>100)throw new Error('Add between 1 and 100 items.');
-    if(items.some(item=>item.article_id?!model.articles.has(item.article_id):!item.text?.trim()))throw new Error('Enter text or choose an article for each item.');
+    if(items.some(item=>'article_id' in item&&!model.articles.has(item.article_id)))throw new Error('Choose an article for each link.');
     return items;
   }
   function appendDetailItem(rows,link,removable=true) {
       const row=document.createElement('div');row.dataset.detailLinkRow='';row.className='lexicon-detail-link-row';
       const choices=[...model.articles.values()].filter(a=>!a.hidden||a.id===link?.article_id).map(a=>[a.id,a.title]);
       if(link?.article_id&&!model.articles.has(link.article_id))choices.push([link.article_id,'Unavailable article']);
-      row.innerHTML=selectField('item_type','Item type',[['text','Text'],['article','Article link']],link?.article_id?'article':'text')+'<div data-item-text><label class="form-field"><span>Text</span><textarea name="item_text" aria-label="Text" rows="2" maxlength="10000" required>'+esc(link?.text||link?.label||model.articles.get(link?.article_id)?.title||'')+'</textarea></label></div><div data-item-article>'+selectField('link_article','Article',[['','Choose an article'],...choices],link?.article_id||'')+'<label class="form-field"><span>Link text (optional)</span><input name="link_label" maxlength="240" value="'+esc(link?.label||'')+'"></label></div>'+(removable?'<div class="lexicon-detail-actions"><button type="button" class="secondary-action" data-link-up aria-label="Move item up">↑</button><button type="button" class="secondary-action" data-link-down aria-label="Move item down">↓</button><button type="button" class="secondary-action" data-link-remove aria-label="Remove item">'+icon('trash')+'</button></div>':'');
+      row.innerHTML=selectField('item_type','Item type',[['text','Text'],['article','Article link']],link?.article_id?'article':'text')+'<div data-item-text><label class="form-field"><span>Text (optional)</span><textarea name="item_text" aria-label="Text (optional)" rows="2" maxlength="10000">'+esc(link?.text||link?.label||model.articles.get(link?.article_id)?.title||'')+'</textarea></label></div><div data-item-article>'+selectField('link_article','Article',[['','Choose an article'],...choices],link?.article_id||'')+'<label class="form-field"><span>Link text (optional)</span><input name="link_label" maxlength="240" value="'+esc(link?.label||'')+'"></label></div>'+(removable?'<div class="lexicon-detail-actions"><button type="button" class="secondary-action" data-link-up aria-label="Move item up">↑</button><button type="button" class="secondary-action" data-link-down aria-label="Move item down">↓</button><button type="button" class="secondary-action" data-link-remove aria-label="Remove item">'+icon('trash')+'</button></div>':'');
       row.querySelector('[name="link_article"]').required=true;
       const update=()=>{const article=row.querySelector('[name="item_type"]').value==='article';for(const [selector,show]of [['[data-item-article]',article],['[data-item-text]',!article]]){const area=row.querySelector(selector);area.hidden=!show;area.querySelectorAll('input,textarea,select').forEach(input=>input.disabled=!show);}};
       row.querySelector('[name="item_type"]').onchange=update;update();
@@ -906,7 +907,7 @@ import * as Prose from './lexicon-prose.js?v=wiki-followups-1';
     if(['bold','italic','heading'].includes(action)){const active=[...inlineEditors.values()].find(v=>v.editor.isFocused)||[...inlineEditors.values()].at(-1);if(active){const chain=active.editor.chain().focus();if(action==='bold')chain.toggleBold().run();if(action==='italic')chain.toggleItalic().run();if(action==='heading')chain.toggleHeading({level:3}).run();}return;}
     if(['manual-link','unlink','image','excerpt'].includes(action)){inlineAction(action);return;}
     if(action==='new-fact'&&a){editDetailItem(a,undefined,control.dataset.group||'');return;}
-    if(action==='pin-relation'&&a){const id=crypto.randomUUID(),relations=model.connections(a.id).flatMap(g=>g.relations.map(r=>({r,title:g.article.title})));openForm('Pin relationship',selectField('relation','Relationship',relations.map(({r,title})=>[r.id,(r.label||'Connection')+' — '+title]))+inputField('label','Label')+detailGroupField(a),v=>{const r=relations.find(x=>x.r.id===v.relation)?.r;if(!r)throw new Error('Choose a relationship.');return store.saveDetail({id,wiki_id:wikiId,article_id:a.id,label:v.label,kind:'relationship',reference:{subject_type:r.subjectType,subject_id:r.id},placement:'infobox',sort_order:a.fields.length},v.group_id);});}
+    if(action==='pin-relation'&&a){const id=crypto.randomUUID(),relations=model.connections(a.id).flatMap(g=>g.relations.map(r=>({r,title:g.article.title})));openForm('Pin relationship',selectField('relation','Relationship',relations.map(({r,title})=>[r.id,(r.label||'Connection')+' — '+title]))+inputField('label','Label (optional)','','text',false)+detailGroupField(a),v=>{const r=relations.find(x=>x.r.id===v.relation)?.r;if(!r)throw new Error('Choose a relationship.');return store.saveDetail({id,wiki_id:wikiId,article_id:a.id,label:v.label,kind:'relationship',reference:{subject_type:r.subjectType,subject_id:r.id},placement:'infobox',sort_order:a.fields.length},v.group_id);});}
     if(action==='alias'&&a){const id=crypto.randomUUID();openForm('Add alias',inputField('alias','Alias'),v=>store.save('lexicon_aliases',{id,wiki_id:wikiId,article_id:a.id,alias:v.alias.trim()}));}
     if(action==='remove-annotation'){try{const item=repairItems.find(n=>n.id===control.dataset.id);await store.remove(item?.excerpt?'lexicon_facts':'lexicon_annotations',wikiId,control.dataset.id);await load();}catch(e){status.textContent=e.message;}}
     if(action==='repair'){const point=selectionPoint||captureSelection(),item=repairItems.find(n=>n.id===control.dataset.id);if(!point){status.textContent='Select a replacement passage first.';return;}try{if(item.excerpt)await store.save('lexicon_facts',{id:item.id,wiki_id:wikiId,article_id:item.article_id,label:item.label,kind:'excerpt',placement:item.placement,sort_order:item.sort_order,hidden:item.hidden,reference:{subject_type:point.type,subject_id:point.id,property:point.property,anchor:point.anchor}});else await store.save('lexicon_annotations',{...item,subject_type:point.type,subject_id:point.id,property:point.property,anchor:point.anchor});await load();}catch(e){status.textContent=e.message;}}
