@@ -78,7 +78,6 @@ body:has(.lexicon-inline-toolbar) .lexicon-back-top { bottom:76px; }
 .lexicon-field { padding: 10px 0; }
 .lexicon-field dt { font-weight: 750; margin-bottom: 5px; }
 .lexicon-field dd { margin: 0; color: var(--ink); }
-.lexicon-infobox .lexicon-field { border-top: 1px solid var(--line); }
 .lexicon-connections { padding-left: 20px; }
 .lexicon-connections > li { margin: 14px 0; }
 .lexicon-connections ul { margin-top: 5px; color: var(--muted); }
