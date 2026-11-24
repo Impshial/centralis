@@ -46,7 +46,7 @@ for sections, groups and items. Selecting an entry opens its editing controls.
 wiki context menu and can place them in an existing section/group. Unchanged
 selected text added outside a group retains its pinned excerpt reference.
 Item labels and text values are optional. Unlabeled values span the Article Details
-width; the manager identifies them by their content. Empty items remain editable
+width and align right; the manager identifies them by their content. Empty items remain editable
 in the manager and do not display in the reader. Chronicle preserves blank labels.
 Sections require only a name, with no text value. The migration
 `20261123234241_lexicon_optional_detail_values.sql` is applied to Centralis.
