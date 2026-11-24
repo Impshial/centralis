@@ -1,6 +1,10 @@
 # Lexicon and Chronicle
 
 `lexicon.html` lists saved wikis and creates universe-backed or standalone wikis.
+Each card and list row has a delete button with a confirmation dialog. Deleting a
+wiki removes its Lexicon content and edits through owner-scoped deletion and the
+existing foreign-key cascades. Source universes, elements, and Chronicle data
+remain available. Failed deletions keep the card and allow retrying.
 `lexicon-wiki.html?wiki=<id>&article=<id>` reads an article; `&edit=1` enables
 author controls. `&view=index` opens All articles.
 `lexicon-search.html?wiki=<id>&q=<query>` opens bookmarkable search results; older

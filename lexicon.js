@@ -8,6 +8,12 @@
   const form = dialog.querySelector('form');
   const message = dialog.querySelector('[role="status"]');
   const field = name => form.elements.namedItem(name);
+  const deleteDialog = document.querySelector('[data-lexicon-delete-dialog]');
+  const deleteForm = deleteDialog.querySelector('form');
+  const deleteMessage = deleteDialog.querySelector('[data-lexicon-delete-message]');
+  const deleteStatus = deleteDialog.querySelector('[role="status"]');
+  const deleteCancel = deleteDialog.querySelector('[data-lexicon-delete-cancel]');
+  let pendingDelete = null, deleting = false;
   let store, wikis = [], universes = [];
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   function render() {
@@ -21,9 +27,48 @@
           <span class="universe-card-description-short">${escape(w.universe?.description || (w.kind === 'standalone' ? 'Standalone wiki' : 'Source universe unavailable'))}</span>
           <span class="universe-card-description-long">${escape(w.universe?.description || (w.kind === 'standalone' ? 'Standalone wiki' : 'Source universe unavailable'))}</span>
         </span>
-      </a></article>`).join('') || `<p class="empty-state">${query ? 'No matching wikis.' : 'No wikis yet.'}</p>`;
+      </a>
+      <button class="icon-button lexicon-card-delete" type="button" data-lexicon-delete="${escape(w.id)}" aria-label="Delete ${escape(w.name)}" title="Delete wiki">
+        <ph-trash weight="bold" aria-hidden="true"></ph-trash>
+      </button></article>`).join('') || `<p class="empty-state">${query ? 'No matching wikis.' : 'No wikis yet.'}</p>`;
   }
   search.addEventListener('input', render);
+  grid.addEventListener('click', event => {
+    const button = event.target.closest('[data-lexicon-delete]');
+    if (!button || deleting) return;
+    const wiki = wikis.find(w => w.id === button.dataset.lexiconDelete);
+    if (!wiki) return;
+    event.preventDefault();
+    pendingDelete = wiki;
+    deleteMessage.textContent = wiki.kind === 'universe'
+      ? `Permanently delete “${wiki.name}” and its wiki-specific edits? Its universe and Chronicle data will be kept.`
+      : `Permanently delete “${wiki.name}” and all its articles?`;
+    deleteStatus.textContent = '';
+    deleteDialog.showModal();
+    deleteCancel.focus();
+  });
+  deleteCancel.addEventListener('click', () => { if (!deleting) deleteDialog.close(); });
+  deleteDialog.addEventListener('cancel', event => { if (deleting) event.preventDefault(); });
+  deleteDialog.addEventListener('close', () => { pendingDelete = null; });
+  deleteForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (deleting || !pendingDelete) return;
+    const wiki = pendingDelete;
+    deleting = true;
+    deleteForm.querySelectorAll('button').forEach(button => button.disabled = true);
+    deleteStatus.textContent = 'Deleting wiki…';
+    try {
+      await store.deleteWiki(wiki.id);
+      wikis = wikis.filter(w => w.id !== wiki.id);
+      deleteDialog.close();
+      render();
+      (grid.querySelector('[data-lexicon-delete]') || create).focus({ preventScroll: true });
+    } catch (error) { deleteStatus.textContent = `Could not delete wiki: ${error.message}`; }
+    finally {
+      deleting = false;
+      deleteForm.querySelectorAll('button').forEach(button => button.disabled = false);
+    }
+  });
   const views = document.querySelectorAll('[data-lexicon-view]');
   views.forEach(button => button.addEventListener('click', () => {
     const list = button.dataset.lexiconView === 'list';

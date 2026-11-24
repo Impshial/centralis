@@ -8,7 +8,7 @@
   <script src="theme-bootstrap.js?v=theme-bootstrap-1"></script>
   <link rel="stylesheet" href="styles.css?v=lexicon-1">
   <link rel="stylesheet" href="tailwind.generated.css?v=generation-activity-1">
-  <link rel="stylesheet" href="lexicon.css?v=wiki-1">
+  <link rel="stylesheet" href="lexicon.css?v=home-delete-1">
   <script type="module" src="assets/vendor/phosphor/index.mjs?v=flat-runtime-1"></script>
 </head>
 <body data-auth-required="true" data-page="lexicon">
@@ -69,10 +69,21 @@
       </div>
     </form>
   </dialog>
+  <dialog class="lexicon-dialog lexicon-delete-dialog" aria-labelledby="lexicon-delete-title" aria-describedby="lexicon-delete-message" data-lexicon-delete-dialog>
+    <form>
+      <h2 id="lexicon-delete-title">Delete wiki?</h2>
+      <p id="lexicon-delete-message" data-lexicon-delete-message></p>
+      <p class="form-status" role="status"></p>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-lexicon-delete-cancel>Cancel</button>
+        <button class="danger-action" type="submit">Delete wiki</button>
+      </div>
+    </form>
+  </dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js?v=lexicon-1"></script>
-  <script src="lexicon-data.js?v=wiki-followups-1"></script>
-  <script src="lexicon.js?v=wiki-1"></script>
+  <script src="lexicon-data.js?v=home-delete-1"></script>
+  <script src="lexicon.js?v=home-delete-1"></script>
 </body>
 </html>

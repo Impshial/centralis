@@ -153,6 +153,10 @@
     async createWiki(row) {
       return checked(await this.client.from('lexicon_wikis').upsert({ ...row, user_id: this.user.id }, { onConflict: 'id' }).select().single());
     }
+    async deleteWiki(wikiId) {
+      if (!wikiId || !this.user?.id) throw new Error('Select a wiki to delete.');
+      return checked(await this.client.from('lexicon_wikis').delete().eq('id', wikiId).eq('user_id', this.user.id).select('id').maybeSingle());
+    }
     async save(table, row) {
       if (!writes.has(table) || table === 'lexicon_wikis') throw new Error('Unsupported content table.');
       return checked(await this.client.from(table).upsert(row, { onConflict: 'id' }).select().single());
