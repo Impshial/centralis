@@ -314,21 +314,25 @@
         .from(ELEMENT_TYPES_TABLE)
         .select("id,name,icon,color")
         .eq("user_id", state.user.id)
+        .eq("deleted", false)
         .order("name", { ascending: true }),
       window.centralisSupabase
         .from(CHRONICLE_MODULES_TABLE)
         .select("element_id")
         .eq("user_id", state.user.id)
+        .eq("deleted", false)
         .eq("module_type", TEMPLATE_SECTION_MODULE_TYPE),
       window.centralisSupabase
         .from(UNIVERSES_TABLE)
         .select("id,name")
         .eq("user_id", state.user.id)
+        .eq("deleted", false)
         .order("name", { ascending: true }),
       window.centralisSupabase
         .from(ELEMENTS_TABLE)
         .select("id,name,description,element_type_id,universe_id,updated_at,created_at")
         .eq("user_id", state.user.id)
+        .eq("deleted", false)
         .is("universe_id", null)
         .order("updated_at", { ascending: false })
     ]);
@@ -344,11 +348,17 @@
     state.moduleCounts = countModules(moduleResponse.data || []);
     state.standaloneElements = standaloneResponse.data || [];
 
+    if (state.selectedUniverseId && !state.universesById.has(state.selectedUniverseId)) {
+      state.selectedUniverseId = "";
+      writeHomepageQueryState();
+    }
+
     if (state.selectedUniverseId) {
       const universeElementResponse = await window.centralisSupabase
         .from(ELEMENTS_TABLE)
         .select("id,name,description,element_type_id,universe_id,updated_at,created_at")
         .eq("user_id", state.user.id)
+        .eq("deleted", false)
         .eq("universe_id", state.selectedUniverseId)
         .order("updated_at", { ascending: false });
 
@@ -371,6 +381,8 @@
     const { data, error } = await window.centralisSupabase
       .from(UNIVERSES_TABLE)
       .select("id,name")
+      .eq("user_id", state.user.id)
+      .eq("deleted", false)
       .in("id", universeIds)
       .order("name", { ascending: true });
 
@@ -431,6 +443,8 @@
             .from(UNIVERSES_TABLE)
             .select("id,name")
             .eq("id", element.universe_id)
+            .eq("user_id", state.user.id)
+            .eq("deleted", false)
             .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
         window.centralisSupabase
@@ -457,6 +471,9 @@
       ]);
 
       throwIfError(universeResponse);
+      if (element.universe_id && !universeResponse.data) {
+        throw new Error("This element's universe is no longer available.");
+      }
       throwIfError(moduleResponse);
       throwIfError(valueResponse);
       throwIfError(customResponse);
@@ -617,8 +634,9 @@
     }
 
     dom.universeFilterWrap.hidden = state.activeTab !== "universe";
+    dom.universeFilter.disabled = !state.universes.length;
     dom.universeFilter.innerHTML = `
-      <option value="">Choose a universe</option>
+      <option value="">${state.universes.length ? "Choose a universe" : "No universes available"}</option>
       ${state.universes.map((universe) => `<option value="${escapeHtml(universe.id)}"${universe.id === state.selectedUniverseId ? " selected" : ""}>${escapeHtml(universe.name)}</option>`).join("")}
     `;
   }
@@ -1223,6 +1241,16 @@
   }
 
   function renderUniverseElements(rows) {
+    if (!state.universes.length) {
+      dom.content.innerHTML = `
+        <div class="chronicle-empty">
+          <h2>No universes available</h2>
+          <a class="secondary-action" href="universe-builder.html">Open Universe Builder</a>
+        </div>
+      `;
+      return;
+    }
+
     if (!state.selectedUniverseId) {
       dom.content.innerHTML = `
         <div class="chronicle-empty">
