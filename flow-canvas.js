@@ -1244,7 +1244,7 @@
           { className: "group-flow-title" },
           React.createElement("span", null, "Group"),
           React.createElement("strong", null, data.name || "Untitled Group"),
-          React.createElement("small", null, `${Number(data.childCount || 0)} ${Number(data.childCount || 0) === 1 ? "element" : "elements"}`)
+          collapsed && React.createElement("small", null, `${Number(data.childCount || 0)} ${Number(data.childCount || 0) === 1 ? "element" : "elements"}`)
         ),
         React.createElement(
           "div",
@@ -3857,6 +3857,7 @@
       .from("element_type_templates")
       .select("*")
       .eq("element_type_id", elementTypeId)
+      .eq("deleted", false)
       .order("name", { ascending: true });
 
     if (error) {
@@ -4065,17 +4066,24 @@
       return { modules, sections: [], fields: [], values: valueResponse.data || [], customFields };
     }
 
-    const [sectionResponse, fieldResponse] = await Promise.all([
+    const [sectionResponse, fieldResponse, templateResponse] = await Promise.all([
       window.centralisSupabase
         .from("element_template_sections")
         .select("*")
+        .eq("deleted", false)
         .in("id", sectionIds),
       window.centralisSupabase
         .from("element_type_template_fields")
         .select("*")
+        .eq("deleted", false)
         .in("template_id", templateIds)
         .in("section_id", sectionIds)
-        .order("sort_order", { ascending: true })
+        .order("sort_order", { ascending: true }),
+      window.centralisSupabase
+        .from("element_type_templates")
+        .select("id")
+        .in("id", templateIds)
+        .eq("deleted", false)
     ]);
 
     if (sectionResponse.error) {
@@ -4084,9 +4092,13 @@
     if (fieldResponse.error) {
       throw fieldResponse.error;
     }
+    if (templateResponse.error) {
+      throw templateResponse.error;
+    }
 
+    const activeTemplateIds = new Set((templateResponse.data || []).map((template) => template.id));
     const visibleSectionIds = new Set((sectionResponse.data || [])
-      .filter((section) => !section.is_hidden && !section.deleted)
+      .filter((section) => !section.is_hidden && !section.deleted && activeTemplateIds.has(section.template_id))
       .map((section) => section.id));
     const fields = dedupeTemplateFields(fieldResponse.data || [])
       .filter((field) => !field.is_hidden && !field.deleted && visibleSectionIds.has(field.section_id));
@@ -4152,12 +4164,14 @@
             .from("element_template_sections")
             .select("*")
             .eq("template_id", template.id)
+            .eq("deleted", false)
             .order("sort_order", { ascending: true })
             .order("name", { ascending: true }),
           window.centralisSupabase
             .from("element_type_template_fields")
             .select("*")
             .eq("template_id", template.id)
+            .eq("deleted", false)
             .order("sort_order", { ascending: true })
         ]);
 
@@ -4549,6 +4563,8 @@
     const [historyVersion, setHistoryVersion] = React.useState(0);
     const reactFlowWrapper = React.useRef(null);
     const reactFlowInstance = React.useRef(null);
+    const pendingElementPositionRef = React.useRef(null);
+    const pendingGroupPositionRef = React.useRef(null);
     const pendingFocusElementIdRef = React.useRef(focusElementId);
     const connectionCompletedRef = React.useRef(false);
 
@@ -6365,6 +6381,7 @@
           .from("element_type_templates")
           .select("*")
           .in("element_type_id", typeIds)
+          .eq("deleted", false)
           .order("name", { ascending: true });
         if (templateResponse.error) throw templateResponse.error;
 
@@ -6385,12 +6402,14 @@
             .from("element_template_sections")
             .select("*")
             .in("template_id", templateIds)
+            .eq("deleted", false)
             .order("sort_order", { ascending: true })
             .order("name", { ascending: true }),
           window.centralisSupabase
             .from("element_type_template_fields")
             .select("*")
             .in("template_id", templateIds)
+            .eq("deleted", false)
             .order("sort_order", { ascending: true })
         ]);
         if (sectionResponse.error) throw sectionResponse.error;
@@ -7278,19 +7297,20 @@
           setTemplateStatus("Default templates cannot be deleted. Duplicate it if you want a deletable copy.", "error");
           return;
         }
-        if (!template || !window.confirm(`Delete "${template.name}"? Elements using it will lose their selected Rich Details template.`)) return;
+        if (!template || !window.confirm(`Delete "${template.name}" and its sections, fields, and saved field values? Elements using it will no longer have this template selected.`)) return;
         setTemplateStatus("Deleting template...");
         try {
-          const clearResponse = await window.centralisSupabase
-            .from("elements")
-            .update({ rich_template_id: null, updated_at: new Date().toISOString() })
-            .eq("rich_template_id", templateId);
-          if (clearResponse.error) throw clearResponse.error;
+          // Foreign keys clear element selections and remove template children atomically.
           const deleteResponse = await window.centralisSupabase
             .from("element_type_templates")
-            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
-            .eq("id", templateId);
+            .delete()
+            .eq("id", templateId)
+            .eq("element_type_id", template.element_type_id)
+            .eq("is_default", false)
+            .select("id")
+            .single();
           if (deleteResponse.error) throw deleteResponse.error;
+          if (deleteResponse.data?.id !== templateId) throw new Error("Template was not deleted. Refresh and try again.");
           setNodes((currentNodes) => currentNodes.map((node) => node.data?.richTemplateId === templateId
             ? { ...node, data: { ...node.data, richTemplateId: null } }
             : node));
@@ -7307,6 +7327,7 @@
       async function deleteSection(sectionId) {
         const section = [...sectionsByTemplateId.values()].flat().find((item) => item.id === sectionId);
         const template = [...templatesByTypeId.values()].flat().find((item) => item.id === section?.template_id);
+        if (!section || !template) return;
         if (section?.is_default || template?.is_default) {
           setTemplateStatus("Seeded template sections are read-only. Duplicate the template to customize it.", "error");
           return;
@@ -7315,9 +7336,14 @@
         try {
           const response = await window.centralisSupabase
             .from("element_template_sections")
-            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
-            .eq("id", sectionId);
+            .delete()
+            .eq("id", sectionId)
+            .eq("template_id", template.id)
+            .eq("is_default", false)
+            .select("id")
+            .single();
           if (response.error) throw response.error;
+          if (response.data?.id !== sectionId) throw new Error("Section was not deleted. Refresh and try again.");
           await refreshTypeTemplateData();
           renderWideTemplateEditor();
           setTemplateStatus("Section deleted.", "success");
@@ -7329,6 +7355,7 @@
       async function deleteField(fieldId) {
         const field = [...fieldsByTemplateId.values()].flat().find((item) => item.id === fieldId);
         const template = [...templatesByTypeId.values()].flat().find((item) => item.id === field?.template_id);
+        if (!field || !template) return;
         if (field?.is_default || template?.is_default) {
           setTemplateStatus("Seeded template fields are read-only. Duplicate the template to customize it.", "error");
           return;
@@ -7337,9 +7364,14 @@
         try {
           const response = await window.centralisSupabase
             .from("element_type_template_fields")
-            .update({ deleted: true, deleted_at: new Date().toISOString(), deleted_by: universe.user_id || currentAppUser?.id || null })
-            .eq("id", fieldId);
+            .delete()
+            .eq("id", fieldId)
+            .eq("template_id", template.id)
+            .eq("is_default", false)
+            .select("id")
+            .single();
           if (response.error) throw response.error;
+          if (response.data?.id !== fieldId) throw new Error("Field was not deleted. Refresh and try again.");
           await refreshTypeTemplateData();
           renderWideTemplateEditor();
           setTemplateStatus("Field deleted.", "success");
@@ -7678,6 +7710,7 @@
       function closeAddElementModal() {
         modal.hidden = true;
         setPendingLink(null);
+        pendingElementPositionRef.current = null;
         form?.reset();
         setElementTypePickerValue("");
         if (status) {
@@ -9067,7 +9100,7 @@
 
         pushCanvasHistory();
         const id = createId();
-        const position = pendingLink?.position || {
+        const position = pendingLink?.position || pendingElementPositionRef.current || {
           x: Number(universe.canvas_position_x ?? 120) + 360 + (nodes.length - 1) * 32,
           y: Number(universe.canvas_position_y ?? 120) + 40 + (nodes.length - 1) * 22
         };
@@ -9149,6 +9182,7 @@
         }
 
         setPendingLink(null);
+        pendingElementPositionRef.current = null;
         form.reset();
         setElementTypePickerValue("");
         updateSubmitLabel();
@@ -10278,11 +10312,14 @@
       return true;
     }
 
-    function openCreateGroupDialog() {
+    function openCreateGroupDialog(position = null) {
       const modal = document.getElementById("create-group-modal");
       const input = modal?.querySelector('[name="group-name"]');
       const status = modal?.querySelector("[data-group-status]");
       if (!modal) return;
+      pendingGroupPositionRef.current = position;
+      const subtitle = modal.querySelector(".modal-subtitle");
+      if (subtitle) subtitle.textContent = position ? "Name the new group." : "Name the group for the selected elements.";
       modal.hidden = false;
       if (status) {
         status.textContent = "";
@@ -10295,9 +10332,9 @@
       }
     }
 
-    async function createGroupFromSelection(name) {
-      const selectedNodes = getSelectedGroupableNodes();
-      if (!selectedNodes.length) {
+    async function createGroup(name, position = null) {
+      const selectedNodes = position ? [] : getSelectedGroupableNodes();
+      if (!selectedNodes.length && !position) {
         setTransferStatus("Select one or more top-level elements or groups to group.", "error");
         return false;
       }
@@ -10308,7 +10345,9 @@
       }
 
       pushCanvasHistory();
-      const bounds = getGroupBounds(selectedNodes);
+      const bounds = position
+        ? { x: Math.round(position.x), y: Math.round(position.y), width: 280, height: 190 }
+        : getGroupBounds(selectedNodes);
       const id = createId();
       const now = new Date().toISOString();
       const groupRow = {
@@ -11608,6 +11647,7 @@
       const templateResponse = await window.centralisSupabase
         .from("element_type_templates")
         .select("*")
+        .eq("deleted", false)
         .in("element_type_id", typeIds);
       if (templateResponse.error) throw templateResponse.error;
 
@@ -11624,6 +11664,7 @@
       const fieldResponse = await window.centralisSupabase
         .from("element_type_template_fields")
         .select("*")
+        .eq("deleted", false)
         .in("template_id", templateIds);
       if (fieldResponse.error) throw fieldResponse.error;
 
@@ -11688,6 +11729,7 @@
           const fieldResponse = await window.centralisSupabase
             .from("element_type_template_fields")
             .select("id,field_key,label")
+            .eq("deleted", false)
             .in("id", fieldIds);
           if (fieldResponse.error) throw fieldResponse.error;
           fieldsById = new Map((fieldResponse.data || []).map((field) => [field.id, field]));
@@ -11701,6 +11743,7 @@
           const templateResponse = await window.centralisSupabase
             .from("element_type_templates")
             .select("id,name")
+            .eq("deleted", false)
             .in("id", templateIds);
           if (templateResponse.error) throw templateResponse.error;
           templatesById = new Map((templateResponse.data || []).map((template) => [template.id, template]));
@@ -13538,6 +13581,7 @@
 
       function closeModal() {
         modal.hidden = true;
+        pendingGroupPositionRef.current = null;
       }
 
       async function handleSubmit(event) {
@@ -13553,7 +13597,7 @@
           return;
         }
         if (submitButton) submitButton.disabled = true;
-        const created = await createGroupFromSelection(groupName);
+        const created = await createGroup(groupName, pendingGroupPositionRef.current);
         if (submitButton) submitButton.disabled = false;
         if (created) {
           form.reset();
@@ -14057,7 +14101,11 @@
         position = reactFlowInstance.current.project({ x: canvasX, y: canvasY });
       }
       setContextMenu(null);
-      setCanvasContextMenu({ x: canvasX, y: canvasY, position });
+      setCanvasContextMenu({
+        x: Math.max(8, Math.min(canvasX, (wrapperRect?.width || window.innerWidth) - 176)),
+        y: Math.max(8, Math.min(canvasY, (wrapperRect?.height || window.innerHeight) - 144)),
+        position
+      });
     }, []);
 
     function closeContextMenu() {
@@ -14430,6 +14478,37 @@
           onClick: closeContextMenu,
           onContextMenu: (event) => event.preventDefault()
         },
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              pendingElementPositionRef.current = canvasContextMenu.position;
+              setPendingLink(null);
+              closeContextMenu();
+              const modal = document.getElementById("add-element-modal");
+              if (modal) {
+                modal.hidden = false;
+                modal.querySelector('[name="element-name"]')?.focus();
+              }
+            }
+          },
+          "Add Element"
+        ),
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              const position = canvasContextMenu.position;
+              closeContextMenu();
+              openCreateGroupDialog(position);
+            }
+          },
+          "Add Group"
+        ),
         React.createElement(
           "button",
           {

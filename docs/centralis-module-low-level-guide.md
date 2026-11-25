@@ -701,6 +701,8 @@ The Settings page includes an Elements tab that supports:
 
 Recent changes require hard removal of element type field/template data where appropriate, rather than only soft-deleting type rows, because the default element type system expects actual cleanup in user-specific field structures.
 
+The template editor permanently deletes custom templates, sections, and fields. Template deletion cascades to its sections, fields, and saved field values, and clears element template selections through foreign keys. Section deletion keeps its fields and makes them unsectioned. System defaults remain protected. Deletion must return the intended record before the editor reports success. Library queries exclude older soft-deleted records; an element type may have no templates.
+
 ### Legacy Rich Naming
 
 Some table names and fields still contain old `rich` terminology, especially around `rich_template_id` and rich detail views. A saved plan exists at:

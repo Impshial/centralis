@@ -516,6 +516,7 @@
       .from(ELEMENT_TYPE_TEMPLATES_TABLE)
       .select("*")
       .eq("element_type_id", elementTypeId)
+      .eq("deleted", false)
       .order("is_default", { ascending: false })
       .order("name", { ascending: true });
 
@@ -529,12 +530,14 @@
         .from(ELEMENT_TEMPLATE_SECTIONS_TABLE)
         .select("*")
         .eq("template_id", templateId)
+        .eq("deleted", false)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true }),
       window.centralisSupabase
         .from(ELEMENT_TYPE_TEMPLATE_FIELDS_TABLE)
         .select("*")
         .eq("template_id", templateId)
+        .eq("deleted", false)
         .order("sort_order", { ascending: true })
     ]);
 
