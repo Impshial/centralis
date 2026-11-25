@@ -725,9 +725,11 @@
           <div class="chronicle-workspace-actions">
             ${renderBackToCanvasLink()}
             ${workspace.universe?.id?'<button class="secondary-action" type="button" data-chronicle-view-lexicon>View in Lexicon</button>':''}
-            <span data-chronicle-dirty role="status" aria-live="polite"></span>
             <button class="secondary-action" type="button" data-chronicle-add-custom-field>Add field</button>
-            <button class="primary-action" type="submit" data-chronicle-workspace-save>${workspace.isUniverse ? 'Save Universe' : 'Save Element'}</button>
+            <div class="chronicle-workspace-save">
+              <button class="primary-action" type="submit" data-chronicle-workspace-save>${workspace.isUniverse ? 'Save Universe' : 'Save Element'}</button>
+              <span data-chronicle-dirty role="status" aria-live="polite"></span>
+            </div>
           </div>
         </div>
         ${renderWorkspaceImagePanel(images, element.name)}

@@ -3982,6 +3982,20 @@ body[data-page="home"] :is(
 .chronicle-workspace-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.chronicle-workspace-save {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.chronicle-workspace-save [data-chronicle-dirty] {
+  min-height: 1.4em;
+  color: var(--danger);
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .chronicle-nav-button {
