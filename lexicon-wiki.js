@@ -94,22 +94,23 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
     }).join('');
     return `<section class="lexicon-infobox" aria-label="Article Details"><h2>Article Details</h2>${a.image ? `<img src="${esc(a.image)}" alt="${esc(a.title)}">` : ''}${a.type ? `<dl><div class="lexicon-field"><dt>Type</dt><dd>${esc(a.type)}</dd></div></dl>` : ''}${fieldsMarkup(info.filter(f=>!f.group_id))}${grouped}${edit?button('manage-details','Manage Article Details'):''}</section>`;
   }
-  function sourceTools(a) {
-    if(model.wiki.kind!=='universe'||!a||!canEdit())return '';
+  function articleTools(a, editAction) {
+    if(!a||!canEdit())return '';
+    if(model.wiki.kind!=='universe')return editAction?'<section class="lexicon-page-tools" aria-label="Page tools"><h2>Page tools</h2>'+editAction+'</section>':'';
     const builder='universe-canvas.html?universe_id='+encodeURIComponent(model.wiki.universe_id);
-    return '<section class="lexicon-source-tools" aria-label="Source tools"><h2>Source tools</h2><a href="'+builder+'&focus_element_id='+encodeURIComponent(a.id)+'">'+icon('cube')+'Open in Builder</a><a href="chronicle-editor.html#universe/'+encodeURIComponent(model.wiki.universe_id)+(a.isRoot?'':'/element/'+encodeURIComponent(a.id))+'">'+icon('arrow-square-out')+'Edit in Chronicle</a>'+button('refresh',icon('arrows-clockwise')+'Reload source')+'</section>';
+    return '<section class="lexicon-source-tools" aria-label="Source tools"><h2>Source tools</h2><a href="'+builder+'&focus_element_id='+encodeURIComponent(a.id)+'">'+icon('cube')+'Open in Builder</a><a href="chronicle-editor.html#universe/'+encodeURIComponent(model.wiki.universe_id)+(a.isRoot?'':'/element/'+encodeURIComponent(a.id))+'">'+icon('arrow-square-out')+'Edit in Chronicle</a>'+editAction+button('refresh',icon('arrows-clockwise')+'Reload source')+'</section>';
   }
   const sidebarTitle = a => '<div class="lexicon-sidebar-page-title" data-sidebar-page-title hidden>'+esc(a.title)+'</div>';
   function reader(a) {
     if(!a)return '<section class="lexicon-article"><h1>'+esc(model.wiki.name)+'</h1>'+ (model.wiki.kind==='standalone'?(model.articles.size?resultList([...model.articles.values()].filter(visible).map(article=>({article,snippet:model.plain(article.introduction).slice(0,150)}))):'<p>No articles.</p>'):'<p>No article selected.</p>')+'</section>';
     const editAction=canEdit()&&!overviewPending?'<a class="secondary-action" href="'+url(articleId,!edit)+'">'+icon(edit?'eye':'pencil-simple')+(edit?'View wiki page':'Edit wiki page')+'</a>':'';
-    if(a.hidden&&!edit){const tools=sourceTools(a);return '<div class="lexicon-reader'+(tools?'':' is-single')+'"><section class="lexicon-article"><div class="lexicon-title-row"><h1>Article hidden</h1>'+editAction+'</div><p>This article is hidden in this wiki.</p></section>'+(tools?'<aside class="lexicon-sidebar" aria-label="Article information">'+tools+'</aside>':'')+'</div>';}
-    resolveFacts(a);const body=model.visibleFields(a,'body'),info=infobox(a),tools=sourceTools(a);
-    return '<div class="lexicon-reader'+(info||tools?'':' is-single')+'"><article class="lexicon-article"><div class="lexicon-title-row"><h1>'+esc(a.title)+'</h1>'+editAction+'</div>'+prose(a,'introduction','Introduction')+
+    if(a.hidden&&!edit){const tools=articleTools(a,editAction);return '<div class="lexicon-reader'+(tools?'':' is-single')+'"><section class="lexicon-article"><div class="lexicon-title-row"><h1>Article hidden</h1></div><p>This article is hidden in this wiki.</p></section>'+(tools?'<aside class="lexicon-sidebar" aria-label="Article information">'+tools+'</aside>':'')+'</div>';}
+    resolveFacts(a);const body=model.visibleFields(a,'body'),info=infobox(a),tools=articleTools(a,editAction);
+    return '<div class="lexicon-reader'+(info||tools?'':' is-single')+'"><article class="lexicon-article"><div class="lexicon-title-row"><h1>'+esc(a.title)+'</h1></div>'+prose(a,'introduction','Introduction')+
       (a.body||edit&&a.subjectType==='article'&&!a.isRoot?'<section><h2 id="article-body">Body</h2>'+prose(a,'body','Body')+'</section>':'')+
       (body.some(f=>!f.sectionId)?'<section><h2 id="article-details">Details</h2>'+fieldsMarkup(body.filter(f=>!f.sectionId))+'</section>':'')+
       a.sections.filter(s=>edit||!s.hidden&&(C.hasValue(s.body)||body.some(f=>f.sectionId===s.id))).map(s=>'<section data-section-id="'+esc(s.id)+'"><h2 id="'+anchorId(s.id)+'">'+esc(s.label)+'</h2>'+(s.table==='lexicon_sections'?prose(s,'body',s.label):'')+fieldsMarkup(body.filter(f=>f.sectionId===s.id))+'</section>').join('')+
-      '</article><aside class="lexicon-sidebar" aria-label="Article information"'+(info||tools?'':' hidden')+'>'+(info?sidebarTitle(a)+info:'')+tools+'</aside></div>'+(edit?'<div class="lexicon-inline-toolbar" role="toolbar" aria-label="Article editing">'+button('save-prose','Save page')+button('cancel-prose','Cancel edits')+'</div><div data-repairs></div><details class="lexicon-settings"><summary>Choose details</summary>'+button('new-fact','Add item')+button('pin-relation','Pin relationship')+button('alias','Add alias')+editor(a)+'</details>':'');
+      '</article><aside class="lexicon-sidebar" aria-label="Article information"'+(info||tools?'':' hidden')+'>'+(info||tools?sidebarTitle(a)+info:'')+tools+'</aside></div>'+(edit?'<div class="lexicon-inline-toolbar" role="toolbar" aria-label="Article editing">'+button('save-prose','Save page')+button('cancel-prose','Cancel edits')+'</div><div data-repairs></div><details class="lexicon-settings"><summary>Choose details</summary>'+button('new-fact','Add item')+button('pin-relation','Pin relationship')+button('alias','Add alias')+editor(a)+'</details>':'');
   }
   function resolveFacts(a) {
     for(const f of a?.fields || []) {
@@ -604,7 +605,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
       readerEl.querySelector('[data-sidebar-page-title]')?.remove();
       const info = infobox(a);
       const sidebar=readerEl.querySelector('.lexicon-sidebar');
-      if(info)sidebar.insertAdjacentHTML('afterbegin',sidebarTitle(a)+info);
+      if(info||sidebar.children.length)sidebar.insertAdjacentHTML('afterbegin',sidebarTitle(a)+info);
       sidebar.hidden=!sidebar.children.length;
       readerEl.classList.toggle('is-single',sidebar.hidden);
       const used=new Set();

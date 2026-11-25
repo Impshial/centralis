@@ -29,7 +29,7 @@
 .lexicon-reader { display: grid; grid-template-columns: minmax(0,1fr) clamp(260px, 23vw, 320px); align-items: start; gap: var(--lexicon-gutter, 24px); }
 .lexicon-reader.is-single { grid-template-columns: minmax(0,1fr); }
 .lexicon-article { min-width: 0; padding: 0; color: var(--ink); }
-.lexicon-editor-section, .lexicon-infobox, .lexicon-source-tools { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; }
+.lexicon-editor-section, .lexicon-infobox, .lexicon-source-tools, .lexicon-page-tools { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; }
 .lexicon-article h2, .lexicon-editor h2 { margin: 0 0 18px; font-size: 1.8rem; overflow-wrap: anywhere; }
 .lexicon-article h3 { margin: 28px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .lexicon-prose, .lexicon-field dd { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
@@ -184,8 +184,6 @@ body:has(.lexicon-inline-toolbar) .lexicon-back-top { bottom:76px; }
 .lexicon-navigation [data-current-within] > .lexicon-outline-row > a { color: var(--accent); font-weight: 600; }
 .lexicon-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); margin-bottom: 16px; padding-bottom: 10px; }
 .lexicon-title-row h1 { margin: 0; font-size: 2rem; line-height: 1.2; min-width: 0; }
-.lexicon-title-row .secondary-action { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; font-size: .875rem; color: var(--ink); }
-.lexicon-title-row ph-pencil-simple, .lexicon-title-row ph-eye { font-size: 20px; }
 .lexicon-reader .lexicon-article { font-size: 1rem; line-height: 1.5; }
 .lexicon-article .lexicon-prose { line-height: 1.5; }
 .lexicon-article :is(section > h2, .lexicon-prose h2) { margin: 24px 0 12px; padding-bottom: 6px; font-size: 1.5rem; line-height: 1.25; }
@@ -209,9 +207,9 @@ body:has(.lexicon-inline-toolbar) .lexicon-back-top { bottom:76px; }
 .lexicon-infobox .lexicon-field.is-unlabeled dd { grid-column: 1 / -1; text-align: right; }
 .lexicon-infobox .lexicon-field:last-child { padding-bottom: 0; }
 .lexicon-infobox dl + dl .lexicon-field { padding-top: 10px; margin-top: 10px; }
-.lexicon-source-tools > :is(a, button) { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 32px; margin: 0; padding: 5px; text-align: left; background: transparent; border: 0; border-radius: 4px; color: var(--accent); font: inherit; overflow-wrap: anywhere; }
-.lexicon-source-tools > :is(a, button):hover { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
-.lexicon-source-tools :is(ph-cube, ph-arrow-square-out, ph-arrows-clockwise) { flex-shrink: 0; font-size: 20px; }
+:is(.lexicon-source-tools, .lexicon-page-tools) > :is(a, button) { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 32px; margin: 0; padding: 5px; text-align: left; background: transparent; border: 0; border-radius: 4px; color: var(--accent); font: inherit; overflow-wrap: anywhere; }
+:is(.lexicon-source-tools, .lexicon-page-tools) > :is(a, button):hover { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+:is(.lexicon-source-tools, .lexicon-page-tools) :is(ph-cube, ph-arrow-square-out, ph-arrows-clockwise, ph-pencil-simple, ph-eye) { flex-shrink: 0; font-size: 20px; }
 @media (max-width: 1100px) {
   .lexicon-layout { grid-template-columns: minmax(0,1fr); gap: 20px; }
   .lexicon-navigation { position: static; max-height: none; }
@@ -228,7 +226,6 @@ body:has(.lexicon-inline-toolbar) .lexicon-back-top { bottom:76px; }
   .lexicon-search { flex-basis: 100%; min-width: 0; }
   .lexicon-reader { grid-template-columns: minmax(0,1fr); }
   .lexicon-title-row { align-items: start; flex-wrap: wrap; gap: 12px; }
-  .lexicon-title-row .secondary-action { font-size: .88rem; }
   .lexicon-reader .lexicon-article { font-size: 1rem; }
   .lexicon-heading { flex-direction: column; align-items: stretch; }
   .lexicon-layout { grid-template-columns: minmax(0,1fr); gap: 16px; }

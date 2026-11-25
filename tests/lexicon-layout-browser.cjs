@@ -19,7 +19,8 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   await sourceCard.waitFor();await page.evaluate(()=>window.finishLayoutImage());await page.locator('.lexicon-infobox img').waitFor();
   assert.equal(await page.locator('.lexicon-sidebar > :first-child').getAttribute('data-sidebar-page-title'),'');assert.equal(await page.locator('[data-sidebar-page-title]').isVisible(),false);
   assert.deepEqual(await page.locator('.lexicon-sidebar > section').evaluateAll(els=>els.map(e=>e.getAttribute('aria-label'))),['Article Details','Source tools']);
-  assert.deepEqual(await sourceCard.locator('a,button').allTextContents(),['Open in Builder','Edit in Chronicle','Reload source']);
+  assert.deepEqual(await sourceCard.locator('a,button').allTextContents(),['Open in Builder','Edit in Chronicle','Edit wiki page','Reload source']);
+  assert.equal(await page.locator('.lexicon-title-row a').count(),0);
   assert.equal(await page.locator('[aria-label="Breadcrumb"]').count(),1);
   assert.equal(await page.locator('.lexicon-breadcrumbs [aria-current="page"]').innerText(),'Stormhaven');
   assert.match(await page.locator('.lexicon-breadcrumbs').innerText(),/Lexicon.*Aesterra.*Regions.*Coast.*Stormhaven/);
@@ -52,7 +53,9 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   await input.fill('Harbor');await input.press('Escape');assert.equal(await page.locator('#wiki-suggestions').isVisible(),false);await input.press('Enter');assert.match(page.url(),/lexicon-search.html.*q=Harbor/);
   await input.fill('');await page.getByRole('button',{name:'Search',exact:true}).click();await page.getByText('Enter a search term.',{exact:true}).waitFor();
   // Source reload retains local customizations and unsaved editor drafts.
-  await open(wiki.id,'a',true);await h.property('Article title','Local title');
+  await open(wiki.id,'a');await sourceCard.getByRole('link',{name:'Edit wiki page',exact:true}).click();await page.getByRole('button',{name:'Edit Introduction',exact:true}).waitFor();
+  assert.deepEqual(await sourceCard.locator('a,button').allTextContents(),['Open in Builder','Edit in Chronicle','View wiki page','Reload source']);
+  await h.property('Article title','Local title');
   await page.getByRole('button',{name:'Edit Introduction',exact:true}).click();await page.getByRole('textbox',{name:'Introduction',exact:true}).fill('Unsaved introduction');
   await page.getByRole('button',{name:'Reload source',exact:true}).click();await page.getByText('Source reloaded.',{exact:true}).waitFor();
   assert.equal(await page.getByRole('textbox',{name:'Introduction',exact:true}).innerText(),'Unsaved introduction');
@@ -62,12 +65,32 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   assert.deepEqual(await f.snapshot(),snapshot);
   // Every density uses the same layout, including a truly empty infobox.
   await f.db.exec("update universes set name='A very long universe title that wraps across the available reading column' where id='u1';delete from universe_custom_fields where universe_id='u1';");
+  await f.db.query("update universes set description=$1 where id='u1'",[Array.from({length:24},()=> 'The coastal settlements trade throughout the year. Ships connect the region to nearby islands.').join('\n\n')]);
   await open(wiki.id);assert.equal(await page.locator('.lexicon-infobox').count(),0);assert.equal(await sourceCard.count(),1);
+  // Universe articles without details still show their title when scrolled,
+  // including after the asynchronous image request returns no root image.
+  assert.equal(await page.locator('[data-sidebar-page-title]').isVisible(),false);
+  await page.evaluate(()=>scrollTo(0,500));
+  await page.waitForFunction(()=>document.querySelector('[data-sidebar-page-title]')?.hidden===false);
+  assert.equal(await page.locator('.lexicon-sidebar > :first-child').innerText(),'A very long universe title that wraps across the available reading column');
+  await page.screenshot({path:shots+'/layout-universe-scrolled.png'});
+  await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Back to top',exact:true}).click();
+  await page.waitForFunction(()=>scrollY===0&&document.querySelector('[data-sidebar-page-title]').hidden);
+  await sourceCard.getByRole('link',{name:'Edit wiki page',exact:true}).click();await page.getByRole('button',{name:'Edit Introduction',exact:true}).waitFor();
+  await sourceCard.getByRole('link',{name:'View wiki page',exact:true}).click();
+  assert.equal(await sourceCard.getByRole('link',{name:'Edit wiki page',exact:true}).count(),1);
+  assert.equal(new URL(page.url()).searchParams.get('article'),null);
   const standalone=await store.createWiki({id:f.uuid(),kind:'standalone',name:'Standalone wiki'});
   await open(standalone.id);assert.equal(await sourceCard.count(),0);assert.equal(await page.locator('.lexicon-infobox').count(),0);
   await page.getByRole('button',{name:'Create article',exact:true}).click();await page.getByRole('dialog').getByLabel('Article title').fill('First article');await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('button',{name:'Edit Introduction',exact:true}).waitFor();
   await page.getByRole('button',{name:'Edit Introduction',exact:true}).click();await page.getByRole('textbox',{name:'Introduction',exact:true}).fill('A saved standalone introduction.');await page.getByRole('button',{name:'Save page',exact:true}).click();await page.getByText('Saved.',{exact:true}).waitFor();
   assert.equal(await sourceCard.count(),0);assert.equal(await page.getByRole('button',{name:'Reload wiki',exact:true}).count(),1);
+  const pageTools=page.getByRole('region',{name:'Page tools',exact:true});
+  assert.equal(await pageTools.getByRole('link',{name:'Edit wiki page',exact:true}).count(),1);
+  assert.equal(await page.locator('.lexicon-title-row a').count(),0);
+  await pageTools.getByRole('link',{name:'Edit wiki page',exact:true}).click();await page.getByRole('button',{name:'Edit Introduction',exact:true}).waitFor();
+  await pageTools.getByRole('link',{name:'View wiki page',exact:true}).click();
+  await pageTools.getByRole('link',{name:'Edit wiki page',exact:true}).waitFor();
   await page.screenshot({path:shots+'/layout-standalone.png',fullPage:true});
   const long=f.uuid();await store.save('lexicon_facts',{id:long,wiki_id:wiki.id,article_id:'a',label:'Long reference value',value:'LongValue'.repeat(70),placement:'infobox',sort_order:9});
   // Long panels must fit from their initial position below search, not just after
@@ -83,8 +106,8 @@ const {setup}=require('./lexicon-browser-harness.cjs');
    await page.screenshot({path:shots+'/layout-fit-'+viewport.width+'.png'});
    await page.evaluate(()=>scrollTo(0,500));await page.waitForFunction(()=>scrollY===500);await panelsFit();
    await page.waitForFunction(()=>!document.querySelector('[data-sidebar-page-title]').hidden);assert.equal(await page.locator('[data-sidebar-page-title]').innerText(),'Local title');
-   await page.getByRole('link',{name:'Edit in Chronicle',exact:true}).focus();
-   assert.ok(await page.getByRole('link',{name:'Edit in Chronicle',exact:true}).evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),'Source tools remain reachable within the panel');
+   await sourceCard.getByRole('link',{name:'Edit wiki page',exact:true}).focus();
+   assert.ok(await sourceCard.getByRole('link',{name:'Edit wiki page',exact:true}).evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),'Wiki editing remains reachable within the panel');
    await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Back to top',exact:true}).click();await page.waitForFunction(()=>scrollY===0);await panelsFit();
   }
   await open(wiki.id,'a',true);await panelsFit();
@@ -99,6 +122,6 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   const foreign=f.uuid();await f.db.exec('reset role');await f.db.query("insert into lexicon_wikis(id,user_id,kind,name) values($1,2,'standalone','Private wiki')",[foreign]);await f.db.exec('set role authenticated');
   await open(foreign);await page.getByText('Wiki not found or access denied.',{exact:true}).waitFor();assert.equal(await sourceCard.count(),0);assert.equal(await page.getByRole('link',{name:'Edit wiki page'}).count(),0);
   assert.deepEqual(h.errors,[]);
-  console.log('Layout: shared desktop/tablet/phone composition; image/card ordering; sparse and empty facts; top search/button/suggestions/Back; breadcrumbs and anchors; source destinations; standalone creation; preserved reload drafts and wiki/source isolation; access denied passed.');
+  console.log('Layout: shared desktop/tablet/phone composition; image/card ordering; universe scroll title without details; right-panel wiki editing; sparse and empty facts; search/suggestions/Back; breadcrumbs and anchors; source destinations; standalone creation; preserved reload drafts and wiki/source isolation; access denied passed.');
  }catch(e){console.error(page.url(),(await page.locator('body').innerText()).slice(-4500));throw e;}finally{await h.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -3121,7 +3121,7 @@
     }
     clearDetailsPaneAiState(controls);
 
-    if (controls.lexiconButton) { controls.lexiconButton.hidden = true; controls.lexiconButton.disabled = false; }
+    if (controls.lexiconButton) controls.lexiconButton.disabled = false;
     if (controls.lexiconChoices) { controls.lexiconChoices.hidden = true; controls.lexiconChoices.replaceChildren(); }
 
     const node = currentNodes.find((currentNode) => currentNode.id === nodeId);
@@ -3147,6 +3147,7 @@
       controls.title.textContent = name;
     }
     const isElementNode = node.data?.kind === "element";
+    if (controls.lexiconButton) controls.lexiconButton.hidden = !isElementNode && node.data?.kind !== "universe";
     controls.pane.querySelector("[data-details-ai-expert]")?.remove();
     if (controls.richButton && !isElementNode) {
       controls.actionBar?.prepend(controls.richButton);
@@ -8967,12 +8968,6 @@
       }
 
       renderDetailsPane(detailsNodeId, nodes, edges, openLinkedNodeDetails, detailsMode);
-      let active = true;
-      const controls = getDetailsControls(), node = nodes.find(currentNode => currentNode.id === detailsNodeId);
-      if (detailsMode !== 'edit') nodeHasChronicleData(node).then(hasData => {
-        if (active && controls?.lexiconButton) controls.lexiconButton.hidden = !hasData;
-      }).catch(error => console.error('Could not check Chronicle data:', error));
-      return () => { active = false; };
     }, [aiChatOpen, detailsNodeId, detailsMode, nodes, edges, openLinkedNodeDetails]);
 
     React.useEffect(() => {
