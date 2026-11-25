@@ -88,22 +88,22 @@ export function rangeAt(root,start,end=start) {
   r.selectNodeContents(root);r.collapse(false);return r;
 }
 function unwrap(a){a.replaceWith(...a.childNodes);}
-function wrap(root,pos,attrs) {
+function wrap(root,pos,attrs,tag='a') {
   let offset=0;const segments=[];
   for(const n of textNodes(root)){const end=offset+n.length;if(end>pos.start&&offset<pos.end&&!n.parentElement.closest('a,code,pre'))segments.push({n,start:Math.max(0,pos.start-offset),end:Math.min(n.length,pos.end-offset)});offset=end;}
-  for(const {n,start,end} of segments.reverse()) {const r=document.createRange();r.setStart(n,start);r.setEnd(n,end);const a=document.createElement('a');for(const [k,v]of Object.entries(attrs))a.setAttribute(k,v);r.surroundContents(a);}
+  for(const {n,start,end} of segments.reverse()) {const r=document.createRange();r.setStart(n,start);r.setEnd(n,end);const a=document.createElement(tag);for(const [k,v]of Object.entries(attrs))a.setAttribute(k,v);r.surroundContents(a);}
 }
 export function insertFigure(root,pos,figure) {
   const r=rangeAt(root,pos.start);const block=r.startContainer.parentElement?.closest('p,h2,h3,h4,h5,h6');
   if(block&&root.contains(block)) {const tail=document.createRange();tail.selectNodeContents(block);tail.setStart(r.startContainer,r.startOffset);const after=block.cloneNode(false);after.append(tail.extractContents());block.after(figure,after);}
   else r.insertNode(figure);
 }
-export function decorate(root,subject,model,article,url,used,media) {
+export function decorate(root,subject,model,article,url,used,media,linked=used) {
   const errors=[],text=plain(root);
   for(const a of root.querySelectorAll('a')) {
     const target=new URL(a.getAttribute('href')||'',location.href);
     const id=a.dataset.articleId || (target.pathname.endsWith('/lexicon-wiki.html')&&target.searchParams.get('wiki')===model.wiki.id?target.searchParams.get('article')||model.wiki.universe_id:null);
-    if(id){const dest=model.articles.get(id);if(!dest||dest.hidden){unwrap(a);continue;}a.dataset.articleId=id;a.href=url(id);used.add(id);}
+    if(id){const dest=model.articles.get(id);if(!dest||dest.hidden){unwrap(a);continue;}a.dataset.articleId=id;a.href=url(id);used.add(id);linked.add(id);}
   }
   const annotations=model.annotations.filter(n=>n.article_id===article.id&&n.subject_type===subject.type&&n.subject_id===subject.id&&n.property===subject.property);
   const blocked=[];
@@ -114,7 +114,7 @@ export function decorate(root,subject,model,article,url,used,media) {
   for(const n of annotations.filter(n=>n.kind==='link')) {
     const p=locate(text,n.anchor),dest=model.articles.get(n.target_id);if(!p){errors.push(n);continue;}if(!dest||dest.hidden)continue;
     const r=rangeAt(root,p.start,p.end);for(const a of root.querySelectorAll('a'))if(r.intersectsNode(a))unwrap(a);
-    wrap(root,p,{href:url(dest.id),'data-article-id':dest.id,'data-annotation-id':n.id});used.add(dest.id);
+    wrap(root,p,{href:url(dest.id),'data-article-id':dest.id,'data-annotation-id':n.id});used.add(dest.id);linked.add(dest.id);
   }
   const names=nameIndex(model);
   const suppressed=new Set(model.annotations.filter(n=>n.article_id===article.id&&n.kind==='auto_suppress').map(n=>n.target_id));
@@ -125,8 +125,11 @@ export function decorate(root,subject,model,article,url,used,media) {
   }
   for(const p of candidates.sort((a,b)=>a.start-b.start||b.end-a.end)) {
     if(used.has(p.id)||blocked.some(b=>b.start<p.end&&b.end>p.start))continue;
-    const r=rangeAt(root,p.start,p.end);if([...root.querySelectorAll('a,code,pre')].some(a=>r.intersectsNode(a)))continue;
-    wrap(root,p,{href:url(p.id),'data-article-id':p.id,'data-auto-link':'true'});used.add(p.id);
+    const r=rangeAt(root,p.start,p.end);if([...root.querySelectorAll('a,code,pre,[data-article-mention]')].some(a=>r.intersectsNode(a)))continue;
+    // Repeated references stay plain text, but remain available to section illustrations.
+    if(linked.has(p.id))wrap(root,p,{'data-article-mention':p.id},'span');
+    else wrap(root,p,{href:url(p.id),'data-article-id':p.id,'data-auto-link':'true'});
+    used.add(p.id);linked.add(p.id);
   }
   errors.push(...decorateImages(root,subject,model,article,media));
   return errors;

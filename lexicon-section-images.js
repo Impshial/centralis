@@ -1,4 +1,4 @@
-// Reader-only illustrations derived from the links already visible in a section.
+// Reader-only illustrations derived from article references in a section.
 // Keep them separate from saved prose and its text-selection anchors.
 export function renderSectionImages(root, model, article, choices) {
   if (!root) return;
@@ -38,10 +38,10 @@ export function renderSectionImages(root, model, article, choices) {
   const sections = scopes.filter(scope => scope.nodes.some(node => node.textContent.trim() || node.querySelector('img')));
   for (const scope of sections.slice(1)) {
     const candidates = new Map();
-    for (const node of scope.nodes) for (const link of node.querySelectorAll('a[href]')) {
+    for (const node of scope.nodes) for (const link of node.querySelectorAll('a[href],[data-article-mention]')) {
       if (link.closest('figure')) continue;
-      const href = new URL(link.getAttribute('href'), location.href);
-      const id = link.dataset.articleId || (href.origin === location.origin && href.pathname.endsWith('/lexicon-wiki.html') && href.searchParams.get('wiki') === model.wiki.id ? href.searchParams.get('article') || model.wiki.universe_id : null);
+      const href = new URL(link.getAttribute('href') || '', location.href);
+      const id = link.dataset.articleMention || link.dataset.articleId || (href.origin === location.origin && href.pathname.endsWith('/lexicon-wiki.html') && href.searchParams.get('wiki') === model.wiki.id ? href.searchParams.get('article') || model.wiki.universe_id : null);
       const target = model.articles.get(id);
       if (target && target.id !== article.id && !target.hidden && target.image && !usedElements.has(target.id) && !usedImages.has(imageKey(target.image))) candidates.set(target.id, target);
     }

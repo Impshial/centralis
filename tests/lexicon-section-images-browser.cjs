@@ -36,7 +36,7 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   const uniqueImages=async()=>{const sources=await page.locator('.lexicon-reader img').evaluateAll(imgs=>imgs.map(img=>img.src));assert.equal(new Set(sources).size,sources.length,'No repeated images anywhere on the article');};
   await page.setViewportSize({width:1600,height:1000});await open(wiki.id,'a');await installImages();
   assert.equal(await figures().count(),0,'Text is readable while image metadata is pending');
-  await page.evaluate(()=>{const root=document.querySelector('[data-section-id="m1"] [data-label="Major regions"]'),n=[...root.querySelectorAll('a')][0].firstChild,r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
+  await page.evaluate(()=>{const root=document.querySelector('[data-section-id="m1"] [data-label="Major regions"]'),n=root.querySelector('[data-article-mention="b"]').firstChild,r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);});
   await page.evaluate(()=>window.releaseSectionImages());await regions().waitFor();
   assert.equal(await page.evaluate(()=>getSelection().toString()),'Harbor','Delayed illustrations preserve the current text selection');
   assert.equal(await figures().count(),4,'One illustration per linked module or top-level Markdown section');

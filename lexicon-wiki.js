@@ -1,5 +1,5 @@
-import * as Prose from './lexicon-prose.js?v=markdown-render-1';
-import {renderSectionImages} from './lexicon-section-images.js?v=section-images-3';
+import * as Prose from './lexicon-prose.js?v=article-links-1';
+import {renderSectionImages} from './lexicon-section-images.js?v=article-links-1';
 (() => {
   const C = window.LexiconCore;
   const params = new URLSearchParams(location.search);
@@ -127,14 +127,14 @@ import {renderSectionImages} from './lexicon-section-images.js?v=section-images-
     }
   }
   function finishReader() {
-    const a=current(),sectionLinks=new Map();
+    const a=current(),sectionLinks=new Map(),articleLinks=new Set();
     if(a)for(const root of content.querySelectorAll('[data-prose]')) {
       const p=proseItems.get(root.dataset.prose);
-      // Repeat a destination once in each section (and each infobox), not every mention.
+      // Recognize references per section for images, but link only once across article prose.
       const scope=root.closest('section,.lexicon-infobox')||root;
       if(!sectionLinks.has(scope))sectionLinks.set(scope,new Set());
       const used=sectionLinks.get(scope);
-      repairItems.push(...Prose.decorate(root,subject(p.item,p.property),model,a,id=>url(id,false),used,media));
+      repairItems.push(...Prose.decorate(root,subject(p.item,p.property),model,a,id=>url(id,false),used,media,root.closest('.lexicon-article')?articleLinks:used));
       if(!edit){root.tabIndex=0;root.setAttribute('aria-label',p.label);}
       if(edit && !root.closest('.lexicon-infobox') && !p.item.kind && !['number','checkbox','relationship'].includes(p.item.field_type)) {
         const b=document.createElement('button');b.className='secondary-action lexicon-edit-text';b.type='button';b.textContent='Edit '+p.label;b.dataset.editProse=root.dataset.prose;root.after(b);

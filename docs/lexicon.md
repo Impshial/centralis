@@ -211,8 +211,10 @@ their Chronicle values and reset controls. Removal preserves other editor drafts
 the editor. Paragraphs, headings, formatting, lists, tables and field boundaries
 are preserved. Explicit links retain stable targets and exact phrases. Automatic
 links use a cached index of all loaded visible articles and unambiguous whole
-names/aliases. A destination can repeat once per introduction, body/section and
-Article Details. Explicit links take priority; self/hidden/ambiguous/substring matches
+names/aliases. Only the first eligible mention of a destination is automatically
+linked across the article's introduction, body and sections. Article Details has
+separate link tracking. Later mentions remain plain text and can still supply
+section illustrations. Explicit links take priority; self/hidden/ambiguous/substring matches
 are skipped. No per-mention database requests are made.
 Automatic links are generated at render time, not saved into source prose. Manual
 links persist their destination ID and field-scoped quote anchor.
@@ -322,7 +324,7 @@ ignored `node_modules/.cache/lexicon/screenshots`.
 
 The follow-up suites cover the six reported issues, including held-detail fetches
 during first entry, search route/history/scroll/direct reload without extra
-internal navigation requests, section link repetition/aliases/ambiguity, reader
+internal navigation requests, first article links/aliases/ambiguity, reader
 selection/right-click/keyboard/mobile actions, clicked image placement, source
 isolation, dirty-state revert/failure/save/history, and visible/multiple/hidden/
 missing View in Lexicon targets. Generation tests use held fixture responses;
