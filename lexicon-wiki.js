@@ -1,4 +1,5 @@
 import * as Prose from './lexicon-prose.js?v=markdown-render-1';
+import {renderSectionImages} from './lexicon-section-images.js?v=section-images-3';
 (() => {
   const C = window.LexiconCore;
   const params = new URLSearchParams(location.search);
@@ -9,6 +10,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
   const anchorId=id=>'section-'+encodeURIComponent(id);
   const proseItems=new Map();
   const outlineAliases=new Map();
+  const sectionImageChoices=new Map();
   let activeOutlineId='';
   let imageViewerOpen=false;
   let articleId = params.get('article') || '';
@@ -148,6 +150,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
     renderOutline(headings,intro);
     const outline=nav.querySelector('[data-outline]');if(outline){outline.open=!compactNavigation.matches;outline.querySelector('summary').textContent=headings.length?'On this page':'Wiki navigation';outline.classList.toggle('has-outline',!!headings.length);}
     outlineHeadings=headings;activeOutlineId='';updateOutline();
+    if(!edit&&!overviewPending&&a&&!a.hidden)renderSectionImages(content.querySelector('.lexicon-article'),model,a,sectionImageChoices);
     schedulePanelFit();
     enableImageViewing();
     const repairs=content.querySelector('[data-repairs]');if(repairs)repairs.innerHTML=repairItems.length?'<p>Some annotations need a new passage. Select the passage, then choose Repair.</p>'+repairItems.map(n=>'<div>'+esc(n.kind==='image'?'Image':n.kind==='excerpt'?'Pinned excerpt':'Link')+' '+button('repair','Repair',`data-id="${esc(n.id)}"`)+button('remove-annotation','Remove',`data-id="${esc(n.id)}"`)+'</div>').join(''):'';
@@ -284,6 +287,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
         if(inlineEditors.has(root.dataset.prose))continue;
         const p=proseItems.get(root.dataset.prose);if(p)Prose.decorateImages(root,subject(p.item,p.property),model,a,media);
       }
+      if(!edit&&a&&!a.hidden)renderSectionImages(content.querySelector('.lexicon-article'),model,a,sectionImageChoices);
       enableImageViewing();
     }catch(e){if(version===loadVersion)status.textContent='Illustrations unavailable: '+e.message;}
   }
@@ -312,7 +316,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
   function captureSelection(range) {
     const selection=getSelection(),text=range?range.toString():selection?.toString()||'';range=range|| (selection?.rangeCount?selection.getRangeAt(0):null);if(!range)return null;
     const start=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement,root=start.closest?.('[data-prose]');
-    if(!root||!root.contains(range.endContainer))return null;
+    if(!root||!root.contains(range.endContainer)||start.closest('.lexicon-section-image'))return null;
     const p=proseItems.get(root.dataset.prose);if(!p)return null;
     return {root,range:range.cloneRange(),text,anchor:Prose.anchor(root,range),...subject(p.item,p.property)};
   }
@@ -369,6 +373,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
   content.addEventListener('pointerup',event=>{if(!dialog.open&&!overviewPending)selectionPoint=captureSelection()||caretPoint(event)||selectionPoint;});
   content.addEventListener('contextmenu',event=>{
     if(event.shiftKey||overviewPending){closeContext();return;}
+    if(event.target.closest('.lexicon-section-image'))return;
     const root=event.target.closest('[data-prose]');if(!root)return;
     const link=event.target.closest('a');let selected=captureSelection();
     if(link){
@@ -612,6 +617,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
       for(const root of readerEl.querySelectorAll('.lexicon-infobox [data-prose]')) {
         const p=proseItems.get(root.dataset.prose);Prose.decorate(root,subject(p.item,p.property),model,a,id=>url(id,false),used,media);
       }
+      renderSectionImages(readerEl.querySelector('.lexicon-article'),model,a,sectionImageChoices);
       enableImageViewing();
       updateOutline();schedulePanelFit();
     } catch(error) {
@@ -653,7 +659,7 @@ import * as Prose from './lexicon-prose.js?v=markdown-render-1';
   window.addEventListener('centralis:current-user-changed',event=>{
     if (!store || event.detail?.user?.id === store.user.id) return;
     // No wiki data survives an account change, including pending image/read responses.
-    ++loadVersion; store = null; model = null; data = null;outlineHeadings=[];activeOutlineId='';
+    ++loadVersion; store = null; model = null; data = null;outlineHeadings=[];activeOutlineId='';sectionImageChoices.clear();
     if(imageViewerOpen)window.closeCentralisImageViewer?.();
     const viewer=document.querySelector('[data-centralis-image-viewer]');
     viewer?.querySelectorAll('img').forEach(img=>img.removeAttribute('src'));

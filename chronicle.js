@@ -84,7 +84,7 @@
     const section=id=>getModuleSectionId(w.modules.find(m=>m.id===id)||{})||null;
     const fields=getAssignedSectionModules(w).flatMap(m=>m.fields).map(f=>[f.id,readTemplateFieldValue(form,f)]).filter(([,v])=>hasMeaningfulValue(v)).sort((a,b)=>a[0].localeCompare(b[0]));
     const custom=[...form.querySelectorAll('[data-custom-field-row]')].map(row=>[row.dataset.customFieldId,row.querySelector('[name="custom-name"]').value.trim(),row.querySelector('[name="custom-value"]').value,Number(row.querySelector('[name="custom-order"]').value),section(row.dataset.customModuleId)]).sort((a,b)=>a[0].localeCompare(b[0]));
-    return JSON.stringify({id:w.element.id,name:value('workspace-name'),description:value('workspace-description'),body:value('workspace-body'),type:value('workspace-element-type'),template:value('workspace-template'),modules:[...w.modules].sort(sortModules).map(m=>[getModuleSectionId(m),getModuleTemplateId(m)]),fields,custom});
+    return JSON.stringify({id:w.element.id,name:value('workspace-name'),description:value('workspace-description'),type:value('workspace-element-type'),template:value('workspace-template'),modules:[...w.modules].sort(sortModules).map(m=>[getModuleSectionId(m),getModuleTemplateId(m)]),fields,custom});
   }
   function isWorkspaceDirty(){
     if(savedDraft===null)return false;
@@ -422,7 +422,7 @@
       }
       const elementResponse = await window.centralisSupabase
         .from(ELEMENTS_TABLE)
-        .select("id,name,description,body,element_type_id,universe_id,rich_template_id,updated_at,created_at")
+        .select("id,name,description,element_type_id,universe_id,rich_template_id,updated_at,created_at")
         .eq("user_id", state.user.id)
         .eq("id", context.elementId)
         .eq("deleted", false)
@@ -757,7 +757,6 @@
             <span>Description</span>
             <textarea name="workspace-description" rows="6">${escapeHtml(element.description || "")}</textarea>
           </label>
-          ${workspace.isUniverse ? '' : `<label class="form-field"><span>Body</span><textarea name="workspace-body" rows="8">${escapeHtml(element.body || '')}</textarea></label>`}
           ${workspace.isUniverse ? '' : renderTemplateChoiceHint(workspace)}
         </section>
         <section class="chronicle-editor-section" data-chronicle-custom-fields><h3>Details</h3>${renderWorkspaceCustomFields(workspace.customFields.filter(f=>!f.chronicle_module_id))}</section>
@@ -1514,8 +1513,7 @@
       element: {
         ...workspace.element,
         name: String(form.elements.namedItem("workspace-name")?.value || "").trim(),
-        description: String(form.elements.namedItem("workspace-description")?.value || "").trim() || null,
-        ...(!workspace.isUniverse ? {body:String(form.elements.namedItem('workspace-body')?.value || '')} : {})
+        description: String(form.elements.namedItem("workspace-description")?.value || "").trim() || null
       },
       customFields: [...form.querySelectorAll('[data-custom-field-row]')].map(row=>({
         ...workspace.customFields.find(f=>f.id===row.dataset.customFieldId),
@@ -2869,7 +2867,6 @@
         .update({
           name,
           description: description || null,
-          body: String(formData.get('workspace-body') || '') || null,
           element_type_id: elementTypeId || null,
           rich_template_id: nextTemplateId || null,
           updated_at: new Date().toISOString()

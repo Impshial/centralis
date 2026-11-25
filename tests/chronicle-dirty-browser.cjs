@@ -3,6 +3,7 @@ const {setup}=require('./lexicon-browser-harness.cjs');
 (async()=>{
  const h=await setup(),{f,store,page,base}=h;
  try{
+  await f.db.exec("update elements set body='Legacy article body.' where id='a';insert into elements(id,user_id,name,description,body) values('standalone',1,'Standalone draft','Original description','Legacy standalone body.');");
   const wiki=await store.createWiki({id:f.uuid(),name:'First wiki',kind:'universe',universe_id:'u1'});
   const route=id=>`${base}/chronicle-editor.html#universe/u1${id?'/element/'+id:''}`;
   const dirty=()=>page.locator('[data-chronicle-dirty]');
@@ -12,6 +13,7 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   const clean=async()=>assert.equal(await dirty().innerText(),'');
   const changed=async()=>assert.equal(await dirty().innerText(),'Unsaved changes');
   await go('a');await clean();
+  assert.equal(await page.getByRole('textbox',{name:'Body',exact:true}).count(),0);
   const original=await page.locator('[name="workspace-name"]').inputValue();
   await page.locator('[name="workspace-name"]').fill('Draft');await changed();
   await page.getByRole('link',{name:'Back to Builder',exact:true}).click();await stay();assert.equal(await page.locator('[name="workspace-name"]').inputValue(),'Draft');
@@ -20,6 +22,7 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   await page.locator('[name="workspace-description"]').fill('A new description');await changed();
   h.failNext('elements');await page.getByRole('button',{name:'Save Element',exact:true}).click();await page.getByText(/Could not save element: Fixture save failed/).waitFor();await changed();
   await page.getByRole('button',{name:'Save Element',exact:true}).click();await page.getByText('Element saved.',{exact:true}).waitFor();await clean();
+  assert.deepEqual((await f.db.query("select description,body from elements where id='a'")).rows[0],{description:'A new description',body:'Legacy article body.'});
   await page.locator('[name="workspace-field:f1"]').fill('101');await changed();await page.locator('[name="workspace-field:f1"]').fill('100');await clean();
   await page.getByRole('button',{name:'Add field',exact:true}).click();let d=page.getByRole('dialog');await d.getByLabel('Name',{exact:true}).fill('Draft fact');await d.getByLabel('Value',{exact:true}).fill('Value');await d.getByRole('button',{name:'Apply',exact:true}).click();await changed();
   const field=page.locator('[data-custom-field-row]').filter({has:page.locator('[name="custom-name"][value="Draft fact"]')});await field.locator('[data-chronicle-remove-custom-field]').click();await clean();
@@ -44,6 +47,11 @@ const {setup}=require('./lexicon-browser-harness.cjs');
   await go('a');await page.getByRole('button',{name:'View in Lexicon',exact:true}).click();await page.getByRole('dialog').getByText('This article is hidden in every linked wiki.',{exact:true}).waitFor();assert.equal(await page.getByRole('dialog').getByRole('link',{name:'First wiki'}).count(),0);await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();
   await f.db.exec("insert into universes(id,user_id,name,description) values('no-wiki',1,'No wiki','No wiki exists');");await page.goto(`${base}/chronicle-editor.html#universe/no-wiki`);await page.getByRole('button',{name:'Save Universe'}).waitFor();await page.getByRole('button',{name:'View in Lexicon',exact:true}).click();await page.getByText('No wiki is linked to this universe.',{exact:true}).waitFor();await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();assert.equal((await f.db.query("select count(*)::int n from lexicon_wikis where universe_id='no-wiki'")).rows[0].n,0);
   await page.locator('[name="workspace-description"]').fill('Root draft');await changed();await page.getByRole('button',{name:'Save Universe'}).click();await page.getByText('Universe saved.',{exact:true}).waitFor();await clean();
-  assert.deepEqual(h.errors,[]);console.log('Chronicle follow-ups passed: dirty/revert/save/failure, field/module/template drafts, beforeunload, canceled/accepted links and Back/Forward, and View in Lexicon root/element/multiple/hidden/missing without phantom writes.');
+  await page.goto(base+'/chronicle-editor.html#element/standalone');await form().waitFor();await clean();
+  assert.equal(await page.getByRole('textbox',{name:'Body',exact:true}).count(),0);
+  await page.locator('[name="workspace-description"]').fill('Updated standalone description');await changed();
+  await page.getByRole('button',{name:'Save Element',exact:true}).click();await page.getByText('Element saved.',{exact:true}).waitFor();await clean();
+  assert.deepEqual((await f.db.query("select description,body from elements where id='standalone'")).rows[0],{description:'Updated standalone description',body:'Legacy standalone body.'});
+  assert.deepEqual(h.errors,[]);console.log('Chronicle follow-ups passed: removed Body input with legacy content preserved on universe/standalone element saves, dirty/revert/save/failure, field/module/template drafts, beforeunload, canceled/accepted links and Back/Forward, and View in Lexicon root/element/multiple/hidden/missing without phantom writes.');
  }catch(e){console.error(page.url(),(await page.locator('body').innerText()).slice(-2500));throw e;}finally{await h.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
