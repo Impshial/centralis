@@ -3443,7 +3443,30 @@
     return null;
   }
 
-  function getLayoutEdges(currentNodes, currentEdges) {
+  function getLayoutPort(nodeId, ownerId, side, nodesById, format) {
+    let endpoint = nodesById.get(nodeId);
+    let ancestor = endpoint;
+    while (ancestor?.parentId) {
+      ancestor = nodesById.get(ancestor.parentId);
+      if (ancestor?.data?.collapsed) endpoint = ancestor;
+    }
+    const owner = nodesById.get(ownerId);
+    const ownerPosition = getAbsoluteNodePosition(owner, nodesById);
+    const endpointPosition = getAbsoluteNodePosition(endpoint, nodesById);
+    const size = estimateNodeSize(endpoint, format);
+    // Use the rendered handle's center, even when layout reserves extra card space.
+    const height = Number(endpoint.measured?.height || endpoint.height || size.height);
+    return {
+      id: `layout-port:${ownerId}:${endpoint.id}:${side}`,
+      x: side === "EAST" ? estimateNodeSize(owner, format).width : 0,
+      y: endpointPosition.y - ownerPosition.y + height / 2,
+      width: 0,
+      height: 0,
+      layoutOptions: { "elk.port.side": side }
+    };
+  }
+
+  function getLayoutEdges(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
     const nodesById = new Map(currentNodes.map((node) => [node.id, node]));
     const layoutNodeIds = new Set(getLayoutNodes(currentNodes).map((node) => node.id));
     const seenEdges = new Set();
@@ -3460,7 +3483,9 @@
         return;
       }
 
-      const key = `${source}->${target}`;
+      const sourcePort = getLayoutPort(edge.source, source, "EAST", nodesById, format);
+      const targetPort = getLayoutPort(edge.target, target, "WEST", nodesById, format);
+      const key = `${sourcePort.id}->${targetPort.id}`;
       if (seenEdges.has(key)) {
         return;
       }
@@ -3468,7 +3493,9 @@
       layoutEdges.push({
         id: `layout:${edge.id}:${source}:${target}`,
         source,
-        target
+        target,
+        sourcePort,
+        targetPort
       });
     });
 
@@ -3643,7 +3670,8 @@
 
   function createColumnAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
     const layoutNodes = getLayoutNodes(currentNodes);
-    const layoutEdges = getLayoutEdges(currentNodes, currentEdges);
+    if (!layoutNodes.length) return currentNodes;
+    const layoutEdges = getLayoutEdges(currentNodes, currentEdges, format);
     const nodesById = new Map(layoutNodes.map((node) => [node.id, node]));
     const allNodesById = new Map(currentNodes.map((node) => [node.id, node]));
     const childrenById = new Map(layoutNodes.map((node) => [node.id, []]));
@@ -3695,8 +3723,8 @@
     const minX = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).x || 0)));
     const minY = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).y || 0)));
     const spacingUnit = Number(format.nodeLayoutGap || 12);
-    const columnGap = Math.max(330, 286 + spacingUnit * 7);
-    const rowGap = Math.max(58, 42 + spacingUnit * 3);
+    const columnGap = Math.max(125, spacingUnit * 10);
+    const rowGap = Math.max(48, spacingUnit * 5);
     const groups = new Map();
 
     layoutNodes.forEach((node) => {
@@ -3708,41 +3736,59 @@
     });
 
     const positionsById = new Map();
+    let xCursor = minX;
     [...groups.entries()]
       .sort(([leftLevel], [rightLevel]) => leftLevel - rightLevel)
-      .forEach(([level, levelNodes]) => {
+      .forEach(([, levelNodes]) => {
+        const preferredY = new Map(levelNodes.map((node) => {
+          const anchors = layoutEdges
+            .filter((edge) => edge.target === node.id && positionsById.has(edge.source))
+            .map((edge) => positionsById.get(edge.source).y + edge.sourcePort.y - edge.targetPort.y)
+            .sort((left, right) => left - right);
+          return [node.id, anchors.length ? anchors[Math.floor(anchors.length / 2)] : null];
+        }));
         const sortedNodes = [...levelNodes].sort((left, right) => {
           if (left.data?.kind === "universe") return -1;
           if (right.data?.kind === "universe") return 1;
-          return Number(getLayoutPosition(left, allNodesById).y || 0) - Number(getLayoutPosition(right, allNodesById).y || 0);
+          return (preferredY.get(left.id) ?? getLayoutPosition(left, allNodesById).y)
+            - (preferredY.get(right.id) ?? getLayoutPosition(right, allNodesById).y);
         });
-        let yCursor = minY;
+        let yCursor = -Infinity;
         sortedNodes.forEach((node) => {
           const size = estimateNodeSize(node, format);
+          const desiredY = preferredY.get(node.id) ?? Math.max(minY, yCursor);
+          const y = Math.max(desiredY, yCursor);
           positionsById.set(node.id, {
-            x: Math.round((minX + level * columnGap) / 12) * 12,
-            y: Math.round(yCursor / 12) * 12
+            x: Math.round(xCursor / 12) * 12,
+            y: Math.round(y / 12) * 12
           });
-          yCursor += size.height + rowGap;
+          yCursor = y + size.height + rowGap;
         });
+        xCursor += Math.max(...levelNodes.map((node) => estimateNodeSize(node, format).width)) + columnGap;
       });
 
     return applyLayoutPositions(currentNodes, positionsById, format);
   }
 
   async function createAutoLayout(currentNodes, currentEdges, format = DEFAULT_UNIVERSE_FORMAT) {
+    if (!getLayoutNodes(currentNodes).length) return currentNodes;
     const Elk = window.ELK || window.ElkConstructor || window.elkjs?.ELK;
     if (!Elk) {
       return createColumnAutoLayout(currentNodes, currentEdges, format);
     }
 
     const layoutNodes = getLayoutNodes(currentNodes);
-    const layoutEdges = getLayoutEdges(currentNodes, currentEdges);
+    const layoutEdges = getLayoutEdges(currentNodes, currentEdges, format);
     const allNodesById = new Map(currentNodes.map((node) => [node.id, node]));
     const minX = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).x || 0)));
     const minY = Math.min(...layoutNodes.map((node) => Number(getLayoutPosition(node, allNodesById).y || 0)));
     const spacingUnit = Number(format.nodeLayoutGap || 12);
     const nodeSizes = new Map(layoutNodes.map((node) => [node.id, estimateNodeSize(node, format)]));
+    const portsByNodeId = new Map(layoutNodes.map((node) => [node.id, new Map()]));
+    layoutEdges.forEach((edge) => {
+      portsByNodeId.get(edge.source).set(edge.sourcePort.id, edge.sourcePort);
+      portsByNodeId.get(edge.target).set(edge.targetPort.id, edge.targetPort);
+    });
     const graph = {
       id: "centralis-universe-layout",
       layoutOptions: {
@@ -3760,15 +3806,17 @@
         return {
           id: node.id,
           width: size.width,
-          height: size.height
+          height: size.height,
+          layoutOptions: { "elk.portConstraints": "FIXED_POS", "elk.alignment": "LEFT" },
+          ports: [...portsByNodeId.get(node.id).values()]
         };
       }),
       edges: layoutEdges
         .filter((edge) => nodeSizes.has(edge.source) && nodeSizes.has(edge.target))
         .map((edge) => ({
           id: edge.id,
-          sources: [edge.source],
-          targets: [edge.target]
+          sources: [edge.sourcePort.id],
+          targets: [edge.targetPort.id]
         }))
     };
 

@@ -465,6 +465,8 @@ Universe root links are allowed by migration `202605310002_allow_universe_root_l
 
 Auto layout uses ELK. It lays out nodes based on graph relationships and then saves positions back to relevant tables.
 
+Nodes in the same layer share a left edge. Layout connections use the actual vertical handle positions, including offsets inside expanded and nested groups, so connected elements can align across group boundaries. Collapsed groups use their visible group handle. Multiple connections between different members of the same two groups remain distinct. The fallback layout uses the same connection offsets and reserves each column's full width.
+
 ### Import/Export
 
 The Options menu supports:
